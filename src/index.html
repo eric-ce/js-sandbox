@@ -1,12 +1,34 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>web components sandbox</title>
-    <!--    <link rel="stylesheet" href="./style.css" />-->
-    <script src="./scripts/app.js" defer></script>
-  </head>
-  <body>
-    <hello-world></hello-world>
-  </body>
+    <head>
+        <meta charset="UTF-8" />
+        <title>web components sandbox</title>
+        <!--    <link rel="stylesheet" href="./style.css" />-->
+        <!--    <script src="./scripts/app.js" defer></script>-->
+        <script src="./scripts/itemsList.js" defer></script>
+        <script src="./scripts/expandable.js" defer></script>
+        <style>
+            h3 {
+                color: blue;
+            }
+        </style>
+    </head>
+    <body>
+        <h3>other title</h3>
+        <items-list checked>
+            task 1
+            <div slot="description">small description</div>
+        </items-list>
+        <items-list>task 2</items-list>
+        <items-list>task 3</items-list>
+
+        <ul is="expandable-list" data-expanded>
+            <li>First</li>
+            <li>Second</li>
+            <ul is="expandable-list" data-expanded>
+                <li>First</li>
+                <li>Second</li>
+            </ul>
+        </ul>
+    </body>
 </html>

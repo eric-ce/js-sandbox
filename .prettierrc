@@ -1,6 +1,7 @@
 {
   "bracketSpacing": true,
   "endOfLine": "auto",
-  "singleQuote": true,
-  "semi": true
+  "doubleQuote": true,
+  "semi": true,
+  "tabWidth": 4
 }
