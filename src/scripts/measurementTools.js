@@ -1,4 +1,5 @@
 import * as Cesium from "cesium/Cesium";
+import { TwoPointsDistance } from "./twoPointsDistance.js";
 
 export class MeasureToolbox extends HTMLElement {
     constructor() {
@@ -9,7 +10,7 @@ export class MeasureToolbox extends HTMLElement {
             this.viewerResolve = resolve;
         });
 
-        this.viewerPromise.then((viewer) => {
+        this.viewerPromise.then(async (viewer) => {
             this.viewer = viewer;
 
             const handler = new Cesium.ScreenSpaceEventHandler(
@@ -18,19 +19,21 @@ export class MeasureToolbox extends HTMLElement {
             this.handler = handler;
 
             this.buttonsSetup(viewer, this.shadowRoot, handler);
+            await this.initComponents(viewer, handler);
+        });
 
-            // this.initComponents();
-        })
     }
 
-    // async initComponents() {
-    //     // Dynamically import the module
-    //     await import('./twoPointsDistance.js');
+    async initComponents(viewer, handler) {
+        // Dynamically import the module
+        // await import('./twoPointsDistance.js');
+        const twoPointsDistance = new TwoPointsDistance();
+        // Create an instance of TwoPointsDistance using document.createElement
+        // const twoPointsDistanceTag = document.createElement('two-points-distance');
+        twoPointsDistance.setViewer(viewer);
+        twoPointsDistance.setHandler(handler);
 
-    //     // Create an instance of TwoPointsDistance using document.createElement
-    //     this.twoPointsDistance = document.createElement('two-points-distance');
-    //     this.toolsContainer.appendChild(this.twoPointsDistance);
-    // }
+    }
 
     buttonsSetup(viewer, shadowRoot, handler) {
         const toolsContainer = document.createElement("div");
@@ -122,12 +125,7 @@ export class MeasureToolbox extends HTMLElement {
      */
     set viewer(viewer) {
         this._viewer = viewer;
-        // console.log("🚀  viewer", viewer);
-
-        // Resolve the promise when the viewer is set
-        if (this.viewerResolve) {
-            this.viewerResolve(viewer);
-        }
+        this.viewerResolve(viewer);
     }
 
     /**

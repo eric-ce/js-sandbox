@@ -2,7 +2,6 @@ import * as Cesium from "cesium/Cesium";
 import "../style.css";
 import "cesium/Widgets/widgets.css";
 import { MeasureToolbox } from "./measurementTools.js";
-import { TwoPointsDistance } from "./twoPointsDistance";
 
 class CesiumMap {
     constructor() {
@@ -66,8 +65,8 @@ class CesiumMap {
         this.div.appendChild(measureToolBox);
         measureToolBox.viewer = this.viewer;
 
-        const twoPointsDistance = document.createElement("two-points-distance");
-        measureToolBox.appendChild(twoPointsDistance);
+        // const twoPointsDistance = document.createElement("two-points-distance");
+        // measureToolBox.appendChild(twoPointsDistance);
 
     }
 }
