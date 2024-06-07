@@ -19,12 +19,12 @@ export class MeasureToolbox extends HTMLElement {
             this.handler = handler;
 
             this.buttonsSetup(viewer, this.shadowRoot, handler);
-            await this.initComponents(viewer, handler);
+            await this.initComponents(viewer, handler, this.nameOverlay);
         });
 
     }
 
-    async initComponents(viewer, handler) {
+    async initComponents(viewer, handler, nameOverlay) {
         // Dynamically import the module
         // await import('./twoPointsDistance.js');
         const twoPointsDistance = new TwoPointsDistance();
@@ -32,6 +32,7 @@ export class MeasureToolbox extends HTMLElement {
         // const twoPointsDistanceTag = document.createElement('two-points-distance');
         twoPointsDistance.setViewer(viewer);
         twoPointsDistance.setHandler(handler);
+        twoPointsDistance.setNameOverlay(nameOverlay)
 
     }
 
@@ -46,15 +47,15 @@ export class MeasureToolbox extends HTMLElement {
         toolButton.innerHTML = "Tools";
         toolsContainer.appendChild(toolButton);
 
-        const nameOverlay = document.createElement("div");
-        nameOverlay.style.display = "none";
-        nameOverlay.className = "backdrop";
-        nameOverlay.style.position = "absolute";
-        nameOverlay.style.bottom = "0";
-        nameOverlay.style.left = "0";
-        nameOverlay.style["pointer-events"] = "none";
-        nameOverlay.style.padding = "4px";
-        toolsContainer.appendChild(nameOverlay);
+        this.nameOverlay = document.createElement("div");
+        this.nameOverlay.style.display = "none";
+        this.nameOverlay.className = "backdrop";
+        this.nameOverlay.style.position = "absolute";
+        this.nameOverlay.style.top = "0";
+        this.nameOverlay.style.left = "0";
+        this.nameOverlay.style["pointer-events"] = "none";
+        this.nameOverlay.style.padding = "4px";
+        document.querySelector(".cesium-viewer").appendChild(this.nameOverlay);
 
         this.clearAll(viewer, handler)
 
