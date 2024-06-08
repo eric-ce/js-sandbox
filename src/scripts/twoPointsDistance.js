@@ -14,10 +14,7 @@ export class TwoPointsDistance {
         this.viewerPromise.then((viewer) => {
             this.viewer = viewer;
             this.initializeMeasurement(this.viewer, this.handler, this.nameOverlay);
-
         })
-
-
     }
 
     initializeMeasurement(viewer, handler, nameOverlay) {
@@ -179,17 +176,12 @@ export class TwoPointsDistance {
             entitiesCollection = [];
         }
     }
-    setViewer(viewer) {
+
+    setValues(viewer, handler, nameOverlay) {
         this.viewer = viewer;
         this.viewerResolve(viewer);
-        console.log("Viewer set in TwoPointsDistance:", this.viewer);
-    }
 
-    setHandler(handler) {
-        this.handler = handler
-    }
-
-    setNameOverlay(nameOverlay) {
+        this.handler = handler;
         this.nameOverlay = nameOverlay;
     }
 }

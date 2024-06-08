@@ -1,7 +1,7 @@
 import * as Cesium from "cesium/Cesium";
 import "../style.css";
 import "cesium/Widgets/widgets.css";
-import { MeasureToolbox } from "./measurementTools.js";
+import { MeasureToolbox } from "./MeasureToolbox.js";
 
 class CesiumMap {
     constructor() {

@@ -1,5 +1,6 @@
 import * as Cesium from "cesium/Cesium";
 import { TwoPointsDistance } from "./twoPointsDistance.js";
+import { Points } from "./points.js";
 
 export class MeasureToolbox extends HTMLElement {
     constructor() {
@@ -30,9 +31,13 @@ export class MeasureToolbox extends HTMLElement {
         const twoPointsDistance = new TwoPointsDistance();
         // Create an instance of TwoPointsDistance using document.createElement
         // const twoPointsDistanceTag = document.createElement('two-points-distance');
-        twoPointsDistance.setViewer(viewer);
-        twoPointsDistance.setHandler(handler);
-        twoPointsDistance.setNameOverlay(nameOverlay)
+        // twoPointsDistance.setViewer(viewer);
+        // twoPointsDistance.setHandler(handler);
+        // twoPointsDistance.setNameOverlay(nameOverlay)
+        twoPointsDistance.setValues(viewer, handler, nameOverlay)
+
+        const points = new Points();
+        points.setValues(viewer, handler, nameOverlay)
 
     }
 
