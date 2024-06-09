@@ -2,22 +2,18 @@ import * as Cesium from "cesium/Cesium";
 // import { MeasureToolbox } from "./measurementTools.js";
 import { createPointEntity, createLineEntity, calculateDistance, createDistanceLabel } from "./helper.js";
 export class TwoPointsDistance {
-    constructor() {
+    constructor(viewer, handler, nameOverlay) {
         this.pointEntities = [];
         this.lineEntities = [];
         this.labelEntities = [];
         this.entitiesCollection = [];
+        this.viewer = viewer;
+        this.handler = handler;
+        this.nameOverlay = nameOverlay;
 
-        this.viewerPromise = new Promise((resolve) => {
-            this.viewerResolve = resolve;
-        });
-        this.viewerPromise.then((viewer) => {
-            this.viewer = viewer;
-            this.initializeMeasurement(this.viewer, this.handler, this.nameOverlay);
-        })
     }
 
-    initializeMeasurement(viewer, handler, nameOverlay) {
+    initializeMeasurement() {
         // create distance button
         this.button = document.createElement("button");
         this.button.className = "distance cesium-button"
@@ -25,7 +21,7 @@ export class TwoPointsDistance {
         document.body.getElementsByTagName("measure-toolbox")[0].shadowRoot.querySelector(".toolbar").appendChild(this.button);
         // add event listener to distance button
         this.button.addEventListener("click", () => {
-            this.setupInputAction(viewer, handler, nameOverlay);
+            this.setupInputAction(this.viewer, this.handler, this.nameOverlay);
         })
     }
 
@@ -169,19 +165,9 @@ export class TwoPointsDistance {
     }
 
     removeEntities(entitiesCollection, viewer) {
-        if (entitiesCollection.length > 0) {
-            entitiesCollection.forEach((entity) => {
-                viewer.entities.remove(entity);
-            });
-            entitiesCollection = [];
-        }
-    }
-
-    setValues(viewer, handler, nameOverlay) {
-        this.viewer = viewer;
-        this.viewerResolve(viewer);
-
-        this.handler = handler;
-        this.nameOverlay = nameOverlay;
+        entitiesCollection.forEach((entity) => {
+            viewer.entities.remove(entity);
+        });
+        entitiesCollection.length = 0;
     }
 }

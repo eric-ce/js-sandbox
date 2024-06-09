@@ -6,6 +6,12 @@ export class MeasureToolbox extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
+
+        this.toolsContainer = null;
+        this.nameOverlay = null;
+
+        this.handler = null;
+
         // Use a Promise to wait for the viewer to be set
         this.viewerPromise = new Promise((resolve) => {
             this.viewerResolve = resolve;
@@ -14,31 +20,24 @@ export class MeasureToolbox extends HTMLElement {
         this.viewerPromise.then(async (viewer) => {
             this.viewer = viewer;
 
-            const handler = new Cesium.ScreenSpaceEventHandler(
+            this.handler = new Cesium.ScreenSpaceEventHandler(
                 viewer.scene.canvas
             );
-            this.handler = handler;
 
-            this.buttonsSetup(viewer, this.shadowRoot, handler);
-            await this.initComponents(viewer, handler, this.nameOverlay);
+            await this.initializeMeasureModes(this.viewer, this.handler, this.nameOverlay);
         });
 
     }
 
-    async initComponents(viewer, handler, nameOverlay) {
-        // Dynamically import the module
-        // await import('./twoPointsDistance.js');
-        const twoPointsDistance = new TwoPointsDistance();
-        // Create an instance of TwoPointsDistance using document.createElement
-        // const twoPointsDistanceTag = document.createElement('two-points-distance');
-        // twoPointsDistance.setViewer(viewer);
-        // twoPointsDistance.setHandler(handler);
-        // twoPointsDistance.setNameOverlay(nameOverlay)
-        twoPointsDistance.setValues(viewer, handler, nameOverlay)
+    // initialize all the measure modes, including its UI, and event listeners
+    async initializeMeasureModes(viewer, handler, nameOverlay) {
+        this.buttonsSetup(this.viewer, this.shadowRoot, this.handler);
 
-        const points = new Points();
-        points.setValues(viewer, handler, nameOverlay)
+        const twoPointsDistance = new TwoPointsDistance(viewer, handler, nameOverlay);
+        twoPointsDistance.initializeMeasurement();
 
+        const points = new Points(viewer, handler, nameOverlay);
+        points.initializeMeasurement();
     }
 
     buttonsSetup(viewer, shadowRoot, handler) {
@@ -123,6 +122,7 @@ export class MeasureToolbox extends HTMLElement {
             Cesium.ScreenSpaceEventType.RIGHT_CLICK
         );
     }
+
     /**
      * Setter for the Cesium viewer. Also triggers the promise resolution if it was waiting for
      * a viewer to be set.

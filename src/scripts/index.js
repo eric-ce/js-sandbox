@@ -65,6 +65,11 @@ class CesiumMap {
         this.div.appendChild(measureToolBox);
         measureToolBox.viewer = this.viewer;
 
+        const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+        const nameOverlay = document.createElement('div');
+
+        measureToolBox.handler = handler;
+        measureToolBox.nameOverlay = nameOverlay;
         // const twoPointsDistance = document.createElement("two-points-distance");
         // measureToolBox.appendChild(twoPointsDistance);
 

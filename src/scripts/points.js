@@ -2,20 +2,17 @@ import * as Cesium from "cesium/Cesium";
 import { createPointEntity } from "./helper.js";
 
 export class Points {
-    constructor() {
+    constructor(viewer, handler, nameOverlay) {
         this.pointEntities = [];
         this.entitiesCollection = [];
+        this.button = null;
 
-        this.viewerPromise = new Promise((resolve) => {
-            this.viewerResolve = resolve;
-        });
-        this.viewerPromise.then((viewer) => {
-            this.viewer = viewer;
-            this.initializeMeasurement(this.viewer, this.handler, this.nameOverlay);
-        })
+        this.viewer = viewer;
+        this.handler = handler;
+        this.nameOverlay = nameOverlay;
     }
 
-    initializeMeasurement(viewer, handler, nameOverlay) {
+    initializeMeasurement() {
         // create distance button
         this.button = document.createElement("button");
         this.button.className = "points cesium-button"
@@ -24,7 +21,7 @@ export class Points {
         document.body.getElementsByTagName("measure-toolbox")[0].shadowRoot.querySelector(".toolbar").appendChild(this.button);
         // add event listener to distance button
         this.button.addEventListener("click", () => {
-            this.setupInputAction(viewer, handler, nameOverlay);
+            this.setupInputAction(this.viewer, this.handler, this.nameOverlay);
         })
     }
 
@@ -88,11 +85,11 @@ export class Points {
         }
     }
 
-    setValues(viewer, handler, nameOverlay) {
-        this.viewer = viewer;
-        this.viewerResolve(viewer);
+    // setValues(viewer, handler, nameOverlay) {
+    //     this.viewer = viewer;
+    //     this.viewerResolve(viewer);
 
-        this.handler = handler;
-        this.nameOverlay = nameOverlay;
-    }
+    //     this.handler = handler;
+    //     this.nameOverlay = nameOverlay;
+    // }
 }
