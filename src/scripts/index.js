@@ -66,7 +66,9 @@ class CesiumMap {
         measureToolBox.viewer = this.viewer;
 
         const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+
         const nameOverlay = document.createElement('div');
+        this.viewer.container.appendChild(nameOverlay);
 
         measureToolBox.handler = handler;
         measureToolBox.nameOverlay = nameOverlay;

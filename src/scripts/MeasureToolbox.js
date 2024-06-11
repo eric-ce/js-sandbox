@@ -12,6 +12,8 @@ export class MeasureToolbox extends HTMLElement {
 
         this.handler = null;
 
+        this.clearButton = null
+
         // Use a Promise to wait for the viewer to be set
         this.viewerPromise = new Promise((resolve) => {
             this.viewerResolve = resolve;
@@ -38,6 +40,8 @@ export class MeasureToolbox extends HTMLElement {
 
         const points = new Points(viewer, handler, nameOverlay);
         points.initializeMeasurement();
+
+        this.clearButtonSetup(viewer, handler, nameOverlay);
     }
 
     buttonsSetup(viewer, shadowRoot, handler) {
@@ -46,12 +50,13 @@ export class MeasureToolbox extends HTMLElement {
 
         this.toolsContainer = toolsContainer;
 
+        // initialize tool button to control collapse/expand for buttons
         const toolButton = document.createElement("button");
         toolButton.className = "measure-tools cesium-button";
         toolButton.innerHTML = "Tools";
         toolsContainer.appendChild(toolButton);
 
-        this.nameOverlay = document.createElement("div");
+        // initialize style of nameOverlay, the moving dot
         this.nameOverlay.style.display = "none";
         this.nameOverlay.className = "backdrop";
         this.nameOverlay.style.position = "absolute";
@@ -59,11 +64,16 @@ export class MeasureToolbox extends HTMLElement {
         this.nameOverlay.style.left = "0";
         this.nameOverlay.style["pointer-events"] = "none";
         this.nameOverlay.style.padding = "4px";
-        document.querySelector(".cesium-viewer").appendChild(this.nameOverlay);
 
-        this.clearAll(viewer, handler)
+        // right click action to clear all entities
+        handler.setInputAction(
+            () => {
+                viewer.entities.removeAll();
+            },
+            Cesium.ScreenSpaceEventType.RIGHT_CLICK
+        );
 
-
+        // add style to the shadowRoot for this web component
         const style = document.createElement("style");
         style.textContent = `
             .toolbar{ 
@@ -114,13 +124,29 @@ export class MeasureToolbox extends HTMLElement {
     //     return button;
     // }
 
-    clearAll(viewer, handler, clearPrimitive = true) {
-        handler.setInputAction(
-            () => {
-                viewer.entities.removeAll();
-            },
-            Cesium.ScreenSpaceEventType.RIGHT_CLICK
-        );
+    // clear button setup 
+    clearButtonSetup(viewer, handler, nameOverlay) {
+        this.clearButton = document.createElement("button");
+        this.clearButton.className = "clear-button cesium-button";
+        this.clearButton.innerHTML = "Clear";
+
+        this.toolsContainer.appendChild(this.clearButton);
+
+        this.clearButton.addEventListener("click", () => {
+            viewer.entities.removeAll();
+            this.removeAllInputActions(handler);
+            nameOverlay.style.display = "none";
+        });
+
+    }
+
+    // remove all input actions of handler
+    removeAllInputActions(handler) {
+        handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
+        handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
+        handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+        handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
     /**
