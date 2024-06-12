@@ -1,7 +1,7 @@
-import * as Cesium from "cesium/Cesium";
-import "../style.css";
-import "cesium/Widgets/widgets.css";
+import * as Cesium from "cesium";
+import "cesiumStyle";
 import { MeasureToolbox } from "./MeasureToolbox.js";
+
 
 class CesiumMap {
     constructor() {
@@ -80,3 +80,4 @@ class CesiumMap {
 
 const map = new CesiumMap();
 map.initialMap();
+

@@ -1,4 +1,4 @@
-import * as Cesium from "cesium/Cesium";
+import * as Cesium from "cesium";
 
 /**
  * Create a point entity setting at the given Cartesian coordinates with the specified color.

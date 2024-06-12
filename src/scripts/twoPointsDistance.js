@@ -1,4 +1,4 @@
-import * as Cesium from "cesium/Cesium";
+import * as Cesium from "cesium";
 // import { MeasureToolbox } from "./measurementTools.js";
 import { createPointEntity, createLineEntity, calculateDistance, createDistanceLabel } from "./helper.js";
 export class TwoPointsDistance {

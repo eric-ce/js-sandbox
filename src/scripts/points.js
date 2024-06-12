@@ -1,4 +1,4 @@
-import * as Cesium from "cesium/Cesium";
+import * as Cesium from "cesium";
 import { createPointEntity } from "./helper.js";
 
 export class Points {

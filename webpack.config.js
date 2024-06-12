@@ -1,13 +1,14 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const HtmlWebpackHarddiskPlugin = require('html-webpack-harddisk-plugin');
-const CopywebpackPlugin = require('copy-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
 const url = require('url');
 const webpack = require('webpack');
 
 const cesiumSource = "node_modules/cesium/Source";
-const cesiumWorkers = "../Build/Cesium/Workers";
+const cesiumWorkers = "node_modules/cesium/Build/Cesium/Workers";
+// const cesiumBaseUrl = "cesiumStatic";
 
 module.exports = {
     entry: ['./src/scripts/index.js', "./src/style.css"], // Your entry point
@@ -34,14 +35,12 @@ module.exports = {
         new HtmlWebpackHarddiskPlugin(),
         new webpack.HotModuleReplacementPlugin(),
         // Copy Cesium Assets, Widgets, and Workers to a static directory
-        new CopywebpackPlugin({
+        new CopyWebpackPlugin({
             patterns: [
-                { from: path.join(cesiumSource, cesiumWorkers), to: "Workers" },
+                { from: path.join(cesiumWorkers), to: "Workers" },
                 { from: path.join(cesiumSource, "Assets"), to: "Assets" },
                 { from: path.join(cesiumSource, "Widgets"), to: "Widgets" },
                 { from: path.join(cesiumSource, "ThirdParty"), to: "ThirdParty" },
-                // { from: "public/assets/", to: "" },
-                // { from: '../node_modules/cesium/Build/Cesium/ThirdParty', to: 'ThirdParty' },
             ],
         }),
         new webpack.DefinePlugin({
@@ -57,16 +56,14 @@ module.exports = {
     mode: 'development',
     devtool: 'source-map',
     resolve: {
-        extensions: [".js", ".ts"],
+        extensions: [".js", ".css"],
         modules: ["src", "node_modules"],
         alias: {
-            // CesiumJS module name
-            cesium: path.resolve(__dirname, cesiumSource),
+            cesium: path.resolve(__dirname, cesiumSource, "Cesium.js"),
+            cesiumStyle: path.resolve(__dirname, cesiumSource, "Widgets", "widgets.css"),
         },
         fallback: {
             fs: false,
-            url: url.pathToFileURL("./node_modules/url/url.js").href,
-            zlib: false,
         },
     },
     amd: {

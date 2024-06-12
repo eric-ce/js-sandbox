@@ -1,4 +1,4 @@
-import * as Cesium from "cesium/Cesium";
+import * as Cesium from "cesium";
 import { TwoPointsDistance } from "./twoPointsDistance.js";
 import { Points } from "./points.js";
 
@@ -12,8 +12,7 @@ export class MeasureToolbox extends HTMLElement {
 
         this.handler = null;
 
-        this.clearButton = null
-
+        this.clearButton = null;
         // Use a Promise to wait for the viewer to be set
         this.viewerPromise = new Promise((resolve) => {
             this.viewerResolve = resolve;
@@ -26,9 +25,21 @@ export class MeasureToolbox extends HTMLElement {
                 viewer.scene.canvas
             );
 
+            // add cesium style to the shadowRoot for this web component
+            this.addStyle()
+
+            // initialize all the measure modes, including its UI, and event listeners
             await this.initializeMeasureModes(this.viewer, this.handler, this.nameOverlay);
         });
 
+    }
+
+    // add cesium style to the shadowRoot for this web component
+    addStyle() {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/Widgets/widgets.css';
+        this.shadowRoot.appendChild(link);
     }
 
     // initialize all the measure modes, including its UI, and event listeners
@@ -78,8 +89,8 @@ export class MeasureToolbox extends HTMLElement {
         style.textContent = `
             .toolbar{ 
                 position:absolute;
-                bottom: 120px;
-                transform: translateX(180px);
+                bottom: 6rem;
+                left: 10rem;
                 display: flex;
                 }
             .toolbar button{
@@ -114,7 +125,9 @@ export class MeasureToolbox extends HTMLElement {
         shadowRoot.appendChild(style);
         shadowRoot.appendChild(toolsContainer);
     }
+    async addCesiumStyle() {
 
+    }
     // createButton(className, text, parent, callback) {
     //     const button = document.createElement("button");
     //     button.className = `${className}`;
