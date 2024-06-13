@@ -1,7 +1,15 @@
 import * as Cesium from "cesium";
-// import { MeasureToolbox } from "./measurementTools.js";
 import { createPointEntity, createLineEntity, calculateDistance, createDistanceLabel } from "./helper.js";
-export class TwoPointsDistance {
+
+
+/**
+ * Represents a two-point distance measurement tool in Cesium.
+ * @class   
+ * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
+ * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
+ * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
+*/
+class TwoPointsDistance {
     constructor(viewer, handler, nameOverlay) {
         this.pointEntities = [];
         this.lineEntities = [];
@@ -13,6 +21,9 @@ export class TwoPointsDistance {
 
     }
 
+    /**
+     * Initializes the measurement tool, creating UI elements and setting up event listeners.
+     */
     initializeMeasurement() {
         // create distance button
         this.button = document.createElement("button");
@@ -25,6 +36,12 @@ export class TwoPointsDistance {
         })
     }
 
+    /**
+     * 
+     * @param {*} viewer 
+     * @param {*} handler 
+     * @param {*} nameOverlay 
+     */
     setupInputAction(viewer, handler, nameOverlay) {
         // left click event
         handler.setInputAction((movement) => {
@@ -36,6 +53,12 @@ export class TwoPointsDistance {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
+    /**
+     * 
+     * @param {*} movement 
+     * @param {*} viewer 
+     * @returns 
+     */
     handleDistanceLeftClick(movement, viewer) {
         // Clear any previously selected entity
         viewer.selectedEntity = undefined;
@@ -111,6 +134,13 @@ export class TwoPointsDistance {
         }
     }
 
+    /**
+     * 
+     * @param {*} movement 
+     * @param {*} nameOverlay 
+     * @param {*} viewer 
+     * @returns 
+     */
     handleDistanceMouseMove(movement, nameOverlay, viewer) {
         const pickedObject = viewer.scene.pick(movement.endPosition);
         if (Cesium.defined(pickedObject)) {
@@ -164,6 +194,11 @@ export class TwoPointsDistance {
         }
     }
 
+    /**
+     * 
+     * @param {Cesium.Entities[]} entitiesCollection 
+     * @param {*} viewer 
+     */
     removeEntities(entitiesCollection, viewer) {
         entitiesCollection.forEach((entity) => {
             viewer.entities.remove(entity);
@@ -171,3 +206,5 @@ export class TwoPointsDistance {
         entitiesCollection.length = 0;
     }
 }
+
+export { TwoPointsDistance };

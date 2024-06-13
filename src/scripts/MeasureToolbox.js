@@ -1,8 +1,9 @@
 import * as Cesium from "cesium";
 import { TwoPointsDistance } from "./twoPointsDistance.js";
 import { Points } from "./points.js";
+import { ThreePointsCurve } from "./threePointsCurve.js";
 
-export class MeasureToolbox extends HTMLElement {
+class MeasureToolbox extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
@@ -26,7 +27,7 @@ export class MeasureToolbox extends HTMLElement {
             );
 
             // add cesium style to the shadowRoot for this web component
-            this.addStyle()
+            this.addCesiumStyle()
 
             // initialize all the measure modes, including its UI, and event listeners
             await this.initializeMeasureModes(this.viewer, this.handler, this.nameOverlay);
@@ -35,7 +36,7 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     // add cesium style to the shadowRoot for this web component
-    addStyle() {
+    addCesiumStyle() {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = '/Widgets/widgets.css';
@@ -51,6 +52,9 @@ export class MeasureToolbox extends HTMLElement {
 
         const points = new Points(viewer, handler, nameOverlay);
         points.initializeMeasurement();
+
+        const threePointsCurve = new ThreePointsCurve(viewer, handler, nameOverlay);
+        threePointsCurve.initializeMeasurement();
 
         this.clearButtonSetup(viewer, handler, nameOverlay);
     }
@@ -125,9 +129,7 @@ export class MeasureToolbox extends HTMLElement {
         shadowRoot.appendChild(style);
         shadowRoot.appendChild(toolsContainer);
     }
-    async addCesiumStyle() {
 
-    }
     // createButton(className, text, parent, callback) {
     //     const button = document.createElement("button");
     //     button.className = `${className}`;
@@ -184,3 +186,4 @@ export class MeasureToolbox extends HTMLElement {
 }
 
 customElements.define("measure-toolbox", MeasureToolbox);
+export { MeasureToolbox };
