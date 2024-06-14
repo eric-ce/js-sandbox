@@ -118,9 +118,7 @@ export function createDistanceLabel(
 }
 
 export function convertToCartesian3(coordinate) {
-    if (!coordinate) {
-        return; // Exit early if cartesian is not defined
-    }
+    if (!Cesium.defined(coordinate)) return;
 
     let cartesian = coordinate;
 

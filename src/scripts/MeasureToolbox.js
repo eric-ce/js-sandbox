@@ -2,6 +2,7 @@ import * as Cesium from "cesium";
 import { TwoPointsDistance } from "./TwoPointsDistance.js";
 import { Points } from "./Points.js";
 import { ThreePointsCurve } from "./ThreePointsCurve.js";
+import { Height } from "./Height.js";
 
 /**
  * Custom web component that acts as a toolbox for various measurement tools in Cesium.
@@ -62,6 +63,9 @@ class MeasureToolbox extends HTMLElement {
 
         const threePointsCurve = new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay);
         threePointsCurve.initializeMeasurement();
+
+        const height = new Height(this.viewer, this.handler, this.nameOverlay);
+        height.initializeMeasurement();
 
         this.setupClearButton();
     }
