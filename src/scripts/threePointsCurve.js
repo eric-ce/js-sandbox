@@ -7,11 +7,11 @@ import {
 
 /**
  * Represents a three-point curve measurement tool in Cesium.
- * @class   
+ * @class
  * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
  * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
  * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
-*/
+ */
 class ThreePointsCurve {
     constructor(viewer, handler, nameOverlay) {
         this.viewer = viewer;
@@ -42,7 +42,7 @@ class ThreePointsCurve {
     }
 
     /**
-     * Sets up input actions for capturing curve points.
+     * Sets up input actions for three points curve mode.
      */
     setupInputActions() {
         this.handler.setInputAction((movement) => {
@@ -55,7 +55,7 @@ class ThreePointsCurve {
     }
 
     /**
-     * Handles left-click events to place points and calculate curves.
+     * Handles left-click events to place points, draw and calculate curves.
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
     handleCurveLeftClick(movement) {
@@ -94,7 +94,6 @@ class ThreePointsCurve {
                 numInterpolationPoints
             );
 
-
             // create curve line entity
             const curveLineEntity = this.viewer.entities.add(
                 createLineEntity(curvePoints, Cesium.Color.YELLOW)
@@ -104,11 +103,7 @@ class ThreePointsCurve {
             // create label
             const totalDistance = this.measureCurveDistance(curvePoints);
             const labelEntity = this.viewer.entities.add(
-                createDistanceLabel(
-                    start,
-                    end,
-                    totalDistance
-                )
+                createDistanceLabel(start, end, totalDistance)
             );
             this.labelEntities.push(labelEntity);
 
@@ -118,7 +113,7 @@ class ThreePointsCurve {
     }
     /**
      * Handles mouse move events to display moving dot with mouse.
-     * @param {{position: Cesium.Cartesian2}} movement
+     * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleCurveMouseMove(movement) {
         const pickedObject = this.viewer.scene.pick(movement.endPosition);
@@ -127,14 +122,7 @@ class ThreePointsCurve {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
 
-        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(
-            this.viewer.scene,
-            cartesian
-        );
-
-        this.nameOverlay.style.cssText = `display: block; left: ${screenPosition.x - 5
-            }px; top: ${screenPosition.y - 5
-            }px; background-color: yellow; border-radius: 50%; width: 1px; height: 1px;`;
+        this.updateMovingDot(cartesian)
     }
 
     /**
@@ -175,6 +163,21 @@ class ThreePointsCurve {
                     : acc,
             0
         );
+    }
+
+    /**
+     * update the moving dot with mouse
+     * @param {Cesium.Cartesian3} cartesian  
+     */
+    updateMovingDot(cartesian) {
+        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
+        this.nameOverlay.style.display = 'block';
+        this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
+        this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
+        this.nameOverlay.style.backgroundColor = "yellow";
+        this.nameOverlay.style.borderRadius = "50%"
+        this.nameOverlay.style.width = "1px";
+        this.nameOverlay.style.height = "1px";
     }
 }
 

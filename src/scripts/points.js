@@ -1,7 +1,14 @@
 import * as Cesium from "cesium";
 import { createPointEntity } from "./helper.js";
 
-export class Points {
+/**
+ * Represents points bookmark tool in Cesium.
+ * @class   
+ * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
+ * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
+ * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
+*/
+class Points {
     constructor(viewer, handler, nameOverlay) {
         this.pointEntities = [];
         this.entitiesCollection = [];
@@ -12,40 +19,51 @@ export class Points {
         this.nameOverlay = nameOverlay;
     }
 
+    /**
+     * Initializes the measurement tool, creating UI elements and setting up event listeners.
+     */
     initializeMeasurement() {
         // create distance button
         this.button = document.createElement("button");
         this.button.className = "points cesium-button"
         this.button.innerHTML = "Points";
-
-        document.body.getElementsByTagName("measure-toolbox")[0].shadowRoot.querySelector(".toolbar").appendChild(this.button);
+        document.body
+            .querySelector("measure-toolbox")
+            .shadowRoot.querySelector(".toolbar")
+            .appendChild(this.button);
         // add event listener to distance button
         this.button.addEventListener("click", () => {
-            this.setupInputAction(this.viewer, this.handler, this.nameOverlay);
+            this.setupInputAction();
         })
     }
 
-    setupInputAction(viewer, handler, nameOverlay) {
-        // left click event
-        handler.setInputAction((movement) => {
-            this.handleDistanceLeftClick(movement, viewer);
+    /**
+     * Sets up input actions for points mode.
+     */
+    setupInputAction() {
+        this.handler.setInputAction((movement) => {
+            this.handlePointsLeftClick(movement);
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-        // right click event
-        handler.setInputAction((movement) => {
-            this.handleDistanceMouseMove(movement, nameOverlay, viewer);
+
+        this.handler.setInputAction((movement) => {
+            this.handlePointsMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
-    handleDistanceLeftClick(movement, viewer) {
-        viewer.selectedEntity = undefined;
-        const pickedObject = viewer.scene.pick(movement.position);
+    /**
+     * Handles left-click events to place points, if selected point existed remove the point
+     * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
+     */
+    handlePointsLeftClick(movement) {
+        this.viewer.selectedEntity = undefined;
+        const pickedObject = this.viewer.scene.pick(movement.position);
 
         if (pickedObject && pickedObject.id) {
             // if picked point entity exists, remove it
-            const entityToRemove = viewer.entities.getById(pickedObject.id.id);
+            const entityToRemove = this.viewer.entities.getById(pickedObject.id.id);
 
             if (entityToRemove) {
-                viewer.entities.remove(entityToRemove);
+                this.viewer.entities.remove(entityToRemove);
                 const filteredPointEntities = this.pointEntities.filter(
                     (entity) => entity.id !== entityToRemove.id
                 );
@@ -53,9 +71,9 @@ export class Points {
             }
         } else {
             // if no point entity is picked, create a new point entity
-            const cartesian = viewer.scene.pickPosition(movement.position);
+            const cartesian = this.viewer.scene.pickPosition(movement.position);
             if (Cesium.defined(cartesian)) {
-                const pointEntity = viewer.entities.add(
+                const pointEntity = this.viewer.entities.add(
                     createPointEntity(cartesian, Cesium.Color.RED)
                 );
                 this.pointEntities.push(pointEntity);
@@ -63,33 +81,39 @@ export class Points {
         }
     }
 
-    handleDistanceMouseMove(movement, nameOverlay, viewer) {
-        const pickedObject = viewer.scene.pick(movement.endPosition);
+    /**
+     * Handles mouse move events to display moving dot with mouse.
+     * @param {{endPosition: Cesium.Cartesian2}} movement
+     */
+    handlePointsMouseMove(movement) {
+        const pickedObject = this.viewer.scene.pick(movement.endPosition);
         if (Cesium.defined(pickedObject)) {
-            const cartesian = viewer.scene.pickPosition(movement.endPosition);
+            const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
-            if (!Cesium.defined(cartesian)) {
-                return;
-            }
+            if (!Cesium.defined(cartesian)) return;
+
             // update nameOverlay: the moving dot with mouse
-            const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
-            nameOverlay.style.display = 'block';
-            nameOverlay.style.left = `${screenPosition.x - 5}px`;
-            nameOverlay.style.top = `${screenPosition.y - 5}px`;
-            nameOverlay.style.backgroundColor = "yellow";
-            nameOverlay.style.borderRadius = "50%"
-            nameOverlay.style.width = "1px";
-            nameOverlay.style.height = "1px";
+            this.updateMovingDot(cartesian);
+
         } else {
-            nameOverlay.style.display = "none";
+            this.nameOverlay.style.display = "none";
         }
     }
 
-    // setValues(viewer, handler, nameOverlay) {
-    //     this.viewer = viewer;
-    //     this.viewerResolve(viewer);
-
-    //     this.handler = handler;
-    //     this.nameOverlay = nameOverlay;
-    // }
+    /**
+     * update the moving dot with mouse
+     * @param {Cesium.Cartesian3} cartesian 
+     */
+    updateMovingDot(cartesian) {
+        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
+        this.nameOverlay.style.display = 'block';
+        this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
+        this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
+        this.nameOverlay.style.backgroundColor = "yellow";
+        this.nameOverlay.style.borderRadius = "50%"
+        this.nameOverlay.style.width = "1px";
+        this.nameOverlay.style.height = "1px";
+    }
 }
+
+export { Points };

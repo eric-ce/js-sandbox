@@ -11,14 +11,13 @@ import { createPointEntity, createLineEntity, calculateDistance, createDistanceL
 */
 class TwoPointsDistance {
     constructor(viewer, handler, nameOverlay) {
-        this.pointEntities = [];
-        this.lineEntities = [];
-        this.labelEntities = [];
-        this.entitiesCollection = [];
         this.viewer = viewer;
         this.handler = handler;
         this.nameOverlay = nameOverlay;
 
+        this.pointEntities = [];
+        this.lineEntities = [];
+        this.labelEntities = [];
     }
 
     /**
@@ -29,104 +28,99 @@ class TwoPointsDistance {
         this.button = document.createElement("button");
         this.button.className = "distance cesium-button"
         this.button.innerHTML = "Distance";
-        document.body.getElementsByTagName("measure-toolbox")[0].shadowRoot.querySelector(".toolbar").appendChild(this.button);
+        document.body
+            .querySelector("measure-toolbox")
+            .shadowRoot.querySelector(".toolbar")
+            .appendChild(this.button);
         // add event listener to distance button
         this.button.addEventListener("click", () => {
-            this.setupInputAction(this.viewer, this.handler, this.nameOverlay);
+            this.setupInputAction();
         })
     }
 
     /**
-     * 
-     * @param {*} viewer 
-     * @param {*} handler 
-     * @param {*} nameOverlay 
+     * Sets up input actions for three points curve mode.
      */
-    setupInputAction(viewer, handler, nameOverlay) {
-        // left click event
-        handler.setInputAction((movement) => {
-            this.handleDistanceLeftClick(movement, viewer);
+    setupInputAction() {
+        this.handler.setInputAction((movement) => {
+            this.handleDistanceLeftClick(movement);
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-        // right click event
-        handler.setInputAction((movement) => {
-            this.handleDistanceMouseMove(movement, nameOverlay, viewer);
+
+        this.handler.setInputAction((movement) => {
+            this.handleDistanceMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
     /**
-     * 
-     * @param {*} movement 
-     * @param {*} viewer 
-     * @returns 
+     * Handles left-click events to place points, draw and calculate distance.
+     * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
-    handleDistanceLeftClick(movement, viewer) {
+    handleDistanceLeftClick(movement) {
         // Clear any previously selected entity
-        viewer.selectedEntity = undefined;
-        viewer.trackedEntity = undefined;
+        this.viewer.selectedEntity = undefined;
+        this.viewer.trackedEntity = undefined;
 
-        const pickedObject = viewer.scene.pick(movement.position);
+        const pickedObject = this.viewer.scene.pick(movement.position);
 
         if (Cesium.defined(pickedObject)) {
-            const cartesian = viewer.scene.pickPosition(movement.position);
+            const cartesian = this.viewer.scene.pickPosition(movement.position);
 
             // early exit if not cartesian
-            if (!Cesium.defined(cartesian)) {
-                return;
-            }
+            if (!Cesium.defined(cartesian)) return;
 
             if (this.pointEntities.length === 0) {
                 // if there is no point entity, create the first point
-                const firstPointEntity = viewer.entities.add(
+                const firstPointEntity = this.viewer.entities.add(
                     createPointEntity(cartesian, Cesium.Color.RED)
                 );
                 this.pointEntities.push(firstPointEntity);
             } else if (this.pointEntities.length % 2 !== 0) {
                 // if there is one point entity, create the second point
-                const secondPointEntity = viewer.entities.add(
+                const secondPointEntity = this.viewer.entities.add(
                     createPointEntity(cartesian, Cesium.Color.BLUE)
                 );
                 this.pointEntities.push(secondPointEntity);
 
                 if (this.pointEntities.length === 2) {
                     // create line entity between the first and second point
-                    this.removeEntities(this.lineEntities, viewer);
+                    this.removeEntities(this.lineEntities);
                     const line = createLineEntity(
                         [
-                            this.pointEntities[0].position._value,
-                            this.pointEntities[1].position._value,
+                            this.pointEntities[0].position.getValue(Cesium.JulianDate.now()),
+                            this.pointEntities[1].position.getValue(Cesium.JulianDate.now()),
                         ],
                         Cesium.Color.ORANGE
                     );
-                    const lineEntity = viewer.entities.add(line);
+                    const lineEntity = this.viewer.entities.add(line);
                     this.lineEntities.push(lineEntity);
 
                     // create distance label
-                    this.removeEntities(this.labelEntities, viewer);
+                    this.removeEntities(this.labelEntities);
                     const distance = calculateDistance(
-                        this.pointEntities[0].position._value,
-                        this.pointEntities[1].position._value
+                        this.pointEntities[0].position.getValue(Cesium.JulianDate.now()),
+                        this.pointEntities[1].position.getValue(Cesium.JulianDate.now())
                     );
                     const label = createDistanceLabel(
-                        this.pointEntities[0].position._value,
-                        this.pointEntities[1].position._value,
+                        this.pointEntities[0].position.getValue(Cesium.JulianDate.now()),
+                        this.pointEntities[1].position.getValue(Cesium.JulianDate.now()),
                         distance
                     );
-                    const labelEntity = viewer.entities.add(label);
+                    const labelEntity = this.viewer.entities.add(label);
                     this.labelEntities.push(labelEntity);
                 }
 
             } else {
                 // if there are more than 2 point entities, reset the measurement
-                this.pointEntities = [];
-                this.lineEntities = [];
-                this.labelEntities = [];
+                this.pointEntities.length = 0;
+                this.lineEntities.length = 0;
+                this.labelEntities.length = 0;
 
                 // Remove all entities from the viewer
-                viewer.entities.removeAll();
+                // this.viewer.entities.removeAll();
 
                 // create the first point, so it won't interupt to restart the measurement
                 // without this could cause click twice to restart the measurement
-                const firstPointEntity = viewer.entities.add(
+                const firstPointEntity = this.viewer.entities.add(
                     createPointEntity(cartesian, Cesium.Color.RED)
                 );
                 this.pointEntities.push(firstPointEntity);
@@ -135,75 +129,79 @@ class TwoPointsDistance {
     }
 
     /**
-     * 
-     * @param {*} movement 
-     * @param {*} nameOverlay 
-     * @param {*} viewer 
-     * @returns 
+     * Handles mouse move events to drawing moving line, update label, and display moving dot with mouse.
+     * @param {{endPosition: Cesium.Cartesian2}} movement
      */
-    handleDistanceMouseMove(movement, nameOverlay, viewer) {
-        const pickedObject = viewer.scene.pick(movement.endPosition);
+    handleDistanceMouseMove(movement) {
+        const pickedObject = this.viewer.scene.pick(movement.endPosition);
         if (Cesium.defined(pickedObject)) {
-            const cartesian = viewer.scene.pickPosition(movement.endPosition);
+            const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
             if (!Cesium.defined(cartesian)) {
                 return;
             }
 
             // update nameOverlay: the moving dot with mouse
-            const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
-            nameOverlay.style.display = 'block';
-            nameOverlay.style.left = `${screenPosition.x - 5}px`;
-            nameOverlay.style.top = `${screenPosition.y - 5}px`;
-            nameOverlay.style.backgroundColor = "yellow";
-            nameOverlay.style.borderRadius = "50%"
-            nameOverlay.style.width = "1px";
-            nameOverlay.style.height = "1px";
+            this.updateMovingDot(cartesian)
 
             if (this.pointEntities.length > 0 && this.pointEntities.length < 2) {
-                const firstPointEntity = this.pointEntities[0];
+                const firstPointCartesian = this.pointEntities[0].position.getValue(Cesium.JulianDate.now())
 
                 // create moving line entity
-                this.removeEntities(this.lineEntities, viewer);
+                this.removeEntities(this.lineEntities);
                 const movingLine = createLineEntity(
-                    [firstPointEntity.position._value, cartesian],
+                    [firstPointCartesian, cartesian],
                     Cesium.Color.YELLOW
                 );
                 movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
-                    return [firstPointEntity.position._value, cartesian];
+                    return [firstPointCartesian, cartesian];
                 }, false);
-                const movingLineEntity = viewer.entities.add(movingLine);
+                const movingLineEntity = this.viewer.entities.add(movingLine);
                 this.lineEntities.push(movingLineEntity);
 
                 // create distance label
-                this.removeEntities(this.labelEntities, viewer);
+                this.removeEntities(this.labelEntities);
                 const distance = calculateDistance(
-                    firstPointEntity.position._value,
+                    firstPointCartesian,
                     cartesian
                 );
                 const label = createDistanceLabel(
-                    firstPointEntity.position._value,
+                    firstPointCartesian,
                     cartesian,
                     distance
                 );
-                const labelEntity = viewer.entities.add(label);
+                const labelEntity = this.viewer.entities.add(label);
                 this.labelEntities.push(labelEntity);
             }
         } else {
-            nameOverlay.style.display = "none";
+            this.nameOverlay.style.display = "none";
         }
     }
 
     /**
-     * 
-     * @param {Cesium.Entities[]} entitiesCollection 
-     * @param {*} viewer 
+     * remove entities from entity collection
+     * @param {Cesium.Entity[]} entitiesCollection 
      */
-    removeEntities(entitiesCollection, viewer) {
-        entitiesCollection.forEach((entity) => {
-            viewer.entities.remove(entity);
+    removeEntities(entities) {
+        entities.forEach((entity) => {
+            this.viewer.entities.remove(entity);
         });
-        entitiesCollection.length = 0;
+        entities.length = 0;
+    }
+
+    /**
+     * update the moving dot with mouse
+     * @param {Cesium.Cartesian3} cartesian  
+     */
+    updateMovingDot(cartesian) {
+        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
+        this.nameOverlay.style.display = 'block';
+        this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
+        this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
+        this.nameOverlay.style.backgroundColor = "yellow";
+        this.nameOverlay.style.borderRadius = "50%"
+        this.nameOverlay.style.width = "1px";
+        this.nameOverlay.style.height = "1px";
     }
 }
 

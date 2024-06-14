@@ -1,8 +1,11 @@
 import * as Cesium from "cesium";
-import { TwoPointsDistance } from "./twoPointsDistance.js";
-import { Points } from "./points.js";
-import { ThreePointsCurve } from "./threePointsCurve.js";
+import { TwoPointsDistance } from "./TwoPointsDistance.js";
+import { Points } from "./Points.js";
+import { ThreePointsCurve } from "./ThreePointsCurve.js";
 
+/**
+ * Custom web component that acts as a toolbox for various measurement tools in Cesium.
+ */
 class MeasureToolbox extends HTMLElement {
     constructor() {
         super();
@@ -30,12 +33,14 @@ class MeasureToolbox extends HTMLElement {
             this.addCesiumStyle()
 
             // initialize all the measure modes, including its UI, and event listeners
-            await this.initializeMeasureModes(this.viewer, this.handler, this.nameOverlay);
+            await this.initializeMeasureModes();
         });
 
     }
 
-    // add cesium style to the shadowRoot for this web component
+    /**
+     * Adds Cesium Widgets CSS to the shadow DOM.
+     */
     addCesiumStyle() {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
@@ -43,23 +48,28 @@ class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(link);
     }
 
-    // initialize all the measure modes, including its UI, and event listeners
-    async initializeMeasureModes(viewer, handler, nameOverlay) {
-        this.buttonsSetup(this.viewer, this.shadowRoot, this.handler);
+    /**
+     * Initialize all the measure modes, including its UI, and event listeners
+     */
+    async initializeMeasureModes() {
+        this.setupButtons();
 
-        const twoPointsDistance = new TwoPointsDistance(viewer, handler, nameOverlay);
-        twoPointsDistance.initializeMeasurement();
-
-        const points = new Points(viewer, handler, nameOverlay);
+        const points = new Points(this.viewer, this.handler, this.nameOverlay);
         points.initializeMeasurement();
 
-        const threePointsCurve = new ThreePointsCurve(viewer, handler, nameOverlay);
+        const twoPointsDistance = new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay);
+        twoPointsDistance.initializeMeasurement();
+
+        const threePointsCurve = new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay);
         threePointsCurve.initializeMeasurement();
 
-        this.clearButtonSetup(viewer, handler, nameOverlay);
+        this.setupClearButton();
     }
 
-    buttonsSetup(viewer, shadowRoot, handler) {
+    /**
+     * Sets up toolbar container, buttons, and style.
+     */
+    setupButtons() {
         const toolsContainer = document.createElement("div");
         toolsContainer.className = "toolbar";
 
@@ -72,18 +82,12 @@ class MeasureToolbox extends HTMLElement {
         toolsContainer.appendChild(toolButton);
 
         // initialize style of nameOverlay, the moving dot
-        this.nameOverlay.style.display = "none";
-        this.nameOverlay.className = "backdrop";
-        this.nameOverlay.style.position = "absolute";
-        this.nameOverlay.style.top = "0";
-        this.nameOverlay.style.left = "0";
-        this.nameOverlay.style["pointer-events"] = "none";
-        this.nameOverlay.style.padding = "4px";
+        this.setupNameOverlay();
 
         // right click action to clear all entities
-        handler.setInputAction(
+        this.handler.setInputAction(
             () => {
-                viewer.entities.removeAll();
+                this.viewer.entities.removeAll();
             },
             Cesium.ScreenSpaceEventType.RIGHT_CLICK
         );
@@ -126,8 +130,8 @@ class MeasureToolbox extends HTMLElement {
             }
             `;
 
-        shadowRoot.appendChild(style);
-        shadowRoot.appendChild(toolsContainer);
+        this.shadowRoot.appendChild(style);
+        this.shadowRoot.appendChild(toolsContainer);
     }
 
     // createButton(className, text, parent, callback) {
@@ -139,8 +143,10 @@ class MeasureToolbox extends HTMLElement {
     //     return button;
     // }
 
-    // clear button setup 
-    clearButtonSetup(viewer, handler, nameOverlay) {
+    /**
+     * Sets up the clear button.
+     */
+    setupClearButton() {
         this.clearButton = document.createElement("button");
         this.clearButton.className = "clear-button cesium-button";
         this.clearButton.innerHTML = "Clear";
@@ -148,22 +154,30 @@ class MeasureToolbox extends HTMLElement {
         this.toolsContainer.appendChild(this.clearButton);
 
         this.clearButton.addEventListener("click", () => {
-            viewer.entities.removeAll();
-            this.removeAllInputActions(handler);
-            nameOverlay.style.display = "none";
+            this.viewer.entities.removeAll();
+            this.removeAllInputActions();
+            this.nameOverlay.style.display = "none";
         });
 
     }
 
-    // remove all input actions of handler
-    removeAllInputActions(handler) {
-        handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-        handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
-        handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
-        handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-        handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    /**
+     * Removes all input actions from the handler.
+     */
+    removeAllInputActions() {
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
+    setupNameOverlay() {
+        this.nameOverlay = document.createElement("div");
+        this.nameOverlay.className = "backdrop";
+        this.nameOverlay.style.cssText = "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
+        this.shadowRoot.appendChild(this.nameOverlay);
+    }
     /**
      * Setter for the Cesium viewer. Also triggers the promise resolution if it was waiting for
      * a viewer to be set.
