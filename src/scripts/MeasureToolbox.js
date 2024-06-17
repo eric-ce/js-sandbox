@@ -3,6 +3,8 @@ import { TwoPointsDistance } from "./TwoPointsDistance.js";
 import { Points } from "./Points.js";
 import { ThreePointsCurve } from "./ThreePointsCurve.js";
 import { Height } from "./Height.js";
+import { MultiDistance } from "./MultiDistance.js";
+import { Polygon } from "./Polygon.js";
 
 /**
  * Custom web component that acts as a toolbox for various measurement tools in Cesium.
@@ -66,6 +68,12 @@ class MeasureToolbox extends HTMLElement {
 
         const height = new Height(this.viewer, this.handler, this.nameOverlay);
         height.initializeMeasurement();
+
+        const multiDistance = new MultiDistance(this.viewer, this.handler, this.nameOverlay);
+        multiDistance.initializeMeasurement();
+
+        const polygon = new Polygon(this.viewer, this.handler, this.nameOverlay);
+        polygon.initializeMeasurement();
 
         this.setupClearButton();
     }
