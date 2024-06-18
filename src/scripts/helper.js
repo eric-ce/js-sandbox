@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import * as turf from "@turf/turf";
 
 /**
  * Create a point entity setting at the given Cartesian coordinates with the specified color.
@@ -152,4 +153,28 @@ export function formatDistance(distance) {
     } else {
         return distance.toFixed(2) + " m";
     }
+}
+
+/**
+ * calculate the area of a polygon
+ * @param cartesianArray
+ * @returns {number}
+ */
+export function calculateArea(cartesianArray) {
+    if (cartesianArray.length < 3) {
+        return 0; // Return 0 for polygons with less than 3 points
+    }
+
+    const positions = cartesianArray.map((cartesian) => {
+        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+        return [
+            Cesium.Math.toDegrees(cartographic.longitude),
+            Cesium.Math.toDegrees(cartographic.latitude),
+        ];
+    });
+    positions.push(positions[0]);
+    const polygon = turf.polygon([positions]);
+    let area = turf.area(polygon);
+
+    return area; // The area will be in square meters
 }
