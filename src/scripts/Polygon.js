@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { createPointEntity, createLineEntity, calculateArea, createDistanceLabel } from "./helper.js";
+import { createPointEntity, createLineEntity, calculateArea, createDistanceLabel, createPolygonEntity } from "./helper.js";
 
 class Polygon {
     constructor(viewer, handler, nameOverlay) {
@@ -13,6 +13,7 @@ class Polygon {
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
         this.labelEntities = new Cesium.EntityCollection();
+        this.polygonEntities = new Cesium.EntityCollection();
     }
 
     /**
@@ -44,11 +45,23 @@ class Polygon {
         this.handler.setInputAction((movement) => {
             this.handlePolygonMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+        this.handler.setInputAction(() => {
+            this.handlePolygonMiddleClick();
+        }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
     }
 
     handlePolygonLeftClick(movement) {
+        // remove track entity and select entity from default
+        this.viewer.selectedEntity = undefined;
+        this.viewer.trackedEntity = undefined;
+
+        if (this.isPolygonEnd) {
+            this.isPolygonEnd = false;
+        }
+
         const pickedObject = this.viewer.scene.pick(movement.position);
-        if (Cesium.defined(pickedObject)) {
+        if (Cesium.defined(pickedObject) && !this.isPolygonEnd) {
             const cartesian = this.viewer.scene.pickPosition(movement.position);
 
             if (!Cesium.defined(cartesian)) return;
@@ -62,11 +75,39 @@ class Polygon {
                 const pointsPosition = this.pointEntities.values.map((pointEntity) => pointEntity.position.getValue(Cesium.JulianDate.now()));
                 const polygonArea = calculateArea(pointsPosition);
 
+                //create label entity
+                if (this.labelEntities.values.length > 0) {
+                    this.removeEntities(this.labelEntities);
+                }
+                const polygonLabel = createDistanceLabel(
+                    pointsPosition[0],
+                    pointsPosition[pointsPosition.length - 1],
+                    polygonArea
+                );
+                polygonLabel.pixelOffset = new Cesium.Cartesian2(0, 20);
+                const polygonLabelEntity = this.viewer.entities.add(polygonLabel);
+                this.labelEntities.add(polygonLabelEntity);
+
+                //create polygon entity
+                // if (!this.polygonEntity) {
+                //     const newPolygonEntity = this.viewer.entities.add(createPolygonEntity(pointsPosition));
+                //     this.polygonEntity = newPolygonEntity;
+                // } else {
+                //     // Update the existing polygon entity's positions
+                //     this.polygonEntity.polygon.hierarchy = pointsPosition;
+                // }
+                if (this.polygonEntities.values.length > 0) {
+                    this.removeEntities(this.polygonEntities);
+                }
+                const newPolygonEntity = this.viewer.entities.add(createPolygonEntity(pointsPosition));
+                this.polygonEntities.add(newPolygonEntity);
             }
         }
     }
 
     handlePolygonMouseMove(movement) {
+        this.viewer.selectedEntity = undefined;
+
         const pickedObject = this.viewer.scene.pick(movement.endPosition);
         if (Cesium.defined(pickedObject)) {
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
@@ -77,6 +118,25 @@ class Polygon {
         } else {
             this.nameOverlay.style.display = 'none';
         }
+    }
+
+    handlePolygonMiddleClick() {
+        this.viewer.selectedEntity = undefined;
+        this.viewer.trackedEntity = undefined;
+
+        this.pointEntities.removeAll();
+        this.lineEntities.removeAll();
+        this.labelEntities.removeAll();
+        this.polygonEntities.removeAll();
+
+        this.isPolygonEnd = true;
+    }
+
+    removeEntities(entityCollection) {
+        entityCollection.values.forEach(entity => {
+            this.viewer.entities.remove(entity);
+        });
+        entityCollection.removeAll();
     }
 
     /**

@@ -14,6 +14,7 @@ class MultiDistance {
         this.nameOverlay = nameOverlay;
 
         this.isMultiDistanceEnd = false;
+        this.button = null;
 
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
@@ -73,7 +74,14 @@ class MultiDistance {
 
             // initialize the measurement, clear all previous measure records
             if (this.isMultiDistanceEnd) {
-                this.clearAll();
+                this.removeEntities(this.pointEntities);
+                this.removeEntities(this.lineEntities);
+                this.removeEntities(this.labelEntities);
+
+                this.removeEntities(this.movingLineEntity);
+                this.removeEntities(this.movingLabelEntity);
+                this.distanceCollection.length = 0;
+
                 this.isMultiDistanceEnd = false;
                 const continuePoint = this.viewer.entities.add(createPointEntity(cartesian, Cesium.Color.RED));
                 this.pointEntities.add(continuePoint);
@@ -101,14 +109,11 @@ class MultiDistance {
                 // create label entities
                 const distance = calculateDistance(prevPointCartesian, currPointCartesian);
                 this.distanceCollection.push(distance);
-                const labelEntity = this.viewer.entities.add(
-                    createDistanceLabel(prevPointCartesian, currPointCartesian, distance)
-                );
-                labelEntity.label.text = formatDistance(distance);
+                const label = createDistanceLabel(prevPointCartesian, currPointCartesian, distance)
+                label.label.text = formatDistance(distance);
+                const labelEntity = this.viewer.entities.add(label);
                 this.labelEntities.add(labelEntity);
             }
-
-
         }
     }
 
@@ -132,10 +137,8 @@ class MultiDistance {
                 const lastPointCartesian = this.pointEntities.values[lastPointIndex].position.getValue(Cesium.JulianDate.now());
 
                 // create labels
-                if (this.movingLabelEntity) {
-                    this.viewer.entities.remove(this.movingLabelEntity);
-                    this.movingLabelEntity = new Cesium.Entity();
-                }
+                this.movingLabelEntity && this.removeEntities(this.movingLabelEntity);
+
                 const movingDistance = calculateDistance(
                     lastPointCartesian,
                     cartesian
@@ -143,22 +146,20 @@ class MultiDistance {
                 const totalDistance =
                     this.distanceCollection.reduce((a, b) => a + b, 0) + movingDistance;
 
-                this.movingLabelEntity = this.viewer.entities.add(createDistanceLabel(
+                const movingLabel = createDistanceLabel(
                     cartesian,
                     cartesian,
                     totalDistance,
-                ));
-                this.movingLabelEntity.label.showBackground = false;
-                this.movingLabelEntity.label.pixelOffset = new Cesium.Cartesian2(
+                );
+                movingLabel.label.showBackground = false;
+                movingLabel.label.pixelOffset = new Cesium.Cartesian2(
                     80,
                     10
                 );
+                this.movingLabelEntity = this.viewer.entities.add(movingLabel)
 
                 // create moving line entity
-                if (this.movingLineEntity) {
-                    this.viewer.entities.remove(this.movingLineEntity);
-                    this.movingLineEntity = new Cesium.Entity();
-                }
+                this.movingLineEntity && this.removeEntities(this.movingLineEntity);
 
                 const movingLine = createLineEntity([lastPointCartesian, cartesian], Cesium.Color.YELLOW)
 
@@ -230,16 +231,36 @@ class MultiDistance {
 
     }
 
-    clearAll() {
-        this.viewer.entities.removeAll();
+    // clearAll() {
+    //     this.viewer.entities.removeAll();
 
-        this.pointEntities.removeAll();
-        this.lineEntities.removeAll();
-        this.labelEntities.removeAll();
-        this.movingLineEntity = new Cesium.Entity();
-        this.movingLabelEntity = new Cesium.Entity();
+    //     this.pointEntities.removeAll();
+    //     this.lineEntities.removeAll();
+    //     this.labelEntities.removeAll();
+    //     this.movingLineEntity = new Cesium.Entity();
+    //     this.movingLabelEntity = new Cesium.Entity();
 
-        this.distanceCollection.length = 0;
+    //     this.distanceCollection.length = 0;
+    // }
+
+    /**
+     * Removes entities from entity collection or a single entity
+     * @param {Cesium.Entity | Cesium.EntityCollection} entityOrCollection - The entity or entity collection to remove
+     */
+    removeEntities(entityOrCollection) {
+        // if it is entitiy collection, remove all entities and reset the collection
+        if (entityOrCollection instanceof Cesium.EntityCollection) {
+
+            entityOrCollection.values.forEach((entity) => {
+                this.viewer.entities.remove(entity);
+            });
+            entityOrCollection.removeAll();
+        }
+        // if it is single entity, remove the entity
+        if (entityOrCollection instanceof Cesium.Entity) {
+            this.viewer.entities.remove(entityOrCollection);
+            entityOrCollection = null
+        }
     }
 
     /**

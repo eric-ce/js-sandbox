@@ -118,6 +118,34 @@ export function createDistanceLabel(
     };
 }
 
+/**
+ * Create a polygon entity between three or more points.
+ * @param {(Cesium.Cartesian3|Cesium.Cartographic)[]} coordinateArray - An array of Cartesian coordinates representing the points of the line.
+ * @returns {Object} polygonEntity - The polygon entity created.
+ */
+export function createPolygonEntity(coordinateArray) {
+    if (!Array.isArray(coordinateArray)) {
+        return; // Exit early if cartesianArray is not defined or contains less than 3 points
+    }
+    const cartesian3Array = coordinateArray.map((item) =>
+        convertToCartesian3(item)
+    );
+
+    return {
+        name: "measure polygon",
+        polygon: {
+            hierarchy: cartesian3Array,
+            perPositionHeight: true,
+            material: new Cesium.ColorMaterialProperty(Cesium.Color.GREEN.withAlpha(0.5)),
+            outline: true,
+            outlineColor: Cesium.Color.YELLOW,
+            outlineWidth: 4,
+            // disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            // depthFailMaterial: Cesium.Color.YELLOW,
+            // extrudedHeight: 0,
+        },
+    };
+}
 export function convertToCartesian3(coordinate) {
     if (!Cesium.defined(coordinate)) return;
 

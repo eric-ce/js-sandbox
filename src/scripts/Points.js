@@ -10,13 +10,13 @@ import { createPointEntity } from "./helper.js";
 */
 class Points {
     constructor(viewer, handler, nameOverlay) {
-        this.pointEntities = [];
-        this.entitiesCollection = [];
-        this.button = null;
-
         this.viewer = viewer;
         this.handler = handler;
         this.nameOverlay = nameOverlay;
+
+        this.button = null;
+
+        this.pointEntities = new Cesium.EntityCollection();
     }
 
     /**
@@ -64,10 +64,7 @@ class Points {
 
             if (entityToRemove) {
                 this.viewer.entities.remove(entityToRemove);
-                const filteredPointEntities = this.pointEntities.filter(
-                    (entity) => entity.id !== entityToRemove.id
-                );
-                this.pointEntities = filteredPointEntities;
+                this.pointEntities.remove(entityToRemove);
             }
         } else {
             // if no point entity is picked, create a new point entity
@@ -76,7 +73,7 @@ class Points {
                 const pointEntity = this.viewer.entities.add(
                     createPointEntity(cartesian, Cesium.Color.RED)
                 );
-                this.pointEntities.push(pointEntity);
+                this.pointEntities.add(pointEntity);
             }
         }
     }

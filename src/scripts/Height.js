@@ -15,10 +15,11 @@ class Height {
         this.nameOverlay = nameOverlay;
 
         this.cartesian = null;
+        this.button = null;
 
-        this.pointEntities = [];
-        this.lineEntities = [];
-        this.labelEntities = [];
+        this.pointEntities = new Cesium.EntityCollection();
+        this.lineEntities = new Cesium.EntityCollection();
+        this.labelEntities = new Cesium.EntityCollection();
     }
 
     /**
@@ -62,31 +63,31 @@ class Height {
 
         if (!Cesium.defined(this.cartesian)) return;
 
-        // create top and bottom points
-        const pointsCarteisan = [];
-        // get the last two points position from mouse move
-        this.pointEntities.forEach(point => {
-            pointsCarteisan.push(point.position.getValue(Cesium.JulianDate.now()));
-        })
+        // create top and bottom points from mouse move picked position
+        const [topPointEntity, bottomPointEntity] = this.pointEntities.values
+        const topCartesian = topPointEntity.position.getValue(Cesium.JulianDate.now());
+        const bottomCartesian = bottomPointEntity.position.getValue(Cesium.JulianDate.now());
 
-        pointsCarteisan.forEach(cartesian => {
-            this.viewer.entities.add(
-                createPointEntity(cartesian, Cesium.Color.RED)
-            )
-        })
+        this.pointEntities.removeAll();
+
+        const topPointEntityClone = this.viewer.entities.add(createPointEntity(topCartesian, Cesium.Color.RED));
+        const bottomPointEntityClone = this.viewer.entities.add(createPointEntity(bottomCartesian, Cesium.Color.RED));
+        this.pointEntities.add(topPointEntityClone);
+        this.pointEntities.add(bottomPointEntityClone);
 
         // create line between top point and bottom point
         this.viewer.entities.add(
-            createLineEntity(pointsCarteisan, Cesium.Color.ORANGE)
+            createLineEntity([topCartesian, bottomCartesian], Cesium.Color.ORANGE)
         )
 
         // create label 
-        const distance = Cesium.Cartesian3.distance(pointsCarteisan[0], pointsCarteisan[1]);
+        const distance = Cesium.Cartesian3.distance(topCartesian, bottomCartesian);
         const labelEntity = this.viewer.entities.add(
-            createDistanceLabel(pointsCarteisan[0], pointsCarteisan[1], distance)
+            createDistanceLabel(topCartesian, bottomCartesian, distance)
         )
         labelEntity.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
     }
+
 
     /**
      * Handles mouse move events to remove and add moving line, moving points, label, and display moving dot with mouse.
@@ -122,12 +123,12 @@ class Height {
                 const topPointEntity = this.viewer.entities.add(
                     createPointEntity(this.cartesian, Cesium.Color.RED)
                 );
-                this.pointEntities.push(topPointEntity);
+                this.pointEntities.add(topPointEntity);
 
                 const bottomPointEntity = this.viewer.entities.add(
                     createPointEntity(groundCartesian, Cesium.Color.RED)
                 )
-                this.pointEntities.push(bottomPointEntity);
+                this.pointEntities.add(bottomPointEntity);
 
                 // create line between top point and bottom point
                 // remove previous line entities
@@ -137,17 +138,18 @@ class Height {
                         [this.cartesian, groundCartesian], Cesium.Color.YELLOW
                     )
                 )
-                this.lineEntities.push(line);
+                this.lineEntities.add(line);
 
                 // create label entity
                 // remove previous label entities
                 this.removeEntities(this.labelEntities);
                 const distance = Cesium.Cartesian3.distance(this.cartesian, groundCartesian);
-                const labelEntity = this.viewer.entities.add(createDistanceLabel(
+                const label = createDistanceLabel(
                     this.cartesian, groundCartesian, distance
-                ));
-                labelEntity.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
-                this.labelEntities.push(labelEntity);
+                )
+                label.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
+                const labelEntity = this.viewer.entities.add(label);
+                this.labelEntities.add(labelEntity);
             })
         }
     }
@@ -156,11 +158,11 @@ class Height {
      * remove entities from entity collection
      * @param {Cesium.Entity[]} entitiesCollection 
      */
-    removeEntities(entities) {
-        entities.forEach((entity) => {
+    removeEntities(entitiesCollection) {
+        entitiesCollection.values.forEach((entity) => {
             this.viewer.entities.remove(entity);
         });
-        entities.length = 0;
+        entitiesCollection.removeAll();
     }
 
     /**

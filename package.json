@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@turf/turf": "^7.0.0",
     "copy-webpack-plugin": "^12.0.2",
     "css-loader": "^7.1.2",
     "html-webpack-harddisk-plugin": "^2.0.0",

@@ -18,9 +18,11 @@ class ThreePointsCurve {
         this.handler = handler;
         this.nameOverlay = nameOverlay;
 
-        this.pointEntities = [];
-        this.lineEntities = [];
-        this.labelEntities = [];
+        this.button = null;
+
+        this.pointEntities = new Cesium.EntityCollection();
+        this.lineEntities = new Cesium.EntityCollection();
+        this.labelEntities = new Cesium.EntityCollection();
     }
 
     /**
@@ -67,14 +69,15 @@ class ThreePointsCurve {
         // Check if the position is defined
         if (!Cesium.defined(cartesian)) return;
 
+
         const pointEntity = this.viewer.entities.add(
             createPointEntity(cartesian, Cesium.Color.RED)
         );
-        this.pointEntities.push(pointEntity);
+        this.pointEntities.add(pointEntity);
 
         // Check if we have collected 3 points, then measure the curve distance
-        if (this.pointEntities.length === 3) {
-            const [start, middle, end] = this.pointEntities.map((p) =>
+        if (this.pointEntities.values.length === 3) {
+            const [start, middle, end] = this.pointEntities.values.map((p) =>
                 p.position.getValue(Cesium.JulianDate.now())
             );
 
@@ -98,17 +101,19 @@ class ThreePointsCurve {
             const curveLineEntity = this.viewer.entities.add(
                 createLineEntity(curvePoints, Cesium.Color.YELLOW)
             );
-            this.lineEntities.push(curveLineEntity);
+            this.lineEntities.add(curveLineEntity);
 
             // create label
             const totalDistance = this.measureCurveDistance(curvePoints);
             const labelEntity = this.viewer.entities.add(
                 createDistanceLabel(start, end, totalDistance)
             );
-            this.labelEntities.push(labelEntity);
+            this.labelEntities.add(labelEntity);
 
-            // reset pointEntities
-            this.pointEntities.length = 0;
+            // reset point entities
+            this.pointEntities.removeAll();
+            this.lineEntities.removeAll();
+            this.labelEntities.removeAll();
         }
     }
     /**
@@ -117,12 +122,12 @@ class ThreePointsCurve {
      */
     handleCurveMouseMove(movement) {
         const pickedObject = this.viewer.scene.pick(movement.endPosition);
-        if (!Cesium.defined(pickedObject)) return;
+        if (Cesium.defined(pickedObject)) {
+            const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
+            if (!Cesium.defined(cartesian)) return;
 
-        const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-        if (!Cesium.defined(cartesian)) return;
-
-        this.updateMovingDot(cartesian)
+            this.updateMovingDot(cartesian)
+        }
     }
 
     /**
