@@ -47,6 +47,8 @@ class ThreePointsCurve {
      * Sets up input actions for three points curve mode.
      */
     setupInputActions() {
+        this.removeAllInputActions();
+
         this.handler.setInputAction((movement) => {
             this.handleCurveLeftClick(movement);
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -183,6 +185,18 @@ class ThreePointsCurve {
         this.nameOverlay.style.borderRadius = "50%"
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
+    }
+
+    /**
+     * Removes all input actions from the handler.
+     */
+    removeAllInputActions() {
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
     }
 }
 

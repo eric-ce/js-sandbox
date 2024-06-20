@@ -47,6 +47,8 @@ class MultiDistance {
      * Sets up input actions for three points curve mode.
      */
     setupInputAction() {
+        this.removeAllInputActions();
+
         this.handler.setInputAction((movement) => {
             this.handleMultiDistanceLeftClick(movement);
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -74,12 +76,13 @@ class MultiDistance {
 
             // initialize the measurement, clear all previous measure records
             if (this.isMultiDistanceEnd) {
-                this.removeEntities(this.pointEntities);
-                this.removeEntities(this.lineEntities);
-                this.removeEntities(this.labelEntities);
+                this.pointEntities.removeAll();
+                this.lineEntities.removeAll();
+                this.labelEntities.removeAll();
 
-                this.removeEntities(this.movingLineEntity);
-                this.removeEntities(this.movingLabelEntity);
+                this.movingLineEntity = new Cesium.Entity();
+                this.movingLabelEntity = new Cesium.Entity();
+
                 this.distanceCollection.length = 0;
 
                 this.isMultiDistanceEnd = false;
@@ -177,11 +180,9 @@ class MultiDistance {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        this.isMultiDistanceEnd = true;
-
         // place last point and place last line
         const pickedObject = this.viewer.scene.pick(movement.position);
-        if (Cesium.defined(pickedObject)) {
+        if (Cesium.defined(pickedObject) && !this.isMultiDistanceEnd) {
             const cartesian = this.viewer.scene.pickPosition(movement.position);
             if (!Cesium.defined(cartesian)) return;
 
@@ -229,6 +230,7 @@ class MultiDistance {
             );
         }
 
+        this.isMultiDistanceEnd = true;
     }
 
     // clearAll() {
@@ -276,6 +278,18 @@ class MultiDistance {
         this.nameOverlay.style.borderRadius = "50%"
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
+    }
+
+    /**
+     * Removes all input actions from the handler.
+     */
+    removeAllInputActions() {
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
     }
 }
 export { MultiDistance }

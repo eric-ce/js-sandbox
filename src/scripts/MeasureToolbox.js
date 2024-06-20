@@ -182,6 +182,7 @@ class MeasureToolbox extends HTMLElement {
         this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
         this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
         this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
     }
 
     setupNameOverlay() {
