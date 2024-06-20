@@ -46,8 +46,8 @@ class Polygon {
             this.handlePolygonMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-        this.handler.setInputAction(() => {
-            this.handlePolygonMiddleClick();
+        this.handler.setInputAction((movement) => {
+            this.handlePolygonMiddleClick(movement);
         }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
     }
 
@@ -58,6 +58,7 @@ class Polygon {
 
         if (this.isPolygonEnd) {
             this.isPolygonEnd = false;
+            this.pointEntities.removeAll();
         }
 
         const pickedObject = this.viewer.scene.pick(movement.position);
@@ -111,16 +112,42 @@ class Polygon {
         const pickedObject = this.viewer.scene.pick(movement.endPosition);
         if (Cesium.defined(pickedObject)) {
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
+            console.log("🚀  cartesian:", cartesian);
+
 
             if (!Cesium.defined(cartesian)) return;
 
             this.updateMovingDot(cartesian);
+
+            if (this.pointEntities.values.length > 2) {
+                const pointsPosition = this.pointEntities.values.map((pointEntity) => pointEntity.position.getValue(Cesium.JulianDate.now()));
+
+                // Update the polygon entity
+                const dynamicPosition = new Cesium.CallbackProperty(() => {
+                    return new Cesium.PolygonHierarchy([...pointsPosition, cartesian]);
+                }, false);
+                this.polygonEntities.values[0].polygon.hierarchy = dynamicPosition;
+
+                // Update the polygon label
+                const polygonArea = calculateArea([...pointsPosition, cartesian]);
+                if (this.labelEntities.values.length > 0) {
+                    this.removeEntities(this.labelEntities);
+                }
+                const polygonLabel = createDistanceLabel(
+                    pointsPosition[0],
+                    pointsPosition[pointsPosition.length - 1],
+                    polygonArea
+                );
+                polygonLabel.pixelOffset = new Cesium.Cartesian2(0, 20);
+                const polygonLabelEntity = this.viewer.entities.add(polygonLabel);
+                this.labelEntities.add(polygonLabelEntity);
+            }
         } else {
             this.nameOverlay.style.display = 'none';
         }
     }
 
-    handlePolygonMiddleClick() {
+    handlePolygonMiddleClick(movement) {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
@@ -128,7 +155,15 @@ class Polygon {
         this.lineEntities.removeAll();
         this.labelEntities.removeAll();
         this.polygonEntities.removeAll();
+        const pickedObject = this.viewer.scene.pick(movement.position);
+        if (Cesium.defined(pickedObject)) {
+            const cartesian = this.viewer.scene.pickPosition(movement.position);
 
+            if (!Cesium.defined(cartesian)) return;
+
+            const pointEntity = this.viewer.entities.add(createPointEntity(cartesian, Cesium.Color.RED));
+            this.pointEntities.add(pointEntity);
+        }
         this.isPolygonEnd = true;
     }
 

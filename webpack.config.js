@@ -11,7 +11,7 @@ const cesiumWorkers = "node_modules/cesium/Build/Cesium/Workers";
 // const cesiumBaseUrl = "cesiumStatic";
 
 module.exports = {
-    entry: ['./src/scripts/index.js', "./src/style.css"], // Your entry point
+    entry: ['./src/scripts/index.js'], // Your entry point
     output: {
         filename: "[name].js",
         path: path.resolve(__dirname, 'dist'), // Output directory
@@ -23,7 +23,7 @@ module.exports = {
             {
                 test: /\.css$/i,
                 use: ['style-loader', 'css-loader'],
-            }
+            },
         ]
     },
     plugins: [
@@ -54,13 +54,14 @@ module.exports = {
         hot: true, // Enable hot module replacement
     },
     mode: 'development',
-    devtool: 'source-map',
+    devtool: 'inline-source-map',
     resolve: {
         extensions: [".js", ".css"],
         modules: ["src", "node_modules"],
         alias: {
             cesium: path.resolve(__dirname, cesiumSource, "Cesium.js"),
             cesiumStyle: path.resolve(__dirname, cesiumSource, "Widgets", "widgets.css"),
+            mainStyle: path.resolve(__dirname, 'src', 'style.css'),
         },
         fallback: {
             fs: false,
