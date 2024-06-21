@@ -121,7 +121,7 @@ class Polygon {
         this.viewer.selectedEntity = undefined;
 
         const pickedObject = this.viewer.scene.pick(movement.endPosition);
-        if (Cesium.defined(pickedObject) && !this.isPolygonEnd) {
+        if (Cesium.defined(pickedObject)) {
             const cartesian = this.viewer.scene.pickPosition(
                 movement.endPosition
             );
@@ -130,7 +130,7 @@ class Polygon {
 
             this.updateMovingDot(cartesian);
 
-            if (this.pointEntities.values.length > 2) {
+            if (this.pointEntities.values.length > 2 && !this.isPolygonEnd) {
                 const pointsPosition = this.pointEntities.values.map(
                     (pointEntity) =>
                         pointEntity.position.getValue(Cesium.JulianDate.now())
