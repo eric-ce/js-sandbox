@@ -13,7 +13,7 @@ const cesiumWorkers = "node_modules/cesium/Build/Cesium/Workers";
 module.exports = {
     entry: ['./src/scripts/index.js'], // Your entry point
     output: {
-        filename: "[name].js",
+        filename: "[name].bundle.js",
         path: path.resolve(__dirname, 'dist'), // Output directory
         clean: true,
         sourcePrefix: "",
