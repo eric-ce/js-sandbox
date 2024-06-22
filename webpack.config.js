@@ -2,12 +2,12 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
+    mode: 'development',
     entry: ['./src/scripts/index.js', "./src/style.css"], // Your entry point
-    output: {
-        filename: "[name].js",
-        path: path.resolve(__dirname, 'dist'), // Output directory
-        clean: true,
-        sourcePrefix: "",
+    devtool: 'inline-source-map',
+    devServer: {
+        static: path.join(__dirname, "dist"),
+        hot: true, // Enable hot module replacement
     },
     module: {
         rules: [
@@ -24,10 +24,9 @@ module.exports = {
             inject: 'body',
         })
     ],
-    devServer: {
-        static: path.join(__dirname, "dist"),
-        hot: true, // Enable hot module replacement
+    output: {
+        filename: "[name].bundle.js",
+        path: path.resolve(__dirname, 'dist'), // Output directory
+        clean: true,
     },
-    mode: 'development',
-    devtool: 'source-map',
 };
