@@ -206,3 +206,10 @@ export function calculateArea(cartesianArray) {
 
     return area; // The area will be in square meters
 }
+
+export function removeInputActions(handler) {
+    handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    handler.removeInputAction(Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+    handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+}

@@ -32,6 +32,9 @@ class MeasureToolbox extends HTMLElement {
                 viewer.scene.canvas
             );
 
+            this.nameOverlay = document.createElement('div');
+            this.viewer.container.appendChild(this.nameOverlay);
+
             // add cesium style to the shadowRoot for this web component
             this.addCesiumStyle()
 
@@ -173,17 +176,7 @@ class MeasureToolbox extends HTMLElement {
 
     }
 
-    /**
-     * Removes all input actions from the handler.
-     */
-    removeAllInputActions() {
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
-    }
+
 
     setupNameOverlay() {
         this.nameOverlay = document.createElement("div");

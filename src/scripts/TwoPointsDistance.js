@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { createPointEntity, createLineEntity, calculateDistance, createDistanceLabel } from "./helper.js";
+import { createPointEntity, createLineEntity, calculateDistance, createDistanceLabel, removeInputActions } from "./helper.js";
 
 
 /**
@@ -47,7 +47,7 @@ class TwoPointsDistance {
      * Sets up input actions for three points curve mode.
      */
     setupInputAction() {
-        this.removeAllInputActions();
+        removeInputActions(this.handler);
 
         this.handler.setInputAction((movement) => {
             this.handleDistanceLeftClick(movement);
@@ -221,17 +221,7 @@ class TwoPointsDistance {
         this.nameOverlay.style.height = "1px";
     }
 
-    /**
-     * Removes all input actions from the handler.
-     */
-    removeAllInputActions() {
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
-    }
+
 }
 
 export { TwoPointsDistance };

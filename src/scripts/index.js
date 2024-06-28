@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-import '../style.css';
-
-console.log("hello world!")
-=======
 import * as Cesium from "cesium";
 import 'mainStyle';
 import "cesiumStyle";
@@ -70,13 +65,13 @@ class CesiumMap {
         this.div.appendChild(measureToolBox);
         measureToolBox.viewer = this.viewer;
 
-        const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+        // const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
 
-        const nameOverlay = document.createElement('div');
-        this.viewer.container.appendChild(nameOverlay);
+        // const nameOverlay = document.createElement('div');
+        // this.viewer.container.appendChild(nameOverlay);
 
-        measureToolBox.handler = handler;
-        measureToolBox.nameOverlay = nameOverlay;
+        // measureToolBox.handler = handler;
+        // measureToolBox.nameOverlay = nameOverlay;
         // const twoPointsDistance = document.createElement("two-points-distance");
         // measureToolBox.appendChild(twoPointsDistance);
 
@@ -86,4 +81,3 @@ class CesiumMap {
 const map = new CesiumMap();
 map.initialMap();
 
->>>>>>> d6dd2cb968ea324de1339d1da3d2fe9620c8e5ef

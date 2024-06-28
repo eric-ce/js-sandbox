@@ -4,6 +4,7 @@ import {
     calculateArea,
     createDistanceLabel,
     createPolygonEntity,
+    removeInputActions
 } from "./helper.js";
 
 class Polygon {
@@ -43,7 +44,7 @@ class Polygon {
      * Sets up input actions for three points curve mode.
      */
     setupInputAction() {
-        this.removeAllInputActions();
+        removeInputActions(this.handler);
 
         this.handler.setInputAction((movement) => {
             this.handlePolygonLeftClick(movement);
@@ -243,21 +244,6 @@ class Polygon {
         this.nameOverlay.style.height = "1px";
     }
 
-    /**
-     * Removes all input actions from the handler.
-     */
-    removeAllInputActions() {
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
-        this.handler.removeInputAction(
-            Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
-        );
-        this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-        this.handler.removeInputAction(
-            Cesium.ScreenSpaceEventType.MIDDLE_CLICK
-        );
-    }
 }
 
 export { Polygon };

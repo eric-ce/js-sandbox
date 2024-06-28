@@ -11,21 +11,12 @@ const cesiumWorkers = "node_modules/cesium/Build/Cesium/Workers";
 // const cesiumBaseUrl = "cesiumStatic";
 
 module.exports = {
-<<<<<<< HEAD
-    mode: 'development',
-    entry: ['./src/scripts/index.js', "./src/style.css"], // Your entry point
-    devtool: 'inline-source-map',
-    devServer: {
-        static: path.join(__dirname, "dist"),
-        hot: true, // Enable hot module replacement
-=======
     entry: ['./src/scripts/index.js'], // Your entry point
     output: {
         filename: "[name].bundle.js",
         path: path.resolve(__dirname, 'dist'), // Output directory
         clean: true,
         sourcePrefix: "",
->>>>>>> d6dd2cb968ea324de1339d1da3d2fe9620c8e5ef
     },
     module: {
         rules: [
@@ -63,8 +54,6 @@ module.exports = {
         path: path.resolve(__dirname, 'dist'), // Output directory
         clean: true,
     },
-<<<<<<< HEAD
-=======
     mode: 'development',
     devtool: 'inline-source-map',
     resolve: {
@@ -83,5 +72,4 @@ module.exports = {
         // Enable webpack-friendly use of require in Cesium
         toUrlUndefined: true,
     },
->>>>>>> d6dd2cb968ea324de1339d1da3d2fe9620c8e5ef
 };
