@@ -14,7 +14,7 @@ class MultiDistance {
         this.nameOverlay = nameOverlay;
 
         this.isMultiDistanceEnd = false;
-        this.button = null;
+        this._button = null;
 
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
@@ -23,30 +23,14 @@ class MultiDistance {
         this.movingLabelEntity = new Cesium.Entity();
 
         this.distanceCollection = [];
-    }
 
-    /**
-     * Initializes the measurement tool, creating UI elements and setting up event listeners.
-     */
-    initializeMeasurement() {
-        // create distance button
-        this.button = document.createElement("button");
-        this.button.className = "multi-distance cesium-button"
-        this.button.innerHTML = "Multi-D";
-        document.body
-            .querySelector("measure-toolbox")
-            .shadowRoot.querySelector(".toolbar")
-            .appendChild(this.button);
-        // add event listener to distance button
-        this.button.addEventListener("click", () => {
-            this.setupInputAction();
-        })
+        this.active = false;
     }
 
     /**
      * Sets up input actions for three points curve mode.
      */
-    setupInputAction() {
+    setupInputActions() {
         removeInputActions(this.handler);
 
         this.handler.setInputAction((movement) => {
@@ -61,6 +45,14 @@ class MultiDistance {
             this.handleMultiDistanceMiddleClick(movement);
         }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
     }
+
+    /**
+     * Removes input actions for height measurement mode.
+     */
+    removeInputAction() {
+        removeInputActions(this.handler);
+    }
+
 
     handleMultiDistanceLeftClick(movement) {
         this.viewer.selectedEntity = undefined;
@@ -173,6 +165,8 @@ class MultiDistance {
                     movingLine
                 );
             }
+        } else {
+            this.nameOverlay.style.display = "none";
         }
     }
 
@@ -233,18 +227,6 @@ class MultiDistance {
         this.isMultiDistanceEnd = true;
     }
 
-    // clearAll() {
-    //     this.viewer.entities.removeAll();
-
-    //     this.pointEntities.removeAll();
-    //     this.lineEntities.removeAll();
-    //     this.labelEntities.removeAll();
-    //     this.movingLineEntity = new Cesium.Entity();
-    //     this.movingLabelEntity = new Cesium.Entity();
-
-    //     this.distanceCollection.length = 0;
-    // }
-
     /**
      * Removes entities from entity collection or a single entity
      * @param {Cesium.Entity | Cesium.EntityCollection} entityOrCollection - The entity or entity collection to remove
@@ -280,6 +262,30 @@ class MultiDistance {
         this.nameOverlay.style.height = "1px";
     }
 
+    /**
+     * Getter for the button element.
+     */
+    get button() {
+        return this._button;
+    }
+
+    /**
+     * Setter for the button element.
+     */
+    set button(value) {
+        this._button = value;
+        this._button.addEventListener("click", () => {
+            if (this.active) {
+                this.removeInputAction();
+                this._button.classList.remove("active");
+                this.nameOverlay.style.display = "none";
+            } else {
+                this.setupInputActions();
+                this._button.classList.add("active");
+            }
+            this.active = !this.active;
+        });
+    }
 
 }
 export { MultiDistance }

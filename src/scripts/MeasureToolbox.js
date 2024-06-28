@@ -5,6 +5,7 @@ import { ThreePointsCurve } from "./ThreePointsCurve.js";
 import { Height } from "./Height.js";
 import { MultiDistance } from "./MultiDistance.js";
 import { Polygon } from "./Polygon.js";
+import { removeInputActions } from "./helper.js";
 
 /**
  * Custom web component that acts as a toolbox for various measurement tools in Cesium.
@@ -15,11 +16,13 @@ class MeasureToolbox extends HTMLElement {
         this.attachShadow({ mode: "open" });
 
         this.toolsContainer = null;
+        this.infoBox = null;
         this.nameOverlay = null;
-
         this.handler = null;
-
         this.clearButton = null;
+        this.activeButton = null;
+        this.activeTool = null;
+
         // Use a Promise to wait for the viewer to be set
         this.viewerPromise = new Promise((resolve) => {
             this.viewerResolve = resolve;
@@ -32,14 +35,12 @@ class MeasureToolbox extends HTMLElement {
                 viewer.scene.canvas
             );
 
-            this.nameOverlay = document.createElement('div');
-            this.viewer.container.appendChild(this.nameOverlay);
-
             // add cesium style to the shadowRoot for this web component
             this.addCesiumStyle()
 
             // initialize all the measure modes, including its UI, and event listeners
             await this.initializeMeasureModes();
+
         });
 
     }
@@ -60,23 +61,12 @@ class MeasureToolbox extends HTMLElement {
     async initializeMeasureModes() {
         this.setupButtons();
 
-        const points = new Points(this.viewer, this.handler, this.nameOverlay);
-        points.initializeMeasurement();
-
-        const twoPointsDistance = new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay);
-        twoPointsDistance.initializeMeasurement();
-
-        const threePointsCurve = new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay);
-        threePointsCurve.initializeMeasurement();
-
-        const height = new Height(this.viewer, this.handler, this.nameOverlay);
-        height.initializeMeasurement();
-
-        const multiDistance = new MultiDistance(this.viewer, this.handler, this.nameOverlay);
-        multiDistance.initializeMeasurement();
-
-        const polygon = new Polygon(this.viewer, this.handler, this.nameOverlay);
-        polygon.initializeMeasurement();
+        this.createMeasureModeButton(new Points(this.viewer, this.handler, this.nameOverlay), "Points");
+        this.createMeasureModeButton(new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay), "Distance");
+        this.createMeasureModeButton(new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay), "Curve");
+        this.createMeasureModeButton(new Height(this.viewer, this.handler, this.nameOverlay), "Height");
+        this.createMeasureModeButton(new MultiDistance(this.viewer, this.handler, this.nameOverlay), "Multi-Distance");
+        this.createMeasureModeButton(new Polygon(this.viewer, this.handler, this.nameOverlay), "Polygon");
 
         this.setupClearButton();
     }
@@ -149,15 +139,6 @@ class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(toolsContainer);
     }
 
-    // createButton(className, text, parent, callback) {
-    //     const button = document.createElement("button");
-    //     button.className = `${className}`;
-    //     button.innerHTML = text;
-    //     parent.appendChild(button);
-    //     button.addEventListener("click", callback);
-    //     return button;
-    // }
-
     /**
      * Sets up the clear button.
      */
@@ -170,20 +151,77 @@ class MeasureToolbox extends HTMLElement {
 
         this.clearButton.addEventListener("click", () => {
             this.viewer.entities.removeAll();
-            this.removeAllInputActions();
+            removeInputActions(this.handler);
             this.nameOverlay.style.display = "none";
+
+            this.infoBox.remove();
+
+            if (this.activeButton) {
+                this.activeButton.classList.remove("active");
+            }
         });
 
     }
-
-
 
     setupNameOverlay() {
         this.nameOverlay = document.createElement("div");
         this.nameOverlay.className = "backdrop";
         this.nameOverlay.style.cssText = "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
-        this.shadowRoot.appendChild(this.nameOverlay);
+        this.viewer.container.appendChild(this.nameOverlay);
     }
+
+    setupInfoBox() {
+        if (this.infoBox) {
+            //remove the div
+            this.infoBox.remove();
+        }
+        this.infoBox = document.createElement("div");
+        this.infoBox.className = "cesium-infoBox cesium-infoBox-visible";
+        this.infoBox.innerHTML = "Left Click: start measure <br><br> Right Click: clear all <br><br> Middle Click: finish measure";
+        this.infoBox.style.width = "250px"
+        this.infoBox.style.padding = "10px"
+
+        this.shadowRoot.appendChild(this.infoBox);
+
+    }
+
+    createMeasureModeButton(toolInstance, buttonText) {
+        const button = document.createElement("button");
+        const lowerCaseString = buttonText.toLowerCase();
+        button.className = `${lowerCaseString} cesium-button`;
+        button.innerHTML = buttonText;
+
+        button.addEventListener("click", () => {
+            if (this.activeButton === button) {
+                this.deactivateButton(button, toolInstance);
+                this.infoBox.remove();
+            } else {
+                this.activateButton(button, toolInstance);
+                this.setupInfoBox();
+            }
+        });
+
+        this.toolsContainer.appendChild(button);
+        toolInstance.button = button; // Use the setter to store the button in the measure mode instance
+    }
+
+    activateButton(button, toolInstance) {
+        if (this.activeButton) {
+            this.deactivateButton(this.activeButton, this.activeTool);
+        }
+        button.classList.add("active");
+        this.activeButton = button;
+        this.activeTool = toolInstance;
+        toolInstance.setupInputActions();
+    }
+
+    deactivateButton(button, toolInstance) {
+        button.classList.remove("active");
+        this.activeButton = null;
+        this.activeTool = null;
+        toolInstance.removeInputAction();
+    }
+
     /**
      * Setter for the Cesium viewer. Also triggers the promise resolution if it was waiting for
      * a viewer to be set.

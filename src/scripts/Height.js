@@ -15,35 +15,19 @@ class Height {
         this.nameOverlay = nameOverlay;
 
         this.cartesian = null;
-        this.button = null;
+        this._button = null;
 
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
         this.labelEntities = new Cesium.EntityCollection();
-    }
 
-    /**
-     * Initializes the measurement tool, creating UI elements and setting up event listeners.
-     */
-    initializeMeasurement() {
-        // create distance button
-        this.button = document.createElement("button");
-        this.button.className = "height cesium-button"
-        this.button.innerHTML = "Height";
-        document.body
-            .querySelector("measure-toolbox")
-            .shadowRoot.querySelector(".toolbar")
-            .appendChild(this.button);
-        // add event listener to distance button
-        this.button.addEventListener("click", () => {
-            this.setupInputAction();
-        })
+        this.active = false;
     }
 
     /**
      * Sets up input actions for three points curve mode.
      */
-    setupInputAction() {
+    setupInputActions() {
         removeInputActions(this.handler);
 
         this.handler.setInputAction(() => {
@@ -53,6 +37,13 @@ class Height {
         this.handler.setInputAction((movement) => {
             this.handleHeightMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    }
+
+    /**
+     * Removes input actions for height measurement mode.
+     */
+    removeInputAction() {
+        removeInputActions(this.handler);
     }
 
     /**
@@ -101,58 +92,65 @@ class Height {
         if (Cesium.defined(pickedObject)) {
             this.cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
-            if (!Cesium.defined(this.cartesian)) return;
-            this.updateMovingDot(this.cartesian);
+            if (Cesium.defined(this.cartesian)) {
 
-            const cartographic = Cesium.Cartographic.fromCartesian(this.cartesian);
+                this.updateMovingDot(this.cartesian);
 
-            Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, [
-                cartographic,
-            ]).then((groundPositions) => {
-                const groundHeight = groundPositions[0].height;
-                // ground position relevant to movement position
-                const groundCartesian = convertToCartesian3(
-                    new Cesium.Cartographic(
-                        cartographic.longitude,
-                        cartographic.latitude,
-                        groundHeight
+                const cartographic = Cesium.Cartographic.fromCartesian(this.cartesian);
+
+                Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, [
+                    cartographic,
+                ]).then((groundPositions) => {
+                    const groundHeight = groundPositions[0].height;
+                    // ground position relevant to movement position
+                    const groundCartesian = convertToCartesian3(
+                        new Cesium.Cartographic(
+                            cartographic.longitude,
+                            cartographic.latitude,
+                            groundHeight
+                        )
+                    );
+
+                    // create top and bottom points
+                    // remove previous point entities
+                    this.removeEntities(this.pointEntities);
+                    const topPointEntity = this.viewer.entities.add(
+                        createPointEntity(this.cartesian, Cesium.Color.RED)
+                    );
+                    this.pointEntities.add(topPointEntity);
+
+                    const bottomPointEntity = this.viewer.entities.add(
+                        createPointEntity(groundCartesian, Cesium.Color.RED)
                     )
-                );
+                    this.pointEntities.add(bottomPointEntity);
 
-                // create top and bottom points
-                // remove previous point entities
-                this.removeEntities(this.pointEntities);
-                const topPointEntity = this.viewer.entities.add(
-                    createPointEntity(this.cartesian, Cesium.Color.RED)
-                );
-                this.pointEntities.add(topPointEntity);
-
-                const bottomPointEntity = this.viewer.entities.add(
-                    createPointEntity(groundCartesian, Cesium.Color.RED)
-                )
-                this.pointEntities.add(bottomPointEntity);
-
-                // create line between top point and bottom point
-                // remove previous line entities
-                this.removeEntities(this.lineEntities)
-                const line = this.viewer.entities.add(
-                    createLineEntity(
-                        [this.cartesian, groundCartesian], Cesium.Color.YELLOW
+                    // create line between top point and bottom point
+                    // remove previous line entities
+                    this.removeEntities(this.lineEntities)
+                    const line = this.viewer.entities.add(
+                        createLineEntity(
+                            [this.cartesian, groundCartesian], Cesium.Color.YELLOW
+                        )
                     )
-                )
-                this.lineEntities.add(line);
+                    this.lineEntities.add(line);
 
-                // create label entity
-                // remove previous label entities
-                this.removeEntities(this.labelEntities);
-                const distance = Cesium.Cartesian3.distance(this.cartesian, groundCartesian);
-                const label = createDistanceLabel(
-                    this.cartesian, groundCartesian, distance
-                )
-                label.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
-                const labelEntity = this.viewer.entities.add(label);
-                this.labelEntities.add(labelEntity);
-            })
+                    // create label entity
+                    // remove previous label entities
+                    this.removeEntities(this.labelEntities);
+                    const distance = Cesium.Cartesian3.distance(this.cartesian, groundCartesian);
+                    const label = createDistanceLabel(
+                        this.cartesian, groundCartesian, distance
+                    )
+                    label.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
+                    const labelEntity = this.viewer.entities.add(label);
+                    this.labelEntities.add(labelEntity);
+                })
+            }
+        } else {
+            this.nameOverlay.style.display = "none";
+            this.removeEntities(this.pointEntities);
+            this.removeEntities(this.lineEntities)
+            this.removeEntities(this.labelEntities);
         }
     }
 
@@ -180,6 +178,31 @@ class Height {
         this.nameOverlay.style.borderRadius = "50%"
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
+    }
+
+    /**
+     * Getter for the button element.
+     */
+    get button() {
+        return this._button;
+    }
+
+    /**
+     * Setter for the button element.
+     */
+    set button(value) {
+        this._button = value;
+        this._button.addEventListener("click", () => {
+            if (this.active) {
+                this.removeInputAction();
+                this._button.classList.remove("active");
+                this.nameOverlay.style.display = "none";
+            } else {
+                this.setupInputActions();
+                this._button.classList.add("active");
+            }
+            this.active = !this.active;
+        });
     }
 
 }
