@@ -189,8 +189,9 @@ class MeasureToolbox extends HTMLElement {
         this.infoBox.style.padding = "10px"
 
         // show different message to different mode
-        const message1 = "Left Click: start measure";
-        const message2 = "Left Click: start measure <br><br> Right Click: finish measure"
+        const messageTitle = "How to use: <br><br>"
+        const message1 = messageTitle + "Left Click: start measure";
+        const message2 = messageTitle + "Left Click: start measure <br><br> Right Click: finish measure"
         if (this.activeButton && (this.activeButton.classList.contains("multi-distance") || this.activeButton.classList.contains("polygon"))) {
             this.infoBox.innerHTML = message2;
         } else {
