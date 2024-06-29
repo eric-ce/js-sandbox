@@ -22,51 +22,56 @@ class MeasureToolbox extends HTMLElement {
         this.clearButton = null;
         this.activeButton = null;
         this.activeTool = null;
-
-        // Use a Promise to wait for the viewer to be set
-        this.viewerPromise = new Promise((resolve) => {
-            this.viewerResolve = resolve;
-        });
-
-        this.viewerPromise.then(async (viewer) => {
-            this.viewer = viewer;
-
-            this.handler = new Cesium.ScreenSpaceEventHandler(
-                viewer.scene.canvas
-            );
-
-            // add cesium style to the shadowRoot for this web component
-            this.addCesiumStyle()
-
-            // initialize all the measure modes, including its UI, and event listeners
-            await this.initializeMeasureModes();
-
-        });
-
+        this._viewer = null;
     }
 
-    /**
-     * Adds Cesium Widgets CSS to the shadow DOM.
-     */
-    addCesiumStyle() {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = '/Widgets/widgets.css';
+    async connectedCallback() {
+        // add cesium style
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "/Widgets/widgets.css";
         this.shadowRoot.appendChild(link);
     }
 
+    initialize() {
+        this.handler = new Cesium.ScreenSpaceEventHandler(
+            this.viewer.scene.canvas
+        );
+
+        // initialize all the measure modes, including its UI, and event listeners
+        this.initializeMeasureModes();
+    }
+
     /**
-     * Initialize all the measure modes, including its UI, and event listeners
+     * Initialize all the measure modes
      */
     async initializeMeasureModes() {
         this.setupButtons();
 
-        this.createMeasureModeButton(new Points(this.viewer, this.handler, this.nameOverlay), "Points");
-        this.createMeasureModeButton(new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay), "Distance");
-        this.createMeasureModeButton(new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay), "Curve");
-        this.createMeasureModeButton(new Height(this.viewer, this.handler, this.nameOverlay), "Height");
-        this.createMeasureModeButton(new MultiDistance(this.viewer, this.handler, this.nameOverlay), "Multi-Distance");
-        this.createMeasureModeButton(new Polygon(this.viewer, this.handler, this.nameOverlay), "Polygon");
+        this.createMeasureModeButton(
+            new Points(this.viewer, this.handler, this.nameOverlay),
+            "Points"
+        );
+        this.createMeasureModeButton(
+            new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay),
+            "Distance"
+        );
+        this.createMeasureModeButton(
+            new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay),
+            "Curve"
+        );
+        this.createMeasureModeButton(
+            new Height(this.viewer, this.handler, this.nameOverlay),
+            "Height"
+        );
+        this.createMeasureModeButton(
+            new MultiDistance(this.viewer, this.handler, this.nameOverlay),
+            "Multi-Distance"
+        );
+        this.createMeasureModeButton(
+            new Polygon(this.viewer, this.handler, this.nameOverlay),
+            "Polygon"
+        );
 
         this.setupClearButton();
     }
@@ -109,6 +114,7 @@ class MeasureToolbox extends HTMLElement {
                 margin: 0 5px;
                 border-radius: 6rem;
                 cursor: pointer;
+                transition: all 0.2s ease-out;
             }
             .toolbar button.active {
                 color: #000;
@@ -139,7 +145,9 @@ class MeasureToolbox extends HTMLElement {
      */
     toggleTools() {
         this.isToolsExpanded = !this.isToolsExpanded;
-        const buttons = this.toolsContainer.querySelectorAll(".measure-mode-button");
+        const buttons = this.toolsContainer.querySelectorAll(
+            ".measure-mode-button"
+        );
         buttons.forEach((button, index) => {
             setTimeout(() => {
                 button.classList.toggle("show", this.isToolsExpanded);
@@ -152,7 +160,8 @@ class MeasureToolbox extends HTMLElement {
      */
     setupClearButton() {
         this.clearButton = document.createElement("button");
-        this.clearButton.className = "clear-button cesium-button measure-mode-button";
+        this.clearButton.className =
+            "clear-button cesium-button measure-mode-button";
         this.clearButton.innerHTML = "Clear";
 
         this.toolsContainer.appendChild(this.clearButton);
@@ -168,13 +177,13 @@ class MeasureToolbox extends HTMLElement {
                 this.activeButton.classList.remove("active");
             }
         });
-
     }
 
     setupNameOverlay() {
         this.nameOverlay = document.createElement("div");
         this.nameOverlay.className = "backdrop";
-        this.nameOverlay.style.cssText = "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
+        this.nameOverlay.style.cssText =
+            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
         this.viewer.container.appendChild(this.nameOverlay);
     }
 
@@ -185,14 +194,20 @@ class MeasureToolbox extends HTMLElement {
 
         this.infoBox = document.createElement("div");
         this.infoBox.className = "cesium-infoBox cesium-infoBox-visible";
-        this.infoBox.style.width = "250px"
-        this.infoBox.style.padding = "10px"
+        this.infoBox.style.width = "250px";
+        this.infoBox.style.padding = "10px";
 
         // show different message to different mode
-        const messageTitle = "How to use: <br><br>"
+        const messageTitle = "How to use: <br><br>";
         const message1 = messageTitle + "Left Click: start measure";
-        const message2 = messageTitle + "Left Click: start measure <br><br> Right Click: finish measure"
-        if (this.activeButton && (this.activeButton.classList.contains("multi-distance") || this.activeButton.classList.contains("polygon"))) {
+        const message2 =
+            messageTitle +
+            "Left Click: start measure <br><br> Right Click: finish measure";
+        if (
+            this.activeButton &&
+            (this.activeButton.classList.contains("multi-distance") ||
+                this.activeButton.classList.contains("polygon"))
+        ) {
             this.infoBox.innerHTML = message2;
         } else {
             this.infoBox.innerHTML = message1;
@@ -200,6 +215,7 @@ class MeasureToolbox extends HTMLElement {
 
         this.shadowRoot.appendChild(this.infoBox);
     }
+
     /**
      * Creates a measurement mode button.
      * @param {Object} toolInstance - The instance of the measurement tool.
@@ -222,12 +238,13 @@ class MeasureToolbox extends HTMLElement {
                 this.infoBox && this.infoBox.remove();
             } else {
                 // initialize button
-                this.activeButton && this.deactivateButton(this.activeButton, this.activeTool);
+                this.activeButton &&
+                    this.deactivateButton(this.activeButton, this.activeTool);
                 // activate button
                 this.activateButton(button, toolInstance);
                 // set state for the button and instance
-                this.activeButton = button
-                this.activeTool = toolInstance
+                this.activeButton = button;
+                this.activeTool = toolInstance;
 
                 this.setupInfoBox();
             }
@@ -262,24 +279,16 @@ class MeasureToolbox extends HTMLElement {
         //     this.activeTool = null;
         // }
     }
-    /**
-     * Setter for the Cesium viewer. Also triggers the promise resolution if it was waiting for
-     * a viewer to be set.
-     *
-     * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
-     */
-    set viewer(viewer) {
-        this._viewer = viewer;
-        this.viewerResolve(viewer);
-    }
 
-    /**
-     * Getter for the Cesium viewer.
-     *
-     * @returns {Cesium.Viewer} The current Cesium viewer instance.
-     */
     get viewer() {
         return this._viewer;
+    }
+
+    set viewer(viewer) {
+        this._viewer = viewer;
+        if (viewer && this.isConnected) {
+            this.initialize();
+        }
     }
 }
 
