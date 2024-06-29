@@ -13,15 +13,12 @@ class Polygon {
         this.handler = handler;
         this.nameOverlay = nameOverlay;
 
-        this._button = null;
         this.isPolygonEnd = false; // flag to check if the polygon is finished
 
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
         this.labelEntities = new Cesium.EntityCollection();
         this.polygonEntities = new Cesium.EntityCollection();
-
-        this.active = false;
     }
 
     /**
@@ -39,8 +36,8 @@ class Polygon {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
         this.handler.setInputAction((movement) => {
-            this.handlePolygonMiddleClick(movement);
-        }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+            this.handlePolygonRightClick(movement);
+        }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
     }
 
     /**
@@ -162,7 +159,7 @@ class Polygon {
         }
     }
 
-    handlePolygonMiddleClick(movement) {
+    handlePolygonRightClick(movement) {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
@@ -233,31 +230,6 @@ class Polygon {
         this.nameOverlay.style.borderRadius = "50%";
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
-    }
-
-    /**
-     * Getter for the button element.
-     */
-    get button() {
-        return this._button;
-    }
-
-    /**
-     * Setter for the button element.
-     */
-    set button(value) {
-        this._button = value;
-        this._button.addEventListener("click", () => {
-            if (this.active) {
-                this.removeInputAction();
-                this._button.classList.remove("active");
-                this.nameOverlay.style.display = "none";
-            } else {
-                this.setupInputActions();
-                this._button.classList.add("active");
-            }
-            this.active = !this.active;
-        });
     }
 }
 

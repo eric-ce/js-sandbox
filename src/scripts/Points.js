@@ -14,11 +14,7 @@ class Points {
         this.handler = handler;
         this.nameOverlay = nameOverlay;
 
-        this._button = null;
-
         this.pointEntities = new Cesium.EntityCollection();
-
-        this.active = false;
     }
 
     /**
@@ -104,31 +100,6 @@ class Points {
         this.nameOverlay.style.borderRadius = "50%"
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
-    }
-
-    /**
-     * Getter for the button element.
-     */
-    get button() {
-        return this._button;
-    }
-
-    /**
-     * Setter for the button element.
-     */
-    set button(value) {
-        this._button = value;
-        this._button.addEventListener("click", () => {
-            if (this.active) {
-                this.removeInputAction();
-                this._button.classList.remove("active");
-                this.nameOverlay.style.display = "none";
-            } else {
-                this.setupInputActions();
-                this._button.classList.add("active");
-            }
-            this.active = !this.active;
-        });
     }
 }
 

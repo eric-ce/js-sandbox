@@ -84,18 +84,13 @@ class MeasureToolbox extends HTMLElement {
         const toolButton = document.createElement("button");
         toolButton.className = "measure-tools cesium-button";
         toolButton.innerHTML = "Tools";
+        toolButton.addEventListener("click", () => {
+            this.toggleTools();
+        });
         toolsContainer.appendChild(toolButton);
 
         // initialize style of nameOverlay, the moving dot
         this.setupNameOverlay();
-
-        // right click action to clear all entities
-        this.handler.setInputAction(
-            () => {
-                this.viewer.entities.removeAll();
-            },
-            Cesium.ScreenSpaceEventType.RIGHT_CLICK
-        );
 
         // add style to the shadowRoot for this web component
         const style = document.createElement("style");
@@ -122,13 +117,13 @@ class MeasureToolbox extends HTMLElement {
                 border-color: #fff;
                 box-shadow: 0 0 8px #fff;
             }
-            .collapsible-buttons {
+            .toolbar .measure-mode-button {
                 /* Hide the buttons by default */
                 display: none;
                 opacity: 0;
                 position: relative;
             }
-            .collapsible-buttons.show {
+            .toolbar .measure-mode-button.show {
                 /* Show the buttons when the "tool" button is clicked */
                 display: block;
                 opacity: 1;
@@ -140,11 +135,24 @@ class MeasureToolbox extends HTMLElement {
     }
 
     /**
+     * toggle tools to show measure modes
+     */
+    toggleTools() {
+        this.isToolsExpanded = !this.isToolsExpanded;
+        const buttons = this.toolsContainer.querySelectorAll(".measure-mode-button");
+        buttons.forEach((button, index) => {
+            setTimeout(() => {
+                button.classList.toggle("show", this.isToolsExpanded);
+            }, index * 50 + 25);
+        });
+    }
+
+    /**
      * Sets up the clear button.
      */
     setupClearButton() {
         this.clearButton = document.createElement("button");
-        this.clearButton.className = "clear-button cesium-button";
+        this.clearButton.className = "clear-button cesium-button measure-mode-button";
         this.clearButton.innerHTML = "Clear";
 
         this.toolsContainer.appendChild(this.clearButton);
@@ -172,31 +180,54 @@ class MeasureToolbox extends HTMLElement {
 
     setupInfoBox() {
         if (this.infoBox) {
-            //remove the div
             this.infoBox.remove();
         }
+
         this.infoBox = document.createElement("div");
         this.infoBox.className = "cesium-infoBox cesium-infoBox-visible";
-        this.infoBox.innerHTML = "Left Click: start measure <br><br> Right Click: clear all <br><br> Middle Click: finish measure";
         this.infoBox.style.width = "250px"
         this.infoBox.style.padding = "10px"
 
+        // show different message to different mode
+        const message1 = "Left Click: start measure";
+        const message2 = "Left Click: start measure <br><br> Right Click: finish measure"
+        if (this.activeButton && (this.activeButton.classList.contains("multi-distance") || this.activeButton.classList.contains("polygon"))) {
+            this.infoBox.innerHTML = message2;
+        } else {
+            this.infoBox.innerHTML = message1;
+        }
+
         this.shadowRoot.appendChild(this.infoBox);
-
     }
-
+    /**
+     * Creates a measurement mode button.
+     * @param {Object} toolInstance - The instance of the measurement tool.
+     * @param {string} buttonText - The text to display on the button.
+     */
     createMeasureModeButton(toolInstance, buttonText) {
         const button = document.createElement("button");
         const lowerCaseString = buttonText.toLowerCase();
-        button.className = `${lowerCaseString} cesium-button`;
+        button.className = `${lowerCaseString} cesium-button measure-mode-button`;
         button.innerHTML = buttonText;
 
         button.addEventListener("click", () => {
             if (this.activeButton === button) {
+                // if the click button the same as active button then deactivate it
                 this.deactivateButton(button, toolInstance);
-                this.infoBox.remove();
+                // set state for the button
+                this.activeButton = null;
+                this.activeTool = null;
+
+                this.infoBox && this.infoBox.remove();
             } else {
+                // initialize button
+                this.activeButton && this.deactivateButton(this.activeButton, this.activeTool);
+                // activate button
                 this.activateButton(button, toolInstance);
+                // set state for the button and instance
+                this.activeButton = button
+                this.activeTool = toolInstance
+
                 this.setupInfoBox();
             }
         });
@@ -205,23 +236,31 @@ class MeasureToolbox extends HTMLElement {
         toolInstance.button = button; // Use the setter to store the button in the measure mode instance
     }
 
+    /**
+     * Activates a measurement tool button.
+     * @param {HTMLElement} button - The button element to activate.
+     * @param {Object} toolInstance - The instance of the measurement tool.
+     */
     activateButton(button, toolInstance) {
-        if (this.activeButton) {
-            this.deactivateButton(this.activeButton, this.activeTool);
-        }
         button.classList.add("active");
-        this.activeButton = button;
-        this.activeTool = toolInstance;
+        // this.activeButton = button;
+        // this.activeTool = toolInstance;
         toolInstance.setupInputActions();
     }
 
+    /**
+     * Deactivates a measurement tool button.
+     * @param {HTMLElement} button - The button element to deactivate.
+     * @param {Object} toolInstance - The instance of the measurement tool.
+     */
     deactivateButton(button, toolInstance) {
         button.classList.remove("active");
-        this.activeButton = null;
-        this.activeTool = null;
         toolInstance.removeInputAction();
+        // if (this.activeButton === button) {
+        //     this.activeButton = null;
+        //     this.activeTool = null;
+        // }
     }
-
     /**
      * Setter for the Cesium viewer. Also triggers the promise resolution if it was waiting for
      * a viewer to be set.
