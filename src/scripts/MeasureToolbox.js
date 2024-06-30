@@ -12,6 +12,7 @@ import { removeInputActions } from "./helper.js";
  */
 class MeasureToolbox extends HTMLElement {
     constructor() {
+        // constructor(viewer) {
         super();
         this.attachShadow({ mode: "open" });
 
@@ -22,6 +23,7 @@ class MeasureToolbox extends HTMLElement {
         this.clearButton = null;
         this.activeButton = null;
         this.activeTool = null;
+
         this._viewer = null;
     }
 
@@ -31,6 +33,9 @@ class MeasureToolbox extends HTMLElement {
         link.rel = "stylesheet";
         link.href = "/Widgets/widgets.css";
         this.shadowRoot.appendChild(link);
+
+        // add measure toolbox with measure modes
+        // this.initialize();
     }
 
     initialize() {
@@ -261,8 +266,6 @@ class MeasureToolbox extends HTMLElement {
      */
     activateButton(button, toolInstance) {
         button.classList.add("active");
-        // this.activeButton = button;
-        // this.activeTool = toolInstance;
         toolInstance.setupInputActions();
     }
 
@@ -274,10 +277,6 @@ class MeasureToolbox extends HTMLElement {
     deactivateButton(button, toolInstance) {
         button.classList.remove("active");
         toolInstance.removeInputAction();
-        // if (this.activeButton === button) {
-        //     this.activeButton = null;
-        //     this.activeTool = null;
-        // }
     }
 
     get viewer() {

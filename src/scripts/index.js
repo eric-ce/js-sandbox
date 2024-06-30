@@ -61,20 +61,12 @@ class CesiumMap {
         this.viewSetup(this.viewer);
         await this.loadTileset(this.viewer);
 
+        // const measureToolBox = new MeasureToolbox(this.viewer);
+        // this.div.appendChild(measureToolBox);
+
         const measureToolBox = document.createElement("measure-toolbox");
         this.div.appendChild(measureToolBox);
         measureToolBox.viewer = this.viewer;
-
-        // const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
-
-        // const nameOverlay = document.createElement('div');
-        // this.viewer.container.appendChild(nameOverlay);
-
-        // measureToolBox.handler = handler;
-        // measureToolBox.nameOverlay = nameOverlay;
-        // const twoPointsDistance = document.createElement("two-points-distance");
-        // measureToolBox.appendChild(twoPointsDistance);
-
     }
 }
 
