@@ -35,7 +35,9 @@ class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(link);
 
         // add measure toolbox with measure modes
-        // this.initialize();
+        if (this.viewer) {
+            this.initialize();
+        }
     }
 
     initialize() {
@@ -277,17 +279,6 @@ class MeasureToolbox extends HTMLElement {
     deactivateButton(button, toolInstance) {
         button.classList.remove("active");
         toolInstance.removeInputAction();
-    }
-
-    get viewer() {
-        return this._viewer;
-    }
-
-    set viewer(viewer) {
-        this._viewer = viewer;
-        if (viewer && this.isConnected) {
-            this.initialize();
-        }
     }
 }
 

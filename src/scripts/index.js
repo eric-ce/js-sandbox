@@ -65,8 +65,8 @@ class CesiumMap {
         // this.div.appendChild(measureToolBox);
 
         const measureToolBox = document.createElement("measure-toolbox");
-        this.div.appendChild(measureToolBox);
         measureToolBox.viewer = this.viewer;
+        this.div.appendChild(measureToolBox);
     }
 }
 
