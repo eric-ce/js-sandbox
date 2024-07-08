@@ -1,5 +1,4 @@
 import * as Cesium from "cesium";
-import * as turf from "@turf/turf";
 
 /**
  * Create a point entity setting at the given Cartesian coordinates with the specified color.
@@ -84,7 +83,6 @@ export function createDistanceLabel(
     startPoint,
     endPoint,
     distance,
-    isTotal = false
 ) {
     const midpoint = Cesium.Cartesian3.lerp(
         startPoint,
@@ -97,7 +95,6 @@ export function createDistanceLabel(
     const labelOffset = new Cesium.Cartesian2(0, -20);
 
     let labelString = "Total: " + formatDistance(distance);
-
 
     // Create a label entity with the fixed position
     return {
@@ -132,9 +129,9 @@ export function createPolygonEntity(coordinateArray) {
     );
 
     return {
-        name: "measure polygon",
+        name: "measure tool polygon",
         polygon: {
-            hierarchy: cartesian3Array,
+            hierarchy: new Cesium.PolygonHierarchy(cartesian3Array),
             perPositionHeight: true,
             material: new Cesium.ColorMaterialProperty(Cesium.Color.GREEN.withAlpha(0.5)),
             outline: true,
@@ -146,6 +143,7 @@ export function createPolygonEntity(coordinateArray) {
         },
     };
 }
+
 export function convertToCartesian3(coordinate) {
     if (!Cesium.defined(coordinate)) return;
 
@@ -170,6 +168,14 @@ export function convertToCartesian3(coordinate) {
     return cartesian;
 }
 
+export function cartesian3ToCartographicDegrees(cartesian) {
+    const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+
+    const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+    const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+    const height = cartographic.height;
+    return {longitude, latitude, height};
+}
 /**
  * format the distance
  * @param {number} distance
@@ -181,30 +187,6 @@ export function formatDistance(distance) {
     } else {
         return distance.toFixed(2) + " m";
     }
-}
-
-/**
- * calculate the area of a polygon
- * @param cartesianArray
- * @returns {number}
- */
-export function calculateArea(cartesianArray) {
-    if (cartesianArray.length < 3) {
-        return 0; // Return 0 for polygons with less than 3 points
-    }
-
-    const positions = cartesianArray.map((cartesian) => {
-        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-        return [
-            Cesium.Math.toDegrees(cartographic.longitude),
-            Cesium.Math.toDegrees(cartographic.latitude),
-        ];
-    });
-    positions.push(positions[0]);
-    const polygon = turf.polygon([positions]);
-    let area = turf.area(polygon);
-
-    return area; // The area will be in square meters
 }
 
 export function removeInputActions(handler) {

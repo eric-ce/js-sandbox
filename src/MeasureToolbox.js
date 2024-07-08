@@ -1,16 +1,26 @@
 import * as Cesium from "cesium";
-import { TwoPointsDistance } from "./TwoPointsDistance.js";
-import { Points } from "./Points.js";
-import { ThreePointsCurve } from "./ThreePointsCurve.js";
-import { Height } from "./Height.js";
-import { MultiDistance } from "./MultiDistance.js";
-import { Polygon } from "./Polygon.js";
-import { removeInputActions } from "./helper.js";
+import { TwoPointsDistance } from "./lib/features/TwoPointsDistance.js";
+import { Points } from "./lib/features/Points.js";
+import { ThreePointsCurve } from "./lib/features/ThreePointsCurve.js";
+import { Height } from "./lib/features/Height.js";
+import { MultiDistance } from "./lib/features/MultiDistance.js";
+import { Polygon } from "./lib/features/Polygon.js";
+import { removeInputActions } from "./lib/helper/helper.js";
+
 
 /**
- * Custom web component that acts as a toolbox for various measurement tools in Cesium.
+ * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
+ * The toolbox offers functionalities such as point measurements, distance calculations,
+ * height measurements, curve and polygon plotting, and more.
+ * Clear tool to remove all plotted elements.
+ *
+ * @extends {HTMLElement}
  */
-class MeasureToolbox extends HTMLElement {
+export class MeasureToolbox extends HTMLElement {
+    /**
+     * Initializes the MeasureToolbox, attaching a shadow root and setting up event handlers
+     * and elements for various measurement functionalities.
+     */
     constructor() {
         // constructor(viewer) {
         super();
@@ -25,14 +35,36 @@ class MeasureToolbox extends HTMLElement {
         this.activeTool = null;
 
         this._viewer = null;
+
+        this.pointMode = null;
+
+        this._records = {
+            points: [],
+            distances: [],
+            curves: [],
+            heights: [],
+            multiDistances: [],
+            polygons: []
+        };
+
+    }
+
+    set viewer(viewer) {
+        this._viewer = viewer
+    }
+
+    get viewer() {
+        return this._viewer
     }
 
     async connectedCallback() {
-        // add cesium style
+        // link cesium package default style
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = "/Widgets/widgets.css";
+        link.href = `/Widgets/widgets.css`
         this.shadowRoot.appendChild(link);
+
+
 
         // add measure toolbox with measure modes
         if (this.viewer) {
@@ -48,7 +80,6 @@ class MeasureToolbox extends HTMLElement {
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();
     }
-
     /**
      * Initialize all the measure modes
      */
@@ -56,15 +87,15 @@ class MeasureToolbox extends HTMLElement {
         this.setupButtons();
 
         this.createMeasureModeButton(
-            new Points(this.viewer, this.handler, this.nameOverlay),
+            new Points(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, 'points')),
             "Points"
         );
         this.createMeasureModeButton(
-            new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay),
+            new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, 'distances')),
             "Distance"
         );
         this.createMeasureModeButton(
-            new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay),
+            new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, 'curves')),
             "Curve"
         );
         this.createMeasureModeButton(
@@ -268,7 +299,7 @@ class MeasureToolbox extends HTMLElement {
      */
     activateButton(button, toolInstance) {
         button.classList.add("active");
-        toolInstance.setupInputActions();
+        toolInstance.setupInputActions && toolInstance.setupInputActions();
     }
 
     /**
@@ -278,9 +309,34 @@ class MeasureToolbox extends HTMLElement {
      */
     deactivateButton(button, toolInstance) {
         button.classList.remove("active");
-        toolInstance.removeInputAction();
+        toolInstance.removeInputAction && toolInstance.removeInputAction();
+        toolInstance.resetValue && toolInstance.resetValue();
+    }
+
+    // log features for measure modes
+    updateLogBox() {
+        console.log("Updated records:", this.records);
+    }
+    /**
+     * Updates records for the specified measure mode.
+     * @param {string} mode - The measurement mode ('points', 'distances', etc.).
+     * @param {Array} records - The updated records.
+     */
+    updateRecords(mode, records) {
+        this._records[mode] = records;
+        this.updateLogBox();
+    }
+
+    get records() {
+        const nonEmptyRecords = {};
+        for (const key in this._records) {
+            if (Object.values(this._records[key]).length > 0) {
+                nonEmptyRecords[key] = this._records[key];
+            }
+        }
+        return nonEmptyRecords;
     }
 }
 
 customElements.define("measure-toolbox", MeasureToolbox);
-export { MeasureToolbox };
+

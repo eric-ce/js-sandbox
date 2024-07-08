@@ -11,7 +11,7 @@ const cesiumWorkers = "node_modules/cesium/Build/Cesium/Workers";
 // const cesiumBaseUrl = "cesiumStatic";
 
 module.exports = {
-    entry: ['./src/scripts/index.js'], // Your entry point
+    entry: ['./src/index.js'], // Your entry point
     output: {
         filename: "[name].bundle.js",
         path: path.resolve(__dirname, 'dist'), // Output directory

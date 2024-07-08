@@ -1,11 +1,10 @@
 import * as Cesium from "cesium";
 import {
     createPointEntity,
-    calculateArea,
     createDistanceLabel,
     createPolygonEntity,
     removeInputActions
-} from "./helper.js";
+} from "../helper/helper.js";
 
 class Polygon {
     constructor(viewer, handler, nameOverlay) {
@@ -18,7 +17,11 @@ class Polygon {
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
         this.labelEntities = new Cesium.EntityCollection();
-        this.polygonEntities = new Cesium.EntityCollection();
+
+        // initialize polygon entity so that it can show drawn polygon quickly
+        this.polygonEntity = new Cesium.Entity();
+
+        this.coordiante = new Cesium.Cartesian3();
     }
 
     /**
@@ -58,15 +61,20 @@ class Polygon {
             this.pointEntities.removeAll();
             this.lineEntities.removeAll();
             this.labelEntities.removeAll();
-            this.polygonEntities.removeAll();
+            this.polygonEntity = null;
         }
 
-        const pickedObject = this.viewer.scene.pick(movement.position);
-        if (Cesium.defined(pickedObject) && !this.isPolygonEnd) {
-            const cartesian = this.viewer.scene.pickPosition(movement.position);
+        // const pickedObject = this.viewer.scene.pick(movement.position);
+        // if (Cesium.defined(pickedObject) && !this.isPolygonEnd) {
+        if (!this.isPolygonEnd) {
+            // const cartesian = this.viewer.scene.pickPosition(movement.position);
+
+            // use mouse move position to control only one pickPosition is used
+            const cartesian = this.coordiante;
 
             if (!Cesium.defined(cartesian)) return;
 
+            // create point entity
             const color = Cesium.Color.fromRandom({ alpha: 1.0 });
             const pointEntity = this.viewer.entities.add(
                 createPointEntity(cartesian, color)
@@ -79,9 +87,18 @@ class Polygon {
                     (pointEntity) =>
                         pointEntity.position.getValue(Cesium.JulianDate.now())
                 );
-                const polygonArea = calculateArea(pointsPosition);
+
+                // create polygon entity
+                if (this.polygonEntity) {
+                    this.removeEntity(this.polygonEntity);
+                }
+                this.polygonEntity = this.viewer.entities.add(
+                    createPolygonEntity(pointsPosition)
+                );
 
                 //create label entity
+                const polygonArea = this.computePolygonArea(pointsPosition);
+
                 if (this.labelEntities.values.length > 0) {
                     this.removeEntities(this.labelEntities);
                 }
@@ -95,13 +112,7 @@ class Polygon {
                     this.viewer.entities.add(polygonLabel);
                 this.labelEntities.add(polygonLabelEntity);
 
-                if (this.polygonEntities.values.length > 0) {
-                    this.removeEntities(this.polygonEntities);
-                }
-                const newPolygonEntity = this.viewer.entities.add(
-                    createPolygonEntity(pointsPosition)
-                );
-                this.polygonEntities.add(newPolygonEntity);
+
             }
         }
     }
@@ -116,6 +127,8 @@ class Polygon {
             );
 
             if (!Cesium.defined(cartesian)) return;
+
+            this.coordiante = cartesian;
 
             this.updateMovingDot(cartesian);
 
@@ -132,14 +145,11 @@ class Polygon {
                         cartesian,
                     ]);
                 }, false);
-                this.polygonEntities.values[0].polygon.hierarchy =
-                    dynamicPosition;
+
+                this.polygonEntity.polygon.hierarchy = dynamicPosition
 
                 // Update the polygon label
-                const polygonArea = calculateArea([
-                    ...pointsPosition,
-                    cartesian,
-                ]);
+                const polygonArea = this.computePolygonArea([...pointsPosition, cartesian]);
                 if (this.labelEntities.values.length > 0) {
                     this.removeEntities(this.labelEntities);
                 }
@@ -163,9 +173,12 @@ class Polygon {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        const pickedObject = this.viewer.scene.pick(movement.position);
-        if (Cesium.defined(pickedObject) && !this.isPolygonEnd) {
-            const cartesian = this.viewer.scene.pickPosition(movement.position);
+        // const pickedObject = this.viewer.scene.pick(movement.position);
+        // if (Cesium.defined(pickedObject) && !this.isPolygonEnd) {
+        if (!this.isPolygonEnd) {
+            // const cartesian = this.viewer.scene.pickPosition(movement.position);
+
+            const cartesian = this.coordiante;
 
             if (!Cesium.defined(cartesian)) return;
 
@@ -181,17 +194,16 @@ class Polygon {
             );
 
             // create polygon entity
-            this.removeEntities(this.polygonEntities);
-            const newPolygonEntity = this.viewer.entities.add(
+            this.removeEntity(this.polygonEntity)
+            this.polygonEntity = this.viewer.entities.add(
                 createPolygonEntity(pointsPosition)
             );
-            this.polygonEntities.add(newPolygonEntity);
 
             // create label entity
             if (this.labelEntities.values.length > 0) {
                 this.removeEntities(this.labelEntities);
             }
-            const polygonArea = calculateArea(pointsPosition);
+            const polygonArea = this.computePolygonArea(pointsPosition);
             const polygonLabel = createDistanceLabel(
                 pointsPosition[0],
                 pointsPosition[pointsPosition.length - 1],
@@ -207,11 +219,28 @@ class Polygon {
         }
     }
 
+    /**
+     * Removes entities that has been added to entity collection
+     * @param {Cesium.EntityCollection} entityOrCollection - The entity or entity collection to remove
+     */
     removeEntities(entityCollection) {
-        entityCollection.values.forEach((entity) => {
-            this.viewer.entities.remove(entity);
-        });
-        entityCollection.removeAll();
+        // if it is entitiy collection, remove all entities and reset the collection
+        if (entityCollection instanceof Cesium.EntityCollection) {
+
+            entityCollection.values.forEach((entity) => {
+                this.viewer.entities.remove(entity);
+            });
+            entityCollection.removeAll();
+        }
+    }
+
+    /**
+     * Removes single entity
+     * @param {Cesium.Entity} entityOrCollection - The entity or entity collection to remove
+     */
+    removeEntity(entity) {
+        this.viewer.entities.remove(entity);
+        entity = null;
     }
 
     /**
@@ -231,6 +260,35 @@ class Polygon {
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
     }
+
+    resetValue() {
+        this.isPolygonEnd = false;
+        this.pointEntities.removeAll();
+        this.lineEntities.removeAll();
+        this.labelEntities.removeAll();
+        this.polygonEntity = null;
+        this.coordiante = new Cesium.Cartesian3();
+    }
+
+    computePolygonArea(cartesianArray) {
+        let hierarchy = new Cesium.PolygonHierarchy(cartesianArray);
+
+        // let hierarchy = polygon.polygon.hierarchy._value;
+        let indices = Cesium.PolygonPipeline.triangulate(hierarchy.positions, hierarchy.holes);
+
+        let area = 0;
+        for (let i = 0; i < indices.length; i += 3) {
+            let vector1 = hierarchy.positions[indices[i]];
+            let vector2 = hierarchy.positions[indices[i + 1]];
+            let vector3 = hierarchy.positions[indices[i + 2]];
+            let vectorC = Cesium.Cartesian3.subtract(vector2, vector1, new Cesium.Cartesian3());
+            let vectorD = Cesium.Cartesian3.subtract(vector3, vector1, new Cesium.Cartesian3());
+            let areaVector = Cesium.Cartesian3.cross(vectorC, vectorD, new Cesium.Cartesian3());
+            area += Cesium.Cartesian3.magnitude(areaVector) / 2.0;
+        }
+        return area;
+    }
+
 }
 
 export { Polygon };

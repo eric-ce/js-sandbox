@@ -4,7 +4,7 @@ import {
     createLineEntity,
     createDistanceLabel,
     removeInputActions
-} from "./helper.js";
+} from "../helper/helper.js";
 
 /**
  * Represents a three-point curve measurement tool in Cesium.
@@ -14,16 +14,20 @@ import {
  * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
  */
 class ThreePointsCurve {
-    constructor(viewer, handler, nameOverlay) {
+    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
         this.nameOverlay = nameOverlay;
 
+        this.logRecordsCallback = logRecordsCallback;
 
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
         this.labelEntities = new Cesium.EntityCollection();
 
+        this.coordinate = new Cesium.Cartesian3();
+
+        this._curveRecords = [];
     }
 
     /**
@@ -57,11 +61,15 @@ class ThreePointsCurve {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        const cartesian = this.viewer.scene.pickPosition(movement.position);
+        // const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+        // if (Cesium.defined(pickedObject)) {
+        // const cartesian = this.viewer.scene.pickPosition(movement.position);
+
+        // use mouse move position to control only one pickPosition is used
+        const cartesian = this.coordinate;
 
         // Check if the position is defined
         if (!Cesium.defined(cartesian)) return;
-
 
         const pointEntity = this.viewer.entities.add(
             createPointEntity(cartesian, Cesium.Color.RED)
@@ -103,21 +111,28 @@ class ThreePointsCurve {
             );
             this.labelEntities.add(labelEntity);
 
+            // log the curve record
+            this._curveRecords.push(totalDistance);
+            this.logRecordsCallback(this.curveRecords)
+
             // reset point entities
             this.pointEntities.removeAll();
             this.lineEntities.removeAll();
             this.labelEntities.removeAll();
         }
+        // }
     }
     /**
      * Handles mouse move events to display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleCurveMouseMove(movement) {
-        const pickedObject = this.viewer.scene.pick(movement.endPosition);
+        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
         if (Cesium.defined(pickedObject)) {
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
             if (!Cesium.defined(cartesian)) return;
+
+            this.coordinate = cartesian;
 
             this.updateMovingDot(cartesian)
         } else {
@@ -167,7 +182,7 @@ class ThreePointsCurve {
 
     /**
      * update the moving dot with mouse
-     * @param {Cesium.Cartesian3} cartesian  
+     * @param {Cesium.Cartesian3} cartesian
      */
     updateMovingDot(cartesian) {
         const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
@@ -178,6 +193,22 @@ class ThreePointsCurve {
         this.nameOverlay.style.borderRadius = "50%"
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
+    }
+
+    resetValue() {
+        this.pointEntities.removeAll();
+        this.lineEntities.removeAll();
+        this.labelEntities.removeAll();
+
+        this.coordinate = new Cesium.Cartesian3();
+    }
+
+    get curveRecords() {
+        return { curve: this._curveRecords };
+    }
+
+    set curveRecords(curve) {
+        this._curveRecords = curve;
     }
 }
 

@@ -1,24 +1,25 @@
-import { createPointEntity, createLineEntity, convertToCartesian3, createDistanceLabel, removeInputActions } from "./helper.js";
+import { createPointEntity, createLineEntity, convertToCartesian3, createDistanceLabel, removeInputActions } from "../helper/helper.js";
 import * as Cesium from "cesium";
 
 /**
  * Represents a height measurement tool in Cesium.
- * @class   
+ * @class
  * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
  * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
  * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
-*/
+ */
 class Height {
     constructor(viewer, handler, nameOverlay) {
         this.viewer = viewer;
         this.handler = handler;
         this.nameOverlay = nameOverlay;
 
-        this.cartesian = null;
+        this.cartesian = new Cesium.Cartesian3();
 
         this.pointEntities = new Cesium.EntityCollection();
-        this.lineEntities = new Cesium.EntityCollection();
-        this.labelEntities = new Cesium.EntityCollection();
+
+        this.lineEntity = new Cesium.Entity();
+        this.heightRecords = [];
     }
 
     /**
@@ -51,31 +52,32 @@ class Height {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
+        // use mouse move position to control only one pickPosition is used
         if (!Cesium.defined(this.cartesian)) return;
 
         // create top and bottom points from mouse move picked position
-        const [topPointEntity, bottomPointEntity] = this.pointEntities.values
-        const topCartesian = topPointEntity.position.getValue(Cesium.JulianDate.now());
-        const bottomCartesian = bottomPointEntity.position.getValue(Cesium.JulianDate.now());
+        if (this.pointEntities.values.length > 1) {
 
-        this.pointEntities.removeAll();
+            const [topPointEntity, bottomPointEntity] = this.pointEntities.values
+            const topCartesianClone = topPointEntity.position.getValue(Cesium.JulianDate.now());
+            const bottomCartesianClone = bottomPointEntity.position.getValue(Cesium.JulianDate.now());
 
-        const topPointEntityClone = this.viewer.entities.add(createPointEntity(topCartesian, Cesium.Color.RED));
-        const bottomPointEntityClone = this.viewer.entities.add(createPointEntity(bottomCartesian, Cesium.Color.RED));
-        this.pointEntities.add(topPointEntityClone);
-        this.pointEntities.add(bottomPointEntityClone);
+            this.pointEntities.removeAll();
 
-        // create line between top point and bottom point
-        this.viewer.entities.add(
-            createLineEntity([topCartesian, bottomCartesian], Cesium.Color.ORANGE)
-        )
+            // leave the line entity
+            const lineEntityClone = this.lineEntity;
+            this.lineEntity = null;
 
-        // create label 
-        const distance = Cesium.Cartesian3.distance(topCartesian, bottomCartesian);
-        const labelEntity = this.viewer.entities.add(
-            createDistanceLabel(topCartesian, bottomCartesian, distance)
-        )
-        labelEntity.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
+
+            // leave the label entity
+            const labelEntityClone = this.labelEntity;
+            this.labelEntity = null;
+
+            // log the height result to heightRecords
+            const distance = Cesium.Cartesian3.distance(topCartesianClone, bottomCartesianClone);
+
+            this.heightRecords.push(distance);
+        }
     }
 
 
@@ -84,9 +86,10 @@ class Height {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleHeightMouseMove(movement) {
-        const pickedObject = this.viewer.scene.pick(movement.endPosition);
+        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
 
-        if (Cesium.defined(pickedObject)) {
+        // make sure it is picking object and not picking mesure tools entities collection
+        if (Cesium.defined(pickedObject) && !pickedObject.collection) {
             this.cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
             if (Cesium.defined(this.cartesian)) {
@@ -109,7 +112,6 @@ class Height {
                     );
 
                     // create top and bottom points
-                    // remove previous point entities
                     this.removeEntities(this.pointEntities);
                     const topPointEntity = this.viewer.entities.add(
                         createPointEntity(this.cartesian, Cesium.Color.RED)
@@ -122,49 +124,55 @@ class Height {
                     this.pointEntities.add(bottomPointEntity);
 
                     // create line between top point and bottom point
-                    // remove previous line entities
-                    this.removeEntities(this.lineEntities)
-                    const line = this.viewer.entities.add(
-                        createLineEntity(
-                            [this.cartesian, groundCartesian], Cesium.Color.YELLOW
-                        )
-                    )
-                    this.lineEntities.add(line);
+                    this.removeEntity(this.lineEntity);
+                    this.lineEntity = this.viewer.entities.add(createLineEntity([groundCartesian, this.cartesian], Cesium.Color.YELLOW));
 
                     // create label entity
                     // remove previous label entities
-                    this.removeEntities(this.labelEntities);
+                    this.removeEntity(this.labelEntity);
                     const distance = Cesium.Cartesian3.distance(this.cartesian, groundCartesian);
                     const label = createDistanceLabel(
                         this.cartesian, groundCartesian, distance
                     )
                     label.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
-                    const labelEntity = this.viewer.entities.add(label);
-                    this.labelEntities.add(labelEntity);
+                    this.labelEntity = this.viewer.entities.add(label);
+
+                    // reset to keep pointEntities only have top and bottom points
+                    if (this.pointEntities.values.length > 2) { this.pointEntities.removeAll() };
                 })
             }
         } else {
             this.nameOverlay.style.display = "none";
-            this.removeEntities(this.pointEntities);
-            this.removeEntities(this.lineEntities)
-            this.removeEntities(this.labelEntities);
         }
     }
 
     /**
-     * remove entities from entity collection
-     * @param {Cesium.Entity[]} entitiesCollection 
+     * Removes entities that has been added to entity collection
+     * @param {Cesium.EntityCollection} entityOrCollection - The entity or entity collection to remove
      */
-    removeEntities(entitiesCollection) {
-        entitiesCollection.values.forEach((entity) => {
-            this.viewer.entities.remove(entity);
-        });
-        entitiesCollection.removeAll();
+    removeEntities(entityCollection) {
+        // if it is entitiy collection, remove all entities and reset the collection
+        if (entityCollection instanceof Cesium.EntityCollection) {
+
+            entityCollection.values.forEach((entity) => {
+                this.viewer.entities.remove(entity);
+            });
+            entityCollection.removeAll();
+        }
+    }
+
+    /**
+     * Removes single entity
+     * @param {Cesium.Entity} entityOrCollection - The entity or entity collection to remove
+     */
+    removeEntity(entity) {
+        this.viewer.entities.remove(entity);
+        entity = null;
     }
 
     /**
      * update the moving dot with mouse
-     * @param {Cesium.Cartesian3} cartesian  
+     * @param {Cesium.Cartesian3} cartesian
      */
     updateMovingDot(cartesian) {
         const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
@@ -176,7 +184,6 @@ class Height {
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
     }
-
 }
 
 export { Height }
