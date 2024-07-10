@@ -114,8 +114,7 @@ class TwoPointsDistance {
 
                 // log distance
                 this._distanceRecords.push(distance);
-                this.logRecordsCallback(this.distanceLog);
-                // console.log(this._distanceRecords);
+                this.logRecordsCallback(this._distanceRecords);
             }
 
         } else {
@@ -224,26 +223,6 @@ class TwoPointsDistance {
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
     }
-
-    resetValue() {
-        this.pointEntities.removeAll();
-        this.lineEntities.removeAll();
-        this.labelEntities.removeAll();
-
-        this.movingLineEntity = null;
-        this.movingLabelEntity = null;
-
-        this.coordinate = new Cesium.Cartesian3();
-    }
-
-    get distanceLog() {
-        return { distance: this._distanceRecords };
-    }
-
-    set distanceLog(distance) {
-        this._distanceRecords = distance;
-    }
-
 }
 
 export { TwoPointsDistance };

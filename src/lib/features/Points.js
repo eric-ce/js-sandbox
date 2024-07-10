@@ -134,7 +134,7 @@ class Points {
      * @returns {Array} The points records.
      */
     get pointsRecords() {
-        return { points: this._pointsRecords.map(cartesian3ToCartographicDegrees) }
+        return this._pointsRecords.map(cartesian3ToCartographicDegrees);
     }
 }
 

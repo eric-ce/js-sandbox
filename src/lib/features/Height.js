@@ -9,17 +9,20 @@ import * as Cesium from "cesium";
  * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
  */
 class Height {
-    constructor(viewer, handler, nameOverlay) {
+    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
         this.nameOverlay = nameOverlay;
+
+        this.logRecordsCallback = logRecordsCallback;
 
         this.cartesian = new Cesium.Cartesian3();
 
         this.pointEntities = new Cesium.EntityCollection();
 
         this.lineEntity = new Cesium.Entity();
-        this.heightRecords = [];
+
+        this._heightRecords = [];
     }
 
     /**
@@ -73,10 +76,10 @@ class Height {
             const labelEntityClone = this.labelEntity;
             this.labelEntity = null;
 
-            // log the height result to heightRecords
+            // log the height result
             const distance = Cesium.Cartesian3.distance(topCartesianClone, bottomCartesianClone);
-
-            this.heightRecords.push(distance);
+            this._heightRecords.push(distance);
+            this.logRecordsCallback(this._heightRecords);
         }
     }
 

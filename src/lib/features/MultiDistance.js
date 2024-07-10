@@ -8,10 +8,12 @@ class MultiDistance {
      * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
      * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
      */
-    constructor(viewer, handler, nameOverlay) {
+    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
         this.nameOverlay = nameOverlay;
+
+        this.logRecordsCallback = logRecordsCallback;
 
         this.isMultiDistanceEnd = false;
 
@@ -23,7 +25,12 @@ class MultiDistance {
 
         this.coordinate = new Cesium.Cartesian3();
 
-        this.distanceCollection = [];
+        this._distanceCollection = [];
+        this._distanceRecords = [];
+        this._labelIndex = 0;
+
+        this.testTotal = [];
+        this.testDistances = [];
     }
 
     /**
@@ -75,7 +82,7 @@ class MultiDistance {
             this.movingLineEntity = new Cesium.Entity();
             this.movingLabelEntity = new Cesium.Entity();
 
-            this.distanceCollection.length = 0;
+            this._distanceCollection.length = 0;
 
             this.isMultiDistanceEnd = false;
             const continuePoint = this.viewer.entities.add(createPointEntity(cartesian, Cesium.Color.RED));
@@ -103,13 +110,13 @@ class MultiDistance {
 
             // create label entities
             const distance = calculateDistance(prevPointCartesian, currPointCartesian);
-            this.distanceCollection.push(distance);
+            this._distanceCollection.push(distance);
             const label = createDistanceLabel(prevPointCartesian, currPointCartesian, distance)
-            label.label.text = formatDistance(distance);
+            label.label.text = `${String.fromCharCode(97 + this._labelIndex)}: ${formatDistance(distance)}`;
+            this._labelIndex++;
             const labelEntity = this.viewer.entities.add(label);
             this.labelEntities.add(labelEntity);
         }
-        // }
     }
 
     handleMultiDistanceMouseMove(movement) {
@@ -141,7 +148,7 @@ class MultiDistance {
                     cartesian
                 );
                 const totalDistance =
-                    this.distanceCollection.reduce((a, b) => a + b, 0) + movingDistance;
+                    this._distanceCollection.reduce((a, b) => a + b, 0) + movingDistance;
 
                 const movingLabel = createDistanceLabel(
                     cartesian,
@@ -203,7 +210,7 @@ class MultiDistance {
                 this.pointEntities.values[this.pointEntities.values.length - 2].position.getValue(Cesium.JulianDate.now()),
                 cartesian
             );
-            this.distanceCollection.push(lastDistance);
+            this._distanceCollection.push(lastDistance);
 
             const lastLabel = this.viewer.entities.add(
                 createDistanceLabel(
@@ -212,7 +219,8 @@ class MultiDistance {
                     lastDistance
                 )
             );
-            lastLabel.label.text = formatDistance(lastDistance);
+            lastLabel.label.text = `${String.fromCharCode(97 + this._labelIndex)}: ${formatDistance(lastDistance)}`;
+            this._labelIndex++;
             this.labelEntities.add(lastLabel);
 
             // remove moving line and moving label
@@ -220,7 +228,7 @@ class MultiDistance {
                 this.removeEntity(this.movingLabelEntity)
             }
             // place total distance label
-            const totalDistance = this.distanceCollection.reduce((a, b) => a + b, 0);
+            const totalDistance = this._distanceCollection.reduce((a, b) => a + b, 0);
             this.viewer.entities.remove(this.movingLabelEntity);
             this.movingLabelEntity = this.viewer.entities.add(createDistanceLabel(cartesian, cartesian, 0));
             this.movingLabelEntity.label.text = `Total: ${formatDistance(totalDistance)}`;
@@ -228,7 +236,19 @@ class MultiDistance {
                 80,
                 10
             );
+
+            // log distance result
+            const distances = []
+            distances.push(...this._distanceCollection);
+            const distanceRecord = {
+                distances: distances,
+                totalDistance: totalDistance
+            };
+            this._distanceRecords.push(distanceRecord);
+            this.logRecordsCallback(this._distanceRecords);
         }
+
+
 
         this.isMultiDistanceEnd = true;
     }
@@ -271,18 +291,5 @@ class MultiDistance {
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
     }
-
-    resetValue() {
-        this.pointEntities.removeAll();
-        this.lineEntities.removeAll();
-        this.labelEntities.removeAll();
-        this.movingLabelEntity = null;
-        this.movingLineEntity = null;
-
-        this.coordinate = new Cesium.Cartesian3();
-
-        this.distanceCollection.length = 0;
-    }
-
 }
 export { MultiDistance }

@@ -113,7 +113,7 @@ class ThreePointsCurve {
 
             // log the curve record
             this._curveRecords.push(totalDistance);
-            this.logRecordsCallback(this.curveRecords)
+            this.logRecordsCallback(this._curveRecords);
 
             // reset point entities
             this.pointEntities.removeAll();
@@ -193,22 +193,6 @@ class ThreePointsCurve {
         this.nameOverlay.style.borderRadius = "50%"
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
-    }
-
-    resetValue() {
-        this.pointEntities.removeAll();
-        this.lineEntities.removeAll();
-        this.labelEntities.removeAll();
-
-        this.coordinate = new Cesium.Cartesian3();
-    }
-
-    get curveRecords() {
-        return { curve: this._curveRecords };
-    }
-
-    set curveRecords(curve) {
-        this._curveRecords = curve;
     }
 }
 

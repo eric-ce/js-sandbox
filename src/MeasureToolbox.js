@@ -7,7 +7,6 @@ import { MultiDistance } from "./lib/features/MultiDistance.js";
 import { Polygon } from "./lib/features/Polygon.js";
 import { removeInputActions } from "./lib/helper/helper.js";
 
-
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
  * The toolbox offers functionalities such as point measurements, distance calculations,
@@ -43,28 +42,25 @@ export class MeasureToolbox extends HTMLElement {
             distances: [],
             curves: [],
             heights: [],
-            multiDistances: [],
-            polygons: []
+            "m-distance": [],
+            polygons: [],
         };
-
     }
 
     set viewer(viewer) {
-        this._viewer = viewer
+        this._viewer = viewer;
     }
 
     get viewer() {
-        return this._viewer
+        return this._viewer;
     }
 
     async connectedCallback() {
         // link cesium package default style
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = `/Widgets/widgets.css`
+        link.href = `/Widgets/widgets.css`;
         this.shadowRoot.appendChild(link);
-
-
 
         // add measure toolbox with measure modes
         if (this.viewer) {
@@ -87,23 +83,48 @@ export class MeasureToolbox extends HTMLElement {
         this.setupButtons();
 
         this.createMeasureModeButton(
-            new Points(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, 'points')),
+            new Points(
+                this.viewer,
+                this.handler,
+                this.nameOverlay,
+                this.updateRecords.bind(this, "points")
+            ),
             "Points"
         );
         this.createMeasureModeButton(
-            new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, 'distances')),
+            new TwoPointsDistance(
+                this.viewer,
+                this.handler,
+                this.nameOverlay,
+                this.updateRecords.bind(this, "distances")
+            ),
             "Distance"
         );
         this.createMeasureModeButton(
-            new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, 'curves')),
+            new ThreePointsCurve(
+                this.viewer,
+                this.handler,
+                this.nameOverlay,
+                this.updateRecords.bind(this, "curves")
+            ),
             "Curve"
         );
         this.createMeasureModeButton(
-            new Height(this.viewer, this.handler, this.nameOverlay),
+            new Height(
+                this.viewer,
+                this.handler,
+                this.nameOverlay,
+                this.updateRecords.bind(this, "height")
+            ),
             "Height"
         );
         this.createMeasureModeButton(
-            new MultiDistance(this.viewer, this.handler, this.nameOverlay),
+            new MultiDistance(
+                this.viewer,
+                this.handler,
+                this.nameOverlay,
+                this.updateRecords.bind(this, "m-distance")
+            ),
             "Multi-Distance"
         );
         this.createMeasureModeButton(
@@ -317,6 +338,7 @@ export class MeasureToolbox extends HTMLElement {
     updateLogBox() {
         console.log("Updated records:", this.records);
     }
+
     /**
      * Updates records for the specified measure mode.
      * @param {string} mode - The measurement mode ('points', 'distances', etc.).
@@ -339,4 +361,3 @@ export class MeasureToolbox extends HTMLElement {
 }
 
 customElements.define("measure-toolbox", MeasureToolbox);
-
