@@ -127,17 +127,17 @@ class ThreePointsCurve {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleCurveMouseMove(movement) {
-        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        if (Cesium.defined(pickedObject)) {
-            const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-            if (!Cesium.defined(cartesian)) return;
+        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        // if (Cesium.defined(pickedObject)) {
+        const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
+        if (!Cesium.defined(cartesian)) return;
 
-            this.coordinate = cartesian;
+        this.coordinate = cartesian;
 
-            this.updateMovingDot(cartesian)
-        } else {
-            this.nameOverlay.style.display = "none";
-        }
+        this.updateMovingDot(cartesian)
+        // } else {
+        //     this.nameOverlay.style.display = "none";
+        // }
     }
 
     /**

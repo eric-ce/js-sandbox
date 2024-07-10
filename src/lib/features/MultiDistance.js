@@ -28,9 +28,6 @@ class MultiDistance {
         this._distanceCollection = [];
         this._distanceRecords = [];
         this._labelIndex = 0;
-
-        this.testTotal = [];
-        this.testDistances = [];
     }
 
     /**
@@ -123,60 +120,60 @@ class MultiDistance {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        if (Cesium.defined(pickedObject)) {
-            const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
+        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        // if (Cesium.defined(pickedObject)) {
+        const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
-            if (!Cesium.defined(cartesian)) return;
+        if (!Cesium.defined(cartesian)) return;
 
-            this.coordinate = cartesian;
+        this.coordinate = cartesian;
 
-            this.updateMovingDot(cartesian);
+        this.updateMovingDot(cartesian);
 
-            if (this.isMultiDistanceEnd) return;
+        if (this.isMultiDistanceEnd) return;
 
-            if (this.pointEntities.values.length > 0) {
-                // Calculate the distance between the last selected point and the current cartesian position
-                const lastPointIndex = this.pointEntities.values.length - 1;
-                const lastPointCartesian = this.pointEntities.values[lastPointIndex].position.getValue(Cesium.JulianDate.now());
+        if (this.pointEntities.values.length > 0) {
+            // Calculate the distance between the last selected point and the current cartesian position
+            const lastPointIndex = this.pointEntities.values.length - 1;
+            const lastPointCartesian = this.pointEntities.values[lastPointIndex].position.getValue(Cesium.JulianDate.now());
 
-                // create labels
-                this.movingLabelEntity && this.removeEntity(this.movingLabelEntity);
+            // create labels
+            this.movingLabelEntity && this.removeEntity(this.movingLabelEntity);
 
-                const movingDistance = calculateDistance(
-                    lastPointCartesian,
-                    cartesian
-                );
-                const totalDistance =
-                    this._distanceCollection.reduce((a, b) => a + b, 0) + movingDistance;
+            const movingDistance = calculateDistance(
+                lastPointCartesian,
+                cartesian
+            );
+            const totalDistance =
+                this._distanceCollection.reduce((a, b) => a + b, 0) + movingDistance;
 
-                const movingLabel = createDistanceLabel(
-                    cartesian,
-                    cartesian,
-                    totalDistance,
-                );
-                movingLabel.label.showBackground = false;
-                movingLabel.label.pixelOffset = new Cesium.Cartesian2(
-                    80,
-                    10
-                );
-                this.movingLabelEntity = this.viewer.entities.add(movingLabel)
+            const movingLabel = createDistanceLabel(
+                cartesian,
+                cartesian,
+                totalDistance,
+            );
+            movingLabel.label.showBackground = false;
+            movingLabel.label.pixelOffset = new Cesium.Cartesian2(
+                80,
+                10
+            );
+            this.movingLabelEntity = this.viewer.entities.add(movingLabel)
 
-                // create moving line entity
-                this.movingLineEntity && this.removeEntity(this.movingLineEntity);
+            // create moving line entity
+            this.movingLineEntity && this.removeEntity(this.movingLineEntity);
 
-                const movingLine = createLineEntity([lastPointCartesian, cartesian], Cesium.Color.YELLOW)
+            const movingLine = createLineEntity([lastPointCartesian, cartesian], Cesium.Color.YELLOW)
 
-                movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
-                    return [lastPointCartesian, cartesian];
-                }, false);
-                this.movingLineEntity = this.viewer.entities.add(
-                    movingLine
-                );
-            }
-        } else {
-            this.nameOverlay.style.display = "none";
+            movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
+                return [lastPointCartesian, cartesian];
+            }, false);
+            this.movingLineEntity = this.viewer.entities.add(
+                movingLine
+            );
         }
+        // } else {
+        //     this.nameOverlay.style.display = "none";
+        // }
     }
 
     handleMultiDistanceRightClick(movement) {

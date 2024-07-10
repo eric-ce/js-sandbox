@@ -51,7 +51,7 @@ class Points {
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
     handlePointsLeftClick(movement) {
-        this.viewer.selectedEntity = undefined;
+        // this.viewer.selectedEntity = undefined;
         const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
         // initialize pointEntities
@@ -99,19 +99,19 @@ class Points {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handlePointsMouseMove(movement) {
-        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        if (Cesium.defined(pickedObject)) {
-            const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
+        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        // if (Cesium.defined(pickedObject)) {
+        const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
-            if (!Cesium.defined(cartesian)) return;
+        if (!Cesium.defined(cartesian)) return;
 
-            this.coordinate = cartesian;
-            // update nameOverlay: the moving dot with mouse
-            this.updateMovingDot(cartesian);
+        this.coordinate = cartesian;
+        // update nameOverlay: the moving dot with mouse
+        this.updateMovingDot(cartesian);
 
-        } else {
-            this.nameOverlay.style.display = "none";
-        }
+        // } else {
+        //     this.nameOverlay.style.display = "none";
+        // }
     }
 
     /**

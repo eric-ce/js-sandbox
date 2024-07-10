@@ -7,10 +7,12 @@ import {
 } from "../helper/helper.js";
 
 class Polygon {
-    constructor(viewer, handler, nameOverlay) {
+    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
         this.nameOverlay = nameOverlay;
+
+        this.logRecordsCallback = logRecordsCallback;
 
         this.isPolygonEnd = false; // flag to check if the polygon is finished
 
@@ -19,9 +21,11 @@ class Polygon {
         this.labelEntities = new Cesium.EntityCollection();
 
         // initialize polygon entity so that it can show drawn polygon quickly
-        this.polygonEntity = new Cesium.Entity();
+        this.polygonEntity = this.viewer.entities.add(createPolygonEntity([Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO]))
 
         this.coordiante = new Cesium.Cartesian3();
+
+        this._areaRecords = [];
     }
 
     /**
@@ -120,53 +124,53 @@ class Polygon {
     handlePolygonMouseMove(movement) {
         this.viewer.selectedEntity = undefined;
 
-        const pickedObject = this.viewer.scene.pick(movement.endPosition);
-        if (Cesium.defined(pickedObject)) {
-            const cartesian = this.viewer.scene.pickPosition(
-                movement.endPosition
+        // const pickedObject = this.viewer.scene.pick(movement.endPosition);
+        // if (Cesium.defined(pickedObject)) {
+        const cartesian = this.viewer.scene.pickPosition(
+            movement.endPosition
+        );
+
+        if (!Cesium.defined(cartesian)) return;
+
+        this.coordiante = cartesian;
+
+        this.updateMovingDot(cartesian);
+
+        if (this.pointEntities.values.length > 2 && !this.isPolygonEnd) {
+            const pointsPosition = this.pointEntities.values.map(
+                (pointEntity) =>
+                    pointEntity.position.getValue(Cesium.JulianDate.now())
             );
 
-            if (!Cesium.defined(cartesian)) return;
+            // Update the polygon entity
+            const dynamicPosition = new Cesium.CallbackProperty(() => {
+                return new Cesium.PolygonHierarchy([
+                    ...pointsPosition,
+                    cartesian,
+                ]);
+            }, false);
 
-            this.coordiante = cartesian;
+            this.polygonEntity.polygon.hierarchy = dynamicPosition
 
-            this.updateMovingDot(cartesian);
-
-            if (this.pointEntities.values.length > 2 && !this.isPolygonEnd) {
-                const pointsPosition = this.pointEntities.values.map(
-                    (pointEntity) =>
-                        pointEntity.position.getValue(Cesium.JulianDate.now())
-                );
-
-                // Update the polygon entity
-                const dynamicPosition = new Cesium.CallbackProperty(() => {
-                    return new Cesium.PolygonHierarchy([
-                        ...pointsPosition,
-                        cartesian,
-                    ]);
-                }, false);
-
-                this.polygonEntity.polygon.hierarchy = dynamicPosition
-
-                // Update the polygon label
-                const polygonArea = this.computePolygonArea([...pointsPosition, cartesian]);
-                if (this.labelEntities.values.length > 0) {
-                    this.removeEntities(this.labelEntities);
-                }
-                const polygonLabel = createDistanceLabel(
-                    pointsPosition[0],
-                    pointsPosition[pointsPosition.length - 1],
-                    polygonArea
-                );
-                polygonLabel.pixelOffset = new Cesium.Cartesian2(0, 20);
-                polygonLabel.label.text = `Total:${polygonArea.toFixed(2)} m²`;
-                const polygonLabelEntity =
-                    this.viewer.entities.add(polygonLabel);
-                this.labelEntities.add(polygonLabelEntity);
+            // Update the polygon label
+            const polygonArea = this.computePolygonArea([...pointsPosition, cartesian]);
+            if (this.labelEntities.values.length > 0) {
+                this.removeEntities(this.labelEntities);
             }
-        } else {
-            this.nameOverlay.style.display = "none";
+            const polygonLabel = createDistanceLabel(
+                pointsPosition[0],
+                pointsPosition[pointsPosition.length - 1],
+                polygonArea
+            );
+            polygonLabel.pixelOffset = new Cesium.Cartesian2(0, 20);
+            polygonLabel.label.text = `Total:${polygonArea.toFixed(2)} m²`;
+            const polygonLabelEntity =
+                this.viewer.entities.add(polygonLabel);
+            this.labelEntities.add(polygonLabelEntity);
         }
+        // } else {
+        //     this.nameOverlay.style.display = "none";
+        // }
     }
 
     handlePolygonRightClick(movement) {
@@ -213,6 +217,10 @@ class Polygon {
             polygonLabel.label.text = `Total:${polygonArea.toFixed(2)} m²`;
             const polygonLabelEntity = this.viewer.entities.add(polygonLabel);
             this.labelEntities.add(polygonLabelEntity);
+
+            // log area records
+            this._areaRecords.push(polygonArea);
+            this.logRecordsCallback(this._areaRecords);
 
             //set flag to the end drawing of polygon
             this.isPolygonEnd = true;

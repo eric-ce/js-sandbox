@@ -21,6 +21,7 @@ class Height {
         this.pointEntities = new Cesium.EntityCollection();
 
         this.lineEntity = new Cesium.Entity();
+        this.labelEntity = new Cesium.Entity();
 
         this._heightRecords = [];
     }
@@ -89,64 +90,64 @@ class Height {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleHeightMouseMove(movement) {
-        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
 
-        // make sure it is picking object and not picking mesure tools entities collection
-        if (Cesium.defined(pickedObject) && !pickedObject.collection) {
-            this.cartesian = this.viewer.scene.pickPosition(movement.endPosition);
+        // // make sure it is picking object and not picking mesure tools entities collection
+        // if (Cesium.defined(pickedObject) && !pickedObject.collection) {
+        this.cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
-            if (Cesium.defined(this.cartesian)) {
+        if (Cesium.defined(this.cartesian)) {
 
-                this.updateMovingDot(this.cartesian);
+            this.updateMovingDot(this.cartesian);
 
-                const cartographic = Cesium.Cartographic.fromCartesian(this.cartesian);
+            const cartographic = Cesium.Cartographic.fromCartesian(this.cartesian);
 
-                Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, [
-                    cartographic,
-                ]).then((groundPositions) => {
-                    const groundHeight = groundPositions[0].height;
-                    // ground position relevant to movement position
-                    const groundCartesian = convertToCartesian3(
-                        new Cesium.Cartographic(
-                            cartographic.longitude,
-                            cartographic.latitude,
-                            groundHeight
-                        )
-                    );
-
-                    // create top and bottom points
-                    this.removeEntities(this.pointEntities);
-                    const topPointEntity = this.viewer.entities.add(
-                        createPointEntity(this.cartesian, Cesium.Color.RED)
-                    );
-                    this.pointEntities.add(topPointEntity);
-
-                    const bottomPointEntity = this.viewer.entities.add(
-                        createPointEntity(groundCartesian, Cesium.Color.RED)
+            Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, [
+                cartographic,
+            ]).then((groundPositions) => {
+                const groundHeight = groundPositions[0].height;
+                // ground position relevant to movement position
+                const groundCartesian = convertToCartesian3(
+                    new Cesium.Cartographic(
+                        cartographic.longitude,
+                        cartographic.latitude,
+                        groundHeight
                     )
-                    this.pointEntities.add(bottomPointEntity);
+                );
 
-                    // create line between top point and bottom point
-                    this.removeEntity(this.lineEntity);
-                    this.lineEntity = this.viewer.entities.add(createLineEntity([groundCartesian, this.cartesian], Cesium.Color.YELLOW));
+                // create top and bottom points
+                this.removeEntities(this.pointEntities);
+                const topPointEntity = this.viewer.entities.add(
+                    createPointEntity(this.cartesian, Cesium.Color.RED)
+                );
+                this.pointEntities.add(topPointEntity);
 
-                    // create label entity
-                    // remove previous label entities
-                    this.removeEntity(this.labelEntity);
-                    const distance = Cesium.Cartesian3.distance(this.cartesian, groundCartesian);
-                    const label = createDistanceLabel(
-                        this.cartesian, groundCartesian, distance
-                    )
-                    label.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
-                    this.labelEntity = this.viewer.entities.add(label);
+                const bottomPointEntity = this.viewer.entities.add(
+                    createPointEntity(groundCartesian, Cesium.Color.RED)
+                )
+                this.pointEntities.add(bottomPointEntity);
 
-                    // reset to keep pointEntities only have top and bottom points
-                    if (this.pointEntities.values.length > 2) { this.pointEntities.removeAll() };
-                })
-            }
-        } else {
-            this.nameOverlay.style.display = "none";
+                // create line between top point and bottom point
+                this.removeEntity(this.lineEntity);
+                this.lineEntity = this.viewer.entities.add(createLineEntity([groundCartesian, this.cartesian], Cesium.Color.YELLOW));
+
+                // create label entity
+                // remove previous label entities
+                this.removeEntity(this.labelEntity);
+                const distance = Cesium.Cartesian3.distance(this.cartesian, groundCartesian);
+                const label = createDistanceLabel(
+                    this.cartesian, groundCartesian, distance
+                )
+                label.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
+                this.labelEntity = this.viewer.entities.add(label);
+
+                // reset to keep pointEntities only have top and bottom points
+                if (this.pointEntities.values.length > 2) { this.pointEntities.removeAll() };
+            })
         }
+        // } else {
+        //     this.nameOverlay.style.display = "none";
+        // }
     }
 
     /**
@@ -186,6 +187,16 @@ class Height {
         this.nameOverlay.style.borderRadius = "50%"
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
+    }
+
+    resetValue() {
+        this.removeEntities(this.pointEntities);
+        this.removeEntity(this.lineEntity);
+        this.removeEntity(this.labelEntity);
+
+        this._heightRecords.length = 0;
+
+        this.cartesian = null;
     }
 }
 

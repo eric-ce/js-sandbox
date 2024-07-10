@@ -141,48 +141,48 @@ class TwoPointsDistance {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleDistanceMouseMove(movement) {
-        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        if (Cesium.defined(pickedObject)) {
-            const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
+        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        // if (Cesium.defined(pickedObject)) {
+        const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
-            if (!Cesium.defined(cartesian)) return;
+        if (!Cesium.defined(cartesian)) return;
 
-            this.coordinate = cartesian;
+        this.coordinate = cartesian;
 
-            // update nameOverlay: the moving dot with mouse
-            this.updateMovingDot(cartesian)
+        // update nameOverlay: the moving dot with mouse
+        this.updateMovingDot(cartesian)
 
-            if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
-                const firstPointCartesian = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now())
+        if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
+            const firstPointCartesian = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now())
 
-                // create moving line entity
-                this.removeEntity(this.movingLineEntity);
-                const movingLine = createLineEntity(
-                    [firstPointCartesian, cartesian],
-                    Cesium.Color.YELLOW
-                );
-                movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
-                    return [firstPointCartesian, cartesian];
-                }, false);
-                this.movingLineEntity = this.viewer.entities.add(movingLine);
+            // create moving line entity
+            this.removeEntity(this.movingLineEntity);
+            const movingLine = createLineEntity(
+                [firstPointCartesian, cartesian],
+                Cesium.Color.YELLOW
+            );
+            movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
+                return [firstPointCartesian, cartesian];
+            }, false);
+            this.movingLineEntity = this.viewer.entities.add(movingLine);
 
-                // create distance label
-                this.removeEntity(this.movingLabelEntity);
-                const distance = calculateDistance(
-                    firstPointCartesian,
-                    cartesian
-                );
-                const label = createDistanceLabel(
-                    firstPointCartesian,
-                    cartesian,
-                    distance
-                );
-                this.movingLabelEntity = this.viewer.entities.add(label);
+            // create distance label
+            this.removeEntity(this.movingLabelEntity);
+            const distance = calculateDistance(
+                firstPointCartesian,
+                cartesian
+            );
+            const label = createDistanceLabel(
+                firstPointCartesian,
+                cartesian,
+                distance
+            );
+            this.movingLabelEntity = this.viewer.entities.add(label);
 
-            }
-        } else {
-            this.nameOverlay.style.display = "none";
         }
+        // } else {
+        //     this.nameOverlay.style.display = "none";
+        // }
     }
 
     /**

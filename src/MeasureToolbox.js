@@ -128,7 +128,12 @@ export class MeasureToolbox extends HTMLElement {
             "Multi-Distance"
         );
         this.createMeasureModeButton(
-            new Polygon(this.viewer, this.handler, this.nameOverlay),
+            new Polygon(
+                this.viewer,
+                this.handler,
+                this.nameOverlay,
+                this.updateRecords.bind(this, "polygons")
+            ),
             "Polygon"
         );
 
