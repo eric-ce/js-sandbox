@@ -138,6 +138,7 @@ class Height {
                 const label = createDistanceLabel(
                     this.cartesian, groundCartesian, distance
                 )
+                label.label.text = `${distance.toFixed(2)} m`;
                 label.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
                 this.labelEntity = this.viewer.entities.add(label);
 

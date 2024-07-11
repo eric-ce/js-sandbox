@@ -25,6 +25,7 @@
     "webpack-dev-server": "^5.0.4"
   },
   "dependencies": {
-    "cesium": "^1.118.2"
+    "cesium": "^1.118.2",
+    "chart.js": "^4.4.3"
   }
 }

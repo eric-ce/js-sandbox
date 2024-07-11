@@ -5,6 +5,7 @@ import { ThreePointsCurve } from "./lib/features/ThreePointsCurve.js";
 import { Height } from "./lib/features/Height.js";
 import { MultiDistance } from "./lib/features/MultiDistance.js";
 import { Polygon } from "./lib/features/Polygon.js";
+import { Profile } from "./lib/features/Profile.js";
 import { removeInputActions } from "./lib/helper/helper.js";
 
 /**
@@ -125,7 +126,7 @@ export class MeasureToolbox extends HTMLElement {
                 this.nameOverlay,
                 this.updateRecords.bind(this, "m-distance")
             ),
-            "Multi-Distance"
+            "Multi-D"
         );
         this.createMeasureModeButton(
             new Polygon(
@@ -135,6 +136,16 @@ export class MeasureToolbox extends HTMLElement {
                 this.updateRecords.bind(this, "polygons")
             ),
             "Polygon"
+        );
+
+        this.createMeasureModeButton(
+            new Profile(
+                this.viewer,
+                this.handler,
+                this.nameOverlay,
+                this.updateRecords.bind(this, "profile")
+            ),
+            "Profile"
         );
 
         this.setupClearButton();
@@ -169,7 +180,7 @@ export class MeasureToolbox extends HTMLElement {
                 bottom: 6rem;
                 left: 10rem;
                 display: flex;
-                }
+            }
             .toolbar button{
                 font-family: "work sans", sans-serif;
                 font-size: 14px;
@@ -179,6 +190,8 @@ export class MeasureToolbox extends HTMLElement {
                 border-radius: 6rem;
                 cursor: pointer;
                 transition: all 0.2s ease-out;
+                color: #e6f8f8;
+                opacity: 0.9;
             }
             .toolbar button.active {
                 color: #000;
@@ -196,14 +209,104 @@ export class MeasureToolbox extends HTMLElement {
             .toolbar .measure-mode-button.show {
                 /* Show the buttons when the "tool" button is clicked */
                 display: block;
-                opacity: 1;
+                opacity: 0.9;
+            }
+            .cesium-infoBox table{
+                width: 100%;
+            }
+            .cesium-infoBox td{
+                padding: 5px 0;
+                border: none;
+            }
+            .cesium-infoBox{
+                width: 250px;
+                padding: 5px;
+                font-size: 0.8rem;
+            }
+            .log-box{
+                position: absolute; 
+                top: 150px; 
+                right: 0; 
+                height: 250px; 
+                overflow-y: auto; 
+                width: 250px; 
+                background: #303336; 
+                opacity: 90%; 
+                padding: 5px; 
+                border-radius: 5px; 
+                box-shadow: 0 0 10px #000; 
+                z-index: 1000;
+                color: #e6f8f8;
+            }
+            .info-panel td{
+                border: 1px 0 solid #e6f8f8;
+                font-size: 0.8rem;
             }
             `;
-
         this.shadowRoot.appendChild(style);
         this.shadowRoot.appendChild(toolsContainer);
     }
 
+    /**
+     * Creates a measurement mode button.
+     * @param {Object} toolInstance - The instance of the measurement tool.
+     * @param {string} buttonText - The text to display on the button.
+     */
+    createMeasureModeButton(toolInstance, buttonText) {
+        const button = document.createElement("button");
+        const lowerCaseString = buttonText.toLowerCase();
+        button.className = `${lowerCaseString} cesium-button measure-mode-button`;
+        button.innerHTML = buttonText;
+
+        button.addEventListener("click", () => {
+            if (this.activeButton === button) {
+                // if the click button the same as active button then deactivate it
+                this.deactivateButton(button, toolInstance);
+                // set state for the button
+                this.activeButton = null;
+                this.activeTool = null;
+
+                this.infoBox && this.infoBox.remove();
+                this.logBox && this.logBox.remove();
+            } else {
+                // initialize button
+                this.activeButton &&
+                    this.deactivateButton(this.activeButton, this.activeTool);
+                // activate button
+                this.activateButton(button, toolInstance);
+                // set state for the button and instance
+                this.activeButton = button;
+                this.activeTool = toolInstance;
+
+                this.setupInfoBox();
+                // this.records && this.setupLogBox();
+            }
+        });
+
+        this.toolsContainer.appendChild(button);
+        toolInstance.button = button; // Use the setter to store the button in the measure mode instance
+    }
+
+    /**
+     * Activates a measurement tool button.
+     * @param {HTMLElement} button - The button element to activate.
+     * @param {Object} toolInstance - The instance of the measurement tool.
+     */
+    activateButton(button, toolInstance) {
+        button.classList.add("active");
+        toolInstance.setupInputActions && toolInstance.setupInputActions();
+    }
+
+    /**
+     * Deactivates a measurement tool button.
+     * @param {HTMLElement} button - The button element to deactivate.
+     * @param {Object} toolInstance - The instance of the measurement tool.
+     */
+    deactivateButton(button, toolInstance) {
+        button.classList.remove("active");
+        toolInstance.removeInputAction && toolInstance.removeInputAction();
+        toolInstance.resetValue && toolInstance.resetValue();
+    }
     /**
      * toggle tools to show measure modes
      */
@@ -258,85 +361,73 @@ export class MeasureToolbox extends HTMLElement {
 
         this.infoBox = document.createElement("div");
         this.infoBox.className = "cesium-infoBox cesium-infoBox-visible";
-        this.infoBox.style.width = "250px";
-        this.infoBox.style.padding = "10px";
 
-        // show different message to different mode
-        const messageTitle = "How to use: <br><br>";
-        const message1 = messageTitle + "Left Click: start measure";
-        const message2 =
-            messageTitle +
-            "Left Click: start measure <br><br> Right Click: finish measure";
+        const infoBoxTable = document.createElement("table");
+
+        const messageTitle = "How to use:";
+        const message1 = "Left Click: start measure";
+        const message2 = "Right Click: finish measure";
+
+        infoBoxTable.appendChild(this.createRow(messageTitle));
+
         if (
             this.activeButton &&
             (this.activeButton.classList.contains("multi-distance") ||
                 this.activeButton.classList.contains("polygon"))
         ) {
-            this.infoBox.innerHTML = message2;
+            infoBoxTable.appendChild(this.createRow(message1));
+            infoBoxTable.appendChild(this.createRow(message2));
         } else {
-            this.infoBox.innerHTML = message1;
+            infoBoxTable.appendChild(this.createRow(message1));
+
         }
 
+        this.infoBox.appendChild(infoBoxTable);
         this.shadowRoot.appendChild(this.infoBox);
     }
 
-    /**
-     * Creates a measurement mode button.
-     * @param {Object} toolInstance - The instance of the measurement tool.
-     * @param {string} buttonText - The text to display on the button.
-     */
-    createMeasureModeButton(toolInstance, buttonText) {
-        const button = document.createElement("button");
-        const lowerCaseString = buttonText.toLowerCase();
-        button.className = `${lowerCaseString} cesium-button measure-mode-button`;
-        button.innerHTML = buttonText;
+    setupLogBox() {
+        this.logBox = document.createElement("div");
+        this.logBox.className = "log-box";
 
-        button.addEventListener("click", () => {
-            if (this.activeButton === button) {
-                // if the click button the same as active button then deactivate it
-                this.deactivateButton(button, toolInstance);
-                // set state for the button
-                this.activeButton = null;
-                this.activeTool = null;
+        const table = document.createElement("table");
+        table.className = "info-panel";
+        const title = this.createRow("Records");
+        table.appendChild(title);
 
-                this.infoBox && this.infoBox.remove();
-            } else {
-                // initialize button
-                this.activeButton &&
-                    this.deactivateButton(this.activeButton, this.activeTool);
-                // activate button
-                this.activateButton(button, toolInstance);
-                // set state for the button and instance
-                this.activeButton = button;
-                this.activeTool = toolInstance;
+        if (this.records) {
+            for (const key in this.records) {
+                console.log(key)
 
-                this.setupInfoBox();
+                this.records[key].forEach((record) => {
+                    // judge if record is object or array
+                    const modeKey = this.createRow(key);
+                    table.appendChild(modeKey);
+
+                    if (typeof record === "object") {
+                        for (const key in record) {
+                            const rows = this.createRow(`${key}: ${record[key]}`);
+                            table.appendChild(rows);
+                        }
+                    } else {
+                        const rows = this.createRow(record);
+                        table.appendChild(rows);
+                    }
+                });
             }
-        });
+        }
 
-        this.toolsContainer.appendChild(button);
-        toolInstance.button = button; // Use the setter to store the button in the measure mode instance
+        this.logBox.appendChild(table);
+        this.shadowRoot.appendChild(this.logBox);
     }
 
-    /**
-     * Activates a measurement tool button.
-     * @param {HTMLElement} button - The button element to activate.
-     * @param {Object} toolInstance - The instance of the measurement tool.
-     */
-    activateButton(button, toolInstance) {
-        button.classList.add("active");
-        toolInstance.setupInputActions && toolInstance.setupInputActions();
-    }
+    createRow(value) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
 
-    /**
-     * Deactivates a measurement tool button.
-     * @param {HTMLElement} button - The button element to deactivate.
-     * @param {Object} toolInstance - The instance of the measurement tool.
-     */
-    deactivateButton(button, toolInstance) {
-        button.classList.remove("active");
-        toolInstance.removeInputAction && toolInstance.removeInputAction();
-        toolInstance.resetValue && toolInstance.resetValue();
+        cell.innerHTML = value;
+        row.appendChild(cell);
+        return row;
     }
 
     // log features for measure modes

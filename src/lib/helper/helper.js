@@ -59,6 +59,33 @@ export function createLineEntity(
     };
 }
 
+export function createLineEntityClamped(
+    coordinateArray,
+    cesiumColor = Cesium.Color.RED
+) {
+    // Check if the input is valid (an array of Cartesian3 points with at least two points)
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
+        return;
+    }
+    // convert unexpect coordinate to cartesian3
+    const convertedCoordinates = coordinateArray.map((item) =>
+        convertToCartesian3(item)
+    );
+
+    // unstable color fix using ColorMaterialProperty
+    const color = new Cesium.ColorMaterialProperty(cesiumColor);
+
+    return {
+        polyline: {
+            positions: convertedCoordinates,
+            width: 2,
+            clampToGround: true,
+            material: color,
+            depthFailMaterial: color,
+        },
+    };
+}
+
 /**
  * calculate the distance between two points
  * @param {Cesium.Cartesian3} startPoint - the cartesian coordinates
@@ -174,7 +201,7 @@ export function cartesian3ToCartographicDegrees(cartesian) {
     const longitude = Cesium.Math.toDegrees(cartographic.longitude);
     const latitude = Cesium.Math.toDegrees(cartographic.latitude);
     const height = cartographic.height;
-    return {longitude, latitude, height};
+    return { longitude, latitude, height };
 }
 /**
  * format the distance
