@@ -1,6 +1,12 @@
 import * as Cesium from "cesium";
-import { createPointEntity, createLineEntityClamped, calculateDistance, createDistanceLabel, removeInputActions } from "../helper/helper.js";
-import Chart from 'chart.js/auto';
+import {
+    createPointEntity,
+    createLineEntityClamped,
+    calculateDistance,
+    createDistanceLabel,
+    removeInputActions,
+} from "../helper/helper.js";
+import Chart from "chart.js/auto";
 
 class Profile {
     constructor(viewer, handler, nameOverlay) {
@@ -16,6 +22,9 @@ class Profile {
         this.movingLabelEntity = new Cesium.Entity();
 
         this.coordinate = new Cesium.Cartesian3();
+
+        this.chart = null;
+        this.chartDiv = null;
 
         this.setupChart();
     }
@@ -103,25 +112,43 @@ class Profile {
                 const labelEntity = this.viewer.entities.add(label);
                 this.labelEntities.add(labelEntity);
 
+                // show the chart, if no chart then create the chart set it to show
+                if (this.chartDiv) {
+                    this.chartDiv.style.display = "block";
+                } else {
+                    this.setupChart();
+                    this.chartDiv.style.display = "block";
+                }
+
                 // interpolate points between the first and second point
                 const interpolatedPoints = this.interpolatePoints(
                     this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now()),
                     this.pointEntities.values[1].position.getValue(Cesium.JulianDate.now())
                 );
-                const interpolatedCartographics = interpolatedPoints.map(point => Cesium.Cartographic.fromCartesian(point));
-
-                Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, interpolatedCartographics).then((groundPositions) => {
-                    const groundCartesian = groundPositions.map(cartograhpic => Cesium.Cartesian3.fromRadians(cartograhpic.longitude, cartograhpic.latitude, cartograhpic.height));
+                // get the ground height of the interpolated points
+                const interpolatedCartographics = interpolatedPoints.map((point) =>
+                    Cesium.Cartographic.fromCartesian(point)
+                );
+                Cesium.sampleTerrainMostDetailed(
+                    this.viewer.terrainProvider,
+                    interpolatedCartographics
+                ).then((groundPositions) => {
+                    const groundCartesian = groundPositions.map((cartograhpic) =>
+                        Cesium.Cartesian3.fromRadians(
+                            cartograhpic.longitude,
+                            cartograhpic.latitude,
+                            cartograhpic.height
+                        )
+                    );
+                    // calculate the distance between the interpolated points and the ground points
                     const distances = interpolatedPoints.map((point, index) => {
                         const groundPosition = groundCartesian[index];
                         return calculateDistance(point, groundPosition);
-                    })
-
+                    });
+                    // update the chart
                     this.updateChart(distances);
-                })
-
+                });
             }
-
         } else {
             // if there are more than 2 point entities, reset the measurement
             this.pointEntities.removeAll();
@@ -155,10 +182,12 @@ class Profile {
         this.coordinate = cartesian;
 
         // update nameOverlay: the moving dot with mouse
-        this.updateMovingDot(cartesian)
+        this.updateMovingDot(cartesian);
 
         if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
-            const firstPointCartesian = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now())
+            const firstPointCartesian = this.pointEntities.values[0].position.getValue(
+                Cesium.JulianDate.now()
+            );
 
             // create moving line entity
             this.removeEntity(this.movingLineEntity);
@@ -173,17 +202,9 @@ class Profile {
 
             // create distance label
             this.removeEntity(this.movingLabelEntity);
-            const distance = calculateDistance(
-                firstPointCartesian,
-                cartesian
-            );
-            const label = createDistanceLabel(
-                firstPointCartesian,
-                cartesian,
-                distance
-            );
+            const distance = calculateDistance(firstPointCartesian, cartesian);
+            const label = createDistanceLabel(firstPointCartesian, cartesian, distance);
             this.movingLabelEntity = this.viewer.entities.add(label);
-
         }
         // } else {
         //     this.nameOverlay.style.display = "none";
@@ -197,7 +218,6 @@ class Profile {
     removeEntities(entityCollection) {
         // if it is entitiy collection, remove all entities and reset the collection
         if (entityCollection instanceof Cesium.EntityCollection) {
-
             entityCollection.values.forEach((entity) => {
                 this.viewer.entities.remove(entity);
             });
@@ -219,12 +239,15 @@ class Profile {
      * @param {Cesium.Cartesian3} cartesian
      */
     updateMovingDot(cartesian) {
-        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
-        this.nameOverlay.style.display = 'block';
+        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(
+            this.viewer.scene,
+            cartesian
+        );
+        this.nameOverlay.style.display = "block";
         this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
         this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
         this.nameOverlay.style.backgroundColor = "yellow";
-        this.nameOverlay.style.borderRadius = "50%"
+        this.nameOverlay.style.borderRadius = "50%";
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
     }
@@ -240,7 +263,12 @@ class Profile {
 
         for (let i = 0; i <= numberOfPoints; i++) {
             const t = i / numberOfPoints;
-            const interpolatedPoint = Cesium.Cartesian3.lerp(pointA, pointB, t, new Cesium.Cartesian3());
+            const interpolatedPoint = Cesium.Cartesian3.lerp(
+                pointA,
+                pointB,
+                t,
+                new Cesium.Cartesian3()
+            );
             points.push(interpolatedPoint);
         }
 
@@ -248,56 +276,67 @@ class Profile {
     }
 
     setupChart() {
-        const chartDiv = document.createElement('div');
-        chartDiv.className = 'chart';
-        this.viewer.container.appendChild(chartDiv);
+        this.chartDiv = document.createElement("div");
+        this.chartDiv.className = "chart";
+        this.viewer.container.appendChild(this.chartDiv);
 
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         canvas.id = "profileTerrainChart";
-        canvas.style.width = "400";
-        canvas.style.height = "200";
-        chartDiv.appendChild(canvas);
+        canvas.style.width = "400px";
+        canvas.style.height = "200px";
+        this.chartDiv.appendChild(canvas);
 
-        chartDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; z-index: 1000; background: white;';
+        this.chartDiv.style.cssText =
+            "position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; width: 400px; height: 200px;";
+        this.chartDiv.style.display = "none";
+        const ctx = document.getElementById("profileTerrainChart").getContext("2d");
+        this.chart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: [], // Empty initially
+                datasets: [
+                    {
+                        label: "Distance from Ground",
+                        data: [], // Empty initially
+                        borderColor: "rgba(75, 192, 192, 1)",
+                        borderWidth: 2,
+                        fill: false,
+                    },
+                ],
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: "Point Index",
+                        },
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: "Distance (meters)",
+                        },
+                    },
+                },
+            },
+        });
     }
 
     updateChart(data) {
-        const ctx = document.getElementById('profileTerrainChart').getContext('2d');
-        if (this.chart) {
-            this.chart.data.datasets[0].data = data;
-            this.chart.update();
-        } else {
-            this.chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map((_, index) => index),
-                    datasets: [{
-                        label: 'Profile of Terrain',
-                        data: data,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 2,
-                        fill: true
-                    }]
-                },
-                options: {
-                    scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Point Index'
-                            }
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: 'Distance (meters)'
-                            }
-                        }
-                    }
-                }
-            });
+        if (!this.chart) return;
+        this.chart.data.labels = data.map((_, index) => index);
+        this.chart.data.datasets[0].data = data;
+        this.chart.update();
+    }
+
+    removeChart() {
+        if (this.chartDiv) {
+            this.chartDiv.remove();
+            this.chart = null;
+            this.chartDiv = null;
         }
     }
 }
 
-export { Profile }
+export { Profile };
