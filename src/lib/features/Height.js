@@ -195,8 +195,6 @@ class Height {
         this.removeEntity(this.lineEntity);
         this.removeEntity(this.labelEntity);
 
-        this._heightRecords.length = 0;
-
         this.cartesian = null;
     }
 }

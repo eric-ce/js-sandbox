@@ -194,6 +194,13 @@ class ThreePointsCurve {
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
     }
+
+    resetvalue() {
+        this.pointEntities.removeAll();
+        this.lineEntities.removeAll();
+        this.labelEntities.removeAll();
+        this.coordinate = null;
+    }
 }
 
 export { ThreePointsCurve };

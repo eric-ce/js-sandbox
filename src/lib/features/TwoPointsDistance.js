@@ -223,6 +223,16 @@ class TwoPointsDistance {
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
     }
+
+    resetValue() {
+        this.pointEntities.removeAll();
+        this.lineEntities.removeAll();
+        this.labelEntities.removeAll();
+        this.removeEntity(this.movingLineEntity);
+        this.removeEntity(this.movingLabelEntity);
+        this.coordinate = null;
+
+    }
 }
 
 export { TwoPointsDistance };

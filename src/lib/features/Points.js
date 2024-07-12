@@ -136,6 +136,11 @@ class Points {
     get pointsRecords() {
         return this._pointsRecords.map(cartesian3ToCartographicDegrees);
     }
+
+    resetValue() {
+        this.pointEntities.removeAll();
+        this.coordinate = null;
+    }
 }
 
 export { Points };

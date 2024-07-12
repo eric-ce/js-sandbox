@@ -288,5 +288,17 @@ class MultiDistance {
         this.nameOverlay.style.width = "1px";
         this.nameOverlay.style.height = "1px";
     }
+
+    resetValue() {
+        this.pointEntities.removeAll();
+        this.lineEntities.removeAll();
+        this.labelEntities.removeAll();
+        this.movingLabelEntity = null;
+        this.movingLineEntity = null;
+
+        this.coordinate = new Cesium.Cartesian3();
+
+        // this._labelIndex = 0;
+    }
 }
 export { MultiDistance }

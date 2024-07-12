@@ -22,22 +22,23 @@ export class MeasureToolbox extends HTMLElement {
      * and elements for various measurement functionalities.
      */
     constructor() {
-        // constructor(viewer) {
         super();
         this.attachShadow({ mode: "open" });
-
-        this.toolsContainer = null;
-        this.infoBox = null;
-        this.nameOverlay = null;
+        // cesium variables
+        this._viewer = null;
         this.handler = null;
+
+        this.nameOverlay = null;
+        this.infoBox = null;
+
+        // buttons variables
+        this.toolsContainer = null;
         this.clearButton = null;
         this.activeButton = null;
         this.activeTool = null;
+        this.measureModes = [];
 
-        this._viewer = null;
-
-        this.pointMode = null;
-
+        // log variables
         this._records = {
             points: [],
             distances: [],
@@ -70,83 +71,33 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     initialize() {
-        this.handler = new Cesium.ScreenSpaceEventHandler(
-            this.viewer.scene.canvas
-        );
+        this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
 
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();
     }
+
     /**
      * Initialize all the measure modes
      */
     async initializeMeasureModes() {
         this.setupButtons();
 
-        this.createMeasureModeButton(
-            new Points(
-                this.viewer,
-                this.handler,
-                this.nameOverlay,
-                this.updateRecords.bind(this, "points")
-            ),
-            "Points"
-        );
-        this.createMeasureModeButton(
-            new TwoPointsDistance(
-                this.viewer,
-                this.handler,
-                this.nameOverlay,
-                this.updateRecords.bind(this, "distances")
-            ),
-            "Distance"
-        );
-        this.createMeasureModeButton(
-            new ThreePointsCurve(
-                this.viewer,
-                this.handler,
-                this.nameOverlay,
-                this.updateRecords.bind(this, "curves")
-            ),
-            "Curve"
-        );
-        this.createMeasureModeButton(
-            new Height(
-                this.viewer,
-                this.handler,
-                this.nameOverlay,
-                this.updateRecords.bind(this, "height")
-            ),
-            "Height"
-        );
-        this.createMeasureModeButton(
-            new MultiDistance(
-                this.viewer,
-                this.handler,
-                this.nameOverlay,
-                this.updateRecords.bind(this, "m-distance")
-            ),
-            "Multi-D"
-        );
-        this.createMeasureModeButton(
-            new Polygon(
-                this.viewer,
-                this.handler,
-                this.nameOverlay,
-                this.updateRecords.bind(this, "polygons")
-            ),
-            "Polygon"
-        );
+        const modes = [
+            { instance: new Points(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "points")), name: "Points" },
+            { instance: new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "distances")), name: "Distance" },
+            { instance: new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "curves")), name: "Curve" },
+            { instance: new Height(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "height")), name: "Height" },
+            { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-D" },
+            { instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")), name: "Polygon" },
+            { instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")), name: "Profile" },
+        ];
 
-        this.createMeasureModeButton(
-            new Profile(
-                this.viewer,
-                this.handler,
-                this.nameOverlay,
-                this.updateRecords.bind(this, "profile")
-            ),
-            "Profile"
-        );
+        this.measureModes = modes.map(mode => mode.instance);
+
+        modes.forEach(mode => {
+            this.createMeasureModeButton(mode.instance, mode.name);
+        });
 
         this.setupClearButton();
     }
@@ -312,6 +263,7 @@ export class MeasureToolbox extends HTMLElement {
             toolInstance.removeChart();
         }
     }
+
     /**
      * toggle tools to show measure modes
      */
@@ -332,8 +284,7 @@ export class MeasureToolbox extends HTMLElement {
      */
     setupClearButton() {
         this.clearButton = document.createElement("button");
-        this.clearButton.className =
-            "clear-button cesium-button measure-mode-button";
+        this.clearButton.className = "clear-button cesium-button measure-mode-button";
         this.clearButton.innerHTML = "Clear";
 
         this.toolsContainer.appendChild(this.clearButton);
@@ -343,10 +294,16 @@ export class MeasureToolbox extends HTMLElement {
             removeInputActions(this.handler);
             this.nameOverlay.style.display = "none";
 
-            this.infoBox.remove();
+            this.infoBox && this.infoBox.remove();
+
+            this.measureModes.forEach(mode => {
+                mode.resetValue && mode.resetValue();
+            });
 
             if (this.activeButton) {
                 this.activeButton.classList.remove("active");
+                this.activeButton = null;
+                this.activeTool = null;
             }
         });
     }

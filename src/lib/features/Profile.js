@@ -297,10 +297,10 @@ class Profile {
                 datasets: [
                     {
                         label: "Distance from Ground",
-                        data: [], // Empty initially
+                        data: [],
                         borderColor: "rgba(75, 192, 192, 1)",
                         borderWidth: 2,
-                        fill: false,
+                        fill: true,
                     },
                 ],
             },
@@ -336,6 +336,18 @@ class Profile {
             this.chart = null;
             this.chartDiv = null;
         }
+    }
+
+    resetValue() {
+        this.pointEntities.removeAll();
+        this.lineEntities.removeAll();
+        this.labelEntities.removeAll();
+        this.removeEntity(this.movingLineEntity);
+        this.removeEntity(this.movingLabelEntity);
+
+        this.removeChart();
+
+        this.coordinate = null;
     }
 }
 
