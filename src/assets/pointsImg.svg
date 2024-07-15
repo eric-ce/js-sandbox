@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+  <g id="point">
+    <circle cx="25.5" cy="25.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+  </g>
+</svg>

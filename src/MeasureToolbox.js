@@ -7,6 +7,14 @@ import { MultiDistance } from "./lib/features/MultiDistance.js";
 import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
 import { removeInputActions } from "./lib/helper/helper.js";
+import toolImg from "./assets/toolImg.svg";
+import pointsImg from "./assets/pointsImg.svg";
+import distanceImg from "./assets/distanceImg.svg";
+import curveImg from "./assets/curveImg.svg";
+import heightImg from "./assets/heightImg.svg";
+import multiDImage from "./assets/multiDImg.svg";
+import polygonImg from "./assets/polygonImg.svg";
+import profileImg from "./assets/profileImg.svg";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -84,19 +92,19 @@ export class MeasureToolbox extends HTMLElement {
         this.setupButtons();
 
         const modes = [
-            { instance: new Points(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "points")), name: "Points" },
-            { instance: new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "distances")), name: "Distance" },
-            { instance: new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "curves")), name: "Curve" },
-            { instance: new Height(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "height")), name: "Height" },
-            { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-D" },
-            { instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")), name: "Polygon" },
-            { instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")), name: "Profile" },
+            { instance: new Points(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "points")), name: "Points", icon: pointsImg },
+            { instance: new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "distances")), name: "Distance", icon: distanceImg },
+            { instance: new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "curves")), name: "Curve", icon: curveImg },
+            { instance: new Height(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "height")), name: "Height", icon: heightImg },
+            { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-D", icon: multiDImage },
+            { instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")), name: "Polygon", icon: polygonImg },
+            { instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")), name: "Profile", icon: profileImg },
         ];
 
         this.measureModes = modes.map(mode => mode.instance);
 
         modes.forEach(mode => {
-            this.createMeasureModeButton(mode.instance, mode.name);
+            this.createMeasureModeButton(mode.instance, mode.name, mode.icon);
         });
 
         this.setupClearButton();
@@ -114,7 +122,7 @@ export class MeasureToolbox extends HTMLElement {
         // initialize tool button to control collapse/expand for buttons
         const toolButton = document.createElement("button");
         toolButton.className = "measure-tools cesium-button";
-        toolButton.innerHTML = "Tools";
+        toolButton.innerHTML = `<img src="${toolImg}" alt="tool" style="width: 30px; height: 30px;">`;
         toolButton.addEventListener("click", () => {
             this.toggleTools();
         });
@@ -133,12 +141,9 @@ export class MeasureToolbox extends HTMLElement {
                 display: flex;
             }
             .toolbar button{
-                font-family: "work sans", sans-serif;
-                font-size: 14px;
-                height: 2.45rem;
-                padding: 0.5rem 1.472rem;
-                margin: 0 5px;
-                border-radius: 6rem;
+                height: 40px;
+                width: 45px;
+                border-radius: 5px;
                 cursor: pointer;
                 transition: all 0.2s ease-out;
                 color: #e6f8f8;
@@ -151,16 +156,27 @@ export class MeasureToolbox extends HTMLElement {
                 border-color: #fff;
                 box-shadow: 0 0 8px #fff;
             }
-            .toolbar .measure-mode-button {
+            .measure-tools{
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .measure-mode-button {
                 /* Hide the buttons by default */
                 display: none;
                 opacity: 0;
                 position: relative;
             }
-            .toolbar .measure-mode-button.show {
+            .measure-mode-button.show {
                 /* Show the buttons when the "tool" button is clicked */
-                display: block;
                 opacity: 0.9;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .cesium-button{
+                margin: 0;
+                padding: 0;
             }
             .cesium-infoBox table{
                 width: 100%;
@@ -203,12 +219,14 @@ export class MeasureToolbox extends HTMLElement {
      * @param {Object} toolInstance - The instance of the measurement tool.
      * @param {string} buttonText - The text to display on the button.
      */
-    createMeasureModeButton(toolInstance, buttonText) {
+    createMeasureModeButton(toolInstance, buttonText, iconImg) {
+        // setup buttons
         const button = document.createElement("button");
         const lowerCaseString = buttonText.toLowerCase();
         button.className = `${lowerCaseString} cesium-button measure-mode-button`;
-        button.innerHTML = buttonText;
+        button.innerHTML = `<img src="${iconImg}" alt="${lowerCaseString}" style="width: 30px; height: 30px;">`;
 
+        // setup button actions
         button.addEventListener("click", () => {
             if (this.activeButton === button) {
                 // if the click button the same as active button then deactivate it
