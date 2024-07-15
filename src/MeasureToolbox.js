@@ -275,11 +275,6 @@ export class MeasureToolbox extends HTMLElement {
         button.classList.remove("active");
         toolInstance.removeInputAction && toolInstance.removeInputAction();
         toolInstance.resetValue && toolInstance.resetValue();
-
-        // remove chart if it is profile mode
-        if (toolInstance instanceof Profile) {
-            toolInstance.removeChart();
-        }
     }
 
     /**
