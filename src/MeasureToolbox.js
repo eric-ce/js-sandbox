@@ -15,6 +15,7 @@ import heightImg from "./assets/heightImg.svg";
 import multiDImage from "./assets/multiDImg.svg";
 import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
+import clearImg from "./assets/clearImg.svg"
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -298,7 +299,7 @@ export class MeasureToolbox extends HTMLElement {
     setupClearButton() {
         this.clearButton = document.createElement("button");
         this.clearButton.className = "clear-button cesium-button measure-mode-button";
-        this.clearButton.innerHTML = "Clear";
+        this.clearButton.innerHTML = `<img src="${clearImg}" alt="clear" style="width: 30px; height: 30px;">`;
 
         this.toolsContainer.appendChild(this.clearButton);
 
