@@ -16,6 +16,7 @@ import multiDImage from "./assets/multiDImg.svg";
 import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
 import clearImg from "./assets/clearImg.svg"
+import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -99,9 +100,10 @@ export class MeasureToolbox extends HTMLElement {
             { instance: new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "distances")), name: "Distance", icon: distanceImg },
             { instance: new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "curves")), name: "Curve", icon: curveImg },
             { instance: new Height(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "height")), name: "Height", icon: heightImg },
-            { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-Distance", icon: multiDImage },
+            { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-Distances", icon: multiDImage },
             { instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")), name: "Polygon", icon: polygonImg },
             { instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")), name: "Profile", icon: profileImg },
+            { instance: new ProfileDistances(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile-distances")), name: "Profile-Distances", icon: profileImg },
         ];
 
         this.measureModes = modes.map(mode => mode.instance);
@@ -376,8 +378,11 @@ export class MeasureToolbox extends HTMLElement {
         infoBoxTable.appendChild(this.createRow(messageTitle));
         // create table rows for the messages
         if (this.activeButton &&
-            (this.activeButton.classList.contains("multi-distance") ||
-                this.activeButton.classList.contains("polygon"))
+            (
+                this.activeButton.classList.contains("multi-distances") ||
+                this.activeButton.classList.contains("polygon") ||
+                this.activeButton.classList.contains("profile-distances")
+            )
         ) {
             // if the active button is multi-distance or polygon, show both messages
             infoBoxTable.appendChild(this.createRow(message1));

@@ -26,7 +26,7 @@ class Profile {
         this.chart = null;
         this.chartDiv = null;
 
-        this.setupChart();
+        // this.setupChart();
     }
 
     /**
