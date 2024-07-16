@@ -46,6 +46,8 @@ export class MeasureToolbox extends HTMLElement {
         this.activeButton = null;
         this.activeTool = null;
         this.measureModes = [];
+        this.isToolsExpanded = false;
+        this.buttonOverlay = null;
 
         // log variables
         this._records = {
@@ -97,7 +99,7 @@ export class MeasureToolbox extends HTMLElement {
             { instance: new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "distances")), name: "Distance", icon: distanceImg },
             { instance: new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "curves")), name: "Curve", icon: curveImg },
             { instance: new Height(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "height")), name: "Height", icon: heightImg },
-            { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-D", icon: multiDImage },
+            { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-Distance", icon: multiDImage },
             { instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")), name: "Polygon", icon: polygonImg },
             { instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")), name: "Profile", icon: profileImg },
         ];
@@ -109,6 +111,8 @@ export class MeasureToolbox extends HTMLElement {
         });
 
         this.setupClearButton();
+
+        this.setupButtonOverlay();
     }
 
     /**
@@ -283,10 +287,7 @@ export class MeasureToolbox extends HTMLElement {
      */
     toggleTools() {
         this.isToolsExpanded = !this.isToolsExpanded;
-        const buttons = this.toolsContainer.querySelectorAll(
-            ".measure-mode-button"
-        );
-        buttons.forEach((button, index) => {
+        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button, index) => {
             setTimeout(() => {
                 button.classList.toggle("show", this.isToolsExpanded);
             }, index * 50 + 25);
@@ -321,7 +322,33 @@ export class MeasureToolbox extends HTMLElement {
             }
         });
     }
+    setupButtonOverlay() {
+        this.buttonOverlay = document.createElement("div");
+        this.buttonOverlay.className = "button-overlay";
+        this.buttonOverlay.style.cssText =
+            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out;";
+        this.viewer.container.appendChild(this.buttonOverlay);
 
+        // cesium container rectangle 
+        const cesiumRect = this.viewer.container.getBoundingClientRect();
+
+        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
+            button.addEventListener("mouseover", (e) => {
+                // set overlay to display
+                this.buttonOverlay.style.display = "block";
+                // get description of the button
+                const description = button.querySelector("img")?.alt;
+                this.buttonOverlay.innerHTML = `${description} mode`;
+                // set position of the overlay
+                this.buttonOverlay.style.left = e.pageX - cesiumRect.x + 'px';  // Position the overlay right of the cursor
+                this.buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + 'px';
+            });
+            button.addEventListener("mouseout", () => {
+                // set overlay to not display
+                this.buttonOverlay.style.display = "none";
+            });
+        })
+    }
     setupNameOverlay() {
         this.nameOverlay = document.createElement("div");
         this.nameOverlay.className = "backdrop";
@@ -331,26 +358,28 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     setupInfoBox() {
+        // remove infoBox if it exists
         if (this.infoBox) {
             this.infoBox.remove();
         }
-
+        // create infoBox div
         this.infoBox = document.createElement("div");
         this.infoBox.className = "cesium-infoBox cesium-infoBox-visible";
 
         const infoBoxTable = document.createElement("table");
 
+        // show different message to different mode
         const messageTitle = "How to use:";
         const message1 = "Left Click: start measure";
         const message2 = "Right Click: finish measure";
-
+        // create table first row for the title
         infoBoxTable.appendChild(this.createRow(messageTitle));
-
-        if (
-            this.activeButton &&
+        // create table rows for the messages
+        if (this.activeButton &&
             (this.activeButton.classList.contains("multi-distance") ||
                 this.activeButton.classList.contains("polygon"))
         ) {
+            // if the active button is multi-distance or polygon, show both messages
             infoBoxTable.appendChild(this.createRow(message1));
             infoBoxTable.appendChild(this.createRow(message2));
         } else {
@@ -365,7 +394,7 @@ export class MeasureToolbox extends HTMLElement {
     setupLogBox() {
         this.logBox = document.createElement("div");
         this.logBox.className = "log-box";
-
+        // create table
         const table = document.createElement("table");
         table.className = "info-panel";
         const title = this.createRow("Records");
