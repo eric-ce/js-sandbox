@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+  <g id="profile_distances" data-name="profile distances">
+    <g>
+      <path d="M5.346,36.359a20.531,20.531,0,0,0,6.6-6.237c-.29.411,1.71-2.589,1.71-2.589.232.027.4.281.5.5" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <path d="M14.154,28.033c1.715,2.99,4.378,6.479,8.133,7.286,2.728.586,4.614-.549,7.117-1.215,3.423-.909,8.423-1.053,15.25,2.429" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    </g>
+    <circle cx="8.5" cy="16.467" r="3" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <circle cx="41.5" cy="16.467" r="3" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <path d="M27.513,16.467c4.065,0,7.553.033,10.987.033" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <path d="M11.5,16.5H22" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <circle cx="24.5" cy="16.5" r="3" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+  </g>
+</svg>
