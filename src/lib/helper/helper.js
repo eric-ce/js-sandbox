@@ -1,6 +1,104 @@
 import * as Cesium from "cesium";
 
 /**
+ * Opens a modal for the user to edit the label name and updates the label entity.
+ * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
+ * @param {Cesium.Entity} label - The label entity to be edited.
+ * @returns {Promise<void>} - A promise that resolves when the label is updated.
+ */
+export async function editableLabel(viewerContainer, label) {
+    try {
+        // open a modal for user to edit the label name
+        const newLabelName = await setupEditableModal(viewerContainer);
+
+        const labelText = label.text.getValue();
+        let value = null;
+        // check the label to see if it has ":"
+        if (labelText.includes(":")) {
+            // retrieve the distance value
+            const [labelName, distance] = label.text.getValue().split(":");
+            value = distance
+        } else {
+            // if the label does not have ":", label value is the distance value
+            value = label.text.getValue();
+        }
+
+        // create the new label text
+        const newLabelText = `${newLabelName.trim()} : ${value.trim()}`;
+
+        // set the new label text
+        label.text = newLabelText;
+    } catch (error) {
+        return;
+    }
+}
+
+/**
+ * Sets up a modal for the user to edit the label name.
+ * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
+ * @returns {Promise<string>} - A promise that resolves to the new label name.
+ */
+export function setupEditableModal(viewerContainer) {
+    return new Promise((resolve, reject) => {
+        const modal = document.createElement("div");
+
+        modal.style.cssText = `
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; 
+            align-items: center; z-index: 2000; color: white; font-size: 20px;
+        `;
+
+        modal.innerHTML = `
+        <div style="background-color: #242526 ; padding: 20px; border-radius: 10px; border: 1px solid #3b4855">
+            <p>Enter new label name</p>
+            <input type="text" id="editableLabelInput" style="width: 100%; padding: 5px; margin: 20px 0;" />
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="label-submit-btn" style="padding: 5px 10px; border-radius: 5px">Submit</button>
+                <button class="label-cancel-btn" style="padding: 5px 10px; border-radius: 5px">Cancel</button>
+            </div>
+        </div>
+        `;
+        viewerContainer.appendChild(modal);
+
+        // Focus on the input field
+        const input = modal.querySelector("#editableLabelInput");
+        input.focus();
+
+        // Add event listener to cancel button
+        const removeModal = () => {
+            viewerContainer.removeChild(modal)
+            modal.removeEventListener("keydown", keyDownHandler);
+        };
+
+        const cancelBtn = modal.querySelector(".label-cancel-btn");
+        const cancelBtnHandler = () => {
+            removeModal();
+            reject(null);
+        }
+        cancelBtn.addEventListener("click", cancelBtnHandler);
+
+        // Add event listener to submit button
+        const submitBtn = modal.querySelector(".label-submit-btn");
+        const submitBtnHandler = () => {
+            const newLabel = modal.querySelector("#editableLabelInput").value;
+            removeModal();
+            resolve(newLabel);
+        }
+        submitBtn.addEventListener("click", submitBtnHandler);
+
+        // add event listener for "enter" and "esc" keydown
+        const keyDownHandler = (e) => {
+            if (e.key === "Enter") {
+                submitBtnHandler();
+            } else if (e.key === "Escape") {
+                cancelBtnHandler();
+            }
+        }
+        modal.addEventListener("keydown", keyDownHandler);
+    });
+}
+
+/**
  * Create a point entity setting at the given Cartesian coordinates with the specified color.
  * @param {Cesium.Cartesian3 | Cesium.Cartographic} coordinate - The coordinate of point entity
  * @param {Cesium.Color} color - The color of the point entity.
@@ -222,3 +320,8 @@ export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.RIGHT_CLICK);
     // handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
 }
+
+
+
+
+
