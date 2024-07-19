@@ -6,6 +6,7 @@ import { Height } from "./lib/features/Height.js";
 import { MultiDistance } from "./lib/features/MultiDistance.js";
 import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
+import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { removeInputActions } from "./lib/helper/helper.js";
 import toolImg from "./assets/toolImg.svg";
 import pointsImg from "./assets/pointsImg.svg";
@@ -15,8 +16,8 @@ import heightImg from "./assets/heightImg.svg";
 import multiDImage from "./assets/multiDImg.svg";
 import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
+import profileDistancesImg from "./assets/profileDistancesImg.svg";
 import clearImg from "./assets/clearImg.svg"
-import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -103,7 +104,7 @@ export class MeasureToolbox extends HTMLElement {
             { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-Distances", icon: multiDImage },
             { instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")), name: "Polygon", icon: polygonImg },
             { instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")), name: "Profile", icon: profileImg },
-            { instance: new ProfileDistances(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile-distances")), name: "Profile-Distances", icon: profileImg },
+            { instance: new ProfileDistances(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile-distances")), name: "Profile-Distances", icon: profileDistancesImg },
         ];
 
         this.measureModes = modes.map(mode => mode.instance);
