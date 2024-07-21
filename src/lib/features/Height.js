@@ -1,4 +1,4 @@
-import { createPointEntity, createLineEntity, convertToCartesian3, createDistanceLabel, removeInputActions } from "../helper/helper.js";
+import { createPointEntity, createLineEntity, convertToCartesian3, createDistanceLabel, removeInputActions, editableLabel } from "../helper/helper.js";
 import * as Cesium from "cesium";
 
 /**
@@ -32,8 +32,8 @@ class Height {
     setupInputActions() {
         removeInputActions(this.handler);
 
-        this.handler.setInputAction(() => {
-            this.handleHeightLeftClick();
+        this.handler.setInputAction((movement) => {
+            this.handleHeightLeftClick(movement);
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
         this.handler.setInputAction((movement) => {
@@ -51,10 +51,23 @@ class Height {
     /**
      * Handles left-click events to place top and ground points, draw line in between.
      */
-    handleHeightLeftClick() {
+    handleHeightLeftClick(movement) {
         // Clear any previously selected entity
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
+
+        // if pick the label entity, make the label entity editable
+        const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
+
+        if (pickedObjects && pickedObjects.length > 0) {
+            pickedObjects.forEach((pickedObject) => {
+                if (Cesium.defined(pickedObject) && pickedObject.id?.label) {
+                    editableLabel(this.viewer.container, pickedObject.id.label);
+                    // to reset that moving action left height measure
+                    this.resetValue()
+                }
+            })
+        }
 
         // use mouse move position to control only one pickPosition is used
         if (!Cesium.defined(this.cartesian)) return;
@@ -143,7 +156,9 @@ class Height {
                 this.labelEntity = this.viewer.entities.add(label);
 
                 // reset to keep pointEntities only have top and bottom points
-                if (this.pointEntities.values.length > 2) { this.pointEntities.removeAll() };
+                if (this.pointEntities.values.length > 2) {
+                    this.pointEntities.removeAll()
+                };
             })
         }
         // } else {

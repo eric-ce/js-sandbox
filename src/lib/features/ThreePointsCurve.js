@@ -3,7 +3,8 @@ import {
     createPointEntity,
     createLineEntity,
     createDistanceLabel,
-    removeInputActions
+    removeInputActions,
+    editableLabel
 } from "../helper/helper.js";
 
 /**
@@ -28,6 +29,8 @@ class ThreePointsCurve {
         this.coordinate = new Cesium.Cartesian3();
 
         this._curveRecords = [];
+
+        this.isCurveStarted = false;
     }
 
     /**
@@ -61,9 +64,20 @@ class ThreePointsCurve {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        // const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
-        // if (Cesium.defined(pickedObject)) {
-        // const cartesian = this.viewer.scene.pickPosition(movement.position);
+        // Check if the measurement has started
+        // if pick the label entity, make the label entity editable
+        if (!this.isCurveStarted) {
+            const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+
+            // If picked object is a label entity, make it editable
+            if (Cesium.defined(pickedObject) && pickedObject.id?.label) {
+                editableLabel(this.viewer.container, pickedObject.id.label);
+                return; // Exit the function after making the label editable
+            }
+
+            // Set flag that the measurement has started
+            this.isCurveStarted = true;
+        }
 
         // use mouse move position to control only one pickPosition is used
         const cartesian = this.coordinate;
@@ -76,7 +90,7 @@ class ThreePointsCurve {
         );
         this.pointEntities.add(pointEntity);
 
-        // Check if we have collected 3 points, then measure the curve distance
+        // Check if it had collected 3 points, then measure the curve distance
         if (this.pointEntities.values.length === 3) {
             const [start, middle, end] = this.pointEntities.values.map((p) =>
                 p.position.getValue(Cesium.JulianDate.now())
@@ -119,6 +133,9 @@ class ThreePointsCurve {
             this.pointEntities.removeAll();
             this.lineEntities.removeAll();
             this.labelEntities.removeAll();
+
+            // set flag that the measurement has ended
+            this.isCurveStarted = false;
         }
         // }
     }

@@ -5,6 +5,7 @@ import {
     calculateDistance,
     createDistanceLabel,
     removeInputActions,
+    editableLabel
 } from "../helper/helper.js";
 import Chart from "chart.js/auto";
 
@@ -25,8 +26,6 @@ class Profile {
 
         this.chart = null;
         this.chartDiv = null;
-
-        // this.setupChart();
     }
 
     /**
@@ -60,10 +59,20 @@ class Profile {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        // const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+        // Check if the measurement has started
+        // if pick the label entity, make the label entity editable
+        if (!this.isDistanceStarted) {
+            const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
-        // if (Cesium.defined(pickedObject)) {
-        // const cartesian = this.viewer.scene.pickPosition(movement.position);
+            // If picked object is a label entity, make it editable
+            if (Cesium.defined(pickedObject) && pickedObject.id?.label) {
+                editableLabel(this.viewer.container, pickedObject.id.label);
+                return; // Exit the function after making the label editable
+            }
+
+            // Set flag that the measurement has started
+            this.isDistanceStarted = true;
+        }
 
         // use mouse move position to control only one pickPosition is used
         const cartesian = this.coordinate;
@@ -169,6 +178,9 @@ class Profile {
                         this.updateChart(diffHeight, labelDistance);
                     }
                 );
+
+                // set flag that the measurement has ended
+                this.isDistanceStarted = false;
             }
         } else {
             // if there are more than 2 point entities, reset the measurement
@@ -321,7 +333,7 @@ class Profile {
         this.chartDiv.style.cssText =
             "position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; width: 400px; height: 200px;";
         this.chartDiv.style.display = "none";
-        const ctx = document.getElementById("profileTerrainChart").getContext("2d");
+        const ctx = canvas.getContext("2d");
         this.chart = new Chart(ctx, {
             type: "line",
             data: {

@@ -3,7 +3,8 @@ import {
     createPointEntity,
     createDistanceLabel,
     createPolygonEntity,
-    removeInputActions
+    removeInputActions,
+    editableLabel,
 } from "../helper/helper.js";
 
 class Polygon {
@@ -58,6 +59,19 @@ class Polygon {
         // remove track entity and select entity from default
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
+
+        // Check if the measurement has ended
+        // if pick the label entity, make the label entity editable
+        if (this.isPolygonEnd) {
+            const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+
+            // If picked object is a label entity, make it editable
+            if (Cesium.defined(pickedObject) && pickedObject.id?.label) {
+                editableLabel(this.viewer.container, pickedObject.id.label);
+                return; // Exit the function after making the label editable
+            }
+        }
+
 
         if (this.isPolygonEnd) {
             this.isPolygonEnd = false;

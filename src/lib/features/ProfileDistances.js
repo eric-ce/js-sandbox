@@ -5,7 +5,8 @@ import {
     calculateDistance,
     createDistanceLabel,
     formatDistance,
-    removeInputActions
+    removeInputActions,
+    editableLabel
 } from "../helper/helper.js";
 import Chart from "chart.js/auto";
 
@@ -65,11 +66,20 @@ class ProfileDistances {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        // const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+        // Check if the measurement has started
+        // if pick the label entity, make the label entity editable
+        if (this.isMultiDistanceEnd) {
+            const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
-        // if (Cesium.defined(pickedObject)) {
+            // If picked object is a label entity, make it editable
+            if (Cesium.defined(pickedObject) && pickedObject.id?.label) {
+                editableLabel(this.viewer.container, pickedObject.id.label);
+                return; // Exit the function after making the label editable
+            }
+        }
 
-        // const cartesian = this.viewer.scene.pickPosition(movement.position);
+
+        // use move position for the position
         const cartesian = this.coordinate
 
         if (!Cesium.defined(cartesian)) return;

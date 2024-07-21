@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { createPointEntity, createLineEntity, calculateDistance, createDistanceLabel, removeInputActions } from "../helper/helper.js";
+import { createPointEntity, createLineEntity, calculateDistance, createDistanceLabel, removeInputActions, editableLabel } from "../helper/helper.js";
 
 
 /**
@@ -27,6 +27,8 @@ class TwoPointsDistance {
         this.coordinate = new Cesium.Cartesian3();
 
         this._distanceRecords = [];
+
+        this.isDistanceStarted = false;
     }
 
     /**
@@ -60,22 +62,36 @@ class TwoPointsDistance {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        // const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+        // Check if the measurement has started
+        // if pick the label entity, make the label entity editable
+        if (!this.isDistanceStarted) {
+            const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
-        // if (Cesium.defined(pickedObject)) {
-        // const cartesian = this.viewer.scene.pickPosition(movement.position);
+            // If picked object is a label entity, make it editable
+            if (Cesium.defined(pickedObject) && pickedObject.id?.label) {
+                editableLabel(this.viewer.container, pickedObject.id.label);
+                return; // Exit the function after making the label editable
+            }
 
+            // Set flag that the measurement has started
+            this.isDistanceStarted = true;
+        }
+
+        // if it is not label entity, then start to draw the measurement
         // use mouse move position to control only one pickPosition is used
         const cartesian = this.coordinate;
         // early exit if not cartesian
         if (!Cesium.defined(cartesian)) return;
 
         if (this.pointEntities.values.length === 0) {
+
+
             // if there is no point entity, create the first point
             const firstPointEntity = this.viewer.entities.add(
                 createPointEntity(cartesian, Cesium.Color.RED)
             );
             this.pointEntities.add(firstPointEntity);
+
         } else if (this.pointEntities.values.length % 2 !== 0) {
             // if there is one point entity, create the second point
             const secondPointEntity = this.viewer.entities.add(
@@ -84,6 +100,7 @@ class TwoPointsDistance {
             this.pointEntities.add(secondPointEntity);
 
             if (this.pointEntities.values.length === 2) {
+
                 // create line entity between the first and second point
                 this.removeEntities(this.lineEntities);
                 this.removeEntities(this.movingLineEntity);
@@ -115,8 +132,10 @@ class TwoPointsDistance {
                 // log distance
                 this._distanceRecords.push(distance);
                 this.logRecordsCallback(this._distanceRecords);
-            }
 
+                // set flag that the measurement has ended
+                this.isDistanceStarted = false;
+            }
         } else {
             // if there are more than 2 point entities, reset the measurement
             this.pointEntities.removeAll();
@@ -134,6 +153,7 @@ class TwoPointsDistance {
             this.pointEntities.add(firstPointEntity);
         }
         // }
+
     }
 
     /**
@@ -228,11 +248,66 @@ class TwoPointsDistance {
         this.pointEntities.removeAll();
         this.lineEntities.removeAll();
         this.labelEntities.removeAll();
+
         this.removeEntity(this.movingLineEntity);
         this.removeEntity(this.movingLabelEntity);
         this.coordinate = null;
 
+        this.isDistanceStarted = false;
     }
+
+    // setupEditableModal() {
+    //     return new Promise((resolve, reject) => {
+    //         const modal = document.createElement("div");
+
+    //         modal.style.cssText = `position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000; color: white; font-size: 20px;`;
+
+    //         modal.innerHTML = `
+    //     <div style="background-color: #242526 ; padding: 20px; border-radius: 10px; border: 1px solid #3b4855">
+    //         <p>Enter new label name</p>
+    //         <input type="text" id="editableLabelInput" style="width: 100%; padding: 5px; margin: 20px 0;" />
+    //         <div style="display: flex; justify-content: flex-end; gap: 10px;">
+    //             <button class="label-submit-btn" style="padding: 5px 10px; border-radius: 5px">Submit</button>
+    //             <button class="label-cancel-btn" style="padding: 5px 10px; border-radius: 5px">Cancel</button>
+    //         </div>
+    //     </div>
+    //     `;
+    //         this.viewer.container.appendChild(modal);
+
+    //         // add event listener to both submit and cancel button
+    //         const cancelBtn = this.viewer.container.querySelector(".label-cancel-btn");
+    //         cancelBtn.addEventListener("click", () => {
+    //             this.viewer.container.removeChild(modal);
+    //             reject(new Error('Modal closed without input'));
+    //         });
+    //         const submitBtn = this.viewer.container.querySelector(".label-submit-btn");
+    //         submitBtn.addEventListener("click", () => {
+    //             const newLabel = this.viewer.container.querySelector("#editableLabelInput").value;
+    //             this.viewer.container.removeChild(modal);
+    //             resolve(newLabel);
+    //         });
+    //     });
+    // }
+
+    // async editabelLabel(label) {
+    //     // clone the label entity to make it editable
+    //     const labelClone = label.clone();
+
+    //     // get the label text
+    //     const labelText = labelClone.text.getValue();
+    //     // labelText is "Total: 23.04 m" sperate by : so I get the total and 23.04 m
+    //     const [labelName, distance] = labelText.split(":");
+
+    //     try {
+    //         const newLabelName = await this.setupEditableModal();
+    //         console.log("🚀  newLabelName:", newLabelName);
+
+    //         const newLabelText = `${newLabelName} :${distance}`;
+    //         label.text = newLabelText;
+    //     } catch (error) {
+    //         console.log(error)
+    //     }
+    // }
 }
 
 export { TwoPointsDistance };
