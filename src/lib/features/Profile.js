@@ -280,7 +280,7 @@ class Profile {
      * @param {Number} interval 
      * @returns {Cesium.Cartesian3[]}
      */
-    interpolatePoints(pointA, pointB, interval = 5) {
+    interpolatePoints(pointA, pointB, interval = 2) {
         const points = [];
 
         // Calculate the distance between the two points

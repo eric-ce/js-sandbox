@@ -282,7 +282,7 @@ class ProfileDistances {
         // interpolation points between the points
         const interpolatedPoints = cartesianPoints.flatMap((point, index) => {
             if (index < cartesianPoints.length - 1) {
-                const interpolatedPoints = this.interpolatePoints(point, cartesianPoints[index + 1], 5);
+                const interpolatedPoints = this.interpolatePoints(point, cartesianPoints[index + 1], 2);
                 return interpolatedPoints;
             }
         }).filter((point, index, self) => {
@@ -334,7 +334,7 @@ class ProfileDistances {
      * @param {Number} interval 
      * @returns {Cesium.Cartesian3[]}
      */
-    interpolatePoints(pointA, pointB, interval = 5) {
+    interpolatePoints(pointA, pointB, interval = 2) {
         const points = [];
 
         // Calculate the distance between the two points
