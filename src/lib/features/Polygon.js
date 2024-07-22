@@ -310,14 +310,6 @@ class Polygon {
         }
         return area;
     }
-
-    resetValue() {
-        this.pointEntities.removeAll();
-        this.lineEntities.removeAll();
-        this.labelEntities.removeAll();
-        this.polygonEntity = null;
-        this.coordiante = null;
-    }
 }
 
 export { Polygon };

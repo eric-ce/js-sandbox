@@ -62,7 +62,7 @@ class Points {
             // if picked point entity exists, remove it
             const entityToRemove = this.viewer.entities.getById(pickedObject.id.id);
 
-            if (entityToRemove) {
+            if (entityToRemove && entityToRemove.id.startsWith("point-bookmark")) {
                 // log the removed point records
                 const position = Cesium.Cartesian3.clone(entityToRemove.position.getValue(Cesium.JulianDate.now()));
                 this._pointsRecords = this._pointsRecords.filter(point => !Cesium.Cartesian3.equals(point, position));
@@ -80,6 +80,7 @@ class Points {
             const cartesian = this.coordinate;
             if (Cesium.defined(cartesian)) {
                 const point = createPointEntity(cartesian, Cesium.Color.RED);
+                point.id = `point-bookmark-${this.coordinate.x}-${this.coordinate.y}-${this.coordinate.z}`;
 
                 const pointEntity = this.viewer.entities.add(point)
 

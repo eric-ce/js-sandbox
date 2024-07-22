@@ -51,8 +51,7 @@ export function setupEditableModal(viewerContainer) {
         modal.innerHTML = `
         <div style="background-color: #242526 ; padding: 20px; border-radius: 10px; border: 1px solid #3b4855">
             <p>Enter new label name</p>
-            <input type="text" id="editableLabelInput" style="width: 100%; padding: 5px; margin: 20px 0;" />
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+<input type="text" id="editableLabelInput" style="padding: 5px; margin: 20px 0;" />            <div style="display: flex; justify-content: flex-end; gap: 10px;">
                 <button class="label-submit-btn" style="padding: 5px 10px; border-radius: 5px">Submit</button>
                 <button class="label-cancel-btn" style="padding: 5px 10px; border-radius: 5px">Cancel</button>
             </div>
@@ -301,6 +300,7 @@ export function cartesian3ToCartographicDegrees(cartesian) {
     const height = cartographic.height;
     return { longitude, latitude, height };
 }
+
 /**
  * format the distance
  * @param {number} distance
