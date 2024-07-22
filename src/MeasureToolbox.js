@@ -97,14 +97,46 @@ export class MeasureToolbox extends HTMLElement {
         this.setupButtons();
 
         const modes = [
-            { instance: new Points(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "points")), name: "Points", icon: pointsImg },
-            { instance: new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "distances")), name: "Distance", icon: distanceImg },
-            { instance: new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "curves")), name: "Curve", icon: curveImg },
-            { instance: new Height(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "height")), name: "Height", icon: heightImg },
-            { instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")), name: "Multi-Distances", icon: multiDImage },
-            { instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")), name: "Polygon", icon: polygonImg },
-            { instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")), name: "Profile", icon: profileImg },
-            { instance: new ProfileDistances(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile-distances")), name: "Profile-Distances", icon: profileDistancesImg },
+            {
+                instance: new Points(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "points")),
+                name: "Points",
+                icon: pointsImg
+            },
+            {
+                instance: new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "distances")),
+                name: "Distance",
+                icon: distanceImg
+            },
+            {
+                instance: new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "curves")),
+                name: "Curve",
+                icon: curveImg
+            },
+            {
+                instance: new Height(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "height")),
+                name: "Height",
+                icon: heightImg
+            },
+            {
+                instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")),
+                name: "Multi-Distances",
+                icon: multiDImage
+            },
+            {
+                instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")),
+                name: "Polygon",
+                icon: polygonImg
+            },
+            {
+                instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")),
+                name: "Profile",
+                icon: profileImg
+            },
+            {
+                instance: new ProfileDistances(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile-distances")),
+                name: "Profile-Distances",
+                icon: profileDistancesImg
+            },
         ];
 
         this.measureModes = modes.map(mode => mode.instance);
@@ -116,6 +148,7 @@ export class MeasureToolbox extends HTMLElement {
         this.setupClearButton();
 
         this.setupButtonOverlay();
+
     }
 
     /**
@@ -142,6 +175,9 @@ export class MeasureToolbox extends HTMLElement {
         // add style to the shadowRoot for this web component
         const style = document.createElement("style");
         style.textContent = `
+            *{
+                font-family:Roboto, sans-serif;
+            }
             .toolbar{ 
                 position:absolute;
                 bottom: 6rem;
@@ -236,8 +272,9 @@ export class MeasureToolbox extends HTMLElement {
 
         // setup button actions
         button.addEventListener("click", () => {
+            this.setupLogBox();
+            // if the click button the same as active button then deactivate it
             if (this.activeButton === button) {
-                // if the click button the same as active button then deactivate it
                 this.deactivateButton(button, toolInstance);
                 // set state for the button
                 this.activeButton = null;
@@ -246,6 +283,7 @@ export class MeasureToolbox extends HTMLElement {
                 this.infoBox && this.infoBox.remove();
                 this.logBox && this.logBox.remove();
             } else {
+                // if the click button is not the active button
                 // initialize button
                 this.activeButton &&
                     this.deactivateButton(this.activeButton, this.activeTool);
@@ -256,7 +294,7 @@ export class MeasureToolbox extends HTMLElement {
                 this.activeTool = toolInstance;
 
                 this.setupInfoBox();
-                // this.records && this.setupLogBox();
+                this.logBox && this.updateLogBox();
             }
         });
 
@@ -312,7 +350,10 @@ export class MeasureToolbox extends HTMLElement {
             removeInputActions(this.handler);
             this.nameOverlay.style.display = "none";
 
+            // clear infobox
             this.infoBox && this.infoBox.remove();
+            // clear logbox
+            this.logBox && this.logBox.remove();
 
             this.measureModes.forEach(mode => {
                 mode.resetValue && mode.resetValue();
@@ -325,6 +366,7 @@ export class MeasureToolbox extends HTMLElement {
             }
         });
     }
+
     setupButtonOverlay() {
         this.buttonOverlay = document.createElement("div");
         this.buttonOverlay.className = "button-overlay";
@@ -398,68 +440,74 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     setupLogBox() {
+        if (this.logBox) {
+            this.logBox.remove();
+        }
         this.logBox = document.createElement("div");
         this.logBox.className = "log-box";
-        // create table
+
         const table = document.createElement("table");
         table.className = "info-panel";
+        table.style.width = "100%";
         const title = this.createRow("Records");
         table.appendChild(title);
-
-        if (this.records) {
-            for (const key in this.records) {
-                console.log(key)
-
-                this.records[key].forEach((record) => {
-                    // judge if record is object or array
-                    const modeKey = this.createRow(key);
-                    table.appendChild(modeKey);
-
-                    if (typeof record === "object") {
-                        for (const key in record) {
-                            const rows = this.createRow(`${key}: ${record[key]}`);
-                            table.appendChild(rows);
-                        }
-                    } else {
-                        const rows = this.createRow(record);
-                        table.appendChild(rows);
-                    }
-                });
-            }
-        }
 
         this.logBox.appendChild(table);
         this.shadowRoot.appendChild(this.logBox);
     }
 
+    updateLogBox() {
+        const table = this.logBox.querySelector("table");
+        table.innerHTML = ""; // Clear the table
+
+        const title = this.createRow("Records");
+        table.appendChild(title);
+
+        const nonEmptyRecords = this.records;
+
+        for (const key in nonEmptyRecords) {
+            // const modeKey = this.createRow(key);
+            // table.appendChild(modeKey);
+
+            nonEmptyRecords[key].forEach((record) => {
+                if (typeof record === "object") {
+                    for (const subKey in record) {
+                        console.log("🚀  subKey:", subKey);
+
+                        const rows = this.createRow(`${subKey}: ${record[subKey]}`);
+                        table.appendChild(rows);
+                    }
+                } else {
+                    console.log("🚀  record:", record);
+                    const rows = this.createRow(`${key}: ${record}`);
+
+
+
+                    table.appendChild(rows);
+                }
+            });
+        }
+    }
+
     createRow(value) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
-
+        cell.style.borderBottom = "1px solid white";
         cell.innerHTML = value;
         row.appendChild(cell);
+
         return row;
     }
 
-    // log features for measure modes
-    updateLogBox() {
-        console.log("Updated records:", this.records);
-    }
-
-    /**
-     * Updates records for the specified measure mode.
-     * @param {string} mode - The measurement mode ('points', 'distances', etc.).
-     * @param {Array} records - The updated records.
-     */
     updateRecords(mode, records) {
         this._records[mode] = records;
-        this.updateLogBox();
+        this.updateLogBox(); // Ensure the log box is updated every time records change
     }
 
     get records() {
         const nonEmptyRecords = {};
         for (const key in this._records) {
-            if (Object.values(this._records[key]).length > 0) {
+            if (this._records[key].length > 0) {
                 nonEmptyRecords[key] = this._records[key];
             }
         }
