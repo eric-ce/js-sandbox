@@ -52,14 +52,15 @@ export class MeasureToolbox extends HTMLElement {
         this.buttonOverlay = null;
 
         // log variables
-        this._records = {
-            points: [],
-            distances: [],
-            curves: [],
-            heights: [],
-            "m-distance": [],
-            polygons: [],
-        };
+        // this._records = {
+        //     points: [],
+        //     distances: [],
+        //     curves: [],
+        //     heights: [],
+        //     "m-distance": [],
+        //     polygons: [],
+        // };
+        this._records = [];
     }
 
     set viewer(viewer) {
@@ -463,30 +464,29 @@ export class MeasureToolbox extends HTMLElement {
         const title = this.createRow("Records");
         table.appendChild(title);
 
-        const nonEmptyRecords = this.records;
+        this._records.forEach(record => {
+            const key = Object.keys(record)[0];
+            let rows = [];
 
-        for (const key in nonEmptyRecords) {
-            // const modeKey = this.createRow(key);
-            // table.appendChild(modeKey);
+            switch (key) {
+                // Handle different types of records
+                case "points":
+                    const { latitude, longitude, height } = record[key][0];
+                    const value = `lat: ${latitude}, long: ${longitude}, height: ${height}`;
+                    rows.push(this.createRow(`${key}: ${value}`));
+                    break;
+                case "m-distance":
+                    const { distances, totalDistance } = record[key][0];
+                    rows.push(this.createRow(`${key}: distances: ${distances}`));
+                    rows.push(this.createRow(`${key}: totalDistance: ${totalDistance}`));
+                    break;
+                default:
+                    rows.push(this.createRow(`${key}: ${record[key]}`));
+                    break;
+            }
 
-            nonEmptyRecords[key].forEach((record) => {
-                if (typeof record === "object") {
-                    for (const subKey in record) {
-                        console.log("🚀  subKey:", subKey);
-
-                        const rows = this.createRow(`${subKey}: ${record[subKey]}`);
-                        table.appendChild(rows);
-                    }
-                } else {
-                    console.log("🚀  record:", record);
-                    const rows = this.createRow(`${key}: ${record}`);
-
-
-
-                    table.appendChild(rows);
-                }
-            });
-        }
+            rows.forEach(row => table.appendChild(row));
+        });
     }
 
     createRow(value) {
@@ -500,18 +500,8 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     updateRecords(mode, records) {
-        this._records[mode] = records;
+        this._records.push({ [mode]: records });
         this.updateLogBox(); // Ensure the log box is updated every time records change
-    }
-
-    get records() {
-        const nonEmptyRecords = {};
-        for (const key in this._records) {
-            if (this._records[key].length > 0) {
-                nonEmptyRecords[key] = this._records[key];
-            }
-        }
-        return nonEmptyRecords;
     }
 }
 
