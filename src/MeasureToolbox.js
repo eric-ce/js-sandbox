@@ -41,6 +41,7 @@ export class MeasureToolbox extends HTMLElement {
 
         this.pointerOverlay = null;
         this.infoBox = null;
+        this.logBox = null;
 
         // buttons variables
         this.toolsContainer = null;

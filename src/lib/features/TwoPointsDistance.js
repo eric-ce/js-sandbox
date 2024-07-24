@@ -7,7 +7,6 @@ import {
     removeInputActions,
     editableLabel,
     updatePointerOverlay,
-    throttle
 } from "../helper/helper.js";
 
 

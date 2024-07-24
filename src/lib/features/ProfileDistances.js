@@ -159,9 +159,7 @@ class ProfileDistances {
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
         updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
-        if (this.isMultiDistanceEnd) return;
-
-        if (this.pointEntities.values.length > 0) {
+        if (this.pointEntities.values.length > 0 && !this.isMultiDistanceEnd) {
             // Calculate the distance between the last selected point and the current cartesian position
             const lastPointIndex = this.pointEntities.values.length - 1;
             const lastPointCartesian = this.pointEntities.values[lastPointIndex].position.getValue(Cesium.JulianDate.now());
@@ -189,10 +187,10 @@ class ProfileDistances {
             this.movingLabelEntity = this.viewer.entities.add(movingLabel)
 
             // create moving line entity
-            this.movingLineEntity && this.removeEntity(this.movingLineEntity);
-
+            if (this.movingLineEntity) {
+                this.removeEntity(this.movingLineEntity);
+            }
             const movingLine = createLineEntityClamped([lastPointCartesian, cartesian], Cesium.Color.YELLOW)
-
             movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
                 return [lastPointCartesian, cartesian];
             }, false);
@@ -268,7 +266,7 @@ class ProfileDistances {
                 totalDistance: totalDistance
             };
             this._distanceRecords.push(distanceRecord);
-            this.logRecordsCallback(this._distanceRecords);
+            this.logRecordsCallback(distanceRecord);
 
             // profile terrain for last distances
             const { diffHeight, labelDistance } = await this._computeAndUpdateProfileTerrain();

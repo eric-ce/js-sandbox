@@ -25,6 +25,10 @@ class Profile {
 
         this.coordinate = new Cesium.Cartesian3();
 
+        this._distanceRecords = [];
+
+        this.isDistanceStarted = false;
+
         this.chart = null;
         this.chartDiv = null;
     }
@@ -121,6 +125,10 @@ class Profile {
                 );
                 const labelEntity = this.viewer.entities.add(label);
                 this.labelEntities.add(labelEntity);
+
+                // log distance
+                this._distanceRecords.push(distance);
+                this.logRecordsCallback(distance);
 
                 // show the chart, if no chart then create the chart set it to show
                 if (this.chartDiv) {
