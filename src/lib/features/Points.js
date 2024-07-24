@@ -1,5 +1,10 @@
 import * as Cesium from "cesium";
-import { createPointEntity, removeInputActions, cartesian3ToCartographicDegrees } from "../helper/helper.js";
+import {
+    createPointEntity,
+    removeInputActions,
+    cartesian3ToCartographicDegrees,
+    updateMovingDot
+} from "../helper/helper.js";
 
 /**
  * Represents points bookmark tool in Cesium.
@@ -108,26 +113,11 @@ class Points {
 
         this.coordinate = cartesian;
         // update nameOverlay: the moving dot with mouse
-        this.updateMovingDot(cartesian);
+        updateMovingDot(movement.endPosition, this.nameOverlay);
 
         // } else {
         //     this.nameOverlay.style.display = "none";
         // }
-    }
-
-    /**
-     * update the moving dot with mouse
-     * @param {Cesium.Cartesian3} cartesian
-     */
-    updateMovingDot(cartesian) {
-        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
-        this.nameOverlay.style.display = 'block';
-        this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
-        this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
-        this.nameOverlay.style.backgroundColor = "yellow";
-        this.nameOverlay.style.borderRadius = "50%"
-        this.nameOverlay.style.width = "1px";
-        this.nameOverlay.style.height = "1px";
     }
 
     /**

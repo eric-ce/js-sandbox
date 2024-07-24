@@ -5,7 +5,8 @@ import {
     calculateDistance,
     createDistanceLabel,
     removeInputActions,
-    editableLabel
+    editableLabel,
+    updateMovingDot
 } from "../helper/helper.js";
 
 
@@ -135,7 +136,7 @@ class TwoPointsDistance {
 
                 // log distance
                 this._distanceRecords.push(distance);
-                this.logRecordsCallback(this._distanceRecords);
+                this.logRecordsCallback(distance);
 
                 // set flag that the measurement has ended
                 this.isDistanceStarted = false;
@@ -174,7 +175,7 @@ class TwoPointsDistance {
         this.coordinate = cartesian;
 
         // update nameOverlay: the moving dot with mouse
-        this.updateMovingDot(cartesian)
+        updateMovingDot(movement.endPosition, this.nameOverlay);
 
         if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
             const firstPointCartesian = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now())
@@ -231,21 +232,6 @@ class TwoPointsDistance {
     removeEntity(entity) {
         this.viewer.entities.remove(entity);
         entity = null;
-    }
-
-    /**
-     * update the moving dot with mouse
-     * @param {Cesium.Cartesian3} cartesian
-     */
-    updateMovingDot(cartesian) {
-        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
-        this.nameOverlay.style.display = 'block';
-        this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
-        this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
-        this.nameOverlay.style.backgroundColor = "yellow";
-        this.nameOverlay.style.borderRadius = "50%"
-        this.nameOverlay.style.width = "1px";
-        this.nameOverlay.style.height = "1px";
     }
 
     resetValue() {

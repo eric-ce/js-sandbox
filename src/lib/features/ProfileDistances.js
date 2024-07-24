@@ -6,7 +6,8 @@ import {
     createDistanceLabel,
     formatDistance,
     removeInputActions,
-    editableLabel
+    editableLabel,
+    updateMovingDot
 } from "../helper/helper.js";
 import Chart from "chart.js/auto";
 
@@ -156,7 +157,7 @@ class ProfileDistances {
 
         this.coordinate = cartesian;
 
-        this.updateMovingDot(cartesian);
+        updateMovingDot(movement.endPosition, this.nameOverlay);
 
         if (this.isMultiDistanceEnd) return;
 
@@ -456,21 +457,6 @@ class ProfileDistances {
     removeEntity(entity) {
         this.viewer.entities.remove(entity);
         entity = null;
-    }
-
-    /**
-     * update the moving dot with mouse
-     * @param {Cesium.Cartesian3} cartesian
-     */
-    updateMovingDot(cartesian) {
-        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
-        this.nameOverlay.style.display = 'block';
-        this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
-        this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
-        this.nameOverlay.style.backgroundColor = "yellow";
-        this.nameOverlay.style.borderRadius = "50%"
-        this.nameOverlay.style.width = "1px";
-        this.nameOverlay.style.height = "1px";
     }
 
     resetValue() {

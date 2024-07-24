@@ -4,7 +4,8 @@ import {
     createLineEntity,
     createDistanceLabel,
     removeInputActions,
-    editableLabel
+    editableLabel,
+    updateMovingDot
 } from "../helper/helper.js";
 
 /**
@@ -127,7 +128,7 @@ class ThreePointsCurve {
 
             // log the curve record
             this._curveRecords.push(totalDistance);
-            this.logRecordsCallback(this._curveRecords);
+            this.logRecordsCallback(totalDistance);
 
             // reset point entities
             this.pointEntities.removeAll();
@@ -151,7 +152,7 @@ class ThreePointsCurve {
 
         this.coordinate = cartesian;
 
-        this.updateMovingDot(cartesian)
+        updateMovingDot(movement.endPosition, this.nameOverlay);
         // } else {
         //     this.nameOverlay.style.display = "none";
         // }
@@ -195,21 +196,6 @@ class ThreePointsCurve {
                     : acc,
             0
         );
-    }
-
-    /**
-     * update the moving dot with mouse
-     * @param {Cesium.Cartesian3} cartesian
-     */
-    updateMovingDot(cartesian) {
-        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
-        this.nameOverlay.style.display = 'block';
-        this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
-        this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
-        this.nameOverlay.style.backgroundColor = "yellow";
-        this.nameOverlay.style.borderRadius = "50%"
-        this.nameOverlay.style.width = "1px";
-        this.nameOverlay.style.height = "1px";
     }
 
     resetvalue() {

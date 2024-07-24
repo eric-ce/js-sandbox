@@ -1,4 +1,12 @@
-import { createPointEntity, createLineEntity, convertToCartesian3, createDistanceLabel, removeInputActions, editableLabel } from "../helper/helper.js";
+import {
+    createPointEntity,
+    createLineEntity,
+    convertToCartesian3,
+    createDistanceLabel,
+    removeInputActions,
+    editableLabel,
+    updateMovingDot
+} from "../helper/helper.js";
 import * as Cesium from "cesium";
 
 /**
@@ -93,7 +101,7 @@ class Height {
             // log the height result
             const distance = Cesium.Cartesian3.distance(topCartesianClone, bottomCartesianClone);
             this._heightRecords.push(distance);
-            this.logRecordsCallback(this._heightRecords);
+            this.logRecordsCallback(distance);
         }
     }
 
@@ -111,7 +119,7 @@ class Height {
 
         if (Cesium.defined(this.cartesian)) {
 
-            this.updateMovingDot(this.cartesian);
+            updateMovingDot(movement.endPosition, this.nameOverlay);
 
             const cartographic = Cesium.Cartographic.fromCartesian(this.cartesian);
 
@@ -161,9 +169,6 @@ class Height {
                 };
             })
         }
-        // } else {
-        //     this.nameOverlay.style.display = "none";
-        // }
     }
 
     /**
@@ -188,21 +193,6 @@ class Height {
     removeEntity(entity) {
         this.viewer.entities.remove(entity);
         entity = null;
-    }
-
-    /**
-     * update the moving dot with mouse
-     * @param {Cesium.Cartesian3} cartesian
-     */
-    updateMovingDot(cartesian) {
-        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
-        this.nameOverlay.style.display = 'block';
-        this.nameOverlay.style.left = `${screenPosition.x - 5}px`;
-        this.nameOverlay.style.top = `${screenPosition.y - 5}px`;
-        this.nameOverlay.style.backgroundColor = "yellow";
-        this.nameOverlay.style.borderRadius = "50%"
-        this.nameOverlay.style.width = "1px";
-        this.nameOverlay.style.height = "1px";
     }
 
     resetValue() {

@@ -52,14 +52,6 @@ export class MeasureToolbox extends HTMLElement {
         this.buttonOverlay = null;
 
         // log variables
-        // this._records = {
-        //     points: [],
-        //     distances: [],
-        //     curves: [],
-        //     heights: [],
-        //     "m-distance": [],
-        //     polygons: [],
-        // };
         this._records = [];
     }
 
@@ -274,6 +266,9 @@ export class MeasureToolbox extends HTMLElement {
         // setup button actions
         button.addEventListener("click", () => {
             this.setupLogBox();
+
+            this.nameOverlay.style.display = "none";
+
             // if the click button the same as active button then deactivate it
             if (this.activeButton === button) {
                 this.deactivateButton(button, toolInstance);
@@ -395,6 +390,7 @@ export class MeasureToolbox extends HTMLElement {
             });
         })
     }
+
     setupNameOverlay() {
         this.nameOverlay = document.createElement("div");
         this.nameOverlay.className = "backdrop";
@@ -467,21 +463,22 @@ export class MeasureToolbox extends HTMLElement {
         this._records.forEach(record => {
             const key = Object.keys(record)[0];
             let rows = [];
-
+            let value = null;
             switch (key) {
                 // Handle different types of records
                 case "points":
                     const { latitude, longitude, height } = record[key][0];
-                    const value = `lat: ${latitude}, long: ${longitude}, height: ${height}`;
+                    value = `lat: ${latitude}, long: ${longitude}, height: ${height}`;
                     rows.push(this.createRow(`${key}: ${value}`));
                     break;
                 case "m-distance":
-                    const { distances, totalDistance } = record[key][0];
+                    const { distances, totalDistance } = record[key];
                     rows.push(this.createRow(`${key}: distances: ${distances}`));
                     rows.push(this.createRow(`${key}: totalDistance: ${totalDistance}`));
                     break;
                 default:
-                    rows.push(this.createRow(`${key}: ${record[key]}`));
+                    value = record[key];
+                    rows.push(this.createRow(`${key}: ${value}`));
                     break;
             }
 
