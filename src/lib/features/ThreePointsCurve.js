@@ -151,8 +151,8 @@ class ThreePointsCurve {
         this.coordinate = cartesian;
 
         // update pointerOverlay: the moving dot with mouse
-        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObject);
+        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
     }
 
     /**

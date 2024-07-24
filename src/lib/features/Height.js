@@ -120,8 +120,8 @@ class Height {
         if (Cesium.defined(this.cartesian)) {
 
             // update pointerOverlay: the moving dot with mouse
-            const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-            updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObject);
+            const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
+            updatePointerOverlay(this.viewer, this.pointerOverlay, this.cartesian, pickedObjects)
 
             const cartographic = Cesium.Cartographic.fromCartesian(this.cartesian);
 

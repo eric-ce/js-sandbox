@@ -214,8 +214,8 @@ class Profile {
         this.coordinate = cartesian;
 
         // update pointerOverlay: the moving dot with mouse
-        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObject);
+        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
         if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
             const firstPointCartesian = this.pointEntities.values[0].position.getValue(

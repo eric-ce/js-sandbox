@@ -175,7 +175,6 @@ class TwoPointsDistance {
 
         // update pointerOverlay: the moving dot with mouse
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
-
         updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
 
