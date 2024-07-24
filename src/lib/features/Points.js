@@ -3,7 +3,7 @@ import {
     createPointEntity,
     removeInputActions,
     cartesian3ToCartographicDegrees,
-    updateMovingDot
+    updatePointerOverlay
 } from "../helper/helper.js";
 
 /**
@@ -11,13 +11,13 @@ import {
  * @class
  * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
  * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
- * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
+ * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
  */
 class Points {
-    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
-        this.nameOverlay = nameOverlay;
+        this.pointerOverlay = pointerOverlay;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -71,7 +71,7 @@ class Points {
                 // log the removed point records
                 const position = Cesium.Cartesian3.clone(entityToRemove.position.getValue(Cesium.JulianDate.now()));
                 this._pointsRecords = this._pointsRecords.filter(point => !Cesium.Cartesian3.equals(point, position));
-                this.logRecordsCallback(this.pointsRecords);
+                this.logRecordsCallback({ "remove": cartesian3ToCartographicDegrees(position) });
 
                 // remove from viewer and pointEntities collection
                 this.viewer.entities.remove(entityToRemove);
@@ -93,11 +93,9 @@ class Points {
 
                 // log the points records
                 this._pointsRecords.push(cartesian);
-                this.logRecordsCallback(cartesian3ToCartographicDegrees(cartesian));
+                this.logRecordsCallback({ "add": cartesian3ToCartographicDegrees(cartesian) });
             }
         }
-
-
     }
 
     /**
@@ -105,20 +103,17 @@ class Points {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handlePointsMouseMove(movement) {
-        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        // if (Cesium.defined(pickedObject)) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
 
         this.coordinate = cartesian;
-        // update nameOverlay: the moving dot with mouse
-        updateMovingDot(movement.endPosition, this.nameOverlay);
 
-        // } else {
-        //     this.nameOverlay.style.display = "none";
-        // }
+        // update pointerOverlay: the moving dot with mouse
+        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects);
     }
+
 
     /**
      * Gets the points records.

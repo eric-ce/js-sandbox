@@ -5,7 +5,7 @@ import {
     createDistanceLabel,
     removeInputActions,
     editableLabel,
-    updateMovingDot
+    updatePointerOverlay
 } from "../helper/helper.js";
 
 /**
@@ -13,13 +13,13 @@ import {
  * @class
  * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
  * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
- * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
+ * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
  */
 class ThreePointsCurve {
-    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
-        this.nameOverlay = nameOverlay;
+        this.pointerOverlay = pointerOverlay;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -145,17 +145,14 @@ class ThreePointsCurve {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleCurveMouseMove(movement) {
-        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        // if (Cesium.defined(pickedObject)) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
 
         this.coordinate = cartesian;
 
-        updateMovingDot(movement.endPosition, this.nameOverlay);
-        // } else {
-        //     this.nameOverlay.style.display = "none";
-        // }
+        // update pointerOverlay: the moving dot with mouse
+        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObject);
     }
 
     /**

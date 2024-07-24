@@ -97,22 +97,19 @@ export function setupEditableModal(viewerContainer) {
     });
 }
 
-/**
- * Moving dot with mouse
- * @param {Cesium.Cartesian2} cartesian2 - The Cartesian2 coordinates of the windows position.
- * @param {HTMLElement} nameOverlay - The overlay element to display the moving dot.
- * @returns {void}
- */
-export function updateMovingDot(cartesian2, nameOverlay) {
-    const screenPosition = cartesian2;
-    // const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
-    nameOverlay.style.display = 'block';
-    nameOverlay.style.left = `${screenPosition.x - 5}px`;
-    nameOverlay.style.top = `${screenPosition.y - 5}px`;
-    nameOverlay.style.backgroundColor = "yellow";
-    nameOverlay.style.borderRadius = "50%"
-    nameOverlay.style.width = "1px";
-    nameOverlay.style.height = "1px";
+export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedObjects) {
+    const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+    pointerOverlay.style.display = 'block';
+    pointerOverlay.style.left = `${screenPosition.x - 5}px`;
+    pointerOverlay.style.top = `${screenPosition.y - 5}px`;
+    pointerOverlay.style.borderRadius = "50%";
+    pointerOverlay.style.width = "1px";
+    pointerOverlay.style.height = "1px";
+
+    // Check if there is any pickedObject that is not an entity using `some` for efficiency
+    const hasNonEntityObject = pickedObjects.some(pickedObject => !(pickedObject.id instanceof Cesium.Entity));
+
+    pointerOverlay.style.backgroundColor = hasNonEntityObject ? "blue" : "yellow";
 }
 
 /**

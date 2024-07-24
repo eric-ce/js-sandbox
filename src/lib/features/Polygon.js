@@ -5,14 +5,14 @@ import {
     createPolygonEntity,
     removeInputActions,
     editableLabel,
-    updateMovingDot
+    updatePointerOverlay
 } from "../helper/helper.js";
 
 class Polygon {
-    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
-        this.nameOverlay = nameOverlay;
+        this.pointerOverlay = pointerOverlay;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -139,8 +139,6 @@ class Polygon {
     handlePolygonMouseMove(movement) {
         this.viewer.selectedEntity = undefined;
 
-        // const pickedObject = this.viewer.scene.pick(movement.endPosition);
-        // if (Cesium.defined(pickedObject)) {
         const cartesian = this.viewer.scene.pickPosition(
             movement.endPosition
         );
@@ -149,7 +147,9 @@ class Polygon {
 
         this.coordiante = cartesian;
 
-        updateMovingDot(movement.endPosition, this.nameOverlay);
+        // update pointerOverlay : the moving dot with mouse
+        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObject);
 
         if (this.pointEntities.values.length > 2 && !this.isPolygonEnd) {
             const pointsPosition = this.pointEntities.values.map(
@@ -183,9 +183,6 @@ class Polygon {
                 this.viewer.entities.add(polygonLabel);
             this.labelEntities.add(polygonLabelEntity);
         }
-        // } else {
-        //     this.nameOverlay.style.display = "none";
-        // }
     }
 
     handlePolygonRightClick(movement) {

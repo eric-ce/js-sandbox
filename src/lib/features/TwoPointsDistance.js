@@ -6,7 +6,8 @@ import {
     createDistanceLabel,
     removeInputActions,
     editableLabel,
-    updateMovingDot
+    updatePointerOverlay,
+    throttle
 } from "../helper/helper.js";
 
 
@@ -15,13 +16,13 @@ import {
  * @class
  * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
  * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
- * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
+ * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
  */
 class TwoPointsDistance {
-    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
-        this.nameOverlay = nameOverlay;
+        this.pointerOverlay = pointerOverlay;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -166,16 +167,17 @@ class TwoPointsDistance {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleDistanceMouseMove(movement) {
-        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        // if (Cesium.defined(pickedObject)) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
 
         this.coordinate = cartesian;
 
-        // update nameOverlay: the moving dot with mouse
-        updateMovingDot(movement.endPosition, this.nameOverlay);
+        // update pointerOverlay: the moving dot with mouse
+        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
+
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
+
 
         if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
             const firstPointCartesian = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now())
@@ -205,9 +207,6 @@ class TwoPointsDistance {
             this.movingLabelEntity = this.viewer.entities.add(label);
 
         }
-        // } else {
-        //     this.nameOverlay.style.display = "none";
-        // }
     }
 
     /**

@@ -7,15 +7,15 @@ import {
     formatDistance,
     removeInputActions,
     editableLabel,
-    updateMovingDot
+    updatePointerOverlay
 } from "../helper/helper.js";
 import Chart from "chart.js/auto";
 
 class ProfileDistances {
-    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
-        this.nameOverlay = nameOverlay;
+        this.pointerOverlay = pointerOverlay;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -149,15 +149,15 @@ class ProfileDistances {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        // if (Cesium.defined(pickedObject)) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
 
         this.coordinate = cartesian;
 
-        updateMovingDot(movement.endPosition, this.nameOverlay);
+        // update pointerOverlay: the moving dot with mouse
+        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObject);
 
         if (this.isMultiDistanceEnd) return;
 
@@ -200,9 +200,6 @@ class ProfileDistances {
                 movingLine
             );
         }
-        // } else {
-        //     this.nameOverlay.style.display = "none";
-        // }
     }
 
     async handleMultiDistanceRightClick(movement) {

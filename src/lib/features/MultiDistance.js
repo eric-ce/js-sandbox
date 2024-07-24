@@ -7,7 +7,7 @@ import {
     formatDistance,
     removeInputActions,
     editableLabel,
-    updateMovingDot
+    updatePointerOverlay
 } from "../helper/helper.js";
 
 class MultiDistance {
@@ -15,12 +15,12 @@ class MultiDistance {
      * Creates a new MultiDistance instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
      * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
-     * @param {HTMLElement} nameOverlay - The HTML element for displaying names.
+     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
      */
-    constructor(viewer, handler, nameOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
-        this.nameOverlay = nameOverlay;
+        this.pointerOverlay = pointerOverlay;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -138,15 +138,15 @@ class MultiDistance {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;
 
-        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        // if (Cesium.defined(pickedObject)) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
 
         this.coordinate = cartesian;
 
-        updateMovingDot(movement.endPosition, this.nameOverlay);
+        // update pointerOverlay: the moving dot with mouse
+        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObject);
 
         if (this.isMultiDistanceEnd) return;
 
@@ -189,9 +189,6 @@ class MultiDistance {
                 movingLine
             );
         }
-        // } else {
-        //     this.nameOverlay.style.display = "none";
-        // }
     }
 
     handleMultiDistanceRightClick(movement) {

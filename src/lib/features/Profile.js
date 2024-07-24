@@ -6,15 +6,15 @@ import {
     createDistanceLabel,
     removeInputActions,
     editableLabel,
-    updateMovingDot
+    updatePointerOverlay
 } from "../helper/helper.js";
 import Chart from "chart.js/auto";
 
 class Profile {
-    constructor(viewer, handler, nameOverlay) {
+    constructor(viewer, handler, pointerOverlay) {
         this.viewer = viewer;
         this.handler = handler;
-        this.nameOverlay = nameOverlay;
+        this.pointerOverlay = pointerOverlay;
 
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
@@ -207,16 +207,15 @@ class Profile {
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
     handleProfileMouseMove(movement) {
-        // const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
-        // if (Cesium.defined(pickedObject)) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
 
         this.coordinate = cartesian;
 
-        // update nameOverlay: the moving dot with mouse
-        updateMovingDot(movement.endPosition, this.nameOverlay);
+        // update pointerOverlay: the moving dot with mouse
+        const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
+        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObject);
 
         if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
             const firstPointCartesian = this.pointEntities.values[0].position.getValue(
@@ -240,9 +239,6 @@ class Profile {
             const label = createDistanceLabel(firstPointCartesian, cartesian, distance);
             this.movingLabelEntity = this.viewer.entities.add(label);
         }
-        // } else {
-        //     this.nameOverlay.style.display = "none";
-        // }
     }
 
     /**

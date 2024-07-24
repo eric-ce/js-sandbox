@@ -39,7 +39,7 @@ export class MeasureToolbox extends HTMLElement {
         this._viewer = null;
         this.handler = null;
 
-        this.nameOverlay = null;
+        this.pointerOverlay = null;
         this.infoBox = null;
 
         // buttons variables
@@ -91,42 +91,42 @@ export class MeasureToolbox extends HTMLElement {
 
         const modes = [
             {
-                instance: new Points(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "points")),
+                instance: new Points(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "points")),
                 name: "Points",
                 icon: pointsImg
             },
             {
-                instance: new TwoPointsDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "distances")),
+                instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
                 name: "Distance",
                 icon: distanceImg
             },
             {
-                instance: new ThreePointsCurve(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "curves")),
+                instance: new ThreePointsCurve(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "curves")),
                 name: "Curve",
                 icon: curveImg
             },
             {
-                instance: new Height(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "height")),
+                instance: new Height(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "height")),
                 name: "Height",
                 icon: heightImg
             },
             {
-                instance: new MultiDistance(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "m-distance")),
+                instance: new MultiDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance")),
                 name: "Multi-Distances",
                 icon: multiDImage
             },
             {
-                instance: new Polygon(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "polygons")),
+                instance: new Polygon(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "polygons")),
                 name: "Polygon",
                 icon: polygonImg
             },
             {
-                instance: new Profile(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile")),
+                instance: new Profile(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile")),
                 name: "Profile",
                 icon: profileImg
             },
             {
-                instance: new ProfileDistances(this.viewer, this.handler, this.nameOverlay, this.updateRecords.bind(this, "profile-distances")),
+                instance: new ProfileDistances(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances")),
                 name: "Profile-Distances",
                 icon: profileDistancesImg
             },
@@ -162,8 +162,8 @@ export class MeasureToolbox extends HTMLElement {
         });
         toolsContainer.appendChild(toolButton);
 
-        // initialize style of nameOverlay, the moving dot
-        this.setupNameOverlay();
+        // initialize style of pointerOverlay, the moving dot
+        this.setupPointerOverlay();
 
         // add style to the shadowRoot for this web component
         const style = document.createElement("style");
@@ -267,7 +267,7 @@ export class MeasureToolbox extends HTMLElement {
         button.addEventListener("click", () => {
             this.setupLogBox();
 
-            this.nameOverlay.style.display = "none";
+            this.pointerOverlay.style.display = "none";
 
             // if the click button the same as active button then deactivate it
             if (this.activeButton === button) {
@@ -344,7 +344,7 @@ export class MeasureToolbox extends HTMLElement {
         this.clearButton.addEventListener("click", () => {
             this.viewer.entities.removeAll();
             removeInputActions(this.handler);
-            this.nameOverlay.style.display = "none";
+            this.pointerOverlay.style.display = "none";
 
             // clear infobox
             this.infoBox && this.infoBox.remove();
@@ -391,12 +391,12 @@ export class MeasureToolbox extends HTMLElement {
         })
     }
 
-    setupNameOverlay() {
-        this.nameOverlay = document.createElement("div");
-        this.nameOverlay.className = "backdrop";
-        this.nameOverlay.style.cssText =
+    setupPointerOverlay() {
+        this.pointerOverlay = document.createElement("div");
+        this.pointerOverlay.className = "backdrop";
+        this.pointerOverlay.style.cssText =
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
-        this.viewer.container.appendChild(this.nameOverlay);
+        this.viewer.container.appendChild(this.pointerOverlay);
     }
 
     setupInfoBox() {
@@ -457,34 +457,27 @@ export class MeasureToolbox extends HTMLElement {
         const table = this.logBox.querySelector("table");
         table.innerHTML = ""; // Clear the table
 
-        const title = this.createRow("Records");
-        table.appendChild(title);
+        const fragment = document.createDocumentFragment();
+        fragment.appendChild(this.createRow("Records"));
 
         this._records.forEach(record => {
             const key = Object.keys(record)[0];
-            let rows = [];
-            let value = null;
+            const recordData = record[key];
 
-            switch (key) {
-                // Handle different types of records
-                case "points":
-                    const { latitude, longitude, height } = record[key];
-                    value = `lat: ${latitude}, long: ${longitude}, height: ${height}`;
-                    rows.push(this.createRow(`${key}: ${value}`));
-                    break;
-                case "m-distance":
-                    const { distances, totalDistance } = record[key];
-                    rows.push(this.createRow(`${key}: distances: ${distances}`));
-                    rows.push(this.createRow(`${key}: totalDistance: ${totalDistance}`));
-                    break;
-                default:
-                    value = record[key];
-                    rows.push(this.createRow(`${key}: ${value}`));
-                    break;
+            if (key === "points") {
+                const action = recordData.add ? "add" : "remove";
+                const { latitude, longitude, height } = recordData[action];
+                fragment.appendChild(this.createRow(`${key}: ${action}: lat: ${latitude}, long: ${longitude}, height: ${height}`));
+            } else if (key === "m-distance") {
+                const { distances, totalDistance } = recordData;
+                fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
+                fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));
+            } else {
+                fragment.appendChild(this.createRow(`${key}: ${recordData}`));
             }
-
-            rows.forEach(row => table.appendChild(row));
         });
+
+        table.appendChild(fragment);
     }
 
     createRow(value) {
