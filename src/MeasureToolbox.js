@@ -464,10 +464,11 @@ export class MeasureToolbox extends HTMLElement {
             const key = Object.keys(record)[0];
             let rows = [];
             let value = null;
+
             switch (key) {
                 // Handle different types of records
                 case "points":
-                    const { latitude, longitude, height } = record[key][0];
+                    const { latitude, longitude, height } = record[key];
                     value = `lat: ${latitude}, long: ${longitude}, height: ${height}`;
                     rows.push(this.createRow(`${key}: ${value}`));
                     break;

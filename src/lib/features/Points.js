@@ -93,7 +93,7 @@ class Points {
 
                 // log the points records
                 this._pointsRecords.push(cartesian);
-                this.logRecordsCallback(this.pointsRecords);
+                this.logRecordsCallback(cartesian3ToCartographicDegrees(cartesian));
             }
         }
 
