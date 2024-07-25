@@ -41,23 +41,52 @@ export async function editableLabel(viewerContainer, label) {
 export function setupEditableModal(viewerContainer) {
     return new Promise((resolve, reject) => {
         const modal = document.createElement("div");
+        modal.className = "edit-label-modal";
 
-        modal.style.cssText = `
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; 
-            align-items: center; z-index: 2000; color: white; font-size: 20px;
+        const style = document.createElement('style');
+        style.textContent = `
+            .edit-label-modal{
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
+                display: flex; justify-content: center; align-items: center; z-index: 2000; color: white; font-size: 20px;
+            }
+            .edit-label-modal-container{
+                background-color: #242526 ; padding: 20px 30px 30px 30px; border-radius: 10px; border: 1px solid #3b4855
+            }
+            .edit-label-modal-input{
+                display: flex; flex-direction: column; gap: 20px;
+            }
+            .edit-label-modal-input p{
+                font-family:Roboto, sans-serif; font-size: 1.25rem
+            }  
+            .edit-label-modal-input input{
+                padding: 5px; margin: 0px 0px 20px 0px;
+            }
+            .edit-label-modal-buttons{
+                display: flex; justify-content: flex-end; gap: 10px; 
+            }
+            .edit-label-modal-buttons button{
+                padding: 5px 10px; border-radius: 5px; border: none; outline: none; cursor: pointer; transition: all .5s ease; 
+                font-family:Roboto, sans-serif; 
+            }
+            .edit-label-modal-buttons button:hover{
+                background-color: rgba(245, 245, 245, 0.8);
+            }
         `;
 
         modal.innerHTML = `
-        <div style="background-color: #242526 ; padding: 20px; border-radius: 10px; border: 1px solid #3b4855">
-            <p>Enter new label name</p>
-<input type="text" id="editableLabelInput" style="padding: 5px; margin: 20px 0;" />            <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="label-submit-btn" style="padding: 5px 10px; border-radius: 5px">Submit</button>
-                <button class="label-cancel-btn" style="padding: 5px 10px; border-radius: 5px">Cancel</button>
+        <div class="edit-label-modal-container">
+            <div class="edit-label-modal-input">
+                <p>Enter new label name</p>
+                <input type="text" id="editableLabelInput" />
+            </div>
+            <div class="edit-label-modal-buttons">
+                <button class="label-submit-btn">Submit</button>
+                <button class="label-cancel-btn">Cancel</button>
             </div>
         </div>
         `;
         viewerContainer.appendChild(modal);
+        viewerContainer.append(style);
 
         // Focus on the input field
         const input = modal.querySelector("#editableLabelInput");
@@ -97,6 +126,13 @@ export function setupEditableModal(viewerContainer) {
     });
 }
 
+/**
+ * update the pointer overlay position and color based on the pickedObjects
+ * @param {Cesium.Viewer} viewer 
+ * @param {HTMLElement} pointerOverlay 
+ * @param {Cesium.Cartesian3} cartesian 
+ * @param {Array} pickedObjects 
+ */
 export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedObjects) {
     const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
     pointerOverlay.style.display = 'block';
@@ -108,6 +144,7 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 
     // Check if there is any pickedObject that is not an entity using `some` for efficiency
     const hasNonEntityObject = pickedObjects.some(pickedObject => !(pickedObject.id instanceof Cesium.Entity));
+
 
     pointerOverlay.style.backgroundColor = hasNonEntityObject ? "blue" : "yellow";
 }

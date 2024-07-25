@@ -56,7 +56,6 @@ class ThreePointsCurve {
         removeInputActions(this.handler);
     }
 
-
     /**
      * Handles left-click events to place points, draw and calculate curves.
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
@@ -140,6 +139,7 @@ class ThreePointsCurve {
         }
         // }
     }
+
     /**
      * Handles mouse move events to display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement

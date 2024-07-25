@@ -65,7 +65,6 @@ class MultiDistance {
         removeInputActions(this.handler);
     }
 
-
     handleMultiDistanceLeftClick(movement) {
         this.viewer.selectedEntity = undefined;
         this.viewer.trackedEntity = undefined;

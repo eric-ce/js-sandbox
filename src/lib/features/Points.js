@@ -114,7 +114,6 @@ class Points {
         updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
     }
 
-
     /**
      * Gets the points records.
      * @returns {Array} The points records.
