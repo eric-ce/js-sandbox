@@ -220,15 +220,16 @@ class TwoPointsDistance {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
         if (this.pointEntities.values.length > 1) {
-            const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+            const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
+            const pointObject = pickedObjects.find(p => p.id && p.id.point);
 
             // if it has picked object, and picked object is point entity
-            if (pickedObject && pickedObject.id && pickedObject.id.point) {
+            if (Cesium.defined(pointObject)) {
                 this.isDragMode = true;
                 // disable camera movement
                 this.viewer.scene.screenSpaceCameraController.enableInputs = false;
 
-                this.draggingEntity = this.viewer.entities.getById(pickedObject.id.id);
+                this.draggingEntity = this.viewer.entities.getById(pointObject.id.id);
 
                 // set move event for dragging
                 this.handler.setInputAction((movement) => {
