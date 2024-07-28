@@ -25,12 +25,16 @@ class MultiDistance {
         this.logRecordsCallback = logRecordsCallback;
 
         this.isMultiDistanceEnd = false;
+        this.isDragMode = false;
 
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
         this.labelEntities = new Cesium.EntityCollection();
         this.movingLineEntity = new Cesium.Entity();
         this.movingLabelEntity = new Cesium.Entity();
+        this.draggingEntity = new Cesium.Entity();
+        this.entitiesArray = [];
+        this.groupsEntities = [];
 
         this.coordinate = new Cesium.Cartesian3();
 
@@ -56,6 +60,14 @@ class MultiDistance {
         this.handler.setInputAction((movement) => {
             this.handleMultiDistanceRightClick(movement);
         }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+
+        this.handler.setInputAction((movement) => {
+            this.handleMultiDistanceDragStart(movement)
+        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+        this.handler.setInputAction((movement) => {
+            this.handleMultiDistanceDragEnd(movement)
+        }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
     /**
@@ -110,7 +122,11 @@ class MultiDistance {
         );
         this.pointEntities.add(pointEntity);
 
+        this.entitiesArray.push(pointEntity);
+
         if (this.pointEntities.values.length > 1) {
+            console.log("🚀  this.pointEntities.values.length:", this.pointEntities.values.length);
+
             const prevIndex = this.pointEntities.values.length - 2;
             const currIndex = this.pointEntities.values.length - 1;
             const prevPointCartesian = this.pointEntities.values[prevIndex].position.getValue(Cesium.JulianDate.now());
@@ -247,6 +263,13 @@ class MultiDistance {
                 80,
                 10
             );
+            this.labelEntities.add(this.movingLabelEntity);
+
+            // group entities
+            const points = this.pointEntities.values;
+            const lines = this.lineEntities.values;
+            const labels = this.labelEntities.values;
+            this.groupsEntities.push([...points, ...lines, ...labels]);
 
             // log distance result
             const distances = []
@@ -258,9 +281,76 @@ class MultiDistance {
             this._distanceRecords.push(distanceRecord);
             this.logRecordsCallback(distanceRecord);
         }
-
-
         this.isMultiDistanceEnd = true;
+    }
+
+    handleMultiDistanceDragStart(movement) {
+        // initialize camera movement
+        this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+        if (this.pointEntities.values.length > 1) {
+            const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+
+            // if it has picked object, and picked object is point entity
+            if (pickedObject && pickedObject.id && pickedObject.id.point) {
+                this.isDragMode = true;
+                // disable camera movement
+                this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+
+                this.draggingEntity = this.viewer.entities.getById(pickedObject.id.id);
+
+                // get the lines that connected to the dragging point
+                const group = this.groupsEntities.find(pair => pair.includes(this.draggingEntity));
+                // use shared dragging point entity position to find out connected lines and labels
+                // connected lines to the dragging point
+                const lineEntities = group.filter(entity => entity.polyline);
+                const connectedLines = lineEntities.filter(line => {
+                    const positions = line.polyline.positions.getValue(Cesium.JulianDate.now());
+                    const dragEntityPosition = this.draggingEntity.position.getValue(Cesium.JulianDate.now());
+                    return Cesium.Cartesian3.equals(positions[0], dragEntityPosition) || Cesium.Cartesian3.equals(positions[1], dragEntityPosition)
+                });
+                // use connected lines to find out connected midpoints that is aligned with createLabelEntity's position
+                const connectedMidpoints = connectedLines.map(line => {
+                    const positions = line.polyline.positions.getValue(Cesium.JulianDate.now());
+                    return Cesium.Cartesian3.midpoint(positions[0], positions[1], new Cesium.Cartesian3());
+                });
+                // connected labels to the dragging point
+                const labelEntities = group.filter(entity => entity.label);
+                const connectedLabels = labelEntities.filter(label => {
+                    const position = label.position.getValue(Cesium.JulianDate.now());
+                    return Cesium.Cartesian3.equals(position, connectedMidpoints[0]) || Cesium.Cartesian3.equals(position, connectedMidpoints[1]);
+                });
+
+                // set move event for dragging
+                this.handler.setInputAction((movement) => {
+                    this.handleMultiDistanceDrag(movement, this.draggingEntity);
+                }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+            }
+        };
+    }
+
+    handleMultiDistanceDrag(movement, pointEntity) {
+        this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
+
+        const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
+
+        if (!Cesium.defined(cartesian)) return;
+        this.coordinate = cartesian;
+
+        // update point entity to dragging position
+        pointEntity.position = cartesian;
+    }
+
+    handleMultiDistanceDragEnd(movement) {
+        this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+        if (this.draggingEntity && this.isDragMode) {
+
+        }
+
+        this.handler.setInputAction((movement) => {
+            this.handleMultiDistanceMouseMove(movement);
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+        this.isDragMode = false;
     }
 
     /**
