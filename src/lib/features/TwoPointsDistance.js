@@ -186,7 +186,6 @@ class TwoPointsDistance {
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
         updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
-
         if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
             const firstPointCartesian = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now())
 
@@ -221,8 +220,6 @@ class TwoPointsDistance {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
         if (this.pointEntities.values.length > 1) {
-            // set camera movement to false
-
             const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
             // if it has picked object, and picked object is point entity
@@ -298,19 +295,17 @@ class TwoPointsDistance {
 
             // update line entity
             this.removeEntity(this.movingLineEntity);
-            // get the line entity from the group
+            // update line entity from the group
             const polylineEntity = group.find(e => e.polyline);
             polylineEntity.polyline.show = true;
             polylineEntity.polyline.positions.setValue([otherPointPosition, cartesian]);
 
-            // update distance label
+            // update distance label from the group
             this.removeEntity(this.movingLabelEntity);
             const labelEntity = group.find(e => e.label);
-
             labelEntity.label.show = true;
             const distance = calculateDistance(otherPointPosition, cartesian);
             const midpoint = Cesium.Cartesian3.midpoint(otherPointPosition, cartesian, new Cesium.Cartesian3());
-
             labelEntity.label.text = `Total: ${distance.toFixed(2)} m`;
             labelEntity.position.setValue(midpoint);
 
