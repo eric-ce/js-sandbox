@@ -170,6 +170,41 @@ class Height {
                     this.pointEntities.removeAll()
                 };
             })
+            // const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
+            // const groundPosition = new Cesium.Cartographic(cartographic.longitude, cartographic.latitude, groundHeight);
+            // const groundCartesian = Cesium.Cartographic.toCartesian(groundPosition);
+
+            // // create top and bottom points
+            // this.removeEntities(this.pointEntities);
+            // const topPointEntity = this.viewer.entities.add(
+            //     createPointEntity(this.cartesian, Cesium.Color.RED)
+            // );
+            // this.pointEntities.add(topPointEntity);
+
+            // const bottomPointEntity = this.viewer.entities.add(
+            //     createPointEntity(groundCartesian, Cesium.Color.RED)
+            // )
+            // this.pointEntities.add(bottomPointEntity);
+
+            // // create line between top point and bottom point
+            // this.removeEntity(this.lineEntity);
+            // this.lineEntity = this.viewer.entities.add(createLineEntity([groundCartesian, this.cartesian], Cesium.Color.YELLOW));
+
+            // // create label entity
+            // // remove previous label entities
+            // this.removeEntity(this.labelEntity);
+            // const distance = Cesium.Cartesian3.distance(this.cartesian, groundCartesian);
+            // const label = createDistanceLabel(
+            //     this.cartesian, groundCartesian, distance
+            // )
+            // label.label.text = `${distance.toFixed(2)} m`;
+            // label.label.pixelOffset = new Cesium.Cartesian2(-50, 0);
+            // this.labelEntity = this.viewer.entities.add(label);
+
+            // // reset to keep pointEntities only have top and bottom points
+            // if (this.pointEntities.values.length > 2) {
+            //     this.pointEntities.removeAll()
+            // }
         }
     }
 
