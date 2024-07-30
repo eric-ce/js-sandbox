@@ -309,13 +309,11 @@ export function createPolygonEntity(coordinateArray) {
         polygon: {
             hierarchy: new Cesium.PolygonHierarchy(cartesian3Array),
             perPositionHeight: true,
-            material: new Cesium.ColorMaterialProperty(Cesium.Color.GREEN.withAlpha(0.5)),
+            material: new Cesium.ColorMaterialProperty(Cesium.Color.GREEN.withAlpha(0.8)),
             outline: true,
             outlineColor: Cesium.Color.YELLOW,
             outlineWidth: 4,
-            // disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            // depthFailMaterial: Cesium.Color.YELLOW,
-            // extrudedHeight: 0,
+            arcType: Cesium.ArcType.GEODESIC,
         },
     };
 }
@@ -370,6 +368,8 @@ export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+    handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
+    handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
     // handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
 }
 

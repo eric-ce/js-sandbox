@@ -11,10 +11,12 @@ import {
 import Chart from "chart.js/auto";
 
 class Profile {
-    constructor(viewer, handler, pointerOverlay) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
         this.pointerOverlay = pointerOverlay;
+
+        this.logRecordsCallback = logRecordsCallback;
 
         this.pointEntities = new Cesium.EntityCollection();
         this.lineEntities = new Cesium.EntityCollection();
