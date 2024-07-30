@@ -23,7 +23,7 @@ class Polygon {
         this.labelEntities = new Cesium.EntityCollection();
 
         // initialize polygon entity so that it can show drawn polygon quickly
-        this.polygonEntity = this.viewer.entities.add(createPolygonEntity([Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO]))
+        this.polygonEntity = new Cesium.Entity();
 
         this.coordiante = new Cesium.Cartesian3();
 
@@ -98,22 +98,38 @@ class Polygon {
             const pointEntity = this.viewer.entities.add(
                 createPointEntity(cartesian, color)
             );
-            this.pointEntities.add(pointEntity);
+            this.pointEntities.add(pointEntity)
 
             // If three points have been selected, create/update the polygon entity
             if (this.pointEntities.values.length > 2) {
                 const pointsPosition = this.pointEntities.values.map(
-                    (pointEntity) =>
-                        pointEntity.position.getValue(Cesium.JulianDate.now())
+                    (pointEntity) => pointEntity.position.getValue(Cesium.JulianDate.now())
                 );
 
                 // create polygon entity
                 if (this.polygonEntity) {
                     this.removeEntity(this.polygonEntity);
                 }
-                this.polygonEntity = this.viewer.entities.add(
-                    createPolygonEntity(pointsPosition)
-                );
+
+                const polygon = createPolygonEntity(pointsPosition);
+                polygon.hierarchy = new Cesium.CallbackProperty(() => {
+                    return new Cesium.PolygonHierarchy(pointsPosition);
+                }, false);
+                this.polygonEntity = this.viewer.entities.add(polygon);
+
+                // if (!this.polygonEntity) {
+                //     const polygon = createPolygonEntity(pointsPosition);
+                //     polygon.hierarchy = new Cesium.CallbackProperty(() => {
+                //         return new Cesium.PolygonHierarchy(pointsPosition);
+                //     }, false);
+                //     this.polygonEntity = this.viewer.entities.add(polygon);
+                //     console.log(this.polygonEntity)
+                // } else {
+                //     // if there is polygon entity, update the hierarchy positions
+                //     this.polygonEntity.polygon.hierarchy = new Cesium.CallbackProperty(() => {
+                //         return new Cesium.PolygonHierarchy(pointsPosition);
+                //     }, false);
+                // }
 
                 //create label entity
                 const polygonArea = this.computePolygonArea(pointsPosition);
@@ -130,8 +146,6 @@ class Polygon {
                 const polygonLabelEntity =
                     this.viewer.entities.add(polygonLabel);
                 this.labelEntities.add(polygonLabelEntity);
-
-
             }
         }
     }
@@ -210,10 +224,17 @@ class Polygon {
             );
 
             // create polygon entity
-            this.removeEntity(this.polygonEntity)
-            this.polygonEntity = this.viewer.entities.add(
-                createPolygonEntity(pointsPosition)
-            );
+            // this.removeEntity(this.polygonEntity)
+            // this.polygonEntity = this.viewer.entities.add(
+            //     createPolygonEntity(pointsPosition)
+            // );
+            // update polygon entity
+            if (this.polygonEntity) {
+                this.polygonEntity.polygon.hierarchy = new Cesium.CallbackProperty(() => {
+                    return new Cesium.PolygonHierarchy(pointsPosition);
+                }, false);
+            }
+
 
             // create label entity
             if (this.labelEntities.values.length > 0) {

@@ -117,10 +117,12 @@ class TwoPointsDistance {
             );
             this.pointEntities.add(secondPointEntity);
 
+            // remove moving line entity
+            this.removeEntity(this.movingLineEntity);
+
             if (this.pointEntities.values.length === 2) {
                 // create line entity between the first and second point
                 this.removeEntities(this.lineEntities);
-                this.removeEntities(this.movingLineEntity);
 
                 const firstPointPosition = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now());
                 const secondPointPosition = this.pointEntities.values[1].position.getValue(Cesium.JulianDate.now());
@@ -129,6 +131,9 @@ class TwoPointsDistance {
                     [firstPointPosition, secondPointPosition],
                     Cesium.Color.ORANGE
                 );
+                line.polyline.positions = new Cesium.CallbackProperty(() => {
+                    return [firstPointPosition, secondPointPosition];
+                }, false);
                 const lineEntity = this.viewer.entities.add(line);
                 this.lineEntities.add(lineEntity);
 
@@ -231,6 +236,12 @@ class TwoPointsDistance {
 
                 this.draggingEntity = this.viewer.entities.getById(pointObject.id.id);
 
+                // identify the group of entities for line that associate with the dragging point entity
+                const group = this.groupsEntities.find(pair => pair.includes(this.draggingEntity));
+                const lineEntity = group.find(e => e.polyline);
+                // set not to show the line entity when left click down
+                lineEntity.polyline.show = false;
+
                 // set move event for dragging
                 this.handler.setInputAction((movement) => {
                     this.handleDistanceDrag(movement, this.draggingEntity);
@@ -259,9 +270,6 @@ class TwoPointsDistance {
         const otherPointPosition = otherPoint.position.getValue(Cesium.JulianDate.now());
 
         // create moving line entity
-        // set the line entity to not show
-        const polylineEntity = group.find(e => e.polyline).polyline;
-        polylineEntity.show = false;
         this.removeEntity(this.movingLineEntity);
         const movingLine = createLineEntity(
             [otherPointPosition, cartesian],
@@ -299,7 +307,10 @@ class TwoPointsDistance {
             // update line entity from the group
             const polylineEntity = group.find(e => e.polyline);
             polylineEntity.polyline.show = true;
-            polylineEntity.polyline.positions.setValue([otherPointPosition, cartesian]);
+            polylineEntity.polyline.positions = new Cesium.CallbackProperty(() => {
+                return [otherPointPosition, cartesian];
+            }, false
+            );
 
             // update distance label from the group
             this.removeEntity(this.movingLabelEntity);
