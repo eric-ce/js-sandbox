@@ -41,6 +41,7 @@ class MultiDistance {
         this._distanceCollection = [];
         this._distanceRecords = [];
         this._labelIndex = 0;
+        this._labelNumberIndex = 0;
     }
 
     /**
@@ -125,25 +126,28 @@ class MultiDistance {
         this.entitiesArray.push(pointEntity);
 
         if (this.pointEntities.values.length > 1) {
-            console.log("🚀  this.pointEntities.values.length:", this.pointEntities.values.length);
-
             const prevIndex = this.pointEntities.values.length - 2;
             const currIndex = this.pointEntities.values.length - 1;
             const prevPointCartesian = this.pointEntities.values[prevIndex].position.getValue(Cesium.JulianDate.now());
             const currPointCartesian = this.pointEntities.values[currIndex].position.getValue(Cesium.JulianDate.now());
 
             // create line entities
-            const lineEntity = this.viewer.entities.add(
-                createLineEntity([prevPointCartesian, currPointCartesian], Cesium.Color.ORANGE)
-            );
+            const lineEntity = createLineEntity([prevPointCartesian, currPointCartesian], Cesium.Color.ORANGE)
+            lineEntity.polyline.positions = new Cesium.CallbackProperty(() => {
+                return [prevPointCartesian, currPointCartesian];
+            }, false);
+            this.viewer.entities.add(lineEntity);
             this.lineEntities.add(lineEntity);
 
             // create label entities
             const distance = calculateDistance(prevPointCartesian, currPointCartesian);
             this._distanceCollection.push(distance);
             const label = createDistanceLabel(prevPointCartesian, currPointCartesian, distance)
-            label.label.text = `${String.fromCharCode(97 + this._labelIndex)}: ${formatDistance(distance)}`;
+
+            const currentLetter = String.fromCharCode(97 + this._labelIndex % 26); // 97 is ASCII code for 'a'
+            label.label.text = `${currentLetter}${this._labelNumberIndex}: ${formatDistance(distance)}`;
             this._labelIndex++;
+
             const labelEntity = this.viewer.entities.add(label);
             this.labelEntities.add(labelEntity);
         }
@@ -211,11 +215,7 @@ class MultiDistance {
         this.viewer.trackedEntity = undefined;
 
         // place last point and place last line
-        // const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
-        // if (Cesium.defined(pickedObject) && !this.isMultiDistanceEnd) {
         if (!this.isMultiDistanceEnd) {
-            // const cartesian = this.viewer.scene.pickPosition(movement.position);
-
             // use mouse move position to control only one pickPosition is used
             const cartesian = this.coordinate;
 
@@ -226,25 +226,28 @@ class MultiDistance {
             this.pointEntities.add(lastPoint);
 
             // create last line
-            const lastLine = this.viewer.entities.add(createLineEntity(
-                [this.pointEntities.values[this.pointEntities.values.length - 2].position.getValue(Cesium.JulianDate.now()), cartesian],
-                Cesium.Color.ORANGE
-            ));
+            // remove this.moving line entity
+            if (this.movingLineEntity) {
+                this.removeEntity(this.movingLineEntity);
+            }
+
+            // first point for last line
+            const firstPoint = this.pointEntities.values[this.pointEntities.values.length - 2].position.getValue(Cesium.JulianDate.now());
+
+            const lastLine = createLineEntity([firstPoint, cartesian], Cesium.Color.ORANGE);
+            const lastLinePositions = new Cesium.CallbackProperty(() => {
+                return [firstPoint, cartesian];
+            }, false);
+            lastLine.polyline.positions = lastLinePositions;
+            this.viewer.entities.add(lastLine);
             this.lineEntities.add(lastLine);
 
             // create last label
-            const lastDistance = calculateDistance(
-                this.pointEntities.values[this.pointEntities.values.length - 2].position.getValue(Cesium.JulianDate.now()),
-                cartesian
-            );
+            const lastDistance = calculateDistance(firstPoint, cartesian);
             this._distanceCollection.push(lastDistance);
 
             const lastLabel = this.viewer.entities.add(
-                createDistanceLabel(
-                    this.pointEntities.values[this.pointEntities.values.length - 2].position.getValue(Cesium.JulianDate.now()),
-                    cartesian,
-                    lastDistance
-                )
+                createDistanceLabel(firstPoint, cartesian, lastDistance)
             );
             lastLabel.label.text = `${String.fromCharCode(97 + this._labelIndex)}: ${formatDistance(lastDistance)}`;
             this._labelIndex++;
@@ -259,10 +262,7 @@ class MultiDistance {
             this.viewer.entities.remove(this.movingLabelEntity);
             this.movingLabelEntity = this.viewer.entities.add(createDistanceLabel(cartesian, cartesian, 0));
             this.movingLabelEntity.label.text = `Total: ${formatDistance(totalDistance)}`;
-            this.movingLabelEntity.label.pixelOffset = new Cesium.Cartesian2(
-                80,
-                10
-            );
+            this.movingLabelEntity.label.pixelOffset = new Cesium.Cartesian2(80, 10);
             this.labelEntities.add(this.movingLabelEntity);
 
             // group entities
@@ -280,6 +280,8 @@ class MultiDistance {
             };
             this._distanceRecords.push(distanceRecord);
             this.logRecordsCallback(distanceRecord);
+
+            this._labelNumberIndex++;
         }
         this.isMultiDistanceEnd = true;
     }
@@ -298,6 +300,7 @@ class MultiDistance {
 
                 this.draggingEntity = this.viewer.entities.getById(pickedObject.id.id);
 
+                // update lines
                 // get the lines that connected to the dragging point
                 const group = this.groupsEntities.find(pair => pair.includes(this.draggingEntity));
                 // use shared dragging point entity position to find out connected lines and labels
@@ -308,6 +311,8 @@ class MultiDistance {
                     const dragEntityPosition = this.draggingEntity.position.getValue(Cesium.JulianDate.now());
                     return Cesium.Cartesian3.equals(positions[0], dragEntityPosition) || Cesium.Cartesian3.equals(positions[1], dragEntityPosition)
                 });
+
+                // update labels
                 // use connected lines to find out connected midpoints that is aligned with createLabelEntity's position
                 const connectedMidpoints = connectedLines.map(line => {
                     const positions = line.polyline.positions.getValue(Cesium.JulianDate.now());
