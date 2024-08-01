@@ -33,6 +33,11 @@ class MultiDistance {
         this.movingLineEntity = new Cesium.Entity();
         this.movingLabelEntity = new Cesium.Entity();
         this.draggingEntity = new Cesium.Entity();
+        this.draggingMovingLineEntity1 = new Cesium.Entity();
+        this.draggingMovingLineEntity2 = new Cesium.Entity();
+        this.draggingMovingLabelEntity1 = new Cesium.Entity();
+        this.draggingMovingLabelEntity2 = new Cesium.Entity();
+
         this.entitiesArray = [];
         this.groupsEntities = [];
 
@@ -114,6 +119,9 @@ class MultiDistance {
             this.isMultiDistanceEnd = false;
             const continuePoint = this.viewer.entities.add(createPointEntity(cartesian, Cesium.Color.RED));
             this.pointEntities.add(continuePoint);
+
+            this._labelIndex = 0;
+            this.entitiesArray.length = 0;
             return;
         }
 
@@ -123,7 +131,7 @@ class MultiDistance {
         );
         this.pointEntities.add(pointEntity);
 
-        this.entitiesArray.push(pointEntity);
+        this.entitiesArray.push(pointEntity);  // group entities
 
         if (this.pointEntities.values.length > 1) {
             const prevIndex = this.pointEntities.values.length - 2;
@@ -132,11 +140,11 @@ class MultiDistance {
             const currPointCartesian = this.pointEntities.values[currIndex].position.getValue(Cesium.JulianDate.now());
 
             // create line entities
-            const lineEntity = createLineEntity([prevPointCartesian, currPointCartesian], Cesium.Color.ORANGE)
-            lineEntity.polyline.positions = new Cesium.CallbackProperty(() => {
+            const line = createLineEntity([prevPointCartesian, currPointCartesian], Cesium.Color.ORANGE)
+            line.polyline.positions = new Cesium.CallbackProperty(() => {
                 return [prevPointCartesian, currPointCartesian];
             }, false);
-            this.viewer.entities.add(lineEntity);
+            const lineEntity = this.viewer.entities.add(line);
             this.lineEntities.add(lineEntity);
 
             // create label entities
@@ -150,6 +158,8 @@ class MultiDistance {
 
             const labelEntity = this.viewer.entities.add(label);
             this.labelEntities.add(labelEntity);
+
+            this.entitiesArray.push(lineEntity, labelEntity);  // group entities
         }
     }
 
@@ -239,7 +249,7 @@ class MultiDistance {
                 return [firstPoint, cartesian];
             }, false);
             lastLine.polyline.positions = lastLinePositions;
-            this.viewer.entities.add(lastLine);
+            const lastLineEntity = this.viewer.entities.add(lastLine);
             this.lineEntities.add(lastLine);
 
             // create last label
@@ -249,9 +259,13 @@ class MultiDistance {
             const lastLabel = this.viewer.entities.add(
                 createDistanceLabel(firstPoint, cartesian, lastDistance)
             );
-            lastLabel.label.text = `${String.fromCharCode(97 + this._labelIndex)}: ${formatDistance(lastDistance)}`;
+
+            const currentLetter = String.fromCharCode(97 + this._labelIndex % 26); // 97 is ASCII code for 'a'
+            lastLabel.label.text = `${currentLetter}${this._labelNumberIndex}: ${formatDistance(lastDistance)}`;
             this._labelIndex++;
             this.labelEntities.add(lastLabel);
+
+            this._labelNumberIndex++;
 
             // remove moving line and moving label
             if (this.movingLineEntity) {
@@ -265,11 +279,9 @@ class MultiDistance {
             this.movingLabelEntity.label.pixelOffset = new Cesium.Cartesian2(80, 10);
             this.labelEntities.add(this.movingLabelEntity);
 
-            // group entities
-            const points = this.pointEntities.values;
-            const lines = this.lineEntities.values;
-            const labels = this.labelEntities.values;
-            this.groupsEntities.push([...points, ...lines, ...labels]);
+            // group entities: record the whole process of the all entities
+            this.entitiesArray.push(lastPoint, lastLineEntity, lastLabel);
+            this.groupsEntities.push([...this.entitiesArray]);
 
             // log distance result
             const distances = []
@@ -280,9 +292,9 @@ class MultiDistance {
             };
             this._distanceRecords.push(distanceRecord);
             this.logRecordsCallback(distanceRecord);
-
-            this._labelNumberIndex++;
         }
+
+
         this.isMultiDistanceEnd = true;
     }
 
@@ -311,6 +323,8 @@ class MultiDistance {
                     const dragEntityPosition = this.draggingEntity.position.getValue(Cesium.JulianDate.now());
                     return Cesium.Cartesian3.equals(positions[0], dragEntityPosition) || Cesium.Cartesian3.equals(positions[1], dragEntityPosition)
                 });
+                connectedLines[0].polyline.show = false;
+
 
                 // update labels
                 // use connected lines to find out connected midpoints that is aligned with createLabelEntity's position
@@ -325,15 +339,18 @@ class MultiDistance {
                     return Cesium.Cartesian3.equals(position, connectedMidpoints[0]) || Cesium.Cartesian3.equals(position, connectedMidpoints[1]);
                 });
 
+                // dragg point entity position
+                const dragEntityPosition = this.draggingEntity.position.getValue(Cesium.JulianDate.now());
                 // set move event for dragging
                 this.handler.setInputAction((movement) => {
-                    this.handleMultiDistanceDrag(movement, this.draggingEntity);
+                    this.handleMultiDistanceDrag(movement, this.draggingEntity, dragEntityPosition, connectedLines, connectedLabels);
                 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
             }
         };
     }
 
-    handleMultiDistanceDrag(movement, pointEntity) {
+    handleMultiDistanceDrag(movement, pointEntity, pointEntityPosition, connectedLines, connectedLabels) {
+
         this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
@@ -343,6 +360,68 @@ class MultiDistance {
 
         // update point entity to dragging position
         pointEntity.position = cartesian;
+
+        // update connected lines
+        const filteredConnectedLinePositions = connectedLines.map(line => {
+            const positions = line.polyline.positions.getValue(Cesium.JulianDate.now()); // [cartesian, cartesian]
+            const filterPosition = positions.filter(position => !Cesium.Cartesian3.equals(position, pointEntityPosition));
+            return [...filterPosition, cartesian];
+        });
+
+        // set the existed lines show false
+        connectedLines.forEach(line => {
+            line.polyline.show = false;
+        });
+
+        // create dragging moving line entity
+        filteredConnectedLinePositions.forEach((positions, index) => {
+            const line = createLineEntity(positions, Cesium.Color.ORANGE);
+            line.polyline.positions = new Cesium.CallbackProperty(() => {
+                return positions;
+            }, false);
+            if (index === 0) {
+                if (this.draggingMovingLineEntity1) {
+                    this.removeEntity(this.draggingMovingLineEntity1)
+                }
+                this.draggingMovingLineEntity1 = this.viewer.entities.add(line);
+            } else {
+                if (this.draggingMovingLineEntity2) {
+                    this.removeEntity(this.draggingMovingLineEntity2)
+                }
+                this.draggingMovingLineEntity2 = this.viewer.entities.add(line);
+            }
+        });
+
+        // update connected labels
+        connectedLabels.forEach((labelEntity, labelIndex) => {
+            labelEntity.label.show = false;
+
+            // Extract the current letter from the original label text
+            const getCurrentLabelText = labelEntity.label.text.getValue(Cesium.JulianDate.now());
+            const currentLetter = getCurrentLabelText.split(":")[0];
+
+            // Create new moving labels while dragging
+            filteredConnectedLinePositions.forEach((positions, index) => {
+                const distance = calculateDistance(positions[0], positions[1]);
+                const label = createDistanceLabel(positions[0], positions[1], distance);
+
+                // Apply the correct letter to the new label
+                label.label.text = `${currentLetter}: ${formatDistance(distance)}`;
+
+                if (index === 0) {
+                    if (this.draggingMovingLabelEntity1) {
+                        this.removeEntity(this.draggingMovingLabelEntity1);
+                    }
+                    this.draggingMovingLabelEntity1 = this.viewer.entities.add(label);
+                } else {
+                    if (this.draggingMovingLabelEntity2) {
+                        this.removeEntity(this.draggingMovingLabelEntity2);
+                    }
+                    this.draggingMovingLabelEntity2 = this.viewer.entities.add(label);
+                }
+            });
+        });
+
     }
 
     handleMultiDistanceDragEnd(movement) {
