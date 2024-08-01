@@ -324,13 +324,15 @@ class TwoPointsDistance {
             // log distance
             this._distanceRecords.push(distance);
             this.logRecordsCallback(distance);
+
+            // reset dragging entity
+            this.draggingEntity = null;
+            this.isDragMode = false;
         }
 
         this.handler.setInputAction((movement) => {
             this.handleDistanceMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        this.isDragMode = false;
     };
 
     /**
