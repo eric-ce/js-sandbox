@@ -237,7 +237,7 @@ class TwoPointsDistance {
                 this.draggingEntity = this.viewer.entities.getById(pointObject.id.id);
 
                 // identify the group of entities for line that associate with the dragging point entity
-                const group = this.groupsEntities.find(pair => pair.includes(this.draggingEntity));
+                const group = this.groupsEntities.find(pair => pair.find(e => e.id === this.draggingEntity.id));
                 const lineEntity = group.find(e => e.polyline);
                 // set not to show the line entity when left click down
                 lineEntity.polyline.show = false;
@@ -259,10 +259,10 @@ class TwoPointsDistance {
         this.coordinate = cartesian;
 
         // update point entity to dragging position
-        pointEntity.position = cartesian;
+        pointEntity.position.setValue(cartesian);
 
         // identify the group of point entities that contains the dragging point entity
-        const group = this.groupsEntities.find(pair => pair.includes(pointEntity));
+        const group = this.groupsEntities.find(pair => pair.find(e => e.id === pointEntity.id));
 
         // update line entity
         // otherPoint is the point entity that is not the dragging point entity
@@ -295,7 +295,7 @@ class TwoPointsDistance {
         if (this.draggingEntity && this.isDragMode) {
 
             // identify the group of point entities that contains the dragging point entity
-            const group = this.groupsEntities.find(pair => pair.includes(this.draggingEntity));
+            const group = this.groupsEntities.find(pair => pair.find(e => e.id === pointEntity.id));
 
             const otherPoint = group.find(p => p.id !== this.draggingEntity.id);
             const otherPointPosition = otherPoint.position.getValue(Cesium.JulianDate.now());
