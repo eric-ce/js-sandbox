@@ -482,7 +482,7 @@ class MultiDistance {
             this._distanceRecords.push(distanceRecord);
             this.logRecordsCallback(distanceRecord);
 
-            // remove dragging entities
+            // reset dragging variables
             this.draggingEntity = null;
             this.draggingEntityPosition = null;
             this.draggingMovingLineEntities.forEach(entity => {
@@ -494,14 +494,13 @@ class MultiDistance {
             );
             this.draggingMovingLineEntities = [];
             this.draggingMovingLabelEntities = [];
-
+            // reset dragging mode
             this.isDragMode = false;
         }
         // set back to default multi distance mouse moving actions
         this.handler.setInputAction((movement) => {
             this.handleMultiDistanceMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
     }
 
     /**
