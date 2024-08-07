@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { TwoPointsDistance } from "./lib/features/TwoPointsDistance.js";
+import { TwoPointsDistanceP } from "./lib/features/TwoPointsDistanceP.js";
 import { Points } from "./lib/features/Points.js";
 import { ThreePointsCurve } from "./lib/features/ThreePointsCurve.js";
 import { Height } from "./lib/features/Height.js";
@@ -99,6 +100,11 @@ export class MeasureToolbox extends HTMLElement {
             {
                 instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
                 name: "Distance",
+                icon: distanceImg
+            },
+            {
+                instance: new TwoPointsDistanceP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
+                name: "DistanceP",
                 icon: distanceImg
             },
             {
