@@ -295,7 +295,7 @@ class TwoPointsDistance {
         if (this.draggingEntity && this.isDragMode) {
 
             // identify the group of point entities that contains the dragging point entity
-            const group = this.groupsEntities.find(pair => pair.find(e => e.id === pointEntity.id));
+            const group = this.groupsEntities.find(pair => pair.find(e => e.id === this.draggingEntity.id));
 
             const otherPoint = group.find(p => p.id !== this.draggingEntity.id);
             const otherPointPosition = otherPoint.position.getValue(Cesium.JulianDate.now());
