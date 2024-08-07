@@ -22,7 +22,6 @@ class Polygon {
         this.lineEntities = new Cesium.EntityCollection();
         this.labelEntities = new Cesium.EntityCollection();
 
-        // initialize polygon entity so that it can show drawn polygon quickly
         this.polygonEntity = new Cesium.Entity();
 
         this.coordiante = new Cesium.Cartesian3();
@@ -172,14 +171,14 @@ class Polygon {
             );
 
             // Update the polygon entity
-            const dynamicPosition = new Cesium.CallbackProperty(() => {
+            const dynamicPolygonHierarchy = new Cesium.CallbackProperty(() => {
                 return new Cesium.PolygonHierarchy([
                     ...pointsPosition,
                     cartesian,
                 ]);
             }, false);
 
-            this.polygonEntity.polygon.hierarchy = dynamicPosition
+            this.polygonEntity.polygon.hierarchy = dynamicPolygonHierarchy
 
             // Update the polygon label
             const polygonArea = this.computePolygonArea([...pointsPosition, cartesian]);
@@ -234,7 +233,6 @@ class Polygon {
                     return new Cesium.PolygonHierarchy(pointsPosition);
                 }, false);
             }
-
 
             // create label entity
             if (this.labelEntities.values.length > 0) {
