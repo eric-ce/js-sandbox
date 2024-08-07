@@ -72,7 +72,7 @@ class Points {
         // this.viewer.selectedEntity = undefined;
         const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
-        if (pickedObject && pickedObject.id && pickedObject.id.startsWith("annotate_bookmark")) {
+        if (pickedObject && pickedObject.id && typeof pickedObject.id === 'string' && pickedObject.id.startsWith("annotate_bookmark")) {
             const primitiveToRemoveId = pickedObject.id;
             const primtiveToRemove = this.pointPrimitives._pointPrimitives.find(primitive => primitive.id === primitiveToRemoveId);
             if (primtiveToRemove) {
@@ -122,7 +122,7 @@ class Points {
 
         // pick the point primitive
         const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
-        const pointPrimitive = pickedObjects.find(pickedObject => pickedObject.id && pickedObject.id.startsWith("annotate_bookmark"));
+        const pointPrimitive = pickedObjects.find(pickedObject => pickedObject.id && typeof pickedObject.id === 'string' && pickedObject.id.startsWith("annotate_bookmark"));
         if (Cesium.defined(pointPrimitive)) {
             this.isDragMode = true;
             // initialize camera movement
