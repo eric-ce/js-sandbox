@@ -1,7 +1,7 @@
 import * as Cesium from "cesium";
 import {
     createPointEntity,
-    createLineEntityClamped,
+    createLineEntity,
     calculateDistance,
     createDistanceLabel,
     removeInputActions,
@@ -103,12 +103,13 @@ class Profile {
                 // create line entity between the first and second point
                 this.removeEntities(this.lineEntities);
                 this.removeEntities(this.movingLineEntity);
-                const line = createLineEntityClamped(
+                const line = createLineEntity(
                     [
                         this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now()),
                         this.pointEntities.values[1].position.getValue(Cesium.JulianDate.now()),
                     ],
-                    Cesium.Color.ORANGE
+                    Cesium.Color.ORANGE,
+                    true
                 );
                 const lineEntity = this.viewer.entities.add(line);
                 this.lineEntities.add(lineEntity);
@@ -234,9 +235,10 @@ class Profile {
 
             // create moving line entity
             this.removeEntity(this.movingLineEntity);
-            const movingLine = createLineEntityClamped(
+            const movingLine = createLineEntity(
                 [firstPointCartesian, cartesian],
-                Cesium.Color.YELLOW
+                Cesium.Color.YELLOW,
+                true
             );
             movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
                 return [firstPointCartesian, cartesian];

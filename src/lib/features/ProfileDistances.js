@@ -1,7 +1,7 @@
 import * as Cesium from "cesium";
 import {
     createPointEntity,
-    createLineEntityClamped,
+    createLineEntity,
     calculateDistance,
     createDistanceLabel,
     formatDistance,
@@ -116,7 +116,11 @@ class ProfileDistances {
 
             // create line entities
             const lineEntity = this.viewer.entities.add(
-                createLineEntityClamped([prevPointCartesian, currPointCartesian], Cesium.Color.ORANGE)
+                createLineEntity(
+                    [prevPointCartesian, currPointCartesian],
+                    Cesium.Color.ORANGE,
+                    true
+                )
             );
             this.lineEntities.add(lineEntity);
 
@@ -190,7 +194,11 @@ class ProfileDistances {
             if (this.movingLineEntity) {
                 this.removeEntity(this.movingLineEntity);
             }
-            const movingLine = createLineEntityClamped([lastPointCartesian, cartesian], Cesium.Color.YELLOW)
+            const movingLine = createLineEntity(
+                [lastPointCartesian, cartesian],
+                Cesium.Color.YELLOW,
+                true
+            )
             movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
                 return [lastPointCartesian, cartesian];
             }, false);
@@ -220,9 +228,10 @@ class ProfileDistances {
             this.pointEntities.add(lastPoint);
 
             // create last line
-            const lastLine = this.viewer.entities.add(createLineEntityClamped(
+            const lastLine = this.viewer.entities.add(createLineEntity(
                 [this.pointEntities.values[this.pointEntities.values.length - 2].position.getValue(Cesium.JulianDate.now()), cartesian],
-                Cesium.Color.ORANGE
+                Cesium.Color.ORANGE,
+                true
             ));
             this.lineEntities.add(lastLine);
 

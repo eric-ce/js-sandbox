@@ -135,6 +135,8 @@ export function setupEditableModal(viewerContainer) {
  */
 export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedObjects) {
     const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+    // cesium api update for wgs84ToWindowCoordinates
+    // const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
     pointerOverlay.style.display = 'block';
     pointerOverlay.style.left = `${screenPosition.x - 5}px`;
     pointerOverlay.style.top = `${screenPosition.y - 5}px`;
@@ -149,6 +151,8 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
     pointerOverlay.style.backgroundColor = hasNonEntityObject ? "blue" : "yellow";
 }
 
+
+// Cesium entity
 /**
  * Create a point entity setting at the given Cartesian coordinates with the specified color.
  * @param {Cesium.Cartesian3 | Cesium.Cartographic} coordinate - The coordinate of point entity
@@ -184,7 +188,8 @@ export function createPointEntity(coordinate, color = Cesium.Color.RED) {
  */
 export function createLineEntity(
     coordinateArray,
-    cesiumColor = Cesium.Color.RED
+    cesiumColor = Cesium.Color.RED,
+    isClamped = false,
 ) {
     // Check if the input is valid (an array of Cartesian3 points with at least two points)
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
@@ -204,46 +209,9 @@ export function createLineEntity(
             width: 2,
             material: color,
             depthFailMaterial: color,
+            clampToGround: isClamped,
         },
     };
-}
-
-export function createLineEntityClamped(
-    coordinateArray,
-    cesiumColor = Cesium.Color.RED
-) {
-    // Check if the input is valid (an array of Cartesian3 points with at least two points)
-    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
-        return;
-    }
-    // convert unexpect coordinate to cartesian3
-    const convertedCoordinates = coordinateArray.map((item) =>
-        convertToCartesian3(item)
-    );
-
-    // unstable color fix using ColorMaterialProperty
-    const color = new Cesium.ColorMaterialProperty(cesiumColor);
-
-    return {
-        polyline: {
-            positions: convertedCoordinates,
-            width: 2,
-            clampToGround: true,
-            material: color,
-            depthFailMaterial: color,
-        },
-    };
-}
-
-/**
- * calculate the distance between two points
- * @param {Cesium.Cartesian3} startPoint - the cartesian coordinates
- * @param {Cesium.Cartesian3} endPoint - the cartesian coordinates
- * @returns {number} distance - the distance between startPoint and endPoint
- */
-export function calculateDistance(startPoint, endPoint) {
-    const distance = Cesium.Cartesian3.distance(startPoint, endPoint);
-    return distance;
 }
 
 
@@ -318,6 +286,61 @@ export function createPolygonEntity(coordinateArray) {
     };
 }
 
+// Cesium primitive
+// point primitive
+export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
+    if (!coordinate) {
+        return; // Exit early if coordinate is not defined
+    }
+
+    //check if coordinate is cartographic degrees or radians or cartesian
+    const cartesian = convertToCartesian3(coordinate);
+
+    return {
+        position: cartesian,
+        pixelSize: 8,
+        color: color,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    }
+}
+
+// line primitive
+export function createLinePrimitive(
+    coordinateArray,
+    cesiumColor = Cesium.Color.RED,
+    isClamped = false,
+) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
+        return;
+    }
+
+    const convertedCoordinates = coordinateArray.map((item) =>
+        convertToCartesian3(item)
+    );
+
+    return {
+        positions: convertedCoordinates,
+        width: 2,
+        material: new Cesium.PolylineMaterialAppearance({
+            material: Cesium.Material.fromType('Color', {
+                color: color,
+            }),
+        }),
+        show: true,
+    }
+}
+
+/**
+ * calculate the distance between two points
+ * @param {Cesium.Cartesian3} startPoint - the cartesian coordinates
+ * @param {Cesium.Cartesian3} endPoint - the cartesian coordinates
+ * @returns {number} distance - the distance between startPoint and endPoint
+ */
+export function calculateDistance(startPoint, endPoint) {
+    const distance = Cesium.Cartesian3.distance(startPoint, endPoint);
+    return distance;
+}
+
 export function convertToCartesian3(coordinate) {
     if (!Cesium.defined(coordinate)) return;
 
@@ -342,6 +365,8 @@ export function convertToCartesian3(coordinate) {
     return cartesian;
 }
 
+
+
 export function cartesian3ToCartographicDegrees(cartesian) {
     const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
 
@@ -362,6 +387,28 @@ export function formatDistance(distance) {
     } else {
         return distance.toFixed(2) + " m";
     }
+}
+
+/**
+ * Format cartesian coordinates to generate a unique id for a point entity.
+ * @param {Cesium.Cartesian3} cartesian - The Cartesian coordinates of the point.
+ * @param {string} mode - The mode of the annotation tool.
+ * @returns {string} id - The unique id for entity or primitive.
+ */
+export function generateId(cartesian, mode) {
+    // Convert the cartesian position to a string
+    const positionString = cartesian.toString();
+
+    let hash = 0;
+    // Loop through the characters of the position string and calculate the hash
+    for (let i = 0; i < positionString.length; i++) {
+        const char = positionString.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash = hash & hash; // Convert to a 32-bit integer
+    }
+    const modeString = mode.toString().toLowerCase();
+    // Create the entity id using the hash
+    return `annotate_${modeString}_${Math.abs(hash).toString(36)}`
 }
 
 export function removeInputActions(handler) {
