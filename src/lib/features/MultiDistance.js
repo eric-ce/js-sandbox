@@ -120,7 +120,9 @@ class MultiDistance {
             this._labelIndex = 0;
             this.entitiesArray.length = 0;
 
-            const continuePoint = this.viewer.entities.add(createPointEntity(cartesian, Cesium.Color.RED));
+            const continuePoint = this.viewer.entities.add(
+                createPointEntity(cartesian, Cesium.Color.RED)
+            );
             this.pointEntities.add(continuePoint);
 
             this.entitiesArray.push(continuePoint);  // group entities
@@ -252,7 +254,7 @@ class MultiDistance {
             }, false);
             lastLine.polyline.positions = lastLinePositions;
             const lastLineEntity = this.viewer.entities.add(lastLine);
-            this.lineEntities.add(lastLine);
+            this.lineEntities.add(lastLineEntity);
 
             // create last label
             const lastDistance = calculateDistance(firstPoint, cartesian);
@@ -296,8 +298,6 @@ class MultiDistance {
             this.logRecordsCallback(distanceRecord);
         }
 
-
-
         this.isMultiDistanceEnd = true;
     }
 
@@ -305,8 +305,6 @@ class MultiDistance {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
         if (this.pointEntities.values.length > 1) {
-
-
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
             const pointObject = pickedObjects.find(p => p.id && p.id.point);
 
@@ -535,6 +533,20 @@ class MultiDistance {
         this.movingLineEntity = null;
 
         this.coordinate = new Cesium.Cartesian3();
+
+        this._distanceCollection = [];
+        this._distanceRecords = [];
+        this._labelNumberIndex = 0;
+
+        this.isMultiDistanceEnd = false;
+        this.isDragMode = false;
+
+        this.draggingEntity = null;
+        this.beforeDragEntity = null;
+        this.draggingMovingLineEntities = [];
+        this.draggingMovingLabelEntities = [];
+        this.entitiesArray = [];
+        this.groupsEntities = [];
 
         // this._labelIndex = 0;
     }

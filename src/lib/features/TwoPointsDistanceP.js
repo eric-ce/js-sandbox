@@ -7,6 +7,9 @@ import {
     removeInputActions,
     editableLabel,
     updatePointerOverlay,
+    createPointPrimitive,
+    createLinePrimitive,
+    createGeometryInstance,
 } from "../helper/helper.js";
 
 
@@ -40,6 +43,17 @@ class TwoPointsDistanceP {
 
         this.isDistanceStarted = false;
         this.isDragMode = false;
+
+        // primitive
+        this.pointPrimitive = new Cesium.PointPrimitiveCollection();
+        this.viewer.scene.primitives.add(this.pointPrimitive);
+
+        this.movingPolylinePrimitive = null;
+
+        this.coordinateDataCache = [];
+        // all the click coordinates here 
+        this.groupCoords = []
+
     }
 
     /**
@@ -52,9 +66,9 @@ class TwoPointsDistanceP {
             this.handleDistanceLeftClick(movement);
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-        // this.handler.setInputAction((movement) => {
-        //     this.handleDistanceMouseMove(movement);
-        // }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        this.handler.setInputAction((movement) => {
+            this.handleDistanceMouseMove(movement);
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
         // this.handler.setInputAction((movement) => {
         //     this.handleDistanceDragStart(movement)
@@ -96,85 +110,95 @@ class TwoPointsDistanceP {
             this.isDistanceStarted = true;
         }
 
-        // if it is not label entity, then start to draw the measurement
-        // use mouse move position to control only one pickPosition is used
-        const cartesian = this.coordinate;
-        // early exit if not cartesian
-        if (!Cesium.defined(cartesian)) return;
+        // use cache to store only two coordinates, if more than two, reset the cache
+        if (this.coordinateDataCache.length === 0) {
+            // create the first point
+            this.coordinateDataCache.push(this.coordinate);
+            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
+            this.pointPrimitive.add(point);
+        } else if (this.coordinateDataCache.length % 2 !== 0) {
+            // create the second point
+            this.coordinateDataCache.push(this.coordinate);
+            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
+            this.pointPrimitive.add(point);
 
-        const entityArray = [];
-        if (this.pointEntities.values.length === 0) {
-            // if there is no point entity, create the first point
-            const firstPointEntity = this.viewer.entities.add(
-                createPointEntity(cartesian, Cesium.Color.RED)
-            );
-            this.pointEntities.add(firstPointEntity);
+            // create line and label
+            if (this.coordinateDataCache.length === 2) {
+                // create line
+                if (this.movingPolylinePrimitive) {
+                    this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+                }
+                const lineGeometryInstance = createGeometryInstance(this.coordinateDataCache, "distance");
+                const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN);
+                this.viewer.scene.primitives.add(linePrimitive);
 
-        } else if (this.pointEntities.values.length % 2 !== 0) {
-            // if there is one point entity, create the second point
-            const secondPointEntity = this.viewer.entities.add(
-                createPointEntity(cartesian, Cesium.Color.BLUE)
-            );
-            this.pointEntities.add(secondPointEntity);
-
-            // remove moving line entity
-            this.removeEntity(this.movingLineEntity);
-
-            if (this.pointEntities.values.length === 2) {
-                // create line entity between the first and second point
-                this.removeEntities(this.lineEntities);
-
-                const firstPointPosition = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now());
-                const secondPointPosition = this.pointEntities.values[1].position.getValue(Cesium.JulianDate.now());
-
-                const line = createLineEntity(
-                    [firstPointPosition, secondPointPosition],
-                    Cesium.Color.ORANGE
-                );
-                line.polyline.positions = new Cesium.CallbackProperty(() => {
-                    return [firstPointPosition, secondPointPosition];
-                }, false);
-                const lineEntity = this.viewer.entities.add(line);
-                this.lineEntities.add(lineEntity);
-
-                // create distance label
-                this.removeEntities(this.labelEntities);
-                this.removeEntity(this.movingLabelEntity);
-                const distance = calculateDistance(firstPointPosition, secondPointPosition);
-                const label = createDistanceLabel(firstPointPosition, secondPointPosition, distance);
+                // create label
+                if (this.movingLabelEntity) {
+                    this.viewer.entities.remove(this.movingLabelEntity);
+                }
+                const distance = calculateDistance(this.coordinateDataCache[0], this.coordinateDataCache[1]);
+                const label = createDistanceLabel(this.coordinateDataCache[0], this.coordinateDataCache[1], distance);
                 const labelEntity = this.viewer.entities.add(label);
                 this.labelEntities.add(labelEntity);
 
                 // log distance
-                this._distanceRecords.push(distance);
                 this.logRecordsCallback(distance);
+                // records cache to track all coords
+                this.groupCoords.push(this.coordinateDataCache);
 
                 // set flag that the measurement has ended
                 this.isDistanceStarted = false;
-
-                const firstPoint = this.pointEntities.values[0];
-                const secondPoint = this.pointEntities.values[1];
-                entityArray.push(firstPoint, secondPoint, lineEntity, labelEntity);
-                this.groupsEntities.push(entityArray);
             }
+
+            // const line = createLinePrimitive(coordinateDataCache, Cesium.Color.RED);
+            // this.linePrimitive.add(line);
+
+            // // calculate distance
+            // const distance = calculateDistance(coordinateDataCache[0], coordinateDataCache[1]);
+            // const midpoint = Cesium.Cartesian3.midpoint(coordinateDataCache[0], coordinateDataCache[1], new Cesium.Cartesian3());
+            // const label = editableLabel(midpoint, `Total: ${distance.toFixed(2)} m`, this.viewer, this.handler);
+            // this.labelEntities.add(label);
+
+            // // log distance
+            // this._distanceRecords.push(distance);
+            // this.logRecordsCallback(distance);
+
         } else {
-            // if there are more than 2 point entities, reset the measurement
-            this.pointEntities.removeAll();
-            this.lineEntities.removeAll();
-            this.labelEntities.removeAll();
+            this.coordinateDataCache.length = 0;
+            // add a continue point to the cache so it doesn't need to click twice to start again
+            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
+            this.pointPrimitive.add(point);
 
-            // Remove all entities from the viewer
-            // this.viewer.entities.removeAll();
-
-            // create the first point, so it won't interupt to restart the measurement
-            // without this could cause click twice to restart the measurement
-            const firstPointEntity = this.viewer.entities.add(
-                createPointEntity(cartesian, Cesium.Color.RED)
-            );
-            this.pointEntities.add(firstPointEntity);
+            this.coordinateDataCache.push(this.coordinate);
         }
 
+        // const testCoords = [
+        //     new Cesium.Cartesian3(
+        //         4401708.553479742,
+        //         225001.31820719416,
+        //         4595424.246055711
+        //     ),
+        //     new Cesium.Cartesian3(
+        //         4401704.962729205,
+        //         225016.917551632,
+        //         4595426.213245112
+        //     )
+        // ];
+        // const testCoords2 = [
+        //     new Cesium.Cartesian3(
+        //         4401717.494439208,
+        //         225010.99217682309,
+        //         4595415.725121301
+        //     ),
+        //     new Cesium.Cartesian3(
+        //         4401704.962729205,
+        //         225016.917551632,
+        //         4595426.213245112
+        //     )
+        // ]
+
     }
+
 
     /**
      * Handles mouse move events to drawing moving line, update label, and display moving dot with mouse.
@@ -187,38 +211,48 @@ class TwoPointsDistanceP {
 
         this.coordinate = cartesian;
 
+
+        // test callbackproperty for dynamic position to remove and recreate the polyline geometry
+        // const fixCoordinate = new Cesium.Cartesian3(
+        //     4401708.553479742,
+        //     225001.31820719416,
+        //     4595424.246055711
+        // )
+        // const testCoords = [
+        //     fixCoordinate,
+        //     cartesian
+        // ];
+
+
         // update pointerOverlay: the moving dot with mouse
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
         updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
-        if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
-            const firstPointCartesian = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now())
+        if (this.coordinateDataCache.length > 0 && this.coordinateDataCache.length < 2) {
+            if (this.movingPolylinePrimitive) {
+                this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+            }
+            const firstCoordsCartesian = this.coordinateDataCache[0];
 
-            // create moving line entity
-            this.removeEntity(this.movingLineEntity);
-            const movingLine = createLineEntity(
-                [firstPointCartesian, cartesian],
-                Cesium.Color.YELLOW
-            );
-            movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
-                return [firstPointCartesian, cartesian];
-            }, false);
-            this.movingLineEntity = this.viewer.entities.add(movingLine);
+            const movingLineGeometryInstance = createGeometryInstance([firstCoordsCartesian, this.coordinate], "distance");
+            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOWGREEN);
+
+            this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // create distance label
             this.removeEntity(this.movingLabelEntity);
             const distance = calculateDistance(
-                firstPointCartesian,
+                firstCoordsCartesian,
                 cartesian
             );
             const label = createDistanceLabel(
-                firstPointCartesian,
+                firstCoordsCartesian,
                 cartesian,
                 distance
             );
             this.movingLabelEntity = this.viewer.entities.add(label);
-
         }
+
     }
 
     // handleDistanceDragStart(movement) {

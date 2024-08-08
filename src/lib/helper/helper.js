@@ -281,7 +281,6 @@ export function createPolygonEntity(coordinateArray) {
             outline: true,
             outlineColor: Cesium.Color.YELLOW,
             outlineWidth: 4,
-            arcType: Cesium.ArcType.GEODESIC,
         },
     };
 }
@@ -305,10 +304,9 @@ export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
 }
 
 // line primitive
-export function createLinePrimitive(
+export function createGeometryInstance(
     coordinateArray,
-    cesiumColor = Cesium.Color.RED,
-    isClamped = false,
+    mode
 ) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
         return;
@@ -318,18 +316,36 @@ export function createLinePrimitive(
         convertToCartesian3(item)
     );
 
-    return {
+    const polylineGeometry = new Cesium.PolylineGeometry({
         positions: convertedCoordinates,
         width: 2,
-        material: new Cesium.PolylineMaterialAppearance({
-            material: Cesium.Material.fromType('Color', {
-                color: color,
-            }),
-        }),
-        show: true,
-    }
+        vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
+    });
+
+    const polylineGeometryInstance = new Cesium.GeometryInstance({
+        geometry: polylineGeometry,
+        id: `${generateId(convertedCoordinates, mode)}`,
+    });
+
+    return polylineGeometryInstance;
 }
 
+export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED) {
+    return new Cesium.Primitive({
+        geometryInstances: [geometryInstance],
+        appearance: new Cesium.PolylineMaterialAppearance({
+            material: new Cesium.Material.fromType('Color', {
+                color: color
+            })
+        }),
+        depthFailAppearance: new Cesium.PolylineMaterialAppearance({
+            material: new Cesium.Material.fromType('Color', {
+                color: color
+            })
+        }),
+        asynchronous: false,
+    });
+}
 /**
  * calculate the distance between two points
  * @param {Cesium.Cartesian3} startPoint - the cartesian coordinates
@@ -390,12 +406,33 @@ export function formatDistance(distance) {
 }
 
 /**
- * Format cartesian coordinates to generate a unique id for a point entity.
+ * Generate a unique id for annotation mode with its coordinates. 
  * @param {Cesium.Cartesian3} cartesian - The Cartesian coordinates of the point.
- * @param {string} mode - The mode of the annotation tool.
+ * @param {string} mode - The mode name of the annotation tool.
  * @returns {string} id - The unique id for entity or primitive.
  */
 export function generateId(cartesian, mode) {
+    let coordsId = null;
+    // cartesian could be either array or cartesian3
+    if (Array.isArray(cartesian)) {
+        cartesian.forEach((cart) => {
+            const coordId = cartesianToId(cart);
+            coordsId = coordsId ? coordsId + "_" + coordId : coordId;
+        });
+    } else {
+        coordsId = cartesianToId(cartesian);
+    }
+    const modeString = mode.toString().toLowerCase();
+    // Create the entity id using the hash
+    return `annotate_${modeString}_${coordsId}`;
+}
+
+/**
+ * generate id for cartesian coordinate
+ * @param {Cesium.Cartesian3} cartesian 
+ * @returns {string} id - the id for the cartesian coordinate
+ */
+export function cartesianToId(cartesian) {
     // Convert the cartesian position to a string
     const positionString = cartesian.toString();
 
@@ -406,9 +443,8 @@ export function generateId(cartesian, mode) {
         hash = (hash << 5) - hash + char;
         hash = hash & hash; // Convert to a 32-bit integer
     }
-    const modeString = mode.toString().toLowerCase();
-    // Create the entity id using the hash
-    return `annotate_${modeString}_${Math.abs(hash).toString(36)}`
+    // create id using hash
+    return `${Math.abs(hash).toString(36)}`;
 }
 
 export function removeInputActions(handler) {
