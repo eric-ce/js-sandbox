@@ -242,7 +242,7 @@ export function createDistanceLabel(
 
     // Create a label entity with the fixed position
     return {
-        position: midpoint,
+        position: new Cesium.CallbackProperty(() => midpoint, false),
         label: {
             text: labelString,
             font: "14px sans-serif",
