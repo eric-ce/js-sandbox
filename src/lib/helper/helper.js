@@ -332,7 +332,7 @@ export function createGeometryInstance(
 
 export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED) {
     return new Cesium.Primitive({
-        geometryInstances: [geometryInstance],
+        geometryInstances: geometryInstance,
         appearance: new Cesium.PolylineMaterialAppearance({
             material: new Cesium.Material.fromType('Color', {
                 color: color
@@ -344,6 +344,8 @@ export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED) 
             })
         }),
         asynchronous: false,
+        // false: make geometry instance available to lookup, true: release geometry instances to save memory
+        releaseGeometryInstances: false
     });
 }
 /**
