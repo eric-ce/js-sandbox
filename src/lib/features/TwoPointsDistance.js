@@ -319,7 +319,7 @@ class TwoPointsDistance {
             const distance = calculateDistance(otherPointPosition, cartesian);
             const midpoint = Cesium.Cartesian3.midpoint(otherPointPosition, cartesian, new Cesium.Cartesian3());
             labelEntity.label.text = `Total: ${distance.toFixed(2)} m`;
-            labelEntity.position.setValue(midpoint);
+            labelEntity.position = new Cesium.CallbackProperty(() => midpoint, false);
 
             // log distance
             this._distanceRecords.push(distance);
