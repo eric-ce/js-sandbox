@@ -7,6 +7,7 @@ import {
     removeInputActions,
     editableLabel,
     updatePointerOverlay,
+    formatDistance,
 } from "../helper/helper.js";
 
 
@@ -318,7 +319,7 @@ class TwoPointsDistance {
             labelEntity.label.show = true;
             const distance = calculateDistance(otherPointPosition, cartesian);
             const midpoint = Cesium.Cartesian3.midpoint(otherPointPosition, cartesian, new Cesium.Cartesian3());
-            labelEntity.label.text = `Total: ${distance.toFixed(2)} m`;
+            labelEntity.label.text = "Total: " + formatDistance(distance);
             labelEntity.position = new Cesium.CallbackProperty(() => midpoint, false);
 
             // log distance
