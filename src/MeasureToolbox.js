@@ -3,6 +3,7 @@ import { TwoPointsDistance } from "./lib/features/TwoPointsDistance.js";
 import { TwoPointsDistanceP } from "./lib/features/TwoPointsDistanceP.js";
 import { Points } from "./lib/features/Points.js";
 import { ThreePointsCurve } from "./lib/features/ThreePointsCurve.js";
+import { ThreePointsCurveP } from "./lib/features/ThreePointsCurveP.js";
 import { Height } from "./lib/features/Height.js";
 import { MultiDistance } from "./lib/features/MultiDistance.js";
 import { Polygon } from "./lib/features/Polygon.js";
@@ -97,18 +98,23 @@ export class MeasureToolbox extends HTMLElement {
                 name: "Points",
                 icon: pointsImg
             },
-            {
-                instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
-                name: "Distance",
-                icon: distanceImg
-            },
+            // {
+            //     instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
+            //     name: "Distance",
+            //     icon: distanceImg
+            // },
             {
                 instance: new TwoPointsDistanceP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
                 name: "DistanceP",
                 icon: distanceImg
             },
+            // {
+            //     instance: new ThreePointsCurve(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "curves")),
+            //     name: "Curve",
+            //     icon: curveImg
+            // },
             {
-                instance: new ThreePointsCurve(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "curves")),
+                instance: new ThreePointsCurveP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "curves")),
                 name: "Curve",
                 icon: curveImg
             },

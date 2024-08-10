@@ -144,11 +144,21 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
     pointerOverlay.style.width = "1px";
     pointerOverlay.style.height = "1px";
 
-    // Check if there is any pickedObject that is not an entity using `some` for efficiency
-    const hasNonEntityObject = pickedObjects.some(pickedObject => !(pickedObject.id instanceof Cesium.Entity));
+    if (pickedObjects.length === 0) {
+        pointerOverlay.style.backgroundColor = "yellow";
+    } else {
+        const annotatePrimitives = pickedObjects.some(pickedObject => {
+            // check for its id is string type and start with "annotate"
+            return (typeof pickedObject.id === "string" && pickedObject.id.startsWith("annotate"));
+        });
+        const annotateEntity = pickedObjects.some(pickedObject => {
+            return (pickedObject.id instanceof Cesium.Entity);
+        });
 
+        // anything other than annotate object will be blue
+        pointerOverlay.style.backgroundColor = (!annotatePrimitives && !annotateEntity) ? "blue" : "yellow";
+    }
 
-    pointerOverlay.style.backgroundColor = hasNonEntityObject ? "blue" : "yellow";
 }
 
 
