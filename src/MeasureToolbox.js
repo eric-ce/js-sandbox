@@ -80,7 +80,13 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     initialize() {
-        this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+        if (this.viewer.screenSpaceEventHandler) {
+            this.handler = this.viewer.screenSpaceEventHandler
+        } else {
+            this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+        }
+
+        removeInputActions(this.handler);
 
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();

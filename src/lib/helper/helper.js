@@ -158,7 +158,6 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
         // anything other than annotate object will be blue
         pointerOverlay.style.backgroundColor = (!annotatePrimitives && !annotateEntity) ? "blue" : "yellow";
     }
-
 }
 
 
