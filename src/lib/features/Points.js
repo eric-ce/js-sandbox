@@ -125,8 +125,7 @@ class Points {
         const pointPrimitive = pickedObjects.find(pickedObject => pickedObject.id && typeof pickedObject.id === 'string' && pickedObject.id.startsWith("annotate_bookmark"));
         if (Cesium.defined(pointPrimitive)) {
             this.isDragMode = true;
-            // initialize camera movement
-            this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+
             // set point overlay no show
             this.pointerOverlay.style.display = 'none';
 
@@ -171,6 +170,9 @@ class Points {
             this.draggingPrimitive.position = this.coordinate;
             this.draggingPrimitive.show = true;
 
+            // log the points records
+            this.logRecordsCallback({ "update": cartesian3ToCartographicDegrees(this.coordinate) });
+
             this.isDragMode = false;
         }
 
@@ -180,6 +182,7 @@ class Points {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
     };
+
     createCoordinateInfoOverlay() {
         this.coordinateInfoOverlay = document.createElement("div");
         this.coordinateInfoOverlay.className = "coordinate-info-overlay";

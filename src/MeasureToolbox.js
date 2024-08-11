@@ -104,16 +104,16 @@ export class MeasureToolbox extends HTMLElement {
                 name: "Points",
                 icon: pointsImg
             },
-            // {
-            //     instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
-            //     name: "Distance",
-            //     icon: distanceImg
-            // },
             {
-                instance: new TwoPointsDistanceP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
-                name: "DistanceP",
+                instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
+                name: "Distance",
                 icon: distanceImg
             },
+            // {
+            //     instance: new TwoPointsDistanceP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
+            //     name: "DistanceP",
+            //     icon: distanceImg
+            // },
             // {
             //     instance: new ThreePointsCurve(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "curves")),
             //     name: "Curve",
@@ -484,7 +484,7 @@ export class MeasureToolbox extends HTMLElement {
             const recordData = record[key];
 
             if (key === "points") {
-                const action = recordData.add ? "add" : "remove";
+                const action = Object.keys(recordData)[0];
                 const { latitude, longitude, height } = recordData[action];
                 fragment.appendChild(this.createRow(`${key}: ${action}: lat: ${latitude}, long: ${longitude}, height: ${height}`));
             } else if (key === "m-distance") {

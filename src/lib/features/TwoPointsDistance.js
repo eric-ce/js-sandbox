@@ -1,13 +1,15 @@
 import * as Cesium from "cesium";
 import {
     createPointEntity,
-    createLineEntity,
     calculateDistance,
     createDistanceLabel,
     removeInputActions,
     editableLabel,
     updatePointerOverlay,
     formatDistance,
+    createGeometryInstance,
+    createLinePrimitive,
+    generateId,
 } from "../helper/helper.js";
 
 
@@ -26,21 +28,29 @@ class TwoPointsDistance {
 
         this.logRecordsCallback = logRecordsCallback;
 
-        this.groupsEntities = [];
-        this.pointEntities = new Cesium.EntityCollection();
-        this.lineEntities = new Cesium.EntityCollection();
-        this.labelEntities = new Cesium.EntityCollection();
-
-        this.movingLineEntity = new Cesium.Entity();
+        // Cesium Entities
         this.movingLabelEntity = new Cesium.Entity();
         this.draggingEntity = new Cesium.Entity();
 
-        this.coordinate = new Cesium.Cartesian3();
+        // Cesium Primitives
+        this.movingPolylinePrimitive = null;
 
+        // Coordinate Data
+        this.coordinate = new Cesium.Cartesian3();
+        // coordinates orientated data: use for identify points, lines, labels
+        this.coordinateDataCache = [];
+        // all the click coordinates 
+        this.groupCoords = [];
+
+        // log
         this._distanceRecords = [];
 
+        // flags
         this.isDistanceStarted = false;
         this.isDragMode = false;
+
+        // dragging properties
+        this.beforeDragPosition = new Cesium.Cartesian3();
     }
 
     /**
@@ -103,76 +113,59 @@ class TwoPointsDistance {
         // early exit if not cartesian
         if (!Cesium.defined(cartesian)) return;
 
-        const entityArray = [];
-        if (this.pointEntities.values.length === 0) {
+        if (this.coordinateDataCache.length === 0) {
             // if there is no point entity, create the first point
-            const firstPointEntity = this.viewer.entities.add(
-                createPointEntity(cartesian, Cesium.Color.RED)
-            );
-            this.pointEntities.add(firstPointEntity);
+            this.coordinateDataCache.push(cartesian);
 
-        } else if (this.pointEntities.values.length % 2 !== 0) {
+            const firstPoint = createPointEntity(this.coordinate, Cesium.Color.RED);
+            firstPoint.id = generateId(this.coordinate, "distance_point");
+            this.viewer.entities.add(firstPoint);
+        } else if (this.coordinateDataCache.length % 2 !== 0) {
             // if there is one point entity, create the second point
-            const secondPointEntity = this.viewer.entities.add(
-                createPointEntity(cartesian, Cesium.Color.BLUE)
-            );
-            this.pointEntities.add(secondPointEntity);
+            this.coordinateDataCache.push(cartesian);
 
-            // remove moving line entity
-            this.removeEntity(this.movingLineEntity);
+            const secondPoint = createPointEntity(this.coordinate, Cesium.Color.RED);
+            secondPoint.id = generateId(this.coordinate, "distance_point");
+            this.viewer.entities.add(secondPoint);
 
-            if (this.pointEntities.values.length === 2) {
-                // create line entity between the first and second point
-                this.removeEntities(this.lineEntities);
+            if (this.coordinateDataCache.length === 2) {
+                // create line for the first and second point
+                if (this.movingPolylinePrimitive) {
+                    this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+                }
 
-                const firstPointPosition = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now());
-                const secondPointPosition = this.pointEntities.values[1].position.getValue(Cesium.JulianDate.now());
+                const lineGeometryInstance = createGeometryInstance(this.coordinateDataCache, "distance_line");
+                const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN);
+                this.viewer.scene.primitives.add(linePrimitive);
 
-                const line = createLineEntity(
-                    [firstPointPosition, secondPointPosition],
-                    Cesium.Color.ORANGE
-                );
-                line.polyline.positions = new Cesium.CallbackProperty(() => {
-                    return [firstPointPosition, secondPointPosition];
-                }, false);
-                const lineEntity = this.viewer.entities.add(line);
-                this.lineEntities.add(lineEntity);
-
-                // create distance label
-                this.removeEntities(this.labelEntities);
-                this.removeEntity(this.movingLabelEntity);
-                const distance = calculateDistance(firstPointPosition, secondPointPosition);
-                const label = createDistanceLabel(firstPointPosition, secondPointPosition, distance);
-                const labelEntity = this.viewer.entities.add(label);
-                this.labelEntities.add(labelEntity);
+                // create label
+                if (this.movingLabelEntity) {
+                    this.removeEntity(this.movingLabelEntity);
+                }
+                const distance = calculateDistance(this.coordinateDataCache[0], this.coordinateDataCache[1]);
+                const label = createDistanceLabel(this.coordinateDataCache[0], this.coordinateDataCache[1], distance);
+                const midpoint = Cesium.Cartesian3.midpoint(this.coordinateDataCache[0], this.coordinateDataCache[1], new Cesium.Cartesian3());
+                label.id = generateId(midpoint, "distance_label");
+                this.viewer.entities.add(label);
 
                 // log distance
                 this._distanceRecords.push(distance);
                 this.logRecordsCallback(distance);
+                this.groupCoords.push([...this.coordinateDataCache]);
 
                 // set flag that the measurement has ended
                 this.isDistanceStarted = false;
-
-                const firstPoint = this.pointEntities.values[0];
-                const secondPoint = this.pointEntities.values[1];
-                entityArray.push(firstPoint, secondPoint, lineEntity, labelEntity);
-                this.groupsEntities.push(entityArray);
             }
         } else {
-            // if there are more than 2 point entities, reset the measurement
-            this.pointEntities.removeAll();
-            this.lineEntities.removeAll();
-            this.labelEntities.removeAll();
-
-            // Remove all entities from the viewer
-            // this.viewer.entities.removeAll();
+            this.coordinateDataCache.length = 0;
 
             // create the first point, so it won't interupt to restart the measurement
             // without this could cause click twice to restart the measurement
-            const firstPointEntity = this.viewer.entities.add(
-                createPointEntity(cartesian, Cesium.Color.RED)
-            );
-            this.pointEntities.add(firstPointEntity);
+            const continuePoint = createPointEntity(this.coordinate, Cesium.Color.RED);
+            continuePoint.id = generateId(this.coordinate, "distance_point");
+            this.viewer.entities.add(continuePoint);
+
+            this.coordinateDataCache.push(this.coordinate);
         }
 
     }
@@ -185,73 +178,90 @@ class TwoPointsDistance {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
-
         this.coordinate = cartesian;
 
         // update pointerOverlay: the moving dot with mouse
-        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
-        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
+        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
+        pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
-        if (this.pointEntities.values.length > 0 && this.pointEntities.values.length < 2) {
-            const firstPointCartesian = this.pointEntities.values[0].position.getValue(Cesium.JulianDate.now())
+        if (this.coordinateDataCache.length > 0 && this.coordinateDataCache.length < 2) {
 
             // create moving line entity
-            this.removeEntity(this.movingLineEntity);
-            const movingLine = createLineEntity(
-                [firstPointCartesian, cartesian],
-                Cesium.Color.YELLOW
-            );
-            movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
-                return [firstPointCartesian, cartesian];
-            }, false);
-            this.movingLineEntity = this.viewer.entities.add(movingLine);
+            if (this.movingPolylinePrimitive) {
+                this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+            }
+            const firstCoordsCartesian = this.coordinateDataCache[0];
+
+            const movingLineGeometryInstance = createGeometryInstance([firstCoordsCartesian, this.coordinate], "distance_moving_line");
+            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW);
+
+            this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // create distance label
-            this.removeEntity(this.movingLabelEntity);
+            if (this.movingLabelEntity) {
+                this.removeEntity(this.movingLabelEntity);
+            }
             const distance = calculateDistance(
-                firstPointCartesian,
+                firstCoordsCartesian,
                 cartesian
             );
             const label = createDistanceLabel(
-                firstPointCartesian,
+                firstCoordsCartesian,
                 cartesian,
                 distance
             );
+            const midpoint = Cesium.Cartesian3.midpoint(firstCoordsCartesian, this.coordinate, new Cesium.Cartesian3());
+            label.id = generateId(midpoint, "distance_moving_label");
             this.movingLabelEntity = this.viewer.entities.add(label);
-
         }
     }
 
     handleDistanceDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-        if (this.pointEntities.values.length > 1) {
+        if (this.coordinateDataCache.length > 1) {
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
-            const pointObject = pickedObjects.find(p => p.id && p.id.point);
 
-            // if it has picked object, and picked object is point entity
-            if (Cesium.defined(pointObject)) {
-                this.isDragMode = true;
+            const pickedPoint = pickedObjects.find(p => p.id && p.id?.id?.startsWith("annotate_distance") && p.id.point);
+            if (Cesium.defined(pickedPoint)) {
                 // disable camera movement
                 this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+                // set drag flag
+                this.isDragMode = true;
 
-                this.draggingEntity = this.viewer.entities.getById(pointObject.id.id);
+                this.draggingEntity = this.viewer.entities.getById(pickedPoint.id.id);
+                // clone the static position for the dragging entity
+                const draggingEntityPosition = this.draggingEntity.position.getValue(Cesium.JulianDate.now());
+                this.beforeDragPosition = Cesium.Cartesian3.clone(draggingEntityPosition);
 
-                // identify the group of entities for line that associate with the dragging point entity
-                const group = this.groupsEntities.find(pair => pair.find(e => e.id === this.draggingEntity.id));
-                const lineEntity = group.find(e => e.polyline);
-                // set not to show the line entity when left click down
-                lineEntity.polyline.show = false;
+                // find the relative line primitive to the dragging point
+                const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_distance_line"));
+                let linePrimitive = null;
+                if (linePrimitives.length > 0) {
+                    linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+                    // set the relative line primitive to no show
+                    linePrimitive ? linePrimitive.show = false : console.error("No specific line primitives found");
+                } else {
+                    console.error("No line primitives found");
+                    return;
+                }
+
+                // find the relative label entity to the dragging point 
+                const linePrimitivePosition = linePrimitive.geometryInstances.geometry._positions; // [cart, cart]
+                const midpoint = Cesium.Cartesian3.midpoint(linePrimitivePosition[0], linePrimitivePosition[1], new Cesium.Cartesian3());
+                const labelEntities = this.viewer.entities.values.filter(e => e.label && e.id && e.id.startsWith("annotate_distance_label"));
+                const targetLabelEntity = labelEntities.find(e => e.position && Cesium.Cartesian3.equals(e.position.getValue(Cesium.JulianDate.now()), midpoint));
+                targetLabelEntity.label.show = false;
 
                 // set move event for dragging
                 this.handler.setInputAction((movement) => {
-                    this.handleDistanceDrag(movement, this.draggingEntity);
+                    this.handleDistanceDrag(movement, this.draggingEntity, this.beforeDragPosition);
                 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
             }
-        };
+        }
     };
 
-    handleDistanceDrag(movement, pointEntity) {
+    handleDistanceDrag(movement, pointEntity, pointEntityPosition) {
         this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
@@ -262,94 +272,94 @@ class TwoPointsDistance {
         // update point entity to dragging position
         pointEntity.position.setValue(cartesian);
 
-        // identify the group of point entities that contains the dragging point entity
-        const group = this.groupsEntities.find(pair => pair.find(e => e.id === pointEntity.id));
+        // identify the group of coordinates that contains the dragging position
+        const group = this.groupCoords.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, pointEntityPosition)));
+        const otherPointCoords = group.find(p => !Cesium.Cartesian3.equals(p, pointEntityPosition));
 
-        // update line entity
-        // otherPoint is the point entity that is not the dragging point entity
-        const otherPoint = group.find(p => p.id !== pointEntity.id);
-        const otherPointPosition = otherPoint.position.getValue(Cesium.JulianDate.now());
+        // update moving line primitive by remove the old one and create a new one
+        if (this.movingPolylinePrimitive) {
+            this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+        }
+        const movingLineGeometryInstance = createGeometryInstance([otherPointCoords, this.coordinate], "distance_drag_moving_line");
+        const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW);
 
-        // create moving line entity
-        this.removeEntity(this.movingLineEntity);
-        const movingLine = createLineEntity(
-            [otherPointPosition, cartesian],
-            Cesium.Color.YELLOW
+        this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
+
+        // update moving label entity
+        this.movingLabelEntity && this.removeEntity(this.movingLabelEntity);
+        const distance = calculateDistance(
+            otherPointCoords,
+            this.coordinate,
         );
-        movingLine.polyline.positions = new Cesium.CallbackProperty(() => {
-            return [otherPointPosition, cartesian];
-        }, false);
-        this.movingLineEntity = this.viewer.entities.add(movingLine);
-
-        // create distance label
-        const labelEntity = group.find(e => e.label);
-        labelEntity.label.show = false;
-        this.removeEntity(this.movingLabelEntity);
-        const distance = calculateDistance(otherPointPosition, cartesian);
-        const label = createDistanceLabel(otherPointPosition, cartesian, distance);
+        const label = createDistanceLabel(
+            otherPointCoords,
+            this.coordinate,
+            distance
+        );
+        const midpoint = Cesium.Cartesian3.midpoint(otherPointCoords, this.coordinate, new Cesium.Cartesian3());
+        label.id = generateId(midpoint, "distance_moving_label");
         this.movingLabelEntity = this.viewer.entities.add(label);
     }
 
     handleDistanceDragEnd(movement) {
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-        // this.handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
         if (this.draggingEntity && this.isDragMode) {
+            // update the group coordinates by replace the new set of coordinates
+            // find the relative line primitive to the dragging point
+            const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_distance_line"));
+            if (linePrimitives.length > 0) {
+                const linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+                const targetLinePrimitivePosition = linePrimitive.geometryInstances.geometry._positions; // [cart, cart]
 
-            // identify the group of point entities that contains the dragging point entity
-            const group = this.groupsEntities.find(pair => pair.find(e => e.id === this.draggingEntity.id));
+                // update the this.groupCoords with the new drag end positions, 2 points coordinates
+                const group = this.groupCoords.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+                const otherPointCoords = group.find(p => !Cesium.Cartesian3.equals(p, this.beforeDragPosition));
+                const newCoords = [otherPointCoords, this.coordinate];
+                const index = this.groupCoords.findIndex(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+                this.groupCoords[index] = newCoords;
 
-            const otherPoint = group.find(p => p.id !== this.draggingEntity.id);
-            const otherPointPosition = otherPoint.position.getValue(Cesium.JulianDate.now());
+                // update the line primitive by remove the old one and create a new one
+                if (this.movingPolylinePrimitive) {
+                    this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+                }
+                if (linePrimitive) {
+                    this.viewer.scene.primitives.remove(linePrimitive);
+                }
+                // create new line primitive
+                const lineGeometryInstance = createGeometryInstance(newCoords, "distance_line");
+                const newlinePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN);
+                this.viewer.scene.primitives.add(newlinePrimitive);
 
-            const cartesian = this.coordinate;
+                // update the distance label
+                const labelEntities = this.viewer.entities.values.filter(e => e.label);
+                const targetLabelEntity = labelEntities.find(e => e.position && Cesium.Cartesian3.equals(e.position.getValue(Cesium.JulianDate.now()), Cesium.Cartesian3.midpoint(targetLinePrimitivePosition[0], targetLinePrimitivePosition[1], new Cesium.Cartesian3())));
 
-            // update line entity
-            this.removeEntity(this.movingLineEntity);
-            // update line entity from the group
-            const polylineEntity = group.find(e => e.polyline);
-            polylineEntity.polyline.show = true;
-            polylineEntity.polyline.positions = new Cesium.CallbackProperty(() => {
-                return [otherPointPosition, cartesian];
-            }, false
-            );
+                const distance = calculateDistance(newCoords[0], newCoords[1]);
+                const midpoint = Cesium.Cartesian3.midpoint(newCoords[0], newCoords[1], new Cesium.Cartesian3());
 
-            // update distance label from the group
-            this.removeEntity(this.movingLabelEntity);
-            const labelEntity = group.find(e => e.label);
-            labelEntity.label.show = true;
-            const distance = calculateDistance(otherPointPosition, cartesian);
-            const midpoint = Cesium.Cartesian3.midpoint(otherPointPosition, cartesian, new Cesium.Cartesian3());
-            labelEntity.label.text = "Total: " + formatDistance(distance);
-            labelEntity.position = new Cesium.CallbackProperty(() => midpoint, false);
+                if (this.movingLabelEntity) {
+                    this.removeEntity(this.movingLabelEntity);
+                }
+                targetLabelEntity.label.show = true;
+                targetLabelEntity.label.text = "Total: " + formatDistance(distance);
+                targetLabelEntity.position = new Cesium.CallbackProperty(() => midpoint, false);
 
-            // log distance
-            this._distanceRecords.push(distance);
-            this.logRecordsCallback(distance);
-
-            // reset dragging entity
-            this.draggingEntity = null;
-            this.isDragMode = false;
+                // log distance
+                this.logRecordsCallback(distance);
+            } else {
+                console.error("No line primitives found");
+                return;
+            }
         }
+        // reset dragging entity
+        this.draggingEntity = null;
+        this.isDragMode = false;
 
         this.handler.setInputAction((movement) => {
             this.handleDistanceMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     };
-
-    /**
-     * Removes entities that has been added to entity collection
-     * @param {Cesium.EntityCollection} entityOrCollection - The entity or entity collection to remove
-     */
-    removeEntities(entityCollection) {
-        // if it is entitiy collection, remove all entities and reset the collection
-        if (entityCollection instanceof Cesium.EntityCollection) {
-
-            entityCollection.values.forEach((entity) => {
-                this.viewer.entities.remove(entity);
-            });
-            entityCollection.removeAll();
-        }
-    }
 
     /**
      * Removes single entity
@@ -361,15 +371,15 @@ class TwoPointsDistance {
     }
 
     resetValue() {
-        this.pointEntities.removeAll();
-        this.lineEntities.removeAll();
-        this.labelEntities.removeAll();
-
-        this.removeEntity(this.movingLineEntity);
         this.removeEntity(this.movingLabelEntity);
+
         this.coordinate = null;
 
         this.isDistanceStarted = false;
+        this.isDragMode = false;
+
+        this.movingPolylinePrimitive = null;
+        this.beforeDragPosition = null;
     }
 }
 

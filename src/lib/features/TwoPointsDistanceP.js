@@ -44,7 +44,7 @@ class TwoPointsDistanceP {
 
         this.movingPolylinePrimitive = null;
         this.draggingPrimitive = null;
-        this.beforeDraggingPosition = null;
+        this.beforeDragPosition = null;
 
         // coordinates orientated data: use for identify points, lines, labels
         this.coordinateDataCache = [];
@@ -132,7 +132,7 @@ class TwoPointsDistanceP {
 
                 // create label
                 if (this.movingLabelEntity) {
-                    this.viewer.entities.remove(this.movingLabelEntity);
+                    this.removeEntity(this.movingLabelEntity);
                 }
                 const distance = calculateDistance(this.coordinateDataCache[0], this.coordinateDataCache[1]);
                 const label = createDistanceLabel(this.coordinateDataCache[0], this.coordinateDataCache[1], distance);
@@ -214,13 +214,13 @@ class TwoPointsDistanceP {
                 this.viewer.scene.screenSpaceCameraController.enableInputs = false;
                 this.isDragMode = true;
                 this.draggingPrimitive = pointPrimitive.primitive;
-                this.beforeDraggingPosition = pointPrimitive.primitive.position.clone();
+                this.beforeDragPosition = pointPrimitive.primitive.position.clone();
 
                 // find the relative line primitive to the dragging point
                 const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_distance_line"));
                 let linePrimitive = null;
                 if (linePrimitives.length > 0) {
-                    linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDraggingPosition)));
+                    linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
                     // set the relative line primitive to no show
                     linePrimitive ? linePrimitive.show = false : console.error("No specific line primitives found");
                 } else {
@@ -237,7 +237,7 @@ class TwoPointsDistanceP {
 
                 // set move event for dragging
                 this.handler.setInputAction((movement) => {
-                    this.handleDistanceDrag(movement, this.draggingPrimitive, this.beforeDraggingPosition);
+                    this.handleDistanceDrag(movement, this.draggingPrimitive, this.beforeDragPosition);
                 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
             }
@@ -283,27 +283,23 @@ class TwoPointsDistanceP {
     }
 
     handleDistanceDragEnd(movement) {
-        console.log(this.groupCoords);
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         if (this.draggingPrimitive && this.isDragMode) {
 
             // update the group coordinates by replace the new set of coordinates
-            console.log("primtiives:", this.viewer.scene.primitives._primitives);
             // find the relative line primitive to the dragging point
             const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_distance_line"));
-            console.log("🚀  linePrimitives:", linePrimitives);
 
             if (linePrimitives.length > 0) {
-                const linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDraggingPosition)));
+                const linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
                 const targetLinePrimitivePosition = linePrimitive.geometryInstances.geometry._positions; // [cart, cart]
-                console.log("🚀  targetLinePrimitivePosition:", targetLinePrimitivePosition);
 
                 // update the this.groupCoords with the new drag end positions, 2 points coordinates
-                const group = this.groupCoords.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDraggingPosition)));
-                const otherPointCoords = group.find(p => !Cesium.Cartesian3.equals(p, this.beforeDraggingPosition));
+                const group = this.groupCoords.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+                const otherPointCoords = group.find(p => !Cesium.Cartesian3.equals(p, this.beforeDragPosition));
                 const newCoords = [otherPointCoords, this.coordinate];
-                const index = this.groupCoords.findIndex(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDraggingPosition)));
+                const index = this.groupCoords.findIndex(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
                 this.groupCoords[index] = newCoords;
 
                 // update the line primitive by remove the old one and create a new one
@@ -385,7 +381,7 @@ class TwoPointsDistanceP {
 
         this.movingPolylinePrimitive = null;
         this.draggingPrimitive = null;
-        this.beforeDraggingPosition = null;
+        this.beforeDragPosition = null;
     }
 }
 
