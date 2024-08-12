@@ -246,7 +246,7 @@ export function createDistanceLabel(
     // Define the offset from the midpoint position
     const labelOffset = new Cesium.Cartesian2(0, -20);
 
-    let labelString = "Total: " + formatDistance(distance);
+    let labelString = formatDistance(distance);
 
     // Create a label entity with the fixed position
     return {
@@ -368,7 +368,7 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
     // Define the offset from the midpoint position
     const labelOffset = new Cesium.Cartesian2(0, -20);
 
-    let labelString = "Total: " + formatDistance(distance);
+    let labelString = formatDistance(distance);
 
     // create label primtive
     return {

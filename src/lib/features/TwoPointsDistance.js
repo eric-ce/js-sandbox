@@ -35,11 +35,11 @@ class TwoPointsDistance {
         this.isDragMode = false;
 
         // cesium primitives
-        this.pointPrimitive = new Cesium.PointPrimitiveCollection();
-        this.viewer.scene.primitives.add(this.pointPrimitive);
+        this.pointCollection = new Cesium.PointPrimitiveCollection();
+        this.viewer.scene.primitives.add(this.pointCollection);
 
-        this.labelPrimitive = new Cesium.LabelCollection();
-        this.viewer.scene.primitives.add(this.labelPrimitive);
+        this.labelCollection = new Cesium.LabelCollection();
+        this.viewer.scene.primitives.add(this.labelCollection);
 
         this.movingPolylinePrimitive = null;
         this.movingLabelPrimitive = null;
@@ -93,7 +93,11 @@ class TwoPointsDistance {
             const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
             // If picked object is a label primitive, make it editable
-            if (Cesium.defined(pickedObject) && pickedObject?.id?.startsWith("annotate_distance_label")) {
+            if (
+                Cesium.defined(pickedObject) &&
+                pickedObject?.id?.startsWith("annotate") &&
+                pickedObject.id.includes("label")
+            ) {
                 editableLabel(this.viewer.container, pickedObject.primitive);
                 return; // Exit the function after making the label editable
             }
@@ -108,12 +112,12 @@ class TwoPointsDistance {
             this.coordinateDataCache.push(this.coordinate);
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "distance_point");
-            this.pointPrimitive.add(point);
+            this.pointCollection.add(point);
 
             // initialize the moving label that is going to use in mouse move event, set it to not show.
             const movingLabel = createLabelPrimitive(this.coordinateDataCache[0], this.coordinateDataCache[0], 0);
             movingLabel.id = "annotation_distance_moving_label";
-            this.movingLabelPrimitive = this.labelPrimitive.add(movingLabel)
+            this.movingLabelPrimitive = this.labelCollection.add(movingLabel)
             this.movingLabelPrimitive.show = false;
 
         } else if (this.coordinateDataCache.length % 2 !== 0) {
@@ -121,7 +125,7 @@ class TwoPointsDistance {
             this.coordinateDataCache.push(this.coordinate);
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "distance_point");
-            this.pointPrimitive.add(point);
+            this.pointCollection.add(point);
 
             // create line and label
             if (this.coordinateDataCache.length === 2) {
@@ -142,7 +146,7 @@ class TwoPointsDistance {
                 const midPoint = Cesium.Cartesian3.midpoint(this.coordinateDataCache[0], this.coordinateDataCache[1], new Cesium.Cartesian3());
                 const label = createLabelPrimitive(this.coordinateDataCache[0], this.coordinateDataCache[1], distance)
                 label.id = generateId(midPoint, "distance_label");
-                this.labelPrimitive.add(label);
+                this.labelCollection.add(label);
 
 
                 // log distance
@@ -160,7 +164,7 @@ class TwoPointsDistance {
             // add a continue point to the cache so it doesn't need to click twice to start again
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "distance_point");
-            this.pointPrimitive.add(point);
+            this.pointCollection.add(point);
 
             this.coordinateDataCache.push(this.coordinate);
         }
@@ -199,7 +203,7 @@ class TwoPointsDistance {
             const midPoint = Cesium.Cartesian3.midpoint(firstCoordsCartesian, cartesian, new Cesium.Cartesian3());
             this.movingLabelPrimitive.id = generateId(midPoint, "distance_moving_label");
             this.movingLabelPrimitive.position = midPoint
-            this.movingLabelPrimitive.text = "Total: " + formatDistance(distance);
+            this.movingLabelPrimitive.text = formatDistance(distance);
             this.movingLabelPrimitive.show = true;
         }
     }
@@ -234,7 +238,7 @@ class TwoPointsDistance {
                 // find the relative label primitive to the dragging point 
                 const linePrimitivePosition = linePrimitive.geometryInstances.geometry._positions; // [cart, cart]
                 const midpoint = Cesium.Cartesian3.midpoint(linePrimitivePosition[0], linePrimitivePosition[1], new Cesium.Cartesian3());
-                const targetLabelPrimitive = this.labelPrimitive._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, midpoint) && label.id && label.id.startsWith("annotate_distance_label"));
+                const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, midpoint) && label.id && label.id.startsWith("annotate_distance_label"));
                 targetLabelPrimitive.show = false;
 
                 // set move event for dragging
@@ -281,7 +285,7 @@ class TwoPointsDistance {
             const midPoint = Cesium.Cartesian3.midpoint(otherPointCoords, this.coordinate, new Cesium.Cartesian3());
             this.movingLabelPrimitive.id = generateId(midPoint, "distance_drag_moving_label");
             this.movingLabelPrimitive.position = midPoint;
-            this.movingLabelPrimitive.text = "Total: " + formatDistance(distance);
+            this.movingLabelPrimitive.text = formatDistance(distance);
         }
     }
 
@@ -322,11 +326,11 @@ class TwoPointsDistance {
 
                 const existedMidPoint = Cesium.Cartesian3.midpoint(targetLinePrimitivePosition[0], targetLinePrimitivePosition[1], new Cesium.Cartesian3());
                 const distance = calculateDistance(newCoords[0], newCoords[1]);
-                const targetLabelPrimitive = this.labelPrimitive._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label.id && label.id.startsWith("annotate_distance_label"));
+                const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label.id && label.id.startsWith("annotate_distance_label"));
 
                 const newMidPoint = Cesium.Cartesian3.midpoint(newCoords[0], newCoords[1], new Cesium.Cartesian3());
                 targetLabelPrimitive.position = newMidPoint;
-                targetLabelPrimitive.text = "Total: " + formatDistance(distance);
+                targetLabelPrimitive.text = formatDistance(distance);
                 targetLabelPrimitive.show = true;
                 targetLabelPrimitive.id = generateId(newMidPoint, "distance_label");
 

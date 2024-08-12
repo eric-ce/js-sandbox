@@ -5,11 +5,7 @@ import {
     createDistanceLabel,
     removeInputActions,
     editableLabel,
-    updatePointerOverlay,
-    createGeometryInstance,
-    createLinePrimitive,
-    createPointPrimitive,
-    generateId
+    updatePointerOverlay
 } from "../helper/helper.js";
 
 /**
@@ -19,7 +15,7 @@ import {
  * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
  * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
  */
-class ThreePointsCurveP {
+class ThreePointsCurve {
     constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
         this.viewer = viewer;
         this.handler = handler;
@@ -27,24 +23,15 @@ class ThreePointsCurveP {
 
         this.logRecordsCallback = logRecordsCallback;
 
-        // cesium entities
+        this.pointEntities = new Cesium.EntityCollection();
+        this.lineEntities = new Cesium.EntityCollection();
         this.labelEntities = new Cesium.EntityCollection();
-
-        // cesium primitives
-        this.pointPrimitive = new Cesium.PointPrimitiveCollection();
-        this.viewer.scene.primitives.add(this.pointPrimitive);
 
         this.coordinate = new Cesium.Cartesian3();
 
         this._curveRecords = [];
 
-        // flags
         this.isCurveStarted = false;
-
-        // coordinates orientated data: use for identify points, lines, labels
-        this.coordinateDataCache = [];
-        // all the click coordinates 
-        this.groupCoords = [];
     }
 
     /**
@@ -94,22 +81,20 @@ class ThreePointsCurveP {
 
         // use mouse move position to control only one pickPosition is used
         const cartesian = this.coordinate;
-        this.coordinateDataCache.push(cartesian);
 
         // Check if the position is defined
         if (!Cesium.defined(cartesian)) return;
 
-        const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-        point.id = generateId(this.coordinate, "curve_point");
-        this.pointPrimitive.add(point);
+        const pointEntity = this.viewer.entities.add(
+            createPointEntity(cartesian, Cesium.Color.RED)
+        );
+        this.pointEntities.add(pointEntity);
 
         // Check if it had collected 3 points, then measure the curve distance
-        if (this.coordinateDataCache.length === 3) {
-            this.groupCoords.push([...this.coordinateDataCache]);
-            // const [start, middle, end] = this.pointEntities.values.map((p) =>
-            //     p.position.getValue(Cesium.JulianDate.now())
-            // );
-            const [start, middle, end] = this.coordinateDataCache;
+        if (this.pointEntities.values.length === 3) {
+            const [start, middle, end] = this.pointEntities.values.map((p) =>
+                p.position.getValue(Cesium.JulianDate.now())
+            );
 
             // create curve points
             const numInterpolationPoints = Math.max(
@@ -127,17 +112,11 @@ class ThreePointsCurveP {
                 numInterpolationPoints
             );
 
-            // create curve line primitive
-            const lineGeometryInstance = createGeometryInstance(curvePoints, "curve_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW);
-            this.viewer.scene.primitives.add(linePrimitive);
-
-            // // create curve line entity
-            // const curveLineEntity = this.viewer.entities.add(
-            //     createLineEntity(curvePoints, Cesium.Color.YELLOW)
-            // );
-            // curveLineEntity.polyline.positions = new Cesium.CallbackProperty(() => curvePoints, false);
-            // this.lineEntities.add(curveLineEntity);
+            // create curve line entity
+            const curveLineEntity = this.viewer.entities.add(
+                createLineEntity(curvePoints, Cesium.Color.YELLOW)
+            );
+            this.lineEntities.add(curveLineEntity);
 
             // create label
             const totalDistance = this.measureCurveDistance(curvePoints);
@@ -150,12 +129,14 @@ class ThreePointsCurveP {
             this._curveRecords.push(totalDistance);
             this.logRecordsCallback(totalDistance);
 
+            // reset point entities
+            this.pointEntities.removeAll();
+            this.lineEntities.removeAll();
+            this.labelEntities.removeAll();
+
             // set flag that the measurement has ended
             this.isCurveStarted = false;
-            // reset the coordinate data cache
-            this.coordinateDataCache.length = 0;
         }
-
         // }
     }
 
@@ -170,9 +151,8 @@ class ThreePointsCurveP {
         this.coordinate = cartesian;
 
         // update pointerOverlay: the moving dot with mouse
-        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
+        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
         updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
-
     }
 
     /**
@@ -216,10 +196,11 @@ class ThreePointsCurveP {
     }
 
     resetvalue() {
+        this.pointEntities.removeAll();
+        this.lineEntities.removeAll();
         this.labelEntities.removeAll();
-
         this.coordinate = null;
     }
 }
 
-export { ThreePointsCurveP };
+export { ThreePointsCurve };
