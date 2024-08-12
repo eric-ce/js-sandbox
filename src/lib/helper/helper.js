@@ -3,7 +3,7 @@ import * as Cesium from "cesium";
 /**
  * Opens a modal for the user to edit the label name and updates the label entity.
  * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
- * @param {Cesium.Entity} label - The label entity to be edited.
+ * @param {Cesium.Label} label - the label primitive to be updated.
  * @returns {Promise<void>} - A promise that resolves when the label is updated.
  */
 export async function editableLabel(viewerContainer, label) {
@@ -11,16 +11,16 @@ export async function editableLabel(viewerContainer, label) {
         // open a modal for user to edit the label name
         const newLabelName = await setupEditableModal(viewerContainer);
 
-        const labelText = label.text.getValue();
+        const labelText = label.text
         let value = null;
         // check the label to see if it has ":"
         if (labelText.includes(":")) {
             // retrieve the distance value
-            const [labelName, distance] = label.text.getValue().split(":");
-            value = distance
+            const [labelName, distance] = label.text.split(":");
+            value = distance;
         } else {
             // if the label does not have ":", label value is the distance value
-            value = label.text.getValue();
+            value = label.text;
         }
 
         // create the new label text
@@ -223,7 +223,6 @@ export function createLineEntity(
     };
 }
 
-
 /**
  * Create a label entity for displaying the distance or area.
  * @param {Cesium.Cartesian3} startPoint - The Cartesian coordinates of the starting point.
@@ -356,6 +355,36 @@ export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED) 
         // false: make geometry instance available to lookup, true: release geometry instances to save memory
         releaseGeometryInstances: false
     });
+}
+
+export function createLabelPrimitive(startPoint, endPoint, distance) {
+    const midpoint = Cesium.Cartesian3.lerp(
+        startPoint,
+        endPoint,
+        0.5,
+        new Cesium.Cartesian3()
+    );
+
+    // Define the offset from the midpoint position
+    const labelOffset = new Cesium.Cartesian2(0, -20);
+
+    let labelString = "Total: " + formatDistance(distance);
+
+    // create label primtive
+    return {
+        position: midpoint,
+        pixelOffset: labelOffset,
+        text: labelString,
+        font: "14px sans-serif",
+        fillColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        showBackground: true,
+        backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
+        scale: 1.5,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY, // Make the label always visible
+    }
 }
 /**
  * calculate the distance between two points
