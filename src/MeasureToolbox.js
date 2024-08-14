@@ -18,6 +18,7 @@ import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
 import profileDistancesImg from "./assets/profileDistancesImg.svg";
 import clearImg from "./assets/clearImg.svg"
+import { HeightP } from "./lib/features/HeightP.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -114,6 +115,11 @@ export class MeasureToolbox extends HTMLElement {
             },
             {
                 instance: new Height(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "height")),
+                name: "Height",
+                icon: heightImg
+            },
+            {
+                instance: new HeightP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "height")),
                 name: "Height",
                 icon: heightImg
             },
