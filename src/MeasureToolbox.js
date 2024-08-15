@@ -18,7 +18,7 @@ import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
 import profileDistancesImg from "./assets/profileDistancesImg.svg";
 import clearImg from "./assets/clearImg.svg"
-import { HeightP } from "./lib/features/HeightP.js";
+import { MultiDistanceP } from "./lib/features/MultiDistanceP.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -43,6 +43,8 @@ export class MeasureToolbox extends HTMLElement {
         this.pointerOverlay = null;
         this.infoBox = null;
         this.logBox = null;
+
+        this.cesiumPkg = null;
 
         // buttons variables
         this.toolsContainer = null;
@@ -99,32 +101,32 @@ export class MeasureToolbox extends HTMLElement {
 
         const modes = [
             {
-                instance: new Points(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "points")),
+                instance: new Points(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "points"), this.cesiumPkg),
                 name: "Points",
                 icon: pointsImg
             },
             {
-                instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances")),
+                instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances"), this.cesiumPkg),
                 name: "Distance",
                 icon: distanceImg
             },
             {
-                instance: new ThreePointsCurve(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "curves")),
+                instance: new ThreePointsCurve(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "curves"), this.cesiumPkg),
                 name: "Curve",
                 icon: curveImg
             },
             {
-                instance: new Height(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "height")),
-                name: "Height",
-                icon: heightImg
-            },
-            {
-                instance: new HeightP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "height")),
+                instance: new Height(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "height"), this.cesiumPkg),
                 name: "Height",
                 icon: heightImg
             },
             {
                 instance: new MultiDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance")),
+                name: "Multi-Distances",
+                icon: multiDImage
+            },
+            {
+                instance: new MultiDistanceP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance"), this.cesiumPkg),
                 name: "Multi-Distances",
                 icon: multiDImage
             },
@@ -242,7 +244,7 @@ export class MeasureToolbox extends HTMLElement {
             }
             .log-box{
                 position: absolute; 
-                top: 150px; 
+                top: 190px; 
                 right: 0; 
                 height: 250px; 
                 overflow-y: auto; 
@@ -427,6 +429,7 @@ export class MeasureToolbox extends HTMLElement {
         const messageTitle = "How to use:";
         const message1 = "Left Click: start measure";
         const message2 = "Right Click: finish measure";
+        const message3 = "Hold Left Click: drag point move annotation"
         // create table first row for the title
         infoBoxTable.appendChild(this.createRow(messageTitle));
         // create table rows for the messages
@@ -440,8 +443,10 @@ export class MeasureToolbox extends HTMLElement {
             // if the active button is multi-distance or polygon, show both messages
             infoBoxTable.appendChild(this.createRow(message1));
             infoBoxTable.appendChild(this.createRow(message2));
+            infoBoxTable.appendChild(this.createRow(message3));
         } else {
             infoBoxTable.appendChild(this.createRow(message1));
+            infoBoxTable.appendChild(this.createRow(message3));
 
         }
 

@@ -16,7 +16,7 @@ import {
  * @param {Function} logRecordsCallback - The callback function to log records.
  */
 class Points {
-    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
         this.pointerOverlay = pointerOverlay;
@@ -24,9 +24,11 @@ class Points {
 
         this.logRecordsCallback = logRecordsCallback;
 
+        this.cesiumPkg = cesiumPkg;
+
         this.coordinate = new Cesium.Cartesian3();
         // primitive
-        this.pointPrimitives = new Cesium.PointPrimitiveCollection();
+        this.pointPrimitives = new this.cesiumPkg.PointPrimitiveCollection();
         this.viewer.scene.primitives.add(this.pointPrimitives);
 
         this.draggingPrimitive = null;
@@ -205,6 +207,7 @@ class Points {
         this.coordinateInfoOverlay.style.color = 'white';
         this.coordinateInfoOverlay.style.borderRadius = '4px';
         this.coordinateInfoOverlay.style.padding = '8px';
+        this.coordinateInfoOverlay.style.fontFamily = 'Roboto, sans-serif';
     }
 
     // /**

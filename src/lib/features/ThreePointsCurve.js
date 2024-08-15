@@ -19,17 +19,19 @@ import {
  * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
  */
 class ThreePointsCurve {
-    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
         this.pointerOverlay = pointerOverlay;
 
         this.logRecordsCallback = logRecordsCallback;
 
+        this.cesiumPkg = cesiumPkg;
+
         // cesium primitives
-        this.pointCollection = new Cesium.PointPrimitiveCollection();
+        this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
         this.viewer.scene.primitives.add(this.pointCollection);
-        this.labelCollection = new Cesium.LabelCollection();
+        this.labelCollection = new this.cesiumPkg.LabelCollection();
         this.viewer.scene.primitives.add(this.labelCollection);
 
         this.draggingPrimitive = null;
@@ -142,7 +144,7 @@ class ThreePointsCurve {
             // create curve line primitive
             const lineGeometryInstance = createGeometryInstance(curvePoints, "curve_line");
             lineGeometryInstance.id = generateId([start, middle, end], "curve_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN);
+            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(linePrimitive);
 
             // create label primitive
@@ -281,7 +283,7 @@ class ThreePointsCurve {
             this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
         }
         const movingLineGeometryInstance = createGeometryInstance(curvePoints, "curve_drag_moving_line");
-        const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW);
+        const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
 
         this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
@@ -325,7 +327,7 @@ class ThreePointsCurve {
                 // create new line primitive
                 const lineGeometryInstance = createGeometryInstance(curvePoints, "cruve_line");
                 lineGeometryInstance.id = generateId([start, middle, end], "curve_line");
-                const newLinePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN);
+                const newLinePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
                 this.viewer.scene.primitives.add(newLinePrimitive);
             } else {
                 console.error("No line primitives found");
@@ -343,6 +345,7 @@ class ThreePointsCurve {
                 const oldMidPoint = Cesium.Cartesian3.midpoint(oldStart, oldEnd, new Cesium.Cartesian3());
 
                 const midPoint = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
+                const totalDistance = this.measureCurveDistance(curvePoints);
 
                 let labelPrimitive = null;
 
@@ -351,15 +354,18 @@ class ThreePointsCurve {
                         label => label?.id?.startsWith("annotate_curve_label") &&
                             Cesium.Cartesian3.equals(label.position, oldMidPoint)
                     )
+                    // update label primitive and set it to show
+                    if (labelPrimitive) {
+                        labelPrimitive.show = true;
+                        labelPrimitive.position = midPoint;
+                        labelPrimitive.text = formatDistance(totalDistance);
+                    } else {
+                        console.error("No specific label primitives found");
+                    }
                 });
-                // update label primitive and set it to show
-                if (labelPrimitive) {
-                    labelPrimitive.show = true;
-                    labelPrimitive.position = midPoint;
-                    labelPrimitive.text = formatDistance(this.measureCurveDistance(curvePoints));
-                } else {
-                    console.error("No specific label primitives found");
-                }
+
+                // log the curve
+                this.logRecordsCallback(totalDistance);
             } else {
                 console.error("No label primitives found");
                 return;

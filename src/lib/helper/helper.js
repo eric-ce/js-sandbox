@@ -338,8 +338,8 @@ export function createGeometryInstance(
     return polylineGeometryInstance;
 }
 
-export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED) {
-    return new Cesium.Primitive({
+export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, Primitive) {
+    return new Primitive({
         geometryInstances: geometryInstance,
         appearance: new Cesium.PolylineMaterialAppearance({
             material: new Cesium.Material.fromType('Color', {
@@ -375,7 +375,7 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
         position: midpoint,
         pixelOffset: labelOffset,
         text: labelString,
-        font: "14px sans-serif",
+        font: "14px roboto",
         fillColor: Cesium.Color.WHITE,
         outlineWidth: 2,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,

@@ -21,12 +21,14 @@ import {
  * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
  */
 class TwoPointsDistance {
-    constructor(viewer, handler, pointerOverlay, logRecordsCallback) {
+    constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
         this.pointerOverlay = pointerOverlay;
 
         this.logRecordsCallback = logRecordsCallback;
+
+        this.cesiumPkg = cesiumPkg;
 
         this.coordinate = new Cesium.Cartesian3();
 
@@ -35,10 +37,10 @@ class TwoPointsDistance {
         this.isDragMode = false;
 
         // cesium primitives
-        this.pointCollection = new Cesium.PointPrimitiveCollection();
+        this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
         this.viewer.scene.primitives.add(this.pointCollection);
 
-        this.labelCollection = new Cesium.LabelCollection();
+        this.labelCollection = new this.cesiumPkg.LabelCollection();
         this.viewer.scene.primitives.add(this.labelCollection);
 
         this.movingPolylinePrimitive = null;
@@ -134,7 +136,7 @@ class TwoPointsDistance {
                     this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
                 }
                 const lineGeometryInstance = createGeometryInstance(this.coordinateDataCache, "distance_line");
-                const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN);
+                const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
                 this.viewer.scene.primitives.add(linePrimitive);
 
                 // create label primitive
@@ -194,7 +196,7 @@ class TwoPointsDistance {
             const firstCoordsCartesian = this.coordinateDataCache[0];
 
             const movingLineGeometryInstance = createGeometryInstance([firstCoordsCartesian, this.coordinate], "distance_moving_line");
-            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW);
+            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
 
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
@@ -215,7 +217,7 @@ class TwoPointsDistance {
         if (this.coordinateDataCache.length > 1) {
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
 
-            const pointPrimitive = pickedObjects.find(p => p.primitive && p.primitive instanceof Cesium.PointPrimitive && p.primitive?.id && p.primitive?.id?.startsWith("annotate_distance_point"));
+            const pointPrimitive = pickedObjects.find(p => p.primitive && p.primitive?.id && p.primitive?.id?.startsWith("annotate_distance_point"));
 
             // error handling: if no point primitives found then early exit
             if (!Cesium.defined(pointPrimitive)) {
@@ -277,7 +279,7 @@ class TwoPointsDistance {
                 this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
             }
             const movingLineGeometryInstance = createGeometryInstance([otherPointCoords, this.coordinate], "distance_drag_moving_line");
-            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW);
+            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
 
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
@@ -321,7 +323,7 @@ class TwoPointsDistance {
                 }
                 // create new line primitive
                 const lineGeometryInstance = createGeometryInstance(newCoords, "distance_line");
-                const newlinePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN);
+                const newlinePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
                 this.viewer.scene.primitives.add(newlinePrimitive);
 
                 // update the distance label
