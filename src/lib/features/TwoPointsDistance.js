@@ -217,7 +217,13 @@ class TwoPointsDistance {
         if (this.coordinateDataCache.length > 1) {
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
 
-            const pointPrimitive = pickedObjects.find(p => p.primitive && p.primitive?.id && p.primitive?.id?.startsWith("annotate_distance_point"));
+            const pointPrimitive = pickedObjects.find(p => {
+                if (typeof p.primitive?.id !== 'string') {
+                    return false;
+                }
+                return p.primitive.id.startsWith("annotate_distance_point") &&
+                    !p.primitive.id.includes("moving");
+            });
 
             // error handling: if no point primitives found then early exit
             if (!Cesium.defined(pointPrimitive)) {
