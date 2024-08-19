@@ -5,6 +5,7 @@ import { ThreePointsCurve } from "./lib/features/ThreePointsCurve.js";
 import { Height } from "./lib/features/Height.js";
 import { MultiDistance } from "./lib/features/MultiDistance.js";
 import { Polygon } from "./lib/features/Polygon.js";
+import { PolygonP } from "./lib/features/PolygonP.js";
 import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { removeInputActions } from "./lib/helper/helper.js";
@@ -18,7 +19,6 @@ import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
 import profileDistancesImg from "./assets/profileDistancesImg.svg";
 import clearImg from "./assets/clearImg.svg"
-import { MultiDistanceP } from "./lib/features/MultiDistanceP.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -121,17 +121,17 @@ export class MeasureToolbox extends HTMLElement {
                 icon: heightImg
             },
             {
-                instance: new MultiDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance")),
-                name: "Multi-Distances",
-                icon: multiDImage
-            },
-            {
-                instance: new MultiDistanceP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance"), this.cesiumPkg),
+                instance: new MultiDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance"), this.cesiumPkg),
                 name: "Multi-Distances",
                 icon: multiDImage
             },
             {
                 instance: new Polygon(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "polygons")),
+                name: "Polygon",
+                icon: polygonImg
+            },
+            {
+                instance: new PolygonP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "polygons"), this.cesiumPkg),
                 name: "Polygon",
                 icon: polygonImg
             },

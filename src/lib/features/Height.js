@@ -6,7 +6,7 @@ import {
     createPointPrimitive,
     generateId,
     createLinePrimitive,
-    createGeometryInstance,
+    createLineGeometryInstance,
     createLabelPrimitive,
     formatDistance
 } from "../helper/helper.js";
@@ -130,7 +130,7 @@ class Height {
             this.pointCollection.add(bottomPointPrimitive);
 
             // create line primitive
-            const lineGeometryInstance = createGeometryInstance([topCartesian, bottomCartesian], "height_line");
+            const lineGeometryInstance = createLineGeometryInstance([topCartesian, bottomCartesian], "height_line");
             const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(linePrimitive);
 
@@ -194,7 +194,7 @@ class Height {
             if (this.movingPolylinePrimitive) {
                 this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
             }
-            const movingLineGeometryInstance = createGeometryInstance(this.coordinateDataCache, "height_moving_line");
+            const movingLineGeometryInstance = createLineGeometryInstance(this.coordinateDataCache, "height_moving_line");
             const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
 
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
@@ -351,7 +351,7 @@ class Height {
             if (this.movingPolylinePrimitive) {
                 this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
             }
-            const movingLineGeometryInstance = createGeometryInstance(draggingPosition, "height_moving_line");
+            const movingLineGeometryInstance = createLineGeometryInstance(draggingPosition, "height_moving_line");
             const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
@@ -404,7 +404,7 @@ class Height {
                 // update the line
                 if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
 
-                const lineGeometryInstance = createGeometryInstance(draggingPosition, "height_line");
+                const lineGeometryInstance = createLineGeometryInstance(draggingPosition, "height_line");
                 const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
                 this.viewer.scene.primitives.add(linePrimitive);
 

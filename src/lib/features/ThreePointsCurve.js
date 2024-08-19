@@ -3,7 +3,7 @@ import {
     removeInputActions,
     editableLabel,
     updatePointerOverlay,
-    createGeometryInstance,
+    createLineGeometryInstance,
     createLinePrimitive,
     createPointPrimitive,
     generateId,
@@ -142,7 +142,7 @@ class ThreePointsCurve {
             );
 
             // create curve line primitive
-            const lineGeometryInstance = createGeometryInstance(curvePoints, "curve_line");
+            const lineGeometryInstance = createLineGeometryInstance(curvePoints, "curve_line");
             lineGeometryInstance.id = generateId([start, middle, end], "curve_line");
             const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(linePrimitive);
@@ -282,7 +282,7 @@ class ThreePointsCurve {
         if (this.movingPolylinePrimitive) {
             this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
         }
-        const movingLineGeometryInstance = createGeometryInstance(curvePoints, "curve_drag_moving_line");
+        const movingLineGeometryInstance = createLineGeometryInstance(curvePoints, "curve_drag_moving_line");
         const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
 
         this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
@@ -325,7 +325,7 @@ class ThreePointsCurve {
                 this.viewer.scene.primitives.remove(linePrimitive);
 
                 // create new line primitive
-                const lineGeometryInstance = createGeometryInstance(curvePoints, "cruve_line");
+                const lineGeometryInstance = createLineGeometryInstance(curvePoints, "cruve_line");
                 lineGeometryInstance.id = generateId([start, middle, end], "curve_line");
                 const newLinePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
                 this.viewer.scene.primitives.add(newLinePrimitive);

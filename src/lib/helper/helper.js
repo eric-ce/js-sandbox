@@ -312,7 +312,7 @@ export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
 }
 
 // line primitive
-export function createGeometryInstance(
+export function createLineGeometryInstance(
     coordinateArray,
     mode
 ) {
@@ -356,7 +356,7 @@ export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, 
         releaseGeometryInstances: false
     });
 }
-
+// label primitive
 export function createLabelPrimitive(startPoint, endPoint, distance) {
     const midpoint = Cesium.Cartesian3.lerp(
         startPoint,
@@ -386,6 +386,89 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
         disableDepthTestDistance: Number.POSITIVE_INFINITY, // Make the label always visible
     }
 }
+// polygon primitive
+export function createPolygonGeometryInstance(coordinateArray, mode) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) {
+        return;
+    }
+
+    const convertedCoordinates = coordinateArray.map((item) =>
+        convertToCartesian3(item)
+    );
+
+    const polygonGeometry = new Cesium.PolygonGeometry({
+        polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
+        perPositionHeight: true,
+        vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT
+    });
+
+    const polygonGeometryInstance = new Cesium.GeometryInstance({
+        geometry: polygonGeometry,
+        id: `${generateId(convertedCoordinates, mode)}`,
+    });
+
+    return polygonGeometryInstance;
+}
+export function createPolygonPrimitive(polygonGeometryInstance, Primitive) {
+    return new Primitive({
+        geometryInstances: polygonGeometryInstance,
+        appearance: new Cesium.EllipsoidSurfaceAppearance({
+            material: Cesium.Material.fromType('Color', {
+                color: Cesium.Color.GREEN.withAlpha(0.8)
+            })
+        }),
+        depthFailAppearance: new Cesium.EllipsoidSurfaceAppearance({
+            material: Cesium.Material.fromType('Color', {
+                color: Cesium.Color.GREEN.withAlpha(0.8)
+            })
+        }),
+        asynchronous: false,
+        releaseGeometryInstances: false
+    });
+}
+
+export function createPolygonOutlineGeometryInstance(coordinateArray, mode) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) {
+        return;
+    }
+
+    const convertedCoordinates = coordinateArray.map((item) =>
+        convertToCartesian3(item)
+    );
+
+    const polygonOutlineGeometry = new Cesium.PolygonOutlineGeometry({
+        polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
+        perPositionHeight: true
+    });
+
+    const polygonOutlineGeometryInstance = new Cesium.GeometryInstance({
+        geometry: polygonOutlineGeometry,
+        id: `${generateId(coordinateArray, mode)}-outline`,
+        attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.YELLOW),
+            depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED) // Add depthFailColor attribute
+        }
+    });
+
+    return polygonOutlineGeometryInstance;
+}
+
+export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive) {
+    return new Primitive({
+        geometryInstances: outlineGeometryInstance,
+        appearance: new Cesium.PerInstanceColorAppearance({
+            flat: true,
+            translucent: false,
+        }),
+        depthFailAppearance: new Cesium.PerInstanceColorAppearance({
+            flat: true,
+            translucent: false,
+        }),
+        asynchronous: false,
+        releaseGeometryInstances: false
+    });
+}
+
 /**
  * calculate the distance between two points
  * @param {Cesium.Cartesian3} startPoint - the cartesian coordinates
