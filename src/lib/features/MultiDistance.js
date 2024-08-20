@@ -555,7 +555,6 @@ class MultiDistance {
             }
 
             // update log records
-            // TODO: update this._distanceRecords so the total distance is updated
             const distanceRecord = {
                 distances: this._distanceCollection,
                 totalDistance: this._distanceCollection.reduce((a, b) => a + b, 0)

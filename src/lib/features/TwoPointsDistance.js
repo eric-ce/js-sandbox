@@ -37,21 +37,23 @@ class TwoPointsDistance {
         this.isDragMode = false;
 
         // cesium primitives
+        // point primitives
         this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
         this.viewer.scene.primitives.add(this.pointCollection);
-
+        this.draggingPrimitive = null;
+        // line primitives
+        this.movingPolylinePrimitive = null;
+        // label primitives
         this.labelCollection = new this.cesiumPkg.LabelCollection();
         this.viewer.scene.primitives.add(this.labelCollection);
-
-        this.movingPolylinePrimitive = null;
-        this.movingLabelPrimitive = null;
-        this.draggingPrimitive = null;
-        this.beforeDragPosition = null;
+        this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, 0));
+        this.movingLabelPrimitive.show = false;
 
         // coordinates orientated data: use for identify points, lines, labels
         this.coordinateDataCache = [];
         // all the click coordinates 
         this.groupCoords = [];
+        this.beforeDragPosition = null;
     }
 
     /**
@@ -115,13 +117,6 @@ class TwoPointsDistance {
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "distance_point");
             this.pointCollection.add(point);
-
-            // initialize the moving label that is going to use in mouse move event, set it to not show.
-            const movingLabel = createLabelPrimitive(this.coordinateDataCache[0], this.coordinateDataCache[0], 0);
-            movingLabel.id = "annotation_distance_moving_label";
-            this.movingLabelPrimitive = this.labelCollection.add(movingLabel)
-            this.movingLabelPrimitive.show = false;
-
         } else if (this.coordinateDataCache.length % 2 !== 0) {
             // create the second point
             this.coordinateDataCache.push(this.coordinate);
