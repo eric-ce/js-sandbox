@@ -6,7 +6,6 @@ import { Height } from "./lib/features/Height.js";
 import { MultiDistance } from "./lib/features/MultiDistance.js";
 import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
-import { ProfileP } from "./lib/features/ProfileP.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { removeInputActions } from "./lib/helper/helper.js";
 import toolImg from "./assets/toolImg.svg";
@@ -131,12 +130,7 @@ export class MeasureToolbox extends HTMLElement {
                 icon: polygonImg
             },
             {
-                instance: new Profile(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile")),
-                name: "Profile",
-                icon: profileImg
-            },
-            {
-                instance: new ProfileP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile"), this.cesiumPkg),
+                instance: new Profile(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile"), this.cesiumPkg),
                 name: "Profile",
                 icon: profileImg
             },

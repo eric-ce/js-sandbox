@@ -312,11 +312,7 @@ export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
 }
 
 // line primitive
-export function createLineGeometryInstance(
-    coordinateArray,
-    mode,
-    isClamped = false
-) {
+export function createLineGeometryInstance(coordinateArray, mode) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
         return;
     }
@@ -325,101 +321,74 @@ export function createLineGeometryInstance(
         convertToCartesian3(item)
     );
 
-    let geometryInstance;
-    if (isClamped) {
-        const groundPolylineGeometry = new Cesium.GroundPolylineGeometry({
-            positions: convertedCoordinates,
-            width: 2
-        });
+    const polylineGeometry = new Cesium.PolylineGeometry({
+        positions: convertedCoordinates,
+        width: 2,
+        vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
+    });
 
-        geometryInstance = new Cesium.GeometryInstance({
-            geometry: groundPolylineGeometry,
-            id: `${generateId(convertedCoordinates, mode)}-clamped`,
-        });
-    } else {
-        const polylineGeometry = new Cesium.PolylineGeometry({
-            positions: convertedCoordinates,
-            width: 2,
-            vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
-        });
-
-        geometryInstance = new Cesium.GeometryInstance({
-            geometry: polylineGeometry,
-            id: `${generateId(convertedCoordinates, mode)}`,
-        });
-    }
+    const geometryInstance = new Cesium.GeometryInstance({
+        geometry: polylineGeometry,
+        id: `${generateId(convertedCoordinates, mode)}`,
+    });
 
     return geometryInstance
 }
 
-export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, Primitive, isClamped = false) {
-    if (isClamped) {
-        // For clamped polylines
-        return new Cesium.GroundPolylinePrimitive({
-            geometryInstances: geometryInstance,
-            appearance: new Cesium.PolylineMaterialAppearance({
-                material: new Cesium.Material.fromType('Color', {
-                    color: color
-                })
-            }),
-            asynchronous: false,
-            releaseGeometryInstances: false
-        });
-    } else {
-        // For regular polylines
-        return new Primitive({
-            geometryInstances: geometryInstance,
-            appearance: new Cesium.PolylineMaterialAppearance({
-                material: new Cesium.Material.fromType('Color', {
-                    color: color
-                })
-            }),
-            depthFailAppearance: new Cesium.PolylineMaterialAppearance({
-                material: new Cesium.Material.fromType('Color', {
-                    color: color
-                })
-            }),
-            asynchronous: false,
-            // false: make geometry instance available to lookup, true: release geometry instances to save memory
-            releaseGeometryInstances: false
-        });
-    }
+export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, Primitive) {
+    return new Primitive({
+        geometryInstances: geometryInstance,
+        appearance: new Cesium.PolylineMaterialAppearance({
+            material: new Cesium.Material.fromType('Color', {
+                color: color
+            })
+        }),
+        depthFailAppearance: new Cesium.PolylineMaterialAppearance({
+            material: new Cesium.Material.fromType('Color', {
+                color: color
+            })
+        }),
+        asynchronous: false,
+        // false: make geometry instance available to lookup, true: release geometry instances to save memory
+        releaseGeometryInstances: false
+    });
 }
 
-// export function createClampedLineGeometryInstance(coordinateArray, mode) {
-//     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
-//         return;
-//     }
+export function createClampedLineGeometryInstance(coordinateArray, mode) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
+        return;
+    }
 
-//     const convertedCoordinates = coordinateArray.map((item) =>
-//         convertToCartesian3(item)
-//     );
+    const convertedCoordinates = coordinateArray.map((item) =>
+        convertToCartesian3(item)
+    );
 
-//     const groundPolylineGeometry = new Cesium.GroundPolylineGeometry({
-//         positions: convertedCoordinates,
-//         width: 2
-//     });
+    const groundPolylineGeometry = new Cesium.GroundPolylineGeometry({
+        positions: convertedCoordinates,
+        width: 2
+    });
 
-//     const groundPolylineGeometryInstance = new Cesium.GeometryInstance({
-//         geometry: groundPolylineGeometry,
-//         id: `${generateId(convertedCoordinates, mode)}-clamped`,
-//     });
+    const groundPolylineGeometryInstance = new Cesium.GeometryInstance({
+        geometry: groundPolylineGeometry,
+        id: `${generateId(convertedCoordinates, mode)}-clamped`,
+    });
 
-//     return groundPolylineGeometryInstance;
-// }
+    return groundPolylineGeometryInstance;
+}
 
-// export function createClampedLinePrimitive(geometryInstance, color = Cesium.Color.RED) {
-//     return new Cesium.GroundPolylinePrimitive({
-//         geometryInstances: geometryInstance,
-//         appearance: new Cesium.PolylineMaterialAppearance({
-//             material: new Cesium.Material.fromType('Color', {
-//                 color: color
-//             })
-//         }),
-//         asynchronous: false,
-//         releaseGeometryInstances: false
-//     });
-// }
+export function createClampedLinePrimitive(geometryInstance, color = Cesium.Color.RED, GroundPolylinePrimitive) {
+    return new GroundPolylinePrimitive({
+        geometryInstances: geometryInstance,
+        appearance: new Cesium.PolylineMaterialAppearance({
+            material: new Cesium.Material.fromType('Color', {
+                color: color
+            })
+        }),
+        asynchronous: true,
+        releaseGeometryInstances: false
+    });
+}
+
 // label primitive
 export function createLabelPrimitive(startPoint, endPoint, distance) {
     const midpoint = Cesium.Cartesian3.lerp(

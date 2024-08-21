@@ -2,7 +2,7 @@ import * as Cesium from "cesium";
 import 'mainStyle';
 import "cesiumStyle";
 import { MeasureToolbox } from "./MeasureToolbox.js";
-import { PointPrimitiveCollection, Primitive, LabelCollection } from "cesium";
+import { PointPrimitiveCollection, Primitive, LabelCollection, GroundPolylinePrimitive } from "cesium";
 class CesiumMap {
     constructor() {
         this.cesiumDivSetup();
@@ -69,7 +69,8 @@ class CesiumMap {
         measureToolBox.cesiumPkg = {
             PointPrimitiveCollection,
             Primitive,
-            LabelCollection
+            LabelCollection,
+            GroundPolylinePrimitive
         }
         this.div.appendChild(measureToolBox);
     }
