@@ -124,7 +124,7 @@ class ProfileP {
 
             // create line and label
             if (this.coordinateDataCache.length === 2) {
-                const pickedCartesianArray = await this.computeDetailedPickPositions(this.coordinateDataCache[0], this.coordinateDataCache[1]);
+                const pickedCartesianArray = await this.computeDetailedPickPositions2(this.coordinateDataCache[0], this.coordinateDataCache[1]);
 
                 // line chart x-axis label
                 // always start from 0 meters

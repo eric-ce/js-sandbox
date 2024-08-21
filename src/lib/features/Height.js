@@ -143,7 +143,7 @@ class Height {
 
             // log the height result
             //     this._heightRecords.push(distance);
-            this.logRecordsCallback(distance);
+            this.logRecordsCallback(distance.toFixed(2));
         }
     }
 
@@ -433,7 +433,7 @@ class Height {
                 }
 
                 // log the height result
-                this.logRecordsCallback(distance);
+                this.logRecordsCallback(distance.toFixed(2));
             }
         }
 

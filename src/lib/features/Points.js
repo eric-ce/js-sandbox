@@ -80,7 +80,11 @@ class Points {
             if (primtiveToRemove) {
                 const position = Cesium.Cartesian3.clone(primtiveToRemove.position);
                 this.pointPrimitives.remove(primtiveToRemove);
-                this.logRecordsCallback({ "remove": cartesian3ToCartographicDegrees(position) });
+
+                // log the points records
+                const cartographicDegrees = cartesian3ToCartographicDegrees(position);
+                const formattedCartographicDegrees = this.formatCartographicDegrees(cartographicDegrees)
+                this.logRecordsCallback({ "remove": formattedCartographicDegrees });
             }
         } else {
             // if no point entity is picked, create a new point entity
@@ -94,7 +98,9 @@ class Points {
                 this.pointPrimitives.add(point);
 
                 // log the points records
-                this.logRecordsCallback({ "add": cartesian3ToCartographicDegrees(cartesian) });
+                const cartographicDegrees = cartesian3ToCartographicDegrees(cartesian);
+                const formattedCartographicDegrees = this.formatCartographicDegrees(cartographicDegrees)
+                this.logRecordsCallback({ "add": formattedCartographicDegrees });
             }
         }
     }
@@ -173,7 +179,9 @@ class Points {
             this.draggingPrimitive.show = true;
 
             // log the points records
-            this.logRecordsCallback({ "update": cartesian3ToCartographicDegrees(this.coordinate) });
+            const cartographicDegrees = cartesian3ToCartographicDegrees(this.coordinate);
+            const formattedCartographicDegrees = this.formatCartographicDegrees(cartographicDegrees)
+            this.logRecordsCallback({ "update": formattedCartographicDegrees });
 
             this.isDragMode = false;
         }
@@ -208,6 +216,14 @@ class Points {
         this.coordinateInfoOverlay.style.borderRadius = '4px';
         this.coordinateInfoOverlay.style.padding = '8px';
         this.coordinateInfoOverlay.style.fontFamily = 'Roboto, sans-serif';
+    }
+
+    formatCartographicDegrees(cartographicDegrees) {
+        const { longitude, latitude } = cartographicDegrees;
+        if (!longitude || !latitude) return;
+        return {
+            "lat, lon": `${latitude.toFixed(6)},${longitude.toFixed(6)} `,
+        }
     }
 
     // /**

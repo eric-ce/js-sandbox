@@ -155,7 +155,7 @@ class ThreePointsCurve {
 
             // log the curve record
             this._curveRecords.push(totalDistance);
-            this.logRecordsCallback(totalDistance);
+            this.logRecordsCallback(totalDistance.toFixed(2));
 
             // set flag that the measurement has ended
             this.isCurveStarted = false;
@@ -365,7 +365,7 @@ class ThreePointsCurve {
                 });
 
                 // log the curve
-                this.logRecordsCallback(totalDistance);
+                this.logRecordsCallback(totalDistance.toFixed(2));
             } else {
                 console.error("No label primitives found");
                 return;

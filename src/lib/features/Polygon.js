@@ -252,7 +252,7 @@ class Polygon {
 
             // log area records
             // this._areaRecords.push(polygonArea);
-            this.logRecordsCallback(polygonArea);
+            this.logRecordsCallback(polygonArea.toFixed(2));
 
             //set flag to the end drawing of polygon
             this.isPolygonEnd = true;
@@ -427,7 +427,7 @@ class Polygon {
 
                 // log area records
                 // this._areaRecords.push(polygonArea);
-                this.logRecordsCallback(polygonArea);
+                this.logRecordsCallback(polygonArea.toFixed(2));
             }
 
             // reset dragging primitive and flags

@@ -147,7 +147,7 @@ class TwoPointsDistance {
 
 
                 // log distance
-                this.logRecordsCallback(distance);
+                this.logRecordsCallback(distance.toFixed(2));
 
                 // records cache to track all coords, use shallow copy the cache
                 this.groupCoords.push([...this.coordinateDataCache]);
@@ -341,7 +341,7 @@ class TwoPointsDistance {
                 targetLabelPrimitive.id = generateId(newMidPoint, "distance_label");
 
                 // log distance
-                this.logRecordsCallback(distance);
+                this.logRecordsCallback(distance.toFixed(2));
             } else {
                 console.error("No line primitives found");
                 return;

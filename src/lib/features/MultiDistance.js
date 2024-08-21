@@ -293,8 +293,8 @@ class MultiDistance {
             const distances = []
             distances.push(...this._distanceCollection);
             const distanceRecord = {
-                distances: distances,
-                totalDistance: totalDistance
+                distances: distances.map(d => d.toFixed(2)),
+                totalDistance: totalDistance.toFixed(2)
             };
             this._distanceRecords.push(distanceRecord);
             this.logRecordsCallback(distanceRecord);
@@ -555,9 +555,11 @@ class MultiDistance {
             }
 
             // update log records
+            console.log("🚀  this._distanceCollection:", this._distanceCollection);
             const distanceRecord = {
-                distances: this._distanceCollection,
-                totalDistance: this._distanceCollection.reduce((a, b) => a + b, 0)
+                distances: this._distanceCollection.map(d => d.toFixed(2)),
+
+                totalDistance: this._distanceCollection.reduce((a, b) => a + b, 0).toFixed(2)
             };
 
             this._distanceRecords.push(distanceRecord);

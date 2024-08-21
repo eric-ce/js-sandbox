@@ -476,16 +476,17 @@ export class MeasureToolbox extends HTMLElement {
         table.innerHTML = ""; // Clear the table
 
         const fragment = document.createDocumentFragment();
-        fragment.appendChild(this.createRow("Records"));
+        fragment.appendChild(this.createRow("Actions"));
 
         this._records.forEach(record => {
             const key = Object.keys(record)[0];
             const recordData = record[key];
 
             if (key === "points") {
+                // recordData = {points: {add: {key: value}}}, and callback pass {add: {key: value}}
                 const action = Object.keys(recordData)[0];
-                const { latitude, longitude, height } = recordData[action];
-                fragment.appendChild(this.createRow(`${key}: ${action}: lat: ${latitude}, long: ${longitude}, height: ${height}`));
+                const [coordinateKey, coordinateValue] = Object.entries(recordData[action])[0];
+                fragment.appendChild(this.createRow(`${key}: ${action}: (${coordinateKey}): ${coordinateValue}`));
             } else if (key === "m-distance") {
                 const { distances, totalDistance } = recordData;
                 fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));

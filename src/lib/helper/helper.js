@@ -576,6 +576,7 @@ export function cartesian3ToCartographicDegrees(cartesian) {
     const longitude = Cesium.Math.toDegrees(cartographic.longitude);
     const latitude = Cesium.Math.toDegrees(cartographic.latitude);
     const height = cartographic.height;
+
     return { longitude, latitude, height };
 }
 
