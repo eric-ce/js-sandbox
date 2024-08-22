@@ -18,6 +18,7 @@ import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
 import profileDistancesImg from "./assets/profileDistancesImg.svg";
 import clearImg from "./assets/clearImg.svg"
+import { ProfileDistancesP } from "./lib/features/profileDistancesP.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -136,6 +137,11 @@ export class MeasureToolbox extends HTMLElement {
             },
             {
                 instance: new ProfileDistances(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances")),
+                name: "Profile-Distances",
+                icon: profileDistancesImg
+            },
+            {
+                instance: new ProfileDistancesP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
                 name: "Profile-Distances",
                 icon: profileDistancesImg
             },
@@ -481,7 +487,7 @@ export class MeasureToolbox extends HTMLElement {
                 const action = Object.keys(recordData)[0];
                 const [coordinateKey, coordinateValue] = Object.entries(recordData[action])[0];
                 fragment.appendChild(this.createRow(`${key}: ${action}: (${coordinateKey}): ${coordinateValue}`));
-            } else if (key === "m-distance") {
+            } else if (key === "m-distance" || key === "profile-distances") {
                 const { distances, totalDistance } = recordData;
                 fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
                 fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));

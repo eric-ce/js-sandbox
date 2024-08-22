@@ -1,24 +1,22 @@
 import * as Cesium from "cesium";
 import {
+    createPointEntity,
+    createLineEntity,
     calculateDistance,
+    createDistanceLabel,
     formatDistance,
     removeInputActions,
     editableLabel,
     updatePointerOverlay,
-    createLineGeometryInstance,
-    createLinePrimitive,
     createLabelPrimitive,
     createPointPrimitive,
+    createClampedLineGeometryInstance,
+    createClampedLinePrimitive,
     generateId
 } from "../helper/helper.js";
+import Chart from "chart.js/auto";
 
-class MultiDistance {
-    /**
-     * Creates a new MultiDistance instance.
-     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
-     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
-     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
-     */
+class ProfileDistancesP {
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
@@ -31,9 +29,8 @@ class MultiDistance {
         this.coordinate = new Cesium.Cartesian3();
 
         // flags
-        this.isMultiDistanceEnd = false;
+        this.isProfileDistancesEnd = false;
         this.isDragMode = false;
-
 
         // Cesium Primitives
         // point primitive
@@ -69,6 +66,9 @@ class MultiDistance {
         this.coordinateDataCache = [];
         // all the click coordinates 
         this.groupCoords = [];
+        // all picked position
+        this.pickedCartesianArrayCache = [];
+        this.allPickedCartesianArray = [];
         // distance
         this._distanceCollection = [];
         this._distanceRecords = [];
@@ -76,6 +76,10 @@ class MultiDistance {
         // label text
         this._labelIndex = 0;
         this._labelNumberIndex = 0;
+
+        // chart
+        this.chart = null;
+        this.chartDiv = null;
     }
 
     /**
@@ -85,23 +89,23 @@ class MultiDistance {
         removeInputActions(this.handler);
 
         this.handler.setInputAction((movement) => {
-            this.handleMultiDistanceLeftClick(movement);
+            this.handleProfileDistancesLeftClick(movement);
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
         this.handler.setInputAction((movement) => {
-            this.handleMultiDistanceMouseMove(movement);
+            this.handleProfileDistancesMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
         this.handler.setInputAction((movement) => {
-            this.handleMultiDistanceRightClick(movement);
+            this.handleProfileDistancesRightClick(movement);
         }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
 
         this.handler.setInputAction((movement) => {
-            this.handleMultiDistanceDragStart(movement)
+            this.handleProfileDistancesDragStart(movement)
         }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
 
         this.handler.setInputAction((movement) => {
-            this.handleMultiDistanceDragEnd(movement)
+            this.handleProfileDistancesDragEnd(movement)
         }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
@@ -112,14 +116,15 @@ class MultiDistance {
         removeInputActions(this.handler);
     }
 
-    handleMultiDistanceLeftClick(movement) {
+    async handleProfileDistancesLeftClick(movement) {
         // use move position for the position
         const cartesian = this.coordinate
 
         if (!Cesium.defined(cartesian)) return;
 
-        // editable label features
-        if (this.isMultiDistanceEnd) {
+        // Check if the measurement has started
+        // if pick the label entity, make the label entity editable
+        if (this.isProfileDistancesEnd) {
             const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
             // If picked object is a label primitive, make it editable
@@ -134,13 +139,11 @@ class MultiDistance {
 
             this._distanceCollection.length = 0;
 
-            this.isMultiDistanceEnd = false;
-
-            this._labelIndex = 0;
+            this.isProfileDistancesEnd = false;
 
             // continue point 
             const continuePoint = createPointPrimitive(cartesian, Cesium.Color.RED);
-            continuePoint.id = generateId(cartesian, "multidistance_point");
+            continuePoint.id = generateId(cartesian, "profile_distances_point");
             this.pointCollection.add(continuePoint);
 
             // update coordinate data cache
@@ -148,9 +151,9 @@ class MultiDistance {
             return;
         }
 
-        // create point primitive
+        // create point entity
         const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-        point.id = generateId(this.coordinate, "multidistance_point");
+        point.id = generateId(this.coordinate, "profile_distances_point");
         this.pointCollection.add(point);
 
         // update coordinate data cache
@@ -162,34 +165,76 @@ class MultiDistance {
             const prevPointCartesian = this.coordinateDataCache[prevIndex];
             const currPointCartesian = this.coordinateDataCache[currIndex];
 
-            // create line primitive
-            if (this.movingPolylinePrimitive) {
-                this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
-            }
-            const lineGeometryInstance = createLineGeometryInstance([prevPointCartesian, currPointCartesian], "multidistance_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
-            this.viewer.scene.primitives.add(linePrimitive);
+            // get the repicked positions by windows positions from its ground positions
+            const pickedCartesianArray = await this._computeDetailedPickPositions(prevPointCartesian, currPointCartesian);
+            // update all picked positions
+            this.pickedCartesianArrayCache.push(...pickedCartesianArray);
+            console.log(this.pickedCartesianArrayCache);
 
-            // create label entities
-            if (this.movingLabelPrimitive) {
-                this.movingLabelPrimitive.show = false;
+            // distance for clamped positions between two points
+            let distance = null;
+            for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
+                const fragmentDistance = Cesium.Cartesian3.distance(
+                    pickedCartesianArray[i],
+                    pickedCartesianArray[i + 1]
+                );
+                distance += fragmentDistance;
             }
-            const distance = calculateDistance(prevPointCartesian, currPointCartesian);
+
+            // update distance collection
+            this._distanceCollection.push(distance);
+
+            // create label primitive
+            // set moving label primitive to not show
+            if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = false;
+
             const midPoint = Cesium.Cartesian3.midpoint(prevPointCartesian, currPointCartesian, new Cesium.Cartesian3());
             const label = createLabelPrimitive(prevPointCartesian, currPointCartesian, distance);
-            label.id = generateId(midPoint, "multidistance_label");
+            label.id = generateId(midPoint, "profile_distances_label");
             // label text
             const currentLetter = String.fromCharCode(97 + this._labelIndex % 26); // 97 is ASCII code for 'a'
             label.text = `${currentLetter}${this._labelNumberIndex}: ${formatDistance(distance)}`;
             this._labelIndex++;
             this.labelCollection.add(label);
 
-            // update distance collection
-            this._distanceCollection.push(distance);
+            // create line primitive
+            if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+
+            const lineGeometryInstance = createClampedLineGeometryInstance([prevPointCartesian, currPointCartesian], "profile_distances_line");
+            const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
+            this.viewer.scene.primitives.add(linePrimitive);
+
+            // profile terrain for distances
+            // show the chart, if no chart then create the chart set it to show
+            if (this.chartDiv) {
+                this.chartDiv.style.display = "block";
+            } else {
+                this.setupChart();
+                this.chartDiv.style.display = "block";
+            }
+
+            // line chart x-axis label
+            const labelDistance = [0];
+            for (let i = 0; i < this.pickedCartesianArrayCache.length - 1; i++) {
+                const fragmentDistance = Cesium.Cartesian3.distance(
+                    this.pickedCartesianArrayCache[i],
+                    this.pickedCartesianArrayCache[i + 1]
+                );
+                // line chart x-axis label
+                labelDistance.push(labelDistance[i] + Math.round(fragmentDistance));
+            }
+            // line chart y-axis data
+            const diffHeight = this.pickedCartesianArrayCache.map((pickedCartesian) => {
+                const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedCartesian);
+                return pickedCartographic.height
+            })
+
+            // update the chart
+            this.chart && this.updateChart(diffHeight, labelDistance);
         }
     }
 
-    handleMultiDistanceMouseMove(movement) {
+    async handleProfileDistancesMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
@@ -200,7 +245,7 @@ class MultiDistance {
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
         pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
-        if (this.isMultiDistanceEnd) return;
+        if (this.isProfileDistancesEnd) return;
 
         if (this.coordinateDataCache.length > 0) {
             // Calculate the distance between the last selected point and the current cartesian position
@@ -210,26 +255,34 @@ class MultiDistance {
             if (this.movingPolylinePrimitive) {
                 this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
             }
-            const movingLineGeometryInstance = createLineGeometryInstance([lastPointCartesian, this.coordinate], "multidistance_moving_line");
-            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            const movingLineGeometryInstance = createClampedLineGeometryInstance([lastPointCartesian, this.coordinate], "profile_distances_moving_line");
+            const movingLinePrimitive = createClampedLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
 
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // create label primitive
-            const distance = calculateDistance(lastPointCartesian, this.coordinate);
+            const pickedCartesianArray = await this._computeDetailedPickPositions(lastPointCartesian, this.coordinate);
+            let distance = null;
+            for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
+                const fragmentDistance = Cesium.Cartesian3.distance(
+                    pickedCartesianArray[i],
+                    pickedCartesianArray[i + 1]
+                );
+                distance += fragmentDistance;
+            };
+            // const distance = calculateDistance(lastPointCartesian, this.coordinate);
             const midPoint = Cesium.Cartesian3.midpoint(lastPointCartesian, this.coordinate, new Cesium.Cartesian3());
             const totalDistance = this._distanceCollection.reduce((a, b) => a + b, 0) + distance;
             this.movingLabelPrimitive.show = true;
             this.movingLabelPrimitive.position = midPoint;
             this.movingLabelPrimitive.text = `Total: ${formatDistance(totalDistance)}`;
-            this.movingLabelPrimitive.id = generateId(midPoint, "multidistance_moving_label");
+            this.movingLabelPrimitive.id = generateId(midPoint, "profile_distances_moving_label");
             this.movingLabelPrimitive.pixelOffset = new Cesium.Cartesian2(80, 10);
         }
     }
 
-    handleMultiDistanceRightClick(movement) {
-        // place last point and place last line
-        if (!this.isMultiDistanceEnd) {
+    async handleProfileDistancesRightClick(movement) {
+        if (!this.isProfileDistancesEnd) {
             // use mouse move position to control only one pickPosition is used
             const cartesian = this.coordinate;
 
@@ -241,7 +294,7 @@ class MultiDistance {
 
             // create last point
             const lastPoint = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            lastPoint.id = generateId(this.coordinate, "multidistance_point");
+            lastPoint.id = generateId(this.coordinate, "profile_distances_point");
             this.pointCollection.add(lastPoint);
 
             // create last line
@@ -251,8 +304,8 @@ class MultiDistance {
             }
             // first point for last line
             const firstPoint = this.coordinateDataCache[this.coordinateDataCache.length - 2];
-            const lineGeometryInstance = createLineGeometryInstance([firstPoint, this.coordinate], "multidistance_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+            const lineGeometryInstance = createClampedLineGeometryInstance([firstPoint, this.coordinate], "profile_distances_line");
+            const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
 
             this.viewer.scene.primitives.add(linePrimitive);
 
@@ -260,10 +313,20 @@ class MultiDistance {
             if (this.movingLabelPrimitive) {
                 this.movingLabelPrimitive.show = false;
             }
-            const distance = calculateDistance(firstPoint, this.coordinate);
+            const pickedCartesianArray = await this._computeDetailedPickPositions(firstPoint, this.coordinate);
+            this.pickedCartesianArrayCache.push(...pickedCartesianArray);
+            this.allPickedCartesianArray.push([...pickedCartesianArray]);
+            let distance = null;
+            for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
+                const fragmentDistance = Cesium.Cartesian3.distance(
+                    pickedCartesianArray[i],
+                    pickedCartesianArray[i + 1]
+                );
+                distance += fragmentDistance;
+            };
             const midPoint = Cesium.Cartesian3.midpoint(firstPoint, this.coordinate, new Cesium.Cartesian3());
             const label = createLabelPrimitive(firstPoint, this.coordinate, distance)
-            label.id = generateId(midPoint, "multidistance_label");
+            label.id = generateId(midPoint, "profile_distances_label");
             // label text
             const currentLetter = String.fromCharCode(97 + this._labelIndex % 26); // 97 is ASCII code for 'a'
             label.text = `${currentLetter}${this._labelNumberIndex}: ${formatDistance(distance)}`
@@ -277,27 +340,52 @@ class MultiDistance {
             // total distance label
             const totalDistance = this._distanceCollection.reduce((a, b) => a + b, 0);
             const totalLabel = createLabelPrimitive(this.coordinate, this.coordinate, totalDistance);
-            totalLabel.id = generateId(this.coordinate, "multidistance_total_label");
+            totalLabel.id = generateId(this.coordinate, "profile_distances_total_label");
             totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
             totalLabel.pixelOffset = new Cesium.Cartesian2(80, 10);
             this.labelCollection.add(totalLabel);
 
             // log distance result
             const distances = []
+
             distances.push(...this._distanceCollection);
             const distanceRecord = {
                 distances: distances.map(d => d.toFixed(2)),
                 totalDistance: totalDistance.toFixed(2)
             };
+            console.log("🚀  distances:", distances);
             this._distanceRecords.push(distanceRecord);
             this.logRecordsCallback(distanceRecord);
+
+            // line chart x-axis label
+            const labelDistance = [0];
+
+            for (let i = 0; i < this.pickedCartesianArrayCache.length - 1; i++) {
+                const fragmentDistance = Cesium.Cartesian3.distance(
+                    this.pickedCartesianArrayCache[i],
+                    this.pickedCartesianArrayCache[i + 1]
+                );
+                // line chart x-axis label
+                labelDistance.push(labelDistance[i] + Math.round(fragmentDistance));
+            }
+
+            // line chart y-axis data
+            const diffHeight = this.pickedCartesianArrayCache.map((pickedCartesian) => {
+                const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedCartesian);
+                return pickedCartographic.height
+            })
+
+            // update the chart
+            this.chart && this.updateChart(diffHeight, labelDistance);
         }
 
-        this.isMultiDistanceEnd = true;
+
+        this.isProfileDistancesEnd = true;
         this.coordinateDataCache.length = 0;
+        this.pickedCartesianArrayCache.length = 0;
     }
 
-    handleMultiDistanceDragStart(movement) {
+    handleProfileDistancesDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
         if (this.groupCoords.length > 0) {
@@ -307,7 +395,7 @@ class MultiDistance {
                 if (typeof p.primitive?.id !== 'string') {
                     return false;
                 }
-                return p.primitive.id.startsWith("annotate_multidistance_point") &&
+                return p.primitive.id.startsWith("annotate_profile_distances_point") &&
                     !p.primitive.id.includes("moving");
             });
 
@@ -321,13 +409,14 @@ class MultiDistance {
             this.isDragMode = true;
 
             this.draggingPrimitive = pointPrimitive.primitive;
+
             this.beforeDragPosition = pointPrimitive.primitive.position.clone();
 
             // remove relative line primitives
             const linePrimitives = this.viewer.scene.primitives._primitives.filter(p =>
                 p.geometryInstances &&
                 p.geometryInstances.id &&
-                p.geometryInstances.id.startsWith("annotate_multidistance_line")
+                p.geometryInstances.id.startsWith("annotate_profile_distances_line")
             );
 
             // error handling: if no annotation line primitives found in the scene then early exit
@@ -346,6 +435,10 @@ class MultiDistance {
 
             // set relative label primitives to no show by dragging point
             const groupIndex = this.groupCoords.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+            if (groupIndex === -1) {
+                console.error("No group coordinates found");
+                return;
+            }
             const group = this.groupCoords[groupIndex];
 
             const neighbourPositions = this.findNeighbourPosition(this.beforeDragPosition, group);
@@ -367,7 +460,7 @@ class MultiDistance {
                 if (
                     label.position &&
                     relativeMidPoint.some(cart => Cesium.Cartesian3.equals(cart, label.position)) &&
-                    label.id && label.id.startsWith("annotate_multidistance_label")
+                    label.id && label.id.startsWith("annotate_profile_distances_label")
                 ) {
                     label.show = false;
                 }
@@ -375,12 +468,12 @@ class MultiDistance {
 
             // Set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handleMultiDistanceDrag(movement, this.draggingPrimitive);
+                this.handleProfileDistancesDrag(movement, this.draggingPrimitive);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         };
     }
 
-    handleMultiDistanceDrag(movement, pointEntity) {
+    async handleProfileDistancesDrag(movement, pointEntity) {
         this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
@@ -393,7 +486,12 @@ class MultiDistance {
 
         // create moving line primitives
         const groupIndex = this.groupCoords.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+        if (groupIndex === -1) {
+            console.error("No group coordinates found");
+            return;
+        }
         const group = this.groupCoords[groupIndex];
+
         const neighbourPositions = this.findNeighbourPosition(this.beforeDragPosition, group);
 
         // error handling: if no neighbour positions found then early exit
@@ -411,44 +509,65 @@ class MultiDistance {
 
         if (neighbourPositions.length === 2) { // [prevPosition, current] || [current, nextPosition]
             const otherPosition = neighbourPositions.find(cart => !Cesium.Cartesian3.equals(cart, this.beforeDragPosition));
-            const lineGeometryInstance = createLineGeometryInstance([otherPosition, cartesian], "multidistance_moving_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            const lineGeometryInstance = createClampedLineGeometryInstance([otherPosition, cartesian], "profile_distances_moving_line");
+            const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(linePrimitive);
-
-            const distance = calculateDistance(otherPosition, cartesian);
+            const pickedCartesianArrayCache = await this._computeDetailedPickPositions(otherPosition, cartesian);
+            let distance = null;
+            pickedCartesianArrayCache.forEach((_, i) => {
+                if (i < pickedCartesianArrayCache.length - 1) {
+                    const fragmentDistance = Cesium.Cartesian3.distance(
+                        pickedCartesianArrayCache[i],
+                        pickedCartesianArrayCache[i + 1]
+                    );
+                    distance += fragmentDistance;
+                }
+            });
             const midPoint = Cesium.Cartesian3.midpoint(otherPosition, cartesian, new Cesium.Cartesian3());
             this.movingLabelPrimitive1.position = midPoint;
             this.movingLabelPrimitive1.text = `${formatDistance(distance)}`;
-            this.movingLabelPrimitive1.id = generateId(midPoint, "multidistance_moving_label");
+            this.movingLabelPrimitive1.id = generateId(midPoint, "profile_distances_moving_label");
             this.movingLabelPrimitive1.show = true;
         }
         if (neighbourPositions.length === 3) { // [prevPosition, current, nextPosition]
             const otherPositions = neighbourPositions.filter(cart => !Cesium.Cartesian3.equals(cart, this.beforeDragPosition));
-            otherPositions.forEach((pos, index) => {
-                const lineGeometryInstance = createLineGeometryInstance([pos, cartesian], "multidistance_moving_line");
-                const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+
+            otherPositions.map(async (pos, index) => {
+                const lineGeometryInstance = createClampedLineGeometryInstance([pos, cartesian], "profile_distances_moving_line");
+                const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
                 if (index === 0) this.movingPolylinePrimitive = this.viewer.scene.primitives.add(linePrimitive);
                 if (index === 1) this.movingPolylinePrimitive2 = this.viewer.scene.primitives.add(linePrimitive);
 
-                const distance = calculateDistance(pos, cartesian);
+                // const distance = calculateDistance(pos, cartesian);
+                const pickedCartesianArrayCache = await this._computeDetailedPickPositions(pos, cartesian);
+                let distance = null;
+                pickedCartesianArrayCache.forEach((_, i) => {
+                    if (i < pickedCartesianArrayCache.length - 1) {
+                        const fragmentDistance = Cesium.Cartesian3.distance(
+                            pickedCartesianArrayCache[i],
+                            pickedCartesianArrayCache[i + 1]
+                        );
+                        distance += fragmentDistance;
+                    }
+                });
                 const midPoint = Cesium.Cartesian3.midpoint(pos, cartesian, new Cesium.Cartesian3());
                 if (index === 0) {
                     this.movingLabelPrimitive1.position = midPoint;
                     this.movingLabelPrimitive1.text = `${formatDistance(distance)}`;
-                    this.movingLabelPrimitive1.id = generateId(midPoint, "multidistance_moving_label");
+                    this.movingLabelPrimitive1.id = generateId(midPoint, "profile_distances_moving_label");
                     this.movingLabelPrimitive1.show = true;
                 }
                 if (index === 1) {
                     this.movingLabelPrimitive2.position = midPoint;
                     this.movingLabelPrimitive2.text = `${formatDistance(distance)}`;
-                    this.movingLabelPrimitive2.id = generateId(midPoint, "multidistance_moving_label");
+                    this.movingLabelPrimitive2.id = generateId(midPoint, "profile_distances_moving_label");
                     this.movingLabelPrimitive2.show = true;
                 }
             })
         }
     }
 
-    handleMultiDistanceDragEnd(movement) {
+    async handleProfileDistancesDragEnd(movement) {
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         if (this.draggingPrimitive && this.isDragMode) {
@@ -478,46 +597,67 @@ class MultiDistance {
                 if (primitive) primitive.show = false;
             });
 
-            const labelPrimitives = this.labelCollection._labels.filter(label => label.id && label.id.startsWith("annotate_multidistance_label"));
+            const labelPrimitives = this.labelCollection._labels.filter(label => label.id && label.id.startsWith("annotate_profile_distances_label"));
 
             // Create new moving line primitives
             if (neighbourPositions.length === 2) { // [prevPosition, current] || [current, nextPosition]
                 const otherPosition = neighbourPositions.find(cart => !Cesium.Cartesian3.equals(cart, this.beforeDragPosition));
                 // create line primitive
-                const lineGeometryInstance = createLineGeometryInstance([this.coordinate, otherPosition], "multidistance_line");
-                const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+                const lineGeometryInstance = createClampedLineGeometryInstance([this.coordinate, otherPosition], "profile_distances_line");
+                const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
                 this.viewer.scene.primitives.add(linePrimitive);
 
                 // create label primitive
-                const distance1 = calculateDistance(otherPosition, this.coordinate);
+                const pickedCartesianArray = await this._computeDetailedPickPositions(otherPosition, this.coordinate);
+                let distance = null;
+                pickedCartesianArray.forEach((_, i) => {
+                    if (i < pickedCartesianArray.length - 1) {
+                        const fragmentDistance = Cesium.Cartesian3.distance(
+                            pickedCartesianArray[i],
+                            pickedCartesianArray[i + 1]
+                        );
+                        distance += fragmentDistance;
+                    }
+                });
+                // const distance1 = calculateDistance(otherPosition, this.coordinate);
                 const oldMidPoint = Cesium.Cartesian3.midpoint(otherPosition, this.beforeDragPosition, new Cesium.Cartesian3());
                 const newMidPoint = Cesium.Cartesian3.midpoint(otherPosition, this.coordinate, new Cesium.Cartesian3());
                 const labelPrimitive = labelPrimitives.find(label => Cesium.Cartesian3.equals(label.position, oldMidPoint));
                 if (labelPrimitive) {
                     const oldLabelText = labelPrimitive.text.split(":")[0].trim();
-                    labelPrimitive.text = oldLabelText + ": " + formatDistance(distance1);
-                    labelPrimitive.id = generateId(newMidPoint, "multidistance_label");
+                    labelPrimitive.text = oldLabelText + ": " + formatDistance(distance);
+                    labelPrimitive.id = generateId(newMidPoint, "profile_distances_label");
                     labelPrimitive.position = newMidPoint;
                     labelPrimitive.show = true;
                 }
             }
             if (neighbourPositions.length === 3) { // [prevPosition, current, nextPosition]
                 const otherPositions = neighbourPositions.filter(cart => !Cesium.Cartesian3.equals(cart, this.beforeDragPosition));
-                otherPositions.forEach((pos) => {
+                otherPositions.forEach(async (pos) => {
                     // create line primitive
-                    const lineGeometryInstance = createLineGeometryInstance([pos, this.coordinate], "multidistance_line");
-                    const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+                    const lineGeometryInstance = createClampedLineGeometryInstance([pos, this.coordinate], "profile_distances_line");
+                    const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
                     this.viewer.scene.primitives.add(linePrimitive);
 
                     // create label primitive
-                    const distance = calculateDistance(pos, this.coordinate);
+                    const pickedCartesianArray = await this._computeDetailedPickPositions(pos, this.coordinate);
+                    let distance = null;
+                    pickedCartesianArray.forEach((_, i) => {
+                        if (i < pickedCartesianArray.length - 1) {
+                            const fragmentDistance = Cesium.Cartesian3.distance(
+                                pickedCartesianArray[i],
+                                pickedCartesianArray[i + 1]
+                            );
+                            distance += fragmentDistance;
+                        }
+                    });
                     const oldMidPoint = Cesium.Cartesian3.midpoint(pos, this.beforeDragPosition, new Cesium.Cartesian3());
                     const newMidPoint = Cesium.Cartesian3.midpoint(pos, this.coordinate, new Cesium.Cartesian3());
                     const labelPrimitive = labelPrimitives.find(label => Cesium.Cartesian3.equals(label.position, oldMidPoint));
                     if (labelPrimitive) {
                         const oldLabelText = labelPrimitive.text.split(":")[0].trim();
                         labelPrimitive.text = oldLabelText + ": " + formatDistance(distance);
-                        labelPrimitive.id = generateId(newMidPoint, "multidistance_label");
+                        labelPrimitive.id = generateId(newMidPoint, "profile_distances_label");
                         labelPrimitive.position = newMidPoint;
                         labelPrimitive.show = true;
                     }
@@ -525,7 +665,7 @@ class MultiDistance {
             }
 
             // find total distance label by the last point in group (not updated)
-            const totalLabel = this.labelCollection._labels.find(label => label.id && label.id.startsWith("annotate_multidistance_total_label") && Cesium.Cartesian3.equals(label.position, group[group.length - 1]));
+            const totalLabel = this.labelCollection._labels.find(label => label.id && label.id.startsWith("annotate_profile_distances_total_label") && Cesium.Cartesian3.equals(label.position, group[group.length - 1]));
 
             // update the coordinate data
             const positionIndex = group.findIndex(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition));
@@ -544,7 +684,7 @@ class MultiDistance {
             if (totalLabel) {
                 totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
                 totalLabel.position = group[group.length - 1];
-                totalLabel.id = generateId(group[group.length - 1], "multidistance_total_label");
+                totalLabel.id = generateId(group[group.length - 1], "profile_distances_total_label");
             }
 
             // update log records
@@ -556,14 +696,95 @@ class MultiDistance {
             this._distanceRecords.push(distanceRecord);
             this.logRecordsCallback(distanceRecord);
 
+            // update chart
+            let pickedPosition = [];
+
+            group.forEach(async (_, i) => {
+                if (i < group.length - 1) {
+                    const pickedCartesianArray = await this._computeDetailedPickPositions(group[i], group[i + 1]);
+                    pickedPosition.push(...pickedCartesianArray);
+                }
+            });
+            console.log("🚀  pickedPosition:", pickedPosition);
             // reset dragging primitive and flags
             this.draggingPrimitive = null;
             this.isDragMode = false;
         }
-        // set back to default multi distance mouse moving actions
+        // set back to default profile distance mouse moving actions
         this.handler.setInputAction((movement) => {
-            this.handleMultiDistanceMouseMove(movement);
+            this.handleProfileDistancesMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    }
+
+
+
+    /**
+     * Interpolates points between two points based on the interval.
+     * @param {Cesium.Cartesian3} pointA 
+     * @param {Cesium.Cartesian3} pointB 
+     * @param {Number} interval 
+     * @returns {Cesium.Cartesian3[]}
+     */
+    interpolatePoints(pointA, pointB, interval = 2) {
+        const points = [];
+
+        // Calculate the distance between the two points
+        const distance = Cesium.Cartesian3.distance(pointA, pointB);
+
+        // Determine the number of interpolation points based on the interval
+        let numberOfPoints = Math.floor(distance / interval);
+        // error handling: prevent numberOfPoints to be 0
+        if (numberOfPoints === 0) {
+            numberOfPoints = 1;
+        }
+
+        for (let i = 0; i <= numberOfPoints; i++) {
+            const t = i / numberOfPoints;
+            const interpolatedPoint = Cesium.Cartesian3.lerp(
+                pointA,
+                pointB,
+                t,
+                new Cesium.Cartesian3()
+            );
+            points.push(interpolatedPoint);
+        }
+
+        return points;
+    }
+
+    async _computeDetailedPickPositions(startPosition, endPosition) {
+        // interpolate points between the first and second point
+        const interpolatedPoints = this.interpolatePoints(
+            startPosition,
+            endPosition,
+            5
+        );
+
+        // get the ground height of the interpolated points
+        const interpolatedCartographics = interpolatedPoints.map((point) =>
+            Cesium.Cartographic.fromCartesian(point)
+        );
+
+        const groundPositions = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, interpolatedCartographics);
+
+        // the height of the surface
+        // const surfaceHeight = groundPositions.map((cartographic) => this.viewer.scene.globe.getHeight(cartographic));
+
+        const groundCartesianArray = groundPositions.map((cartograhpic) => {
+            return Cesium.Cartesian3.fromRadians(
+                cartograhpic.longitude,
+                cartograhpic.latitude,
+                cartograhpic.height
+            )
+        });
+
+        const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
+            const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
+            return this.viewer.scene.pickPosition(windowPosition);
+        });
+        // TODO: use another angle from the camera to get points cover by the object and use Set to create a unique array of picked coordinates
+
+        return pickedCartesianArray;
     }
 
     /**
@@ -583,17 +804,76 @@ class MultiDistance {
         return [prevPosition, position, nextPosition].filter(pos => pos !== null);
     }
 
+    setupChart() {
+        this.chartDiv = document.createElement("div");
+        this.chartDiv.className = "chart";
+        this.viewer.container.appendChild(this.chartDiv);
+
+        const canvas = document.createElement("canvas");
+        canvas.id = "profileTerrainDistancesChart";
+        canvas.style.width = "400px";
+        canvas.style.height = "200px";
+        this.chartDiv.appendChild(canvas);
+
+        this.chartDiv.style.cssText =
+            "position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; width: 400px; height: 200px;";
+        this.chartDiv.style.display = "none";
+        const ctx = document.getElementById("profileTerrainDistancesChart").getContext("2d");
+        this.chart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: [], // Empty initially
+                datasets: [
+                    {
+                        label: "Profile of Terrain",
+                        data: [],
+                        borderColor: "rgba(75, 192, 192, 1)",
+                        borderWidth: 2,
+                        fill: true,
+                    },
+                ],
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: "Distance (meters)",
+                        },
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: "Height (meters)",
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    updateChart(data, labels) {
+        if (!this.chart) return;
+        this.chart.data.labels = labels
+        this.chart.data.datasets[0].data = data;
+        this.chart.update();
+    }
+
+    removeChart() {
+        if (this.chartDiv) {
+            this.chartDiv.remove();
+            this.chart = null;
+            this.chartDiv = null;
+        }
+    }
+
     resetValue() {
-        this.coordinate = new Cesium.Cartesian3();
+        this.removeChart();
 
-        this._distanceCollection = [];
-        this._distanceRecords = [];
-        this._labelNumberIndex = 0;
-
-        this.isMultiDistanceEnd = false;
-        this.isDragMode = false;
+        this.coordinate = null;
 
         // this._labelIndex = 0;
     }
 }
-export { MultiDistance }
+
+export { ProfileDistancesP }

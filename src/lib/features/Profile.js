@@ -378,7 +378,7 @@ class Profile {
                 }
                 // create new line primitive
                 const lineGeometryInstance = createClampedLineGeometryInstance(newCoords, "profile_line");
-                const newlinePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.this.cesiumPkg.GroundPolylinePrimitive);
+                const newlinePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
                 this.viewer.scene.primitives.add(newlinePrimitive);
 
                 // update the distance label
@@ -387,7 +387,7 @@ class Profile {
                 const existedMidPoint = Cesium.Cartesian3.midpoint(targetLinePrimitivePosition[0], targetLinePrimitivePosition[1], new Cesium.Cartesian3());
                 const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label.id && label.id.startsWith("annotate_profile_label"));
 
-                const pickedCartesianArray = await this.computeDetailedPickPositions(newCoords[0], newCoords[1]);
+                const pickedCartesianArray = await this.computeDetailedPickPositions(newCoords[1], newCoords[0]);
 
                 // line chart x-axis label
                 // always start from 0 meters
@@ -472,7 +472,7 @@ class Profile {
         const interpolatedPoints = this.interpolatePoints(
             startPosition,
             endPosition,
-            10
+            5
         );
 
         // get the ground height of the interpolated points
