@@ -1,6 +1,5 @@
 import * as Cesium from "cesium";
 import {
-    calculateDistance,
     removeInputActions,
     editableLabel,
     updatePointerOverlay,
@@ -124,7 +123,7 @@ class Profile {
 
             // create line and label
             if (this.coordinateDataCache.length === 2) {
-                const pickedCartesianArray = await this.computeDetailedPickPositions(this.coordinateDataCache[0], this.coordinateDataCache[1]);
+                const pickedCartesianArray = await this._computeDetailedPickPositions(this.coordinateDataCache[0], this.coordinateDataCache[1]);
 
                 // line chart x-axis label
                 // always start from 0 meters
@@ -225,7 +224,7 @@ class Profile {
 
 
             // update moving label primitive and set it to show
-            const pickedCartesianArray = await this.computeDetailedPickPositions(firstCoordsCartesian, this.coordinate);
+            const pickedCartesianArray = await this._computeDetailedPickPositions(firstCoordsCartesian, this.coordinate);
 
             let totalDistance = null;
 
@@ -325,7 +324,7 @@ class Profile {
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // update moving label primitive
-            const pickedCartesianArray = await this.computeDetailedPickPositions(otherPointCoords, this.coordinate);
+            const pickedCartesianArray = await this._computeDetailedPickPositions(otherPointCoords, this.coordinate);
 
             let totalDistance = null;
             for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
@@ -387,7 +386,7 @@ class Profile {
                 const existedMidPoint = Cesium.Cartesian3.midpoint(targetLinePrimitivePosition[0], targetLinePrimitivePosition[1], new Cesium.Cartesian3());
                 const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label.id && label.id.startsWith("annotate_profile_label"));
 
-                const pickedCartesianArray = await this.computeDetailedPickPositions(newCoords[1], newCoords[0]);
+                const pickedCartesianArray = await this._computeDetailedPickPositions(newCoords[1], newCoords[0]);
 
                 // line chart x-axis label
                 // always start from 0 meters
@@ -467,7 +466,7 @@ class Profile {
         return points;
     }
 
-    async computeDetailedPickPositions(startPosition, endPosition) {
+    async _computeDetailedPickPositions(startPosition, endPosition) {
         // interpolate points between the first and second point
         const interpolatedPoints = this.interpolatePoints(
             startPosition,
@@ -493,13 +492,19 @@ class Profile {
             )
         });
 
-        const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
-            const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
-            return this.viewer.scene.pickPosition(windowPosition);
-        });
+        // repick the position by convert back to window position to repick the carteisan, drawbacks is the current camera must see the whole target. 
+        // const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
+        //     const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
+        //     if (windowPosition) {
+        //         const cartesian = this.viewer.scene.pickPosition(windowPosition);
+        //         if (Cesium.defined(cartesian)) {
+        //             return cartesian;
+        //         }
+        //     }
+        // }).filter(cart => cart !== undefined);
         // TODO: use another angle from the camera to get points cover by the object and use Set to create a unique array of picked coordinates
 
-        return pickedCartesianArray;
+        return groundCartesianArray;
     }
 
     setupChart() {

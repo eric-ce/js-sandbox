@@ -4,6 +4,7 @@ import { Points } from "./lib/features/Points.js";
 import { ThreePointsCurve } from "./lib/features/ThreePointsCurve.js";
 import { Height } from "./lib/features/Height.js";
 import { MultiDistance } from "./lib/features/MultiDistance.js";
+import { MultiDistanceClamped } from "./lib/features/MultiDistanceClamped.js";
 import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
@@ -18,7 +19,6 @@ import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
 import profileDistancesImg from "./assets/profileDistancesImg.svg";
 import clearImg from "./assets/clearImg.svg"
-import { ProfileDistancesP } from "./lib/features/profileDistancesP.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -126,6 +126,11 @@ export class MeasureToolbox extends HTMLElement {
                 icon: multiDImage
             },
             {
+                instance: new MultiDistanceClamped(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance-clamped"), this.cesiumPkg),
+                name: "Multi-Distances-Clamped",
+                icon: multiDImage
+            },
+            {
                 instance: new Polygon(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "polygons"), this.cesiumPkg),
                 name: "Polygon",
                 icon: polygonImg
@@ -136,12 +141,7 @@ export class MeasureToolbox extends HTMLElement {
                 icon: profileImg
             },
             {
-                instance: new ProfileDistances(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances")),
-                name: "Profile-Distances",
-                icon: profileDistancesImg
-            },
-            {
-                instance: new ProfileDistancesP(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
+                instance: new ProfileDistances(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
                 name: "Profile-Distances",
                 icon: profileDistancesImg
             },
@@ -436,6 +436,7 @@ export class MeasureToolbox extends HTMLElement {
         if (this.activeButton &&
             (
                 this.activeButton.classList.contains("multi-distances") ||
+                this.activeButton.classList.contains("multi-distances-clamped") ||
                 this.activeButton.classList.contains("polygon") ||
                 this.activeButton.classList.contains("profile-distances")
             )
@@ -487,7 +488,7 @@ export class MeasureToolbox extends HTMLElement {
                 const action = Object.keys(recordData)[0];
                 const [coordinateKey, coordinateValue] = Object.entries(recordData[action])[0];
                 fragment.appendChild(this.createRow(`${key}: ${action}: (${coordinateKey}): ${coordinateValue}`));
-            } else if (key === "m-distance" || key === "profile-distances") {
+            } else if (key === "m-distance" || key === "profile-distances" || key === "m-distance-clamped") {
                 const { distances, totalDistance } = recordData;
                 fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
                 fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));
