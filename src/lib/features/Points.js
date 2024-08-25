@@ -94,7 +94,7 @@ class Points {
             // primitive way to add point
             if (Cesium.defined(cartesian)) {
                 const point = createPointPrimitive(cartesian, Cesium.Color.RED);
-                point.id = generateId(cartesian, "bookmark");
+                point.id = generateId(cartesian, "bookmark_point");
                 this.pointPrimitives.add(point);
 
                 // log the points records

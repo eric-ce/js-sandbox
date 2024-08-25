@@ -51,10 +51,7 @@ class Height {
         // label primitives
         this.labelCollection = new this.cesiumPkg.LabelCollection();
         this.viewer.scene.primitives.add(this.labelCollection);
-
-        const movingLabel = createLabelPrimitive(Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, 0);
-        this.movingLabelPrimitive = this.labelCollection.add(movingLabel);
-        this.movingLabelPrimitive.show = false;
+        this.movingLabelPrimitive = null;
 
         // line primitives
         this.movingPolylinePrimitive = null;
@@ -201,10 +198,10 @@ class Height {
 
             // create label primitive
             const distance = Cesium.Cartesian3.distance(this.coordinateDataCache[0], this.coordinateDataCache[1]);
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(this.coordinateDataCache[0], this.coordinateDataCache[1], distance));
             const midPoint = Cesium.Cartesian3.midpoint(this.coordinateDataCache[0], this.coordinateDataCache[1], new Cesium.Cartesian3());
-            this.movingLabelPrimitive.show = true;
-            this.movingLabelPrimitive.position = midPoint;
-            this.movingLabelPrimitive.text = formatDistance(distance);
+            this.movingLabelPrimitive.id = generateId(midPoint, "height_moving_label");
         };
     };
 
@@ -299,9 +296,7 @@ class Height {
                 return;
             }
             // set relative label not show
-            if (this.movingLabelPrimitive) {
-                this.movingLabelPrimitive.show = false;
-            }
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
             const midpoint = Cesium.Cartesian3.midpoint(topPosition, bottomPosition, new Cesium.Cartesian3());
             const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, midpoint) && label.id && label.id.startsWith("annotate_height_label"));
             targetLabelPrimitive.show = false;
@@ -348,23 +343,18 @@ class Height {
             this.movingBottomPointPrimitive.id = generateId(draggingPosition[1], "height_moving_bottom_point");
 
             // update line primitive to dragging position
-            if (this.movingPolylinePrimitive) {
-                this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
-            }
+            if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
             const movingLineGeometryInstance = createLineGeometryInstance(draggingPosition, "height_moving_line");
             const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // update label primitive to dragging position
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
             const distance = Cesium.Cartesian3.distance(draggingPosition[0], draggingPosition[1]);
+            this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(draggingPosition[0], draggingPosition[1], distance));
             const midPoint = Cesium.Cartesian3.midpoint(draggingPosition[0], draggingPosition[1], new Cesium.Cartesian3());
-            this.movingLabelPrimitive.show = true;
-            this.movingLabelPrimitive.position = midPoint;
-            this.movingLabelPrimitive.text = formatDistance(distance);
             this.movingLabelPrimitive.id = generateId(midPoint, "height_moving_label");
         });
-
-
     }
 
     async handleHeightDragEnd(movement) {
@@ -374,8 +364,6 @@ class Height {
         if (this.draggingTopPrimitive && this.isDragMode) {
 
             const cartographic = Cesium.Cartographic.fromCartesian(this.coordinate);
-            console.log(this.draggingBottomPrimitive,
-                this.draggingTopPrimitive)
 
             const groundCartographicArray = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, [
                 cartographic,
@@ -409,7 +397,7 @@ class Height {
                 this.viewer.scene.primitives.add(linePrimitive);
 
                 // update the label
-                if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = false;
+                if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
                 const existedMidPoint = Cesium.Cartesian3.midpoint(this.beforeDragTopPosition, this.beforeDragBottomPosition, new Cesium.Cartesian3());
                 const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label?.id && label?.id?.startsWith("annotate_height_label"));
 

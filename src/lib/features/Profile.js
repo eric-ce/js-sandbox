@@ -37,8 +37,7 @@ class Profile {
         // label primitives
         this.labelCollection = new this.cesiumPkg.LabelCollection();
         this.viewer.scene.primitives.add(this.labelCollection);
-        this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, 0));
-        this.movingLabelPrimitive.show = false;
+        this.movingLabelPrimitive = null
 
         // coordinates orientated data: use for identify points, lines, labels
         this.coordinateDataCache = [];
@@ -143,7 +142,7 @@ class Profile {
 
                 // create label primitive
                 // set moving label primitive to not show
-                if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = false;
+                if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
 
                 const midPoint = Cesium.Cartesian3.midpoint(this.coordinateDataCache[0], this.coordinateDataCache[1], new Cesium.Cartesian3());
                 const label = createLabelPrimitive(this.coordinateDataCache[0], this.coordinateDataCache[1], totalDistance);
@@ -236,11 +235,10 @@ class Profile {
                 totalDistance += distance;
             }
 
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(firstCoordsCartesian, cartesian, totalDistance));
             const midPoint = Cesium.Cartesian3.midpoint(firstCoordsCartesian, cartesian, new Cesium.Cartesian3());
             this.movingLabelPrimitive.id = generateId(midPoint, "profile_moving_label");
-            this.movingLabelPrimitive.position = midPoint
-            this.movingLabelPrimitive.text = formatDistance(totalDistance);
-            this.movingLabelPrimitive.show = true;
         }
     }
 
@@ -335,11 +333,10 @@ class Profile {
                 totalDistance += distance;
             }
 
-            if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = true;
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(otherPointCoords, this.coordinate, totalDistance));
             const midPoint = Cesium.Cartesian3.midpoint(otherPointCoords, this.coordinate, new Cesium.Cartesian3());
             this.movingLabelPrimitive.id = generateId(midPoint, "profile_drag_moving_label");
-            this.movingLabelPrimitive.position = midPoint;
-            this.movingLabelPrimitive.text = formatDistance(totalDistance);
         }
     }
 
@@ -381,7 +378,7 @@ class Profile {
                 this.viewer.scene.primitives.add(newlinePrimitive);
 
                 // update the distance label
-                if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = false;
+                if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
 
                 const existedMidPoint = Cesium.Cartesian3.midpoint(targetLinePrimitivePosition[0], targetLinePrimitivePosition[1], new Cesium.Cartesian3());
                 const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label.id && label.id.startsWith("annotate_profile_label"));

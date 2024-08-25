@@ -42,24 +42,12 @@ class MultiDistance {
         // label primitive
         this.labelCollection = new this.cesiumPkg.LabelCollection();
         this.viewer.scene.primitives.add(this.labelCollection);
-
-        this.movingLabelPrimitive = this.labelCollection.add(
-            createLabelPrimitive(Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, 0)
-        );
-        this.movingLabelPrimitive1 = this.labelCollection.add(
-            createLabelPrimitive(Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, 0)
-        );
-        this.movingLabelPrimitive2 = this.labelCollection.add(
-            createLabelPrimitive(Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, 0)
-        );
-        this.movingLabelPrimitive.show = false;
-        this.movingLabelPrimitive1.show = false;
-        this.movingLabelPrimitive2.show = false;
-
+        this.movingLabelPrimitive = null;
+        this.movingLabelPrimitive1 = null;
+        this.movingLabelPrimitive2 = null;
         // polyline primitive
         this.movingPolylinePrimitive = null;
         this.movingPolylinePrimitive2 = null;
-
 
         // dragging feature variables
         this.draggingPrimitive = null;
@@ -171,9 +159,7 @@ class MultiDistance {
             this.viewer.scene.primitives.add(linePrimitive);
 
             // create label entities
-            if (this.movingLabelPrimitive) {
-                this.movingLabelPrimitive.show = false;
-            }
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
             const distance = calculateDistance(prevPointCartesian, currPointCartesian);
             const midPoint = Cesium.Cartesian3.midpoint(prevPointCartesian, currPointCartesian, new Cesium.Cartesian3());
             const label = createLabelPrimitive(prevPointCartesian, currPointCartesian, distance);
@@ -212,18 +198,14 @@ class MultiDistance {
             }
             const movingLineGeometryInstance = createLineGeometryInstance([lastPointCartesian, this.coordinate], "multidistance_moving_line");
             const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
-
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // create label primitive
             const distance = calculateDistance(lastPointCartesian, this.coordinate);
             const midPoint = Cesium.Cartesian3.midpoint(lastPointCartesian, this.coordinate, new Cesium.Cartesian3());
-            const totalDistance = this._distanceCollection.reduce((a, b) => a + b, 0) + distance;
-            this.movingLabelPrimitive.show = true;
-            this.movingLabelPrimitive.position = midPoint;
-            this.movingLabelPrimitive.text = `Total: ${formatDistance(totalDistance)}`;
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(lastPointCartesian, this.coordinate, distance));
             this.movingLabelPrimitive.id = generateId(midPoint, "multidistance_moving_label");
-            this.movingLabelPrimitive.pixelOffset = new Cesium.Cartesian2(80, 10);
         }
     }
 
@@ -257,9 +239,7 @@ class MultiDistance {
             this.viewer.scene.primitives.add(linePrimitive);
 
             // create last label
-            if (this.movingLabelPrimitive) {
-                this.movingLabelPrimitive.show = false;
-            }
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
             const distance = calculateDistance(firstPoint, this.coordinate);
             const midPoint = Cesium.Cartesian3.midpoint(firstPoint, this.coordinate, new Cesium.Cartesian3());
             const label = createLabelPrimitive(firstPoint, this.coordinate, distance)
@@ -271,8 +251,8 @@ class MultiDistance {
             this._labelNumberIndex++;
 
             this.labelCollection.add(label);
-            const lastDistance = calculateDistance(firstPoint, cartesian);
-            this._distanceCollection.push(lastDistance);
+            // add last distance to distance collection
+            this._distanceCollection.push(distance);
 
             // total distance label
             const totalDistance = this._distanceCollection.reduce((a, b) => a + b, 0);
@@ -415,12 +395,11 @@ class MultiDistance {
             const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(linePrimitive);
 
+            if (this.movingLabelPrimitive1) this.labelCollection.remove(this.movingLabelPrimitive1);
             const distance = calculateDistance(otherPosition, cartesian);
             const midPoint = Cesium.Cartesian3.midpoint(otherPosition, cartesian, new Cesium.Cartesian3());
-            this.movingLabelPrimitive1.position = midPoint;
-            this.movingLabelPrimitive1.text = `${formatDistance(distance)}`;
+            this.movingLabelPrimitive1 = this.labelCollection.add(createLabelPrimitive(otherPosition, cartesian, distance));
             this.movingLabelPrimitive1.id = generateId(midPoint, "multidistance_moving_label");
-            this.movingLabelPrimitive1.show = true;
         }
         if (neighbourPositions.length === 3) { // [prevPosition, current, nextPosition]
             const otherPositions = neighbourPositions.filter(cart => !Cesium.Cartesian3.equals(cart, this.beforeDragPosition));
@@ -433,16 +412,14 @@ class MultiDistance {
                 const distance = calculateDistance(pos, cartesian);
                 const midPoint = Cesium.Cartesian3.midpoint(pos, cartesian, new Cesium.Cartesian3());
                 if (index === 0) {
-                    this.movingLabelPrimitive1.position = midPoint;
-                    this.movingLabelPrimitive1.text = `${formatDistance(distance)}`;
+                    if (this.movingLabelPrimitive1) this.labelCollection.remove(this.movingLabelPrimitive1);
+                    this.movingLabelPrimitive1 = this.labelCollection.add(createLabelPrimitive(pos, cartesian, distance));
                     this.movingLabelPrimitive1.id = generateId(midPoint, "multidistance_moving_label");
-                    this.movingLabelPrimitive1.show = true;
                 }
                 if (index === 1) {
-                    this.movingLabelPrimitive2.position = midPoint;
-                    this.movingLabelPrimitive2.text = `${formatDistance(distance)}`;
+                    if (this.movingLabelPrimitive2) this.labelCollection.remove(this.movingLabelPrimitive2);
+                    this.movingLabelPrimitive2 = this.labelCollection.add(createLabelPrimitive(pos, cartesian, distance));
                     this.movingLabelPrimitive2.id = generateId(midPoint, "multidistance_moving_label");
-                    this.movingLabelPrimitive2.show = true;
                 }
             })
         }
@@ -475,7 +452,7 @@ class MultiDistance {
 
             // set moving label primitives not show
             [this.movingLabelPrimitive1, this.movingLabelPrimitive2].forEach(primitive => {
-                if (primitive) primitive.show = false;
+                if (primitive) this.labelCollection.remove(primitive);
             });
 
             const labelPrimitives = this.labelCollection._labels.filter(label => label.id && label.id.startsWith("annotate_multidistance_label"));
@@ -589,6 +566,7 @@ class MultiDistance {
         this._distanceCollection = [];
         this._distanceRecords = [];
         this._labelNumberIndex = 0;
+        this._labelIndex = 0;
 
         this.isMultiDistanceEnd = false;
         this.isDragMode = false;

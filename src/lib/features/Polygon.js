@@ -29,22 +29,17 @@ class Polygon {
         this.isDragMode = false;
 
         // Cesium Primitives
+        // point collection
         this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
         this.viewer.scene.primitives.add(this.pointCollection);
         this.movingPoint = null;
-
         // polygon
         this.movingPolygon = null;
         this.movingPolygonOutline = null;
-
         // label primitive
         this.labelCollection = new this.cesiumPkg.LabelCollection();
         this.viewer.scene.primitives.add(this.labelCollection);
-
-        this.movingLabelPrimitive = this.labelCollection.add(
-            createLabelPrimitive(Cesium.Cartesian3.ZERO, Cesium.Cartesian3.ZERO, 0)
-        );
-        this.movingLabelPrimitive.show = false;
+        this.movingLabelPrimitive = null;
 
         // dragging feature variables
         this.draggingPrimitive = null;
@@ -152,10 +147,10 @@ class Polygon {
                     this.coordinateDataCache[this.coordinateDataCache.length - 1],
                     new Cesium.Cartesian3()
                 );
-                this.movingLabelPrimitive.position = midPoint;
+                if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+                this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(this.coordinateDataCache[0], this.coordinateDataCache[this.coordinateDataCache.length - 1], polygonArea));
                 this.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
                 this.movingLabelPrimitive.id = generateId(midPoint, "polygon_label");
-                this.movingLabelPrimitive.show = true;
             }
         }
     }
@@ -201,10 +196,10 @@ class Polygon {
                 movingCoordinateDataCache[movingCoordinateDataCache.length - 1],
                 new Cesium.Cartesian3()
             );
-            this.movingLabelPrimitive.position = midPoint;
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(movingCoordinateDataCache[0], movingCoordinateDataCache[movingCoordinateDataCache.length - 1], polygonArea));
             this.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
             this.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
-            this.movingLabelPrimitive.show = true;
         }
     }
 
@@ -238,7 +233,7 @@ class Polygon {
             this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // create label primitive
-            if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = false;
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
             const polygonArea = this.computePolygonArea(this.coordinateDataCache);
             const midPoint = Cesium.Cartesian3.midpoint(
                 this.coordinateDataCache[0],
@@ -295,7 +290,7 @@ class Polygon {
             const group = this.groupCoords.find(g => g.some(pos => Cesium.Cartesian3.equals(pos, this.beforeDragPosition)));
             const midPoint = Cesium.Cartesian3.midpoint(group[0], group[group.length - 1], new Cesium.Cartesian3());
 
-            this.movingLabelPrimitive.show = false;
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
 
             const targetLabelPrimitive = this.labelCollection._labels.find(label => Cesium.Cartesian3.equals(label.position, midPoint) && !label.id.includes("moving"));
             targetLabelPrimitive.show = false;
@@ -348,18 +343,16 @@ class Polygon {
         this.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
         // update moving label primitive
-        if (this.movingLabelPrimitive) {
-            this.movingLabelPrimitive.show = true;
-            const polygonArea = this.computePolygonArea(movingCoordinateData);
-            const midPoint = Cesium.Cartesian3.midpoint(
-                movingCoordinateData[0],
-                movingCoordinateData[movingCoordinateData.length - 1],
-                new Cesium.Cartesian3()
-            );
-            this.movingLabelPrimitive.position = midPoint;
-            this.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
-            this.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
-        }
+        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+        const polygonArea = this.computePolygonArea(movingCoordinateData);
+        const midPoint = Cesium.Cartesian3.midpoint(
+            movingCoordinateData[0],
+            movingCoordinateData[movingCoordinateData.length - 1],
+            new Cesium.Cartesian3()
+        );
+        this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(movingCoordinateData[0], movingCoordinateData[movingCoordinateData.length - 1], polygonArea));
+        this.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
+        this.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
     }
 
     handlePolygonDragEnd(movement) {
@@ -412,7 +405,7 @@ class Polygon {
             this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // update label primitive
-            if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = false;
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
             if (targetLabelPrimitive) {
                 targetLabelPrimitive.show = true;
                 const polygonArea = this.computePolygonArea(this.groupCoords[groupIndex]);

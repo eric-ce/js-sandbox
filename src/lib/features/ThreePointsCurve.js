@@ -29,13 +29,16 @@ class ThreePointsCurve {
         this.cesiumPkg = cesiumPkg;
 
         // cesium primitives
+        // point primitives
         this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
         this.viewer.scene.primitives.add(this.pointCollection);
+        this.draggingPrimitive = null;
+        // line primitives
+        this.movingPolylinePrimitive = null;
+        // label primitives
         this.labelCollection = new this.cesiumPkg.LabelCollection();
         this.viewer.scene.primitives.add(this.labelCollection);
-
-        this.draggingPrimitive = null;
-        this.movingPolylinePrimitive = null;
+        this.movingLabelPrimitive = null;
 
         // flags
         this.isCurveStarted = false;
@@ -211,7 +214,6 @@ class ThreePointsCurve {
         linePrimitive ? linePrimitive.show = false : console.error("No specific line primitives found");
 
         // find the relative label primitive to the dragging point
-
         const [start, , end] = this.beforeDragPositionSet;
         const midPoint = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
 
@@ -228,7 +230,7 @@ class ThreePointsCurve {
 
         // initialize an moving label primitive, and update it in handleCurveDrag()
         this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(start, end, 0));
-        this.movingLabelPrimitive.id = generateId([start, end], "curve_drag_moving_label");
+        this.movingLabelPrimitive.id = generateId(midPoint, "curve_drag_moving_label");
         this.movingLabelPrimitive.show = false;
 
         // find the index in the group from this.groupCoords, so that it can know which position to update
@@ -288,10 +290,11 @@ class ThreePointsCurve {
         this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
         // update moving label primitive
+        const distance = this.measureCurveDistance(curvePoints);
+        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+        this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(start, end, distance));
         const midPoint = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
-        if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = true;
-        this.movingLabelPrimitive.position = midPoint;
-        this.movingLabelPrimitive.text = formatDistance(this.measureCurveDistance(curvePoints));
+        this.movingLabelPrimitive.id = generateId(midPoint, "curve_drag_moving_label");
     }
 
     handleCurveDragEnd(movement) {
@@ -336,7 +339,7 @@ class ThreePointsCurve {
 
             // update the curve label primitive
             // find the relative label primitive to the dragging point
-            if (this.movingLabelPrimitive) this.movingLabelPrimitive.show = false;
+            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
 
             const labelCollections = this.viewer.scene.primitives._primitives.filter(p => p._labels);
 

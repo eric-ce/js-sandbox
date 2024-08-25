@@ -357,8 +357,31 @@ export class MeasureToolbox extends HTMLElement {
         this.toolsContainer.appendChild(this.clearButton);
 
         this.clearButton.addEventListener("click", () => {
-            this.viewer.entities.removeAll();
+            // remove line primitives
+            const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate") && p.geometryInstances.id.includes("line"));
+            linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
+            // remove polygon primitives
+            const polygonPrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate") && p.geometryInstances.id.includes("polygon"));
+            polygonPrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
+            // remove point primitives from point collections
+            const pointCollections = this.viewer.scene.primitives._primitives.filter(p =>
+                p._pointPrimitives && p._pointPrimitives.some(point => point.id && point.id.startsWith("annotate") && point.id.includes("point"))
+            );
+            pointCollections && pointCollections.forEach(pointCollection =>
+                pointCollection.removeAll()
+            );
+            // remove label primitives from label collections
+            const labelCollections = this.viewer.scene.primitives._primitives.filter(p =>
+                p._labels && p._labels.some(label => label.id && label.id.startsWith("annotate") && label.id.includes("label"))
+            );
+            labelCollections && labelCollections.forEach(labelCollection => {
+                labelCollection.removeAll(); // moving label was not remove, because same label cannot recreate and hence cause destory error
+            });
+
+            // reset handler
             removeInputActions(this.handler);
+
+            // reset pointerOverlay
             this.pointerOverlay.style.display = "none";
 
             // clear infobox
