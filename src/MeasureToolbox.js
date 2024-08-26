@@ -15,6 +15,7 @@ import distanceImg from "./assets/distanceImg.svg";
 import curveImg from "./assets/curveImg.svg";
 import heightImg from "./assets/heightImg.svg";
 import multiDImage from "./assets/multiDImg.svg";
+import multiDClampedImg from "./assets/multiDClampedImg.svg";
 import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
 import profileDistancesImg from "./assets/profileDistancesImg.svg";
@@ -81,6 +82,7 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     initialize() {
+        // if there is pre-existing screenSpaceEventHandler, use it, otherwise create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler
         } else {
@@ -128,7 +130,7 @@ export class MeasureToolbox extends HTMLElement {
             {
                 instance: new MultiDistanceClamped(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance-clamped"), this.cesiumPkg),
                 name: "Multi-Distances-Clamped",
-                icon: multiDImage
+                icon: multiDClampedImg
             },
             {
                 instance: new Polygon(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "polygons"), this.cesiumPkg),
@@ -156,7 +158,6 @@ export class MeasureToolbox extends HTMLElement {
         this.setupClearButton();
 
         this.setupButtonOverlay();
-
     }
 
     /**

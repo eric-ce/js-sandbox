@@ -545,8 +545,8 @@ class MultiDistance {
 
     /**
      * found the next index and previous index position from group of positions
-     * @param {Cesium.Cartesian3} position 
-     * @param {Cesium.Cartesian3[]} group 
+     * @param {Cesium.Cartesian3} position - the Cartesian3 coordinate
+     * @param {Cesium.Cartesian3[]} group - the group of Cartesian3 coordinates
      * @returns {Cesium.Cartesian3[]} - the previous position, current position, and next position
      */
     findNeighbourPosition(position, group) {
@@ -571,7 +571,8 @@ class MultiDistance {
         this.isMultiDistanceEnd = false;
         this.isDragMode = false;
 
-        // this._labelIndex = 0;
+        this.draggingPrimitive = null;
+        this.beforeDragPosition = null;
     }
 }
 export { MultiDistance }

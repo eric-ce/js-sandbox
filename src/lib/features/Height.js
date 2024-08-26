@@ -435,6 +435,9 @@ class Height {
 
     resetValue() {
         this.coordinate = null;
+
+        this.isDragMode = false;
+
         this.beforeDragTopPosition = null;
         this.beforeDragBottomPosition = null;
 

@@ -65,13 +65,11 @@ class Points {
         removeInputActions(this.handler);
     }
 
-
     /**
      * Handles left-click events to place points, if selected point existed remove the point
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
     handlePointsLeftClick(movement) {
-        // this.viewer.selectedEntity = undefined;
         const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
         if (pickedObject && pickedObject.id && typeof pickedObject.id === 'string' && pickedObject.id.startsWith("annotate_bookmark")) {
@@ -218,6 +216,11 @@ class Points {
         this.coordinateInfoOverlay.style.fontFamily = 'Roboto, sans-serif';
     }
 
+    /**
+     * To format the cartographic degrees.
+     * @param {{latitude: number, longitude: number, height: number}} cartographicDegrees - The cartographic degrees. 
+     * @returns {{lat, lon: string}} - The formatted cartographic degrees.
+     */
     formatCartographicDegrees(cartographicDegrees) {
         const { longitude, latitude } = cartographicDegrees;
         if (!longitude || !latitude) return;
@@ -235,11 +238,14 @@ class Points {
     // }
 
     resetValue() {
-        // this.pointPrimitives.removeAll();
         this.coordinate = null;
 
         this.coordinateInfoOverlay.style.display = 'none';
         this.pointerOverlay.style.display = 'none';
+
+        this.isDragMode = false;
+
+        this.draggingPrimitive = null;
     }
 }
 

@@ -8,10 +8,8 @@ import {
     createLinePrimitive,
     createLineGeometryInstance,
     generateId,
-    formatDistance,
     createLabelPrimitive,
 } from "../helper/helper.js";
-
 
 /**
  * Represents a two-point distance measurement tool in Cesium.

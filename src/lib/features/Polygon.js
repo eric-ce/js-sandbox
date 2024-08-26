@@ -141,7 +141,7 @@ class Polygon {
                 this.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
                 // create label primitive
-                const polygonArea = this.computePolygonArea(this.coordinateDataCache);
+                const polygonArea = this._computePolygonArea(this.coordinateDataCache);
                 const midPoint = Cesium.Cartesian3.midpoint(
                     this.coordinateDataCache[0],
                     this.coordinateDataCache[this.coordinateDataCache.length - 1],
@@ -190,7 +190,7 @@ class Polygon {
             this.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // create label primitive
-            const polygonArea = this.computePolygonArea(movingCoordinateDataCache);
+            const polygonArea = this._computePolygonArea(movingCoordinateDataCache);
             const midPoint = Cesium.Cartesian3.midpoint(
                 movingCoordinateDataCache[0],
                 movingCoordinateDataCache[movingCoordinateDataCache.length - 1],
@@ -234,7 +234,7 @@ class Polygon {
 
             // create label primitive
             if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-            const polygonArea = this.computePolygonArea(this.coordinateDataCache);
+            const polygonArea = this._computePolygonArea(this.coordinateDataCache);
             const midPoint = Cesium.Cartesian3.midpoint(
                 this.coordinateDataCache[0],
                 this.coordinateDataCache[this.coordinateDataCache.length - 1],
@@ -344,7 +344,7 @@ class Polygon {
 
         // update moving label primitive
         if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-        const polygonArea = this.computePolygonArea(movingCoordinateData);
+        const polygonArea = this._computePolygonArea(movingCoordinateData);
         const midPoint = Cesium.Cartesian3.midpoint(
             movingCoordinateData[0],
             movingCoordinateData[movingCoordinateData.length - 1],
@@ -408,7 +408,7 @@ class Polygon {
             if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
             if (targetLabelPrimitive) {
                 targetLabelPrimitive.show = true;
-                const polygonArea = this.computePolygonArea(this.groupCoords[groupIndex]);
+                const polygonArea = this._computePolygonArea(this.groupCoords[groupIndex]);
                 const newMidPoint = Cesium.Cartesian3.midpoint(
                     this.groupCoords[groupIndex][0],
                     this.groupCoords[groupIndex][this.groupCoords[groupIndex].length - 1],
@@ -433,14 +433,12 @@ class Polygon {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
-    resetValue() {
-        this.coordinate = new Cesium.Cartesian3();
-
-        this.isPolygonEnd = false;
-        this.isPolygonEnd = false;
-    }
-
-    computePolygonArea(cartesianArray) {
+    /**
+     * To compute the area of the polygon
+     * @param {Cesium.Cartesian3[]} cartesianArray - array of cartesian coordinates of the polygon 
+     * @returns {Number} - area of the polygon
+     */
+    _computePolygonArea(cartesianArray) {
         let hierarchy = new Cesium.PolygonHierarchy(cartesianArray);
 
         // let hierarchy = polygon.polygon.hierarchy._value;
@@ -457,6 +455,16 @@ class Polygon {
             area += Cesium.Cartesian3.magnitude(areaVector) / 2.0;
         }
         return area;
+    }
+
+    resetValue() {
+        this.coordinate = new Cesium.Cartesian3();
+
+        this.isPolygonEnd = false;
+        this.isDragMode = false;
+
+        this.draggingPrimitive = null;
+        this.beforeDragPosition = null;
     }
 }
 

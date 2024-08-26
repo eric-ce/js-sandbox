@@ -416,9 +416,8 @@ class ThreePointsCurve {
 
     /**
      * Measures the distance along a curve.
-     *
      * @param {Cesium.Cartesian3[]} curvePoints - The points along the curve.
-     * @returns {number} The total distance of the curve.
+     * @returns {Number} The total distance of the curve.
      */
     measureCurveDistance(curvePoints) {
         return curvePoints.reduce(
@@ -431,9 +430,13 @@ class ThreePointsCurve {
     }
 
     resetvalue() {
-        // this.labelEntities.removeAll();
-
         this.coordinate = null;
+
+        this.isCurveStarted = false;
+        this.isDragMode = false;
+
+        this.draggingPrimitive = null;
+        this.beforeDragPosition = null;
     }
 }
 

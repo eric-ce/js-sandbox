@@ -431,10 +431,10 @@ class Profile {
 
     /**
      * Interpolates points between two points based on the interval.
-     * @param {Cesium.Cartesian3} pointA 
-     * @param {Cesium.Cartesian3} pointB 
-     * @param {Number} interval 
-     * @returns {Cesium.Cartesian3[]}
+     * @param {Cesium.Cartesian3} pointA - the cartesian coordinate of the first point
+     * @param {Cesium.Cartesian3} pointB - the cartesian coordinate of the second point
+     * @param {Number} interval  - the interval between the two points
+     * @returns {Cesium.Cartesian3[]} - the interpolated points
      */
     interpolatePoints(pointA, pointB, interval = 2) {
         const points = [];
@@ -571,7 +571,12 @@ class Profile {
         this.removeChart();
 
         this.coordinate = null;
+
         this.isDistanceStarted = false;
+        this.isDragMode = false;
+
+        this.draggingPrimitive = null;
+        this.beforeDragPosition = null;
     }
 }
 
