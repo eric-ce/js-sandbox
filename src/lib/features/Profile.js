@@ -32,6 +32,7 @@ class Profile {
         this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
         this.viewer.scene.primitives.add(this.pointCollection);
         this.draggingPrimitive = null;
+        this.hoverPoint = null;
         // line primitives
         this.movingPolylinePrimitive = null;
         // label primitives
@@ -43,13 +44,14 @@ class Profile {
         this.coordinateDataCache = [];
         // all the click coordinates 
         this.groupCoords = [];
-
+        this.interpolatedPointsGroup = [];
         // log
         this._distanceRecords = [];
 
         // chat
         this.chart = null;
         this.chartDiv = null;
+        this.selectedGroupIndex = null;
     }
 
     /**
@@ -86,7 +88,7 @@ class Profile {
      * Handles left-click events to place points, draw and calculate distance.
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
-    async handleProfileLeftClick(movement) {
+    handleProfileLeftClick(movement) {
         // Check if the measurement has started
         // if pick the label entity, make the label entity editable
         if (!this.isDistanceStarted) {
@@ -122,7 +124,10 @@ class Profile {
 
             // create line and label
             if (this.coordinateDataCache.length === 2) {
-                const pickedCartesianArray = await this._computeDetailedPickPositions(this.coordinateDataCache[0], this.coordinateDataCache[1]);
+                const pickedCartesianArray = this._computeDetailedPickPositions(this.coordinateDataCache[0], this.coordinateDataCache[1]);
+                // update the interpolated points group
+                this.interpolatedPointsGroup.push([...pickedCartesianArray]);
+                this.selectedGroupIndex = this.interpolatedPointsGroup.length - 1;
 
                 // line chart x-axis label
                 // always start from 0 meters
@@ -172,7 +177,6 @@ class Profile {
 
                 // update the chart
                 this.updateChart(diffHeight, labelDistance);
-
                 // records cache to track all coords, use shallow copy the cache
                 this.groupCoords.push([...this.coordinateDataCache]);
                 // log distance
@@ -181,10 +185,19 @@ class Profile {
 
                 // set flag that the measurement has ended
                 this.isDistanceStarted = false;
+
+                // testing get height
+
+
+                // interpolated points
+                // const testInter = geodesicDistance.interpolateUsingFraction(5);
+                // console.log("🚀  testInter:", testInter);
+
             }
         } else {
             // reset the cache
             this.coordinateDataCache.length = 0;
+
             // add a continue point to the cache so it doesn't need to click twice to start again
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "profile_point");
@@ -198,7 +211,7 @@ class Profile {
      * Handles mouse move events to drawing moving line, update label, and display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
-    async handleProfileMouseMove(movement) {
+    handleProfileMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         // Check if the position is defined
@@ -223,7 +236,7 @@ class Profile {
 
 
             // update moving label primitive and set it to show
-            const pickedCartesianArray = await this._computeDetailedPickPositions(firstCoordsCartesian, this.coordinate);
+            const pickedCartesianArray = this._computeDetailedPickPositions(firstCoordsCartesian, this.coordinate);
 
             let totalDistance = null;
 
@@ -239,6 +252,33 @@ class Profile {
             this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(firstCoordsCartesian, cartesian, totalDistance));
             const midPoint = Cesium.Cartesian3.midpoint(firstCoordsCartesian, cartesian, new Cesium.Cartesian3());
             this.movingLabelPrimitive.id = generateId(midPoint, "profile_moving_label");
+        }
+
+        // move along the line to show the tooltip for corresponding point
+        const pickedLine = pickedObjects.find(p => p.id && p.id.startsWith("annotate_profile_line"));
+        if (pickedLine) {
+            const pickPosition = this.viewer.scene.pickPosition(movement.endPosition);
+            const cartographic = Cesium.Cartographic.fromCartesian(pickPosition);
+            const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
+
+            const pickCartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, groundHeight);
+
+            if (!Cesium.defined(pickCartesian)) return;
+
+            const closestCoord = this.interpolatedPointsGroup[this.selectedGroupIndex].map(cart => {
+                const distance = Cesium.Cartesian3.distance(cart, pickCartesian);
+                if (distance < 2) {
+                    return cart;
+                }
+            }).filter(cart => cart !== undefined);
+
+            // create point for the first corrds of closestCoord
+            if (closestCoord.length > 0) this.createPointForChartHoverPoint(closestCoord[0]);
+
+            // find the index of pickPosition from this.interpolatedPointsGroup
+            const index = this.interpolatedPointsGroup[this.selectedGroupIndex].findIndex(cart => Cesium.Cartesian3.equals(cart, closestCoord[0]));
+
+            if (this.chart && index !== -1) this.showTooltipAtIndex(this.chart, index);
         }
     }
 
@@ -290,12 +330,10 @@ class Profile {
             this.handler.setInputAction((movement) => {
                 this.handleProfileDrag(movement, this.draggingPrimitive, this.beforeDragPosition);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-
         }
     };
 
-    async handleProfileDrag(movement, pointPrimitive, pointPrimitivePosition) {
+    handleProfileDrag(movement, pointPrimitive, pointPrimitivePosition) {
         if (this.isDragMode) {
             this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
@@ -322,7 +360,7 @@ class Profile {
             this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // update moving label primitive
-            const pickedCartesianArray = await this._computeDetailedPickPositions(otherPointCoords, this.coordinate);
+            const pickedCartesianArray = this._computeDetailedPickPositions(otherPointCoords, this.coordinate);
 
             let totalDistance = null;
             for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
@@ -340,15 +378,10 @@ class Profile {
         }
     }
 
-    async handleProfileDragEnd(movement) {
+    handleProfileDragEnd(movement) {
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         if (this.draggingPrimitive && this.isDragMode) {
-            // reset mouse move to default first because async issue
-            this.handler.setInputAction((movement) => {
-                this.handleProfileMouseMove(movement);
-            }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
             // update the group coordinates by replace the new set of coordinates
             // find the relative line primitive to the dragging point
             const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_profile_line"));
@@ -364,6 +397,9 @@ class Profile {
                 const newCoords = [otherPointCoords, this.coordinate];
                 const index = this.groupCoords.findIndex(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
                 this.groupCoords[index] = newCoords;
+                // update the interpolated points group
+                this.selectedGroupIndex = index;
+
 
                 // update the line primitive by remove the old one and create a new one
                 if (this.movingPolylinePrimitive) {
@@ -383,7 +419,9 @@ class Profile {
                 const existedMidPoint = Cesium.Cartesian3.midpoint(targetLinePrimitivePosition[0], targetLinePrimitivePosition[1], new Cesium.Cartesian3());
                 const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label.id && label.id.startsWith("annotate_profile_label"));
 
-                const pickedCartesianArray = await this._computeDetailedPickPositions(newCoords[1], newCoords[0]);
+                const pickedCartesianArray = this._computeDetailedPickPositions(newCoords[1], newCoords[0]);
+                // update the interpolated points group
+                this.interpolatedPointsGroup[index] = [...pickedCartesianArray];
 
                 // line chart x-axis label
                 // always start from 0 meters
@@ -424,6 +462,11 @@ class Profile {
             }
         }
 
+        // reset to default profile mouse movement action
+        this.handler.setInputAction((movement) => {
+            this.handleProfileMouseMove(movement);
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
         // reset dragging primitive and flags
         this.draggingPrimitive = null;
         this.isDragMode = false;
@@ -463,31 +506,37 @@ class Profile {
         return points;
     }
 
-    async _computeDetailedPickPositions(startPosition, endPosition) {
+    _computeDetailedPickPositions(startPosition, endPosition) {
         // interpolate points between the first and second point
         const interpolatedPoints = this.interpolatePoints(
             startPosition,
             endPosition,
-            5
         );
 
         // get the ground height of the interpolated points
-        const interpolatedCartographics = interpolatedPoints.map((point) =>
-            Cesium.Cartographic.fromCartesian(point)
-        );
+        const interpolatedCartographics = interpolatedPoints.map(point => Cesium.Cartographic.fromCartesian(point));
 
-        const groundPositions = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, interpolatedCartographics);
 
         // the height of the surface
-        // const surfaceHeight = groundPositions.map((cartographic) => this.viewer.scene.globe.getHeight(cartographic));
-
-        const groundCartesianArray = groundPositions.map((cartograhpic) => {
+        const groundCartesianArray = interpolatedCartographics.map((cartographic) => {
+            const height = this.viewer.scene.globe.getHeight(cartographic);
             return Cesium.Cartesian3.fromRadians(
-                cartograhpic.longitude,
-                cartograhpic.latitude,
-                cartograhpic.height
+                cartographic.longitude,
+                cartographic.latitude,
+                height
             )
         });
+
+        // const groundPositions = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, interpolatedCartographics);
+
+        // const groundCartesianArray = interpolatedCartographics.map((cartograhpic) => {
+        //     return Cesium.Cartesian3.fromRadians(
+        //         cartograhpic.longitude,
+        //         cartograhpic.latitude,
+        //         surfaceHeight
+        //     )
+        // });
+
 
         // repick the position by convert back to window position to repick the carteisan, drawbacks is the current camera must see the whole target. 
         // const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
@@ -502,6 +551,15 @@ class Profile {
         // TODO: use another angle from the camera to get points cover by the object and use Set to create a unique array of picked coordinates
 
         return groundCartesianArray;
+    }
+
+    showTooltipAtIndex(chart, index) {
+        if (chart.data.datasets.length > 0 && chart.data.datasets[0].data.length > 1) {
+            chart.tooltip.setActiveElements([{ datasetIndex: 0, index: index }], chart.getDatasetMeta(0).data[1].element);
+            chart.update();
+        } else {
+            console.error('Data is not sufficient to trigger tooltip at index 1');
+        }
     }
 
     setupChart() {
@@ -534,6 +592,18 @@ class Profile {
                 ],
             },
             options: {
+                onHover: (_, chartElement) => {
+                    if (chartElement.length) {
+                        const point = chartElement[0];
+                        // const label = this.chart.data.labels[point.index];
+                        // const dataPoint = this.chart.data.datasets[0].data[point.index];
+                        // handle cesium to update the point primitive to the hover point
+                        if (this.interpolatedPointsGroup.length > 0) {
+                            const lastGroup = this.interpolatedPointsGroup[this.selectedGroupIndex];
+                            this.createPointForChartHoverPoint(lastGroup[point.index]);
+                        }
+                    }
+                },
                 scales: {
                     x: {
                         title: {
@@ -565,6 +635,14 @@ class Profile {
             this.chart = null;
             this.chartDiv = null;
         }
+    }
+
+    createPointForChartHoverPoint(cartesian) {
+        if (!Cesium.defined(cartesian)) return;
+        if (this.hoverPoint) this.pointCollection.remove(this.hoverPoint);
+        const point = createPointPrimitive(cartesian, Cesium.Color.BLUE);
+        point.id = generateId(cartesian, "profile_chart_hover_point");
+        this.hoverPoint = this.pointCollection.add(point);
     }
 
     resetValue() {

@@ -242,6 +242,7 @@ export class MeasureToolbox extends HTMLElement {
                 width: 250px;
                 padding: 5px;
                 font-size: 0.8rem;
+                cursor: grab; /* Indicates it can be moved */  
             }
             .log-box{
                 position: absolute; 
@@ -257,6 +258,7 @@ export class MeasureToolbox extends HTMLElement {
                 box-shadow: 0 0 10px #000; 
                 z-index: 1000;
                 color: #e6f8f8;
+                cursor: grab; /* Indicates it can be moved */
             }
             .info-panel td{
                 border: 1px 0 solid #e6f8f8;
@@ -265,6 +267,8 @@ export class MeasureToolbox extends HTMLElement {
             `;
         this.shadowRoot.appendChild(style);
         this.shadowRoot.appendChild(toolsContainer);
+
+        this.makeDraggable(toolsContainer);
     }
 
     /**
@@ -477,6 +481,9 @@ export class MeasureToolbox extends HTMLElement {
 
         this.infoBox.appendChild(infoBoxTable);
         this.shadowRoot.appendChild(this.infoBox);
+
+        // Make infoBox draggable
+        this.makeDraggable(this.infoBox);
     }
 
     setupLogBox() {
@@ -494,6 +501,9 @@ export class MeasureToolbox extends HTMLElement {
 
         this.logBox.appendChild(table);
         this.shadowRoot.appendChild(this.logBox);
+
+        // Make logBox draggable
+        this.makeDraggable(this.logBox);
     }
 
     updateLogBox() {
@@ -537,6 +547,51 @@ export class MeasureToolbox extends HTMLElement {
     updateRecords(mode, records) {
         this._records.push({ [mode]: records });
         this.updateLogBox(); // Ensure the log box is updated every time records change
+    }
+
+    makeDraggable(element) {
+        let posInitialX = 0, posInitialY = 0;
+        const container = this.viewer.container; // cesium viewer container
+
+        element.onmousedown = dragMouseDown;
+
+        function dragMouseDown(event) {
+            event.preventDefault();
+            posInitialX = event.clientX;
+            posInitialY = event.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        }
+
+        function elementDrag(event) {
+            event.preventDefault();
+            // Calculate the new cursor position:
+            const deltaX = posInitialX - event.clientX;
+            const deltaY = posInitialY - event.clientY;
+            posInitialX = event.clientX;
+            posInitialY = event.clientY;
+
+            // Calculate new position of the logBox
+            let newTop = element.offsetTop - deltaY;
+            let newLeft = element.offsetLeft - deltaX;
+
+            // Get container dimensions
+            const containerRect = container.getBoundingClientRect();
+
+            // Constrain the logBox within the cesiumContainer
+            newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
+
+            // Set the element's new position:
+            element.style.left = `${newLeft}px`;
+            element.style.top = `${newTop}px`;
+        }
+
+        function closeDragElement() {
+            // Stop moving when mouse button is released:
+            document.onmouseup = null;
+            document.onmousemove = null;
+        }
     }
 }
 
