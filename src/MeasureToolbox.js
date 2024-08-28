@@ -58,6 +58,10 @@ export class MeasureToolbox extends HTMLElement {
 
         // log variables
         this._records = [];
+
+        // element style position variable
+        this.logBoxPosition = { top: "190px", right: "0px" };
+        this.infoBoxPosition = { top: "70px", right: "0px" };
     }
 
     set viewer(viewer) {
@@ -101,6 +105,7 @@ export class MeasureToolbox extends HTMLElement {
     async initializeMeasureModes() {
         this.setupButtons();
 
+        // all measure modes
         const modes = [
             {
                 instance: new Points(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "points"), this.cesiumPkg),
@@ -244,25 +249,23 @@ export class MeasureToolbox extends HTMLElement {
                 font-size: 0.8rem;
                 cursor: grab; /* Indicates it can be moved */  
             }
-            .log-box{
-                position: absolute; 
-                top: 190px; 
-                right: 0; 
-                height: 250px; 
-                overflow-y: auto; 
-                width: 250px; 
-                background: #303336; 
-                opacity: 90%; 
-                padding: 5px; 
-                border-radius: 5px; 
-                box-shadow: 0 0 10px #000; 
-                z-index: 1000;
-                color: #e6f8f8;
-                cursor: grab; /* Indicates it can be moved */
-            }
             .info-panel td{
                 border: 1px 0 solid #e6f8f8;
                 font-size: 0.8rem;
+            }
+            .log-box {
+                position: absolute;
+                height: 250px;
+                overflow-y: auto;
+                width: 250px;
+                background: #303336;
+                opacity: 0.9; /* Adjusted for CSS readability */
+                padding: 5px;
+                border-radius: 5px;
+                box-shadow: 0 0 10px #000;
+                z-index: 1000;
+                color: #e6f8f8;
+                cursor: grab; /* Indicates it can be moved */
             }
             `;
         this.shadowRoot.appendChild(style);
@@ -285,7 +288,8 @@ export class MeasureToolbox extends HTMLElement {
 
         // setup button actions
         button.addEventListener("click", () => {
-            this.setupLogBox();
+            if (!this.logBox) this.setupLogBox();
+            if (!this.infoBox) this.setupInfoBox();
 
             this.pointerOverlay.style.display = "none";
 
@@ -296,8 +300,14 @@ export class MeasureToolbox extends HTMLElement {
                 this.activeButton = null;
                 this.activeTool = null;
 
-                this.infoBox && this.infoBox.remove();
-                this.logBox && this.logBox.remove();
+                if (this.infoBox) {
+                    this.infoBox.remove();
+                    this.infoBox = null;
+                };
+                if (this.logBox) {
+                    this.logBox.remove();
+                    this.logBox = null;
+                }
             } else {
                 // if the click button is not the active button
                 // initialize button
@@ -310,7 +320,7 @@ export class MeasureToolbox extends HTMLElement {
                 this.activeTool = toolInstance;
 
                 this.setupInfoBox();
-                this.logBox && this.updateLogBox();
+                this.setupLogBox();
             }
         });
 
@@ -444,12 +454,13 @@ export class MeasureToolbox extends HTMLElement {
 
     setupInfoBox() {
         // remove infoBox if it exists
-        if (this.infoBox) {
-            this.infoBox.remove();
-        }
+        if (this.infoBox) this.infoBox.remove();
+
         // create infoBox div
         this.infoBox = document.createElement("div");
         this.infoBox.className = "cesium-infoBox cesium-infoBox-visible";
+        this.infoBox.style.top = this.infoBoxPosition.top || "70px";
+        this.infoBox.style.right = this.infoBoxPosition.right || "0px";
 
         const infoBoxTable = document.createElement("table");
 
@@ -476,7 +487,6 @@ export class MeasureToolbox extends HTMLElement {
         } else {
             infoBoxTable.appendChild(this.createRow(message1));
             infoBoxTable.appendChild(this.createRow(message3));
-
         }
 
         this.infoBox.appendChild(infoBoxTable);
@@ -487,11 +497,12 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     setupLogBox() {
-        if (this.logBox) {
-            this.logBox.remove();
-        }
+        if (this.logBox) this.logBox.remove();
+
         this.logBox = document.createElement("div");
         this.logBox.className = "log-box";
+        this.logBox.style.top = this.logBoxPosition.top || "190px"
+        this.logBox.style.right = this.logBoxPosition.right || "0px";
 
         const table = document.createElement("table");
         table.className = "info-panel";
@@ -552,46 +563,52 @@ export class MeasureToolbox extends HTMLElement {
     makeDraggable(element) {
         let posInitialX = 0, posInitialY = 0;
         const container = this.viewer.container; // cesium viewer container
+        let containerRect = container.getBoundingClientRect(); // Cache the container dimensions
 
-        element.onmousedown = dragMouseDown;
+        const updatePosition = (newTop, newLeft) => {
+            // Constrain the element within the cesiumContainer
+            newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
 
-        function dragMouseDown(event) {
-            event.preventDefault();
-            posInitialX = event.clientX;
-            posInitialY = event.clientY;
-            document.onmouseup = closeDragElement;
-            document.onmousemove = elementDrag;
+            // Update element's style
+            element.style.left = `${newLeft}px`;
+            element.style.top = `${newTop}px`;
+
+            // Update stored positions for draggable elements
+            if (element === this.infoBox || element === this.logBox) {
+                const positionKey = element === this.infoBox ? 'infoBoxPosition' : 'logBoxPosition';
+                this[positionKey].top = `${newTop}px`;
+                this[positionKey].right = `${containerRect.width - newLeft - element.offsetWidth}px`;
+            }
         }
 
-        function elementDrag(event) {
+        const elementDrag = (event) => {
             event.preventDefault();
-            // Calculate the new cursor position:
             const deltaX = posInitialX - event.clientX;
             const deltaY = posInitialY - event.clientY;
             posInitialX = event.clientX;
             posInitialY = event.clientY;
 
-            // Calculate new position of the logBox
-            let newTop = element.offsetTop - deltaY;
-            let newLeft = element.offsetLeft - deltaX;
+            const newTop = element.offsetTop - deltaY;
+            const newLeft = element.offsetLeft - deltaX;
 
-            // Get container dimensions
-            const containerRect = container.getBoundingClientRect();
+            updatePosition(newTop, newLeft);
+        };
 
-            // Constrain the logBox within the cesiumContainer
-            newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
-            newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
-
-            // Set the element's new position:
-            element.style.left = `${newLeft}px`;
-            element.style.top = `${newTop}px`;
-        }
-
-        function closeDragElement() {
-            // Stop moving when mouse button is released:
+        const closeDragElement = () => {
             document.onmouseup = null;
             document.onmousemove = null;
-        }
+            // Recalculate container dimensions in case the window or container was resized
+            containerRect = container.getBoundingClientRect();
+        };
+
+        element.onmousedown = (event) => {
+            event.preventDefault();
+            posInitialX = event.clientX;
+            posInitialY = event.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        };
     }
 }
 
