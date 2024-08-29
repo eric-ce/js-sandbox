@@ -665,6 +665,15 @@ class ProfileDistances {
             const positionIndex = group.findIndex(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition));
             if (positionIndex !== -1) this.groupCoords[groupIndex][positionIndex] = this.coordinate;
 
+            // recompute the interpolation points and update this.allPickedCartesianArray
+            const groupCoordinates = this.groupCoords[groupIndex];
+            let interpolatedPoints = [];
+            for (let i = 0; i < groupCoordinates.length - 1; i++) {
+                const detailedPickPositions = this._computeDetailedPickPositions(groupCoordinates[i], groupCoordinates[i + 1]);
+                interpolatedPoints.push(...detailedPickPositions);
+            }
+            this.allPickedCartesianArray[groupIndex] = interpolatedPoints;
+
             // update distance collection
             const distances = [];
             for (let i = 0; i < group.length - 1; i++) {
