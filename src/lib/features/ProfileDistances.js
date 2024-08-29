@@ -937,6 +937,8 @@ class ProfileDistances {
 
         this.coordinate = null;
 
+        this.pointerOverlay.style.display = 'none';
+
         this.isProfileDistancesEnd = false;
         this.isDragMode = false;
 

@@ -460,6 +460,8 @@ class Polygon {
     resetValue() {
         this.coordinate = new Cesium.Cartesian3();
 
+        this.pointerOverlay.style.display = 'none';
+
         this.isPolygonEnd = false;
         this.isDragMode = false;
 

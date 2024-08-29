@@ -446,6 +446,8 @@ class Height {
     resetValue() {
         this.coordinate = null;
 
+        this.pointerOverlay.style.display = 'none';
+
         this.isDragMode = false;
 
         this.beforeDragTopPosition = null;

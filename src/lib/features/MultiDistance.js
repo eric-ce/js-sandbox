@@ -563,6 +563,8 @@ class MultiDistance {
     resetValue() {
         this.coordinate = new Cesium.Cartesian3();
 
+        this.pointerOverlay.style.display = 'none';
+
         this._distanceCollection = [];
         this._distanceRecords = [];
         this._labelNumberIndex = 0;

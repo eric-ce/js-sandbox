@@ -432,6 +432,8 @@ class ThreePointsCurve {
     resetvalue() {
         this.coordinate = null;
 
+        this.pointerOverlay.style.display = 'none';
+
         this.isCurveStarted = false;
         this.isDragMode = false;
 
