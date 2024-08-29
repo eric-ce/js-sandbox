@@ -445,7 +445,14 @@ class Profile {
                 })
 
                 // update the chart
-                if (this.chartDiv) this.updateChart(diffHeight, labelDistance);
+                if (this.chartDiv) {
+                    this.updateChart(diffHeight, labelDistance);
+                } else {
+                    this.setupChart();
+                    this.chartDiv.style.display = "block";
+                    this.updateChart(diffHeight, labelDistance);
+                }
+
 
                 // log distance
                 this.logRecordsCallback(totalDistance.toFixed(2));
@@ -453,6 +460,7 @@ class Profile {
                 console.error("No line primitives found");
                 return;
             }
+
         }
 
         // reset to default profile mouse movement action

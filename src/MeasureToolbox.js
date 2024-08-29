@@ -112,7 +112,7 @@ export class MeasureToolbox extends HTMLElement {
         // all measure modes
         const modes = [
             {
-                instance: new Picker(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "picker")),
+                instance: new Picker(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "picker"), this.measureModes),
                 name: "Picker",
                 icon: pointsImg
             },
@@ -165,6 +165,10 @@ export class MeasureToolbox extends HTMLElement {
 
         this.measureModes = modes.map(mode => mode.instance);
 
+        const pickerInstance = modes.find(mode => mode.name === "Picker").instance;
+        pickerInstance.measureModes = this.measureModes;
+        pickerInstance.activateModeCallback = this.activateModeByName.bind(this);
+
         modes.forEach(mode => {
             this.createMeasureModeButton(mode.instance, mode.name, mode.icon);
         });
@@ -173,6 +177,8 @@ export class MeasureToolbox extends HTMLElement {
 
         this.setupButtonOverlay();
     }
+
+
 
     /**
      * Sets up measure toolbar including buttons, and style.
@@ -347,6 +353,8 @@ export class MeasureToolbox extends HTMLElement {
     activateButton(button, toolInstance) {
         button.classList.add("active");
         toolInstance.setupInputActions && toolInstance.setupInputActions();
+        this.activeButton = button;
+        this.activeTool = toolInstance;
     }
 
     /**
@@ -600,6 +608,17 @@ export class MeasureToolbox extends HTMLElement {
     updateRecords(mode, records) {
         this._records.push({ [mode]: records });
         this.updateLogBox(); // Ensure the log box is updated every time records change
+    }
+
+
+    activateModeByName(modeName) {
+        const modeInstance = this.measureModes.find(mode => mode.button.classList.contains(modeName));
+        const button = this.toolsContainer.querySelector(`.${modeName}`);
+
+        if (modeInstance && button) {
+            this.deactivateButton(this.activeButton, this.activeTool); // Deactivate old
+            this.activateButton(button, modeInstance); // Activate new
+        }
     }
 }
 

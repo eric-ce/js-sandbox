@@ -724,7 +724,13 @@ class ProfileDistances {
             });
 
             // update the chart
-            this.chart && this.updateChart(diffHeight, labelDistance);
+            if (this.chartDiv) {
+                this.updateChart(diffHeight, labelDistance);
+            } else {
+                this.setupChart();
+                this.chartDiv.style.display = "block";
+                this.updateChart(diffHeight, labelDistance);
+            }
 
             // reset dragging primitive and flags
             this.draggingPrimitive = null;
@@ -873,12 +879,9 @@ class ProfileDistances {
                         // const dataPoint = this.chart.data.datasets[0].data[point.index];
                         // handle cesium to update the point primitive to the hover point
                         if (this.allPickedCartesianArray.length > 0) {
-                            console.log("🚀  this.allPickedCartesianArray:", this.allPickedCartesianArray);
-
                             const lastGroup = this.allPickedCartesianArray[this.selectedGroupIndex];
                             this.createPointForChartHoverPoint(lastGroup[point.index]);
                         }
-
                     }
                 },
                 scales: {
