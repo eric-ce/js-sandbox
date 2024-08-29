@@ -20,6 +20,7 @@ import polygonImg from "./assets/polygonImg.svg";
 import profileImg from "./assets/profileImg.svg";
 import profileDistancesImg from "./assets/profileDistancesImg.svg";
 import clearImg from "./assets/clearImg.svg"
+import { Picker } from "./lib/features/Picker.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -110,6 +111,11 @@ export class MeasureToolbox extends HTMLElement {
 
         // all measure modes
         const modes = [
+            {
+                instance: new Picker(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "picker")),
+                name: "Picker",
+                icon: pointsImg
+            },
             {
                 instance: new Points(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "points"), this.cesiumPkg),
                 name: "Points",
