@@ -9,6 +9,7 @@ import {
     createPointPrimitive,
     formatDistance,
     createClampedLineGeometryInstance,
+    makeDraggable,
 } from "../helper/helper.js";
 import Chart from "chart.js/auto";
 
@@ -185,14 +186,6 @@ class Profile {
 
                 // set flag that the measurement has ended
                 this.isDistanceStarted = false;
-
-                // testing get height
-
-
-                // interpolated points
-                // const testInter = geodesicDistance.interpolateUsingFraction(5);
-                // console.log("🚀  testInter:", testInter);
-
             }
         } else {
             // reset the cache
@@ -620,6 +613,8 @@ class Profile {
                 },
             },
         });
+
+        makeDraggable(this.chartDiv, this.viewer.container);
     }
 
     updateChart(data, labels) {
