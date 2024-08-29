@@ -8,7 +8,7 @@ import { MultiDistanceClamped } from "./lib/features/MultiDistanceClamped.js";
 import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
-import { removeInputActions } from "./lib/helper/helper.js";
+import { removeInputActions, makeDraggable } from "./lib/helper/helper.js";
 import toolImg from "./assets/toolImg.svg";
 import pointsImg from "./assets/pointsImg.svg";
 import distanceImg from "./assets/distanceImg.svg";
@@ -85,6 +85,9 @@ export class MeasureToolbox extends HTMLElement {
         }
     }
 
+    /**
+     * Initializes the MeasureToolbox, setting up event handlers
+     */
     initialize() {
         // if there is pre-existing screenSpaceEventHandler, use it, otherwise create a new one
         if (this.viewer.screenSpaceEventHandler) {
@@ -166,7 +169,7 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     /**
-     * Sets up toolbar container, buttons, and style.
+     * Sets up measure toolbar including buttons, and style.
      */
     setupButtons() {
         const toolsContainer = document.createElement("div");
@@ -271,13 +274,15 @@ export class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(style);
         this.shadowRoot.appendChild(toolsContainer);
 
-        this.makeDraggable(toolsContainer);
+        // make toolsContainer draggable
+        makeDraggable(toolsContainer, this.viewer.container);
     }
 
     /**
      * Creates a measurement mode button.
      * @param {Object} toolInstance - The instance of the measurement tool.
      * @param {string} buttonText - The text to display on the button.
+     * @param {string} iconImg - The image to display on the button.
      */
     createMeasureModeButton(toolInstance, buttonText, iconImg) {
         // setup buttons
@@ -350,7 +355,7 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     /**
-     * toggle tools to show measure modes
+     * toggle action for the tool button to show/hide measure modes
      */
     toggleTools() {
         this.isToolsExpanded = !this.isToolsExpanded;
@@ -416,6 +421,9 @@ export class MeasureToolbox extends HTMLElement {
         });
     }
 
+    /**
+     * Sets up the button overlay to display the description of the button when mouse hover.
+     */
     setupButtonOverlay() {
         this.buttonOverlay = document.createElement("div");
         this.buttonOverlay.className = "button-overlay";
@@ -423,11 +431,10 @@ export class MeasureToolbox extends HTMLElement {
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out;";
         this.viewer.container.appendChild(this.buttonOverlay);
 
-        // cesium container rectangle 
-        const cesiumRect = this.viewer.container.getBoundingClientRect();
-
         this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
             button.addEventListener("mouseover", (e) => {
+                // cesium container rectangle 
+                const cesiumRect = this.viewer.container.getBoundingClientRect();
                 // set overlay to display
                 this.buttonOverlay.style.display = "block";
                 // get description of the button
@@ -437,6 +444,7 @@ export class MeasureToolbox extends HTMLElement {
                 this.buttonOverlay.style.left = e.pageX - cesiumRect.x + 'px';  // Position the overlay right of the cursor
                 this.buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + 'px';
             });
+
             button.addEventListener("mouseout", () => {
                 // set overlay to not display
                 this.buttonOverlay.style.display = "none";
@@ -444,6 +452,9 @@ export class MeasureToolbox extends HTMLElement {
         })
     }
 
+    /**
+     * Setup the moving yellow dot to show the pointer position at cesium viewer
+     */
     setupPointerOverlay() {
         this.pointerOverlay = document.createElement("div");
         this.pointerOverlay.className = "backdrop";
@@ -452,6 +463,9 @@ export class MeasureToolbox extends HTMLElement {
         this.viewer.container.appendChild(this.pointerOverlay);
     }
 
+    /**
+     * Setup the infoBox to show the instruction of the measure modes, how to use
+     */
     setupInfoBox() {
         // remove infoBox if it exists
         if (this.infoBox) this.infoBox.remove();
@@ -493,9 +507,15 @@ export class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(this.infoBox);
 
         // Make infoBox draggable
-        this.makeDraggable(this.infoBox);
+        makeDraggable(this.infoBox, this.viewer.container, (newTop, newLeft, containerRect) => {
+            this.infoBoxPosition.top = `${newTop}px`;
+            this.infoBoxPosition.right = `${containerRect.width - newLeft - this.infoBox.offsetWidth}px`;
+        });
     }
 
+    /**
+     * Setup the logBox to show the records of the measure modes
+     */
     setupLogBox() {
         if (this.logBox) this.logBox.remove();
 
@@ -514,9 +534,15 @@ export class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(this.logBox);
 
         // Make logBox draggable
-        this.makeDraggable(this.logBox);
+        makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
+            this.logBoxPosition.top = `${newTop}px`;
+            this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
+        });
     }
 
+    /**
+     * Update the logBox with the records of the measure modes
+     */
     updateLogBox() {
         const table = this.logBox.querySelector("table");
         table.innerHTML = ""; // Clear the table
@@ -545,6 +571,11 @@ export class MeasureToolbox extends HTMLElement {
         table.appendChild(fragment);
     }
 
+    /**
+     * create the row for the table
+     * @param {string|number} value 
+     * @returns 
+     */
     createRow(value) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
@@ -555,60 +586,14 @@ export class MeasureToolbox extends HTMLElement {
         return row;
     }
 
+    /**
+     * Update the records of the measure modes
+     * @param {*} mode 
+     * @param {*} records 
+     */
     updateRecords(mode, records) {
         this._records.push({ [mode]: records });
         this.updateLogBox(); // Ensure the log box is updated every time records change
-    }
-
-    makeDraggable(element) {
-        let posInitialX = 0, posInitialY = 0;
-        const container = this.viewer.container; // cesium viewer container
-        let containerRect = container.getBoundingClientRect(); // Cache the container dimensions
-
-        const updatePosition = (newTop, newLeft) => {
-            // Constrain the element within the cesiumContainer
-            newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
-            newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
-
-            // Update element's style
-            element.style.left = `${newLeft}px`;
-            element.style.top = `${newTop}px`;
-
-            // Update stored positions for draggable elements
-            if (element === this.infoBox || element === this.logBox) {
-                const positionKey = element === this.infoBox ? 'infoBoxPosition' : 'logBoxPosition';
-                this[positionKey].top = `${newTop}px`;
-                this[positionKey].right = `${containerRect.width - newLeft - element.offsetWidth}px`;
-            }
-        }
-
-        const elementDrag = (event) => {
-            event.preventDefault();
-            const deltaX = posInitialX - event.clientX;
-            const deltaY = posInitialY - event.clientY;
-            posInitialX = event.clientX;
-            posInitialY = event.clientY;
-
-            const newTop = element.offsetTop - deltaY;
-            const newLeft = element.offsetLeft - deltaX;
-
-            updatePosition(newTop, newLeft);
-        };
-
-        const closeDragElement = () => {
-            document.onmouseup = null;
-            document.onmousemove = null;
-            // Recalculate container dimensions in case the window or container was resized
-            containerRect = container.getBoundingClientRect();
-        };
-
-        element.onmousedown = (event) => {
-            event.preventDefault();
-            posInitialX = event.clientX;
-            posInitialY = event.clientY;
-            document.onmouseup = closeDragElement;
-            document.onmousemove = elementDrag;
-        };
     }
 }
 

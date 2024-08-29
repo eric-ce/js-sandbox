@@ -2,7 +2,6 @@ import {
     convertToCartesian3,
     removeInputActions,
     editableLabel,
-    updatePointerOverlay,
     createPointPrimitive,
     generateId,
     createLinePrimitive,

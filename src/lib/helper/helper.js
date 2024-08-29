@@ -613,7 +613,59 @@ export function removeInputActions(handler) {
     // handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
 }
 
+/**
+ * Makes an HTML element draggable within a specified container.
+ * @param {HTMLElement} element - The HTML element to be made draggable.
+ * @param {HTMLElement} container - The cesium viewer container within which the element can be dragged.
+ * @param {function(number, number, DOMRect): void} updatePositionCallback - A callback function to update the position of the element.
+ * @param {number} updatePositionCallback.newTop - The new top position of the element.
+ * @param {number} updatePositionCallback.newLeft - The new left position of the element.
+ * @param {DOMRect} updatePositionCallback.containerRect - The bounding rectangle of the container.
+ */
+export function makeDraggable(element, container, updatePositionCallback) {
+    let posInitialX = 0, posInitialY = 0;
+    let containerRect = container.getBoundingClientRect(); // Cache the container dimensions
 
+    const updatePosition = (newTop, newLeft) => {
+        // Constrain the element within the container
+        newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
+        newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
 
+        // Update element's style
+        element.style.left = `${newLeft}px`;
+        element.style.top = `${newTop}px`;
 
+        // Call the callback to update stored positions if provided
+        if (updatePositionCallback) {
+            updatePositionCallback(newTop, newLeft, containerRect);
+        }
+    };
 
+    const elementDrag = (event) => {
+        event.preventDefault();
+        const deltaX = posInitialX - event.clientX;
+        const deltaY = posInitialY - event.clientY;
+        posInitialX = event.clientX;
+        posInitialY = event.clientY;
+
+        const newTop = element.offsetTop - deltaY;
+        const newLeft = element.offsetLeft - deltaX;
+
+        updatePosition(newTop, newLeft);
+    };
+
+    const closeDragElement = () => {
+        document.onmouseup = null;
+        document.onmousemove = null;
+        // Recalculate container dimensions in case the window or container was resized
+        containerRect = container.getBoundingClientRect();
+    };
+
+    element.onmousedown = (event) => {
+        event.preventDefault();
+        posInitialX = event.clientX;
+        posInitialY = event.clientY;
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
+    };
+}
