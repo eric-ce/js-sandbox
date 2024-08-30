@@ -497,6 +497,7 @@ export class MeasureToolbox extends HTMLElement {
         const message1 = "Left Click: start measure";
         const message2 = "Right Click: finish measure";
         const message3 = "Hold Left Click: drag point move annotation"
+        const messagePicker = "Left Click: pick an annotation";
         // create table first row for the title
         infoBoxTable.appendChild(this.createRow(messageTitle));
         // create table rows for the messages
@@ -508,10 +509,11 @@ export class MeasureToolbox extends HTMLElement {
                 this.activeButton.classList.contains("profile-distances")
             )
         ) {
-            // if the active button is multi-distance or polygon, show both messages
             infoBoxTable.appendChild(this.createRow(message1));
             infoBoxTable.appendChild(this.createRow(message2));
             infoBoxTable.appendChild(this.createRow(message3));
+        } else if (this.activeButton && this.activeButton.classList.contains("picker")) {
+            infoBoxTable.appendChild(this.createRow(messagePicker));
         } else {
             infoBoxTable.appendChild(this.createRow(message1));
             infoBoxTable.appendChild(this.createRow(message3));

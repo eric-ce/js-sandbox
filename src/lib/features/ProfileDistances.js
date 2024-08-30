@@ -265,34 +265,33 @@ class ProfileDistances {
         }
 
         // move along the line to show the tooltip for corresponding point
-        if (this.isProfileDistancesEnd) {
-            const pickedLine = pickedObjects.find(p => p.id && p.id.startsWith("annotate_profile_distances_line"));
+        const pickedLine = pickedObjects.find(p => p.id && p.id.startsWith("annotate_profile_distances_line"));
 
-            if (pickedLine) {
-                const pickPosition = this.viewer.scene.pickPosition(movement.endPosition);
-                const cartographic = Cesium.Cartographic.fromCartesian(pickPosition);
-                const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
+        if (pickedLine) {
+            const pickPosition = this.viewer.scene.pickPosition(movement.endPosition);
+            const cartographic = Cesium.Cartographic.fromCartesian(pickPosition);
+            const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
 
-                const pickCartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, groundHeight);
+            const pickCartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, groundHeight);
 
-                if (!Cesium.defined(pickCartesian)) return;
+            if (!Cesium.defined(pickCartesian)) return;
 
-                const closestCoord = this.allPickedCartesianArray[this.selectedGroupIndex].map(cart => {
-                    const distance = Cesium.Cartesian3.distance(cart, pickCartesian);
-                    if (distance < 2) {
-                        return cart;
-                    }
-                }).filter(cart => cart !== undefined);
+            const closestCoord = this.allPickedCartesianArray[this.selectedGroupIndex].map(cart => {
+                const distance = Cesium.Cartesian3.distance(cart, pickCartesian);
+                if (distance < 2) {
+                    return cart;
+                }
+            }).filter(cart => cart !== undefined);
 
-                // create point for the first corrds of closestCoord
-                if (closestCoord.length > 0) this.createPointForChartHoverPoint(closestCoord[0]);
+            // create point for the first corrds of closestCoord
+            if (closestCoord.length > 0) this.createPointForChartHoverPoint(closestCoord[0]);
 
-                // find the index of pickPosition from this.interpolatedPointsGroup
-                const index = this.allPickedCartesianArray[this.selectedGroupIndex].findIndex(cart => Cesium.Cartesian3.equals(cart, closestCoord[0]));
+            // find the index of pickPosition from this.interpolatedPointsGroup
+            const index = this.allPickedCartesianArray[this.selectedGroupIndex].findIndex(cart => Cesium.Cartesian3.equals(cart, closestCoord[0]));
 
-                if (this.chart && index !== -1) this.showTooltipAtIndex(this.chart, index);
-            }
+            if (this.chart && index !== -1) this.showTooltipAtIndex(this.chart, index);
         }
+
     }
 
     handleProfileDistancesRightClick(movement) {
