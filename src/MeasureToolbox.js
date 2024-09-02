@@ -10,6 +10,7 @@ import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { removeInputActions, makeDraggable } from "./lib/helper/helper.js";
 import toolImg from "./assets/toolImg.svg";
+import pickerImg from "./assets/pickerImg.svg";
 import pointsImg from "./assets/pointsImg.svg";
 import distanceImg from "./assets/distanceImg.svg";
 import curveImg from "./assets/curveImg.svg";
@@ -114,7 +115,7 @@ export class MeasureToolbox extends HTMLElement {
             {
                 instance: new Picker(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "picker"), this.measureModes),
                 name: "Picker",
-                icon: pointsImg
+                icon: pickerImg
             },
             {
                 instance: new Points(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "points"), this.cesiumPkg),
