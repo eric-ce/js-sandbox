@@ -426,6 +426,9 @@ export class MeasureToolbox extends HTMLElement {
 
             this.measureModes.forEach(mode => {
                 mode.resetValue && mode.resetValue();
+                if (mode instanceof ProfileDistances || mode instanceof MultiDistance || mode instanceof MultiDistanceClamped) {
+                    mode._labelNumberIndex = 0;
+                }
             });
 
             if (this.activeButton) {

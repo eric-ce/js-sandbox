@@ -105,9 +105,10 @@ class Profile {
                 return; // Exit the function after making the label editable
             }
 
-            // Set flag that the measurement has started
-            this.isDistanceStarted = true;
         }
+
+        // Set flag that the measurement has started
+        this.isDistanceStarted = true;
 
         // use cache to store only two coordinates, if more than two, reset the cache
         if (this.coordinateDataCache.length === 0) {
@@ -252,15 +253,16 @@ class Profile {
         if (pickedLine && this.chart) {
             const pickPosition = this.viewer.scene.pickPosition(movement.endPosition);
             const cartographic = Cesium.Cartographic.fromCartesian(pickPosition);
-            const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
+            const groundHeight = this.viewer.scene.sampleHeight(cartographic);
 
             const pickCartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, groundHeight);
 
             if (!Cesium.defined(pickCartesian)) return;
 
             const closestCoord = this.interpolatedPointsGroup[this.selectedGroupIndex].map(cart => {
+                // get the closest point to the pickPosition by comparing the distance
                 const distance = Cesium.Cartesian3.distance(cart, pickCartesian);
-                if (distance < 2) {
+                if (distance < 0.5) {
                     return cart;
                 }
             }).filter(cart => cart !== undefined);
@@ -278,7 +280,7 @@ class Profile {
     handleProfileDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-        if (this.coordinateDataCache.length > 1) {
+        if (this.groupCoords.length > 0) {
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
 
             const pointPrimitive = pickedObjects.find(p => {
@@ -337,6 +339,8 @@ class Profile {
 
             // update point primitive to dragging position
             pointPrimitive.position = cartesian;
+            // remove the hover point
+            if (this.hoverPoint) this.pointCollection.remove(this.hoverPoint);
 
             // identify the group of coordinates that contains the dragging position
             const group = this.groupCoords.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, pointPrimitivePosition)));
@@ -669,6 +673,8 @@ class Profile {
 
         this.isDistanceStarted = false;
         this.isDragMode = false;
+
+        this.coordinateDataCache = [];
 
         this.draggingPrimitive = null;
         this.beforeDragPosition = null;

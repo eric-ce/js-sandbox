@@ -278,7 +278,7 @@ class ProfileDistances {
 
             const closestCoord = this.allPickedCartesianArray[this.selectedGroupIndex].map(cart => {
                 const distance = Cesium.Cartesian3.distance(cart, pickCartesian);
-                if (distance < 2) {
+                if (distance < 0.5) {
                     return cart;
                 }
             }).filter(cart => cart !== undefined);
@@ -495,6 +495,8 @@ class ProfileDistances {
 
         // update point entity to dragging position
         pointEntity.position = cartesian;
+        // remove the hover point
+        if (this.hoverPoint) this.pointCollection.remove(this.hoverPoint);
 
         // create moving line primitives
         const groupIndex = this.groupCoords.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
@@ -951,11 +953,13 @@ class ProfileDistances {
 
         this.pointerOverlay.style.display = 'none';
 
-        // this.isProfileDistancesEnd = false;
+        this.isProfileDistancesEnd = false;
         this.isDragMode = false;
 
+        this.coordinateDataCache.length = 0;
+
         this._labelIndex = 0;
-        this._labelNumberIndex = 0;
+        // this._labelNumberIndex = 0;
 
         this.draggingPrimitive = null;
         this.beforeDragPosition = null;

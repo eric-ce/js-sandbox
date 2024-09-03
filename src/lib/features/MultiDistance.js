@@ -326,6 +326,10 @@ class MultiDistance {
 
             // set relative label primitives to no show by dragging point
             const groupIndex = this.groupCoords.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+            if (groupIndex === -1) {
+                console.error("No group coordinates found");
+                return;
+            }
             const group = this.groupCoords[groupIndex];
 
             const neighbourPositions = this.findNeighbourPosition(this.beforeDragPosition, group);
@@ -567,8 +571,10 @@ class MultiDistance {
 
         this._distanceCollection = [];
         this._distanceRecords = [];
-        this._labelNumberIndex = 0;
+        // this._labelNumberIndex = 0;
         this._labelIndex = 0;
+
+        this.coordinateDataCache = [];
 
         this.isMultiDistanceEnd = false;
         this.isDragMode = false;
