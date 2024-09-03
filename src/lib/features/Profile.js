@@ -249,7 +249,7 @@ class Profile {
 
         // move along the line to show the tooltip for corresponding point
         const pickedLine = pickedObjects.find(p => p.id && p.id.startsWith("annotate_profile_line"));
-        if (pickedLine) {
+        if (pickedLine && this.chart) {
             const pickPosition = this.viewer.scene.pickPosition(movement.endPosition);
             const cartographic = Cesium.Cartographic.fromCartesian(pickPosition);
             const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
@@ -480,7 +480,7 @@ class Profile {
      * @param {Number} interval  - the interval between the two points
      * @returns {Cesium.Cartesian3[]} - the interpolated points
      */
-    interpolatePoints(pointA, pointB, interval = 2) {
+    interpolatePoints(pointA, pointB, interval = 0.9) {
         const points = [];
 
         // Calculate the distance between the two points
@@ -489,9 +489,7 @@ class Profile {
         // Determine the number of interpolation points based on the interval
         let numberOfPoints = Math.floor(distance / interval);
         // error handling: prevent numberOfPoints to be 0
-        if (numberOfPoints === 0) {
-            numberOfPoints = 1;
-        }
+        if (numberOfPoints === 0) numberOfPoints = 1;
 
         for (let i = 0; i <= numberOfPoints; i++) {
             const t = i / numberOfPoints;
@@ -517,17 +515,32 @@ class Profile {
         // get the ground height of the interpolated points
         const interpolatedCartographics = interpolatedPoints.map(point => Cesium.Cartographic.fromCartesian(point));
 
+        // sample height 
+        if (this.viewer.scene.sampleHeightSupported) { // sampleHeight() only supports in 3d mode
+            const clampedPositions = interpolatedCartographics.map((cartographic) => {
+                const height = this.viewer.scene.sampleHeight(cartographic);
+                return Cesium.Cartesian3.fromRadians(
+                    cartographic.longitude,
+                    cartographic.latitude,
+                    height
+                )
+            });
+            return clampedPositions;
+        }
+        return [];
 
+        // getHeight() approach
         // the height of the surface
-        const groundCartesianArray = interpolatedCartographics.map((cartographic) => {
-            const height = this.viewer.scene.globe.getHeight(cartographic);
-            return Cesium.Cartesian3.fromRadians(
-                cartographic.longitude,
-                cartographic.latitude,
-                height
-            )
-        });
+        // const groundCartesianArray = interpolatedCartographics.map((cartographic) => {
+        //     const height = this.viewer.scene.globe.getHeight(cartographic);
+        //     return Cesium.Cartesian3.fromRadians(
+        //         cartographic.longitude,
+        //         cartographic.latitude,
+        //         height
+        //     )
+        // });
 
+        // sampleTerrainMostDetailed() approach
         // const groundPositions = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, interpolatedCartographics);
 
         // const groundCartesianArray = interpolatedCartographics.map((cartograhpic) => {
@@ -537,7 +550,6 @@ class Profile {
         //         surfaceHeight
         //     )
         // });
-
 
         // repick the position by convert back to window position to repick the carteisan, drawbacks is the current camera must see the whole target. 
         // const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
@@ -551,7 +563,7 @@ class Profile {
         // }).filter(cart => cart !== undefined);
         // TODO: use another angle from the camera to get points cover by the object and use Set to create a unique array of picked coordinates
 
-        return groundCartesianArray;
+        // return groundCartesianArray;
     }
 
     showTooltipAtIndex(chart, index) {
