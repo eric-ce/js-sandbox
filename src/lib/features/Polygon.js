@@ -114,8 +114,7 @@ class Polygon {
 
         if (!this.isPolygonEnd) {
             const cartesian = this.coordinate;
-
-            if (!Cesium.defined(cartesian)) return;
+            this.coordinateDataCache.push(cartesian);
 
             // create point entity
             const color = Cesium.Color.fromRandom({ alpha: 1.0 });
@@ -123,8 +122,6 @@ class Polygon {
             point.id = generateId(this.coordinate, "polygon_point");
             this.pointCollection.add(point);
 
-            // update coordinate data cache
-            this.coordinateDataCache.push(this.coordinate);
 
             // If three points create the polygon primitive
             if (this.coordinateDataCache.length > 2) {
@@ -467,6 +464,14 @@ class Polygon {
 
         this.draggingPrimitive = null;
         this.beforeDragPosition = null;
+
+        this.coordinateDataCache = [];
+
+        // remove the moving primitives
+        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+        if (this.movingPolygon) this.viewer.scene.primitives.remove(this.movingPolygon);
+        if (this.movingPolygonOutline) this.viewer.scene.primitives.remove(this.movingPolygonOutline);
+        if (this.movingPoint) this.pointCollection.remove(this.movingPoint);
     }
 }
 

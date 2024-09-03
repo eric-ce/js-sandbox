@@ -963,6 +963,13 @@ class ProfileDistances {
 
         this.draggingPrimitive = null;
         this.beforeDragPosition = null;
+
+        // remove the moving primitives
+        if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+        if (this.movingPolylinePrimitive2) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive2);
+        if (this.movingLabelPrimitive1) this.labelCollection.remove(this.movingLabelPrimitive1);
+        if (this.movingLabelPrimitive2) this.labelCollection.remove(this.movingLabelPrimitive2);
+        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
     }
 }
 

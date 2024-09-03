@@ -678,6 +678,10 @@ class Profile {
 
         this.draggingPrimitive = null;
         this.beforeDragPosition = null;
+
+        // remove moving primitives
+        if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
     }
 }
 

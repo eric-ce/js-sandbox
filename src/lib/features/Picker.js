@@ -124,6 +124,9 @@ class Picker {
 
     resetValue() {
         this.coordinate = null;
+
+        this.pointerOverlay.style.display = "none";
+
     }
 }
 

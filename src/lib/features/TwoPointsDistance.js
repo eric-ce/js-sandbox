@@ -355,10 +355,15 @@ class TwoPointsDistance {
         this.isDistanceStarted = false;
         this.isDragMode = false;
 
-        // this.movingPolylinePrimitive = null;
-        // this.movingLabelPrimitive = null;
         this.draggingPrimitive = null;
         this.beforeDragPosition = null;
+
+        this.coordinateDataCache = [];
+
+        // remove moving primitives
+        if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+
     }
 }
 

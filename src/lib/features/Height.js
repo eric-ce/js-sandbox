@@ -456,6 +456,9 @@ class Height {
         this.draggingBottomPrimitive = null;
         this.draggingTopPrimitive = null;
 
+        this.coordinateDataCache = [];
+
+        // remove moving primitives
         if (this.movingTopPointPrimitive) {
             this.movingPointCollection.remove(this.movingTopPointPrimitive);
         }

@@ -439,6 +439,12 @@ class ThreePointsCurve {
 
         this.draggingPrimitive = null;
         this.beforeDragPosition = null;
+
+        this.coordinateDataCache = [];
+
+        // remove moving primitives
+        if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
     }
 }
 
