@@ -134,9 +134,9 @@ export function setupEditableModal(viewerContainer) {
  * @param {Array} pickedObjects 
  */
 export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedObjects) {
-    const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
-    // cesium api update for wgs84ToWindowCoordinates
-    // const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+    // const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+    // cesium api update for world position to WindowCoordinates
+    const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
     pointerOverlay.style.display = 'block';
     pointerOverlay.style.left = `${screenPosition.x - 5}px`;
     pointerOverlay.style.top = `${screenPosition.y - 5}px`;
