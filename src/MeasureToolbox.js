@@ -22,6 +22,7 @@ import profileImg from "./assets/profileImg.svg";
 import profileDistancesImg from "./assets/profileDistancesImg.svg";
 import clearImg from "./assets/clearImg.svg"
 import { Picker } from "./lib/features/Picker.js";
+import { FlyThrough } from "./lib/features/FlyThrough.js";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -161,6 +162,11 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new ProfileDistances(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
                 name: "Profile-Distances",
                 icon: profileDistancesImg
+            },
+            {
+                instance: new FlyThrough(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
+                name: "Fly-Through",
+                icon: pickerImg
             },
         ];
 

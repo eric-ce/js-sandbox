@@ -19,7 +19,7 @@ class CesiumMap {
         this.div = document.createElement("div");
         this.div.id = "cesiumContainer";
         document.body.appendChild(this.div);
-        this.div.style.width = "95%";
+        this.div.style.width = "90%";
         this.div.style.height = "auto";
         this.div.style.margin = "auto";
         this.div.style.position = "relative";
