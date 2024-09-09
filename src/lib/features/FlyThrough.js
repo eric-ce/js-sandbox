@@ -27,6 +27,14 @@ class FlyThrough {
                 this.pointCollection.add(point);
             });
         }
+        this.goData = this.loadGoData();
+        if (this.goData.length > 0) {
+            this.goData.forEach((position) => {
+                const point = createPointPrimitive(position, Cesium.Color.BLUE);
+                point.id = generateId(position, "fly_through_point");
+                this.pointCollection.add(point);
+            });
+        }
     }
 
     /**
@@ -52,18 +60,22 @@ class FlyThrough {
     }
 
     handleFlyThroughLeftClick(movement) {
+        console.log(`${this.coordinate.x}, ${this.coordinate.y}, ${this.coordinate.z}`);
         const pickedObject = this.viewer.scene.pick(movement.position);
         console.log("🚀  pickedObject:", pickedObject);
 
         if (Cesium.defined(pickedObject) && pickedObject.id.includes("fly_through_point")) {
             const pickedPointPosition = pickedObject.primitive._position;
-            console.log("🚀  pickedPointPosition:", pickedPointPosition);
 
             // const findPoint = this.flyData.find(() => Cesium.Cartesian3.equals(pickedPointPosition, ));
-            const findPoint = this.flyData.find((point) => Cesium.Cartesian3.equals(pickedPointPosition, point));
+            const findPointInFlyData = this.flyData.find((point) => Cesium.Cartesian3.equals(pickedPointPosition, point));
+            const findPointInGoData = this.goData.find((point) => Cesium.Cartesian3.equals(pickedPointPosition, point));
 
-            if (findPoint) {
-                this.startFlyThrough();
+            if (findPointInFlyData) {
+                this.startFlyThrough(this.flyData);
+            }
+            if (findPointInGoData) {
+                this.startFlyThrough(this.goData);
             }
         }
         // const findFlyPoint = this.flyData.find((point) => {})
@@ -71,18 +83,18 @@ class FlyThrough {
     }
 
     // fly through the position in this.flyData one by one
-    startFlyThrough() {
+    startFlyThrough(positionArray) {
         const flyToNextPoint = (index) => {
-            if (index >= this.flyData.length - 2) {
+            if (index >= positionArray.length) {
                 console.log('Completed fly-through.');
                 return; // Exit if we've visited all points
             }
             console.log(this.viewer.camera)
-            const position = this.flyData[index];
+            const position = positionArray[index];
             const nextIndex = index + 1;
-            const offsetPosition = Cesium.Cartographic.fromCartesian(position);
-            const offsetHeight = offsetPosition.height + 100;
-            const offsetCartesian = Cesium.Cartesian3.fromRadians(offsetPosition.longitude, offsetPosition.latitude, offsetHeight);
+            // const offsetPosition = Cesium.Cartographic.fromCartesian(position);
+            // const offsetHeight = offsetPosition.height + 100;
+            // const offsetCartesian = Cesium.Cartesian3.fromRadians(offsetPosition.longitude, offsetPosition.latitude, offsetHeight);
 
             // this.viewer.camera.flyTo({
             //     destination: position,
@@ -108,12 +120,12 @@ class FlyThrough {
             this.viewer.camera.flyToBoundingSphere(pointBoundingSphere, {
                 offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-20), 100),
                 duration: 3,
-                easingEffects: Cesium.EasingFunction.LINEAR_NONE,
+                easingEffects: Cesium.EasingFunction.QUADRATIC_IN_OUT,
                 complete: () => {
                     // this.viewer.camera.moveBackward(70);
                     setTimeout(() => {
                         flyToNextPoint(nextIndex); // Recursively fly to the next point
-                    }, 3000);
+                    }, 2000);
                 },
                 cancel: () => {
                     console.log('Fly-through was canceled.');
@@ -141,6 +153,20 @@ class FlyThrough {
         const point2 = new Cesium.Cartesian3(4402377.298390903, 217044.0988035, 4595014.426903738);
         const point1 = new Cesium.Cartesian3(4399015.383050317, 226727.06596455685, 4597879.00690766);
         positionArray = [point1, point2, point3, point4, point5];
+
+        return positionArray;
+    }
+
+    loadGoData() {
+        let positionArray = [];
+        const pt1 = new Cesium.Cartesian3(4401562.886717393, 225246.10648519278, 4595518.14798431);
+        const pt2 = new Cesium.Cartesian3(4401541.690621404, 225270.47641689502, 4595533.261946663);
+        const pt3 = new Cesium.Cartesian3(4401501.974991431, 225295.62235235822, 4595565.953207925);
+        const pt4 = new Cesium.Cartesian3(4401463.6864656145, 225317.52456706297, 4595604.4916294385);
+        const pt5 = new Cesium.Cartesian3(4401489.255786863, 225371.25566399848, 4595580.979378097);
+        const pt6 = new Cesium.Cartesian3(4401507.737535874, 225421.46254576897, 4595561.67362487);
+        positionArray = [pt1, pt2, pt3, pt4, pt5, pt6];
+
         return positionArray;
     }
 
