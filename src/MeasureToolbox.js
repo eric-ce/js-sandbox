@@ -8,6 +8,7 @@ import { MultiDistanceClamped } from "./lib/features/MultiDistanceClamped.js";
 import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
+import { FireTrack } from "./lib/features/FireTrack.js";
 import { removeInputActions, makeDraggable } from "./lib/helper/helper.js";
 import toolImg from "./assets/toolImg.svg";
 import pickerImg from "./assets/pickerImg.svg";
@@ -166,6 +167,11 @@ export class MeasureToolbox extends HTMLElement {
             {
                 instance: new FlyThrough(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
                 name: "Fly-Through",
+                icon: pickerImg
+            },
+            {
+                instance: new FireTrack(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
+                name: "Fire-Track",
                 icon: pickerImg
             },
         ];
