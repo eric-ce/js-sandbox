@@ -24,31 +24,33 @@ class Polygon {
 
         this.coordinate = new Cesium.Cartesian3();
 
-        // flags
-        this.isPolygonEnd = false; // flag to check if the polygon is finished
-        this.isDragMode = false;
+        // flags to control the state of the tool
+        this.flags = {
+            isPolygonEnd: false,   // flag to check if the polygon is finished
+            isDragMode: false      // flag to check if the polygon is in dragging mode
+        }
 
-        // Cesium Primitives
-        // point collection
+        // Coordinate management and related properties
+        this.coords = {
+            cache: [],      // Stores temporary coordinates during operations
+            groups: [],     // Tracks all coordinates involved in operations
+            dragStart: null // Stores the initial position before a drag begins
+        };
+
+        // Initialize Cesium primitives collections
         this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
-        this.viewer.scene.primitives.add(this.pointCollection);
-        this.movingPoint = null;
-        // polygon
-        this.movingPolygon = null;
-        this.movingPolygonOutline = null;
-        // label primitive
         this.labelCollection = new this.cesiumPkg.LabelCollection();
+        this.viewer.scene.primitives.add(this.pointCollection);
         this.viewer.scene.primitives.add(this.labelCollection);
-        this.movingLabelPrimitive = null;
 
-        // dragging feature variables
-        this.draggingPrimitive = null;
-        this.beforeDragPosition = null;
-
-        // coordinates orientated data: use for identify points, lines, labels
-        this.coordinateDataCache = [];
-        // all the click coordinates 
-        this.groupCoords = [];
+        // Interactive primitives for dynamic actions
+        this.interactivePrimitives = {
+            movingPolygon: null,
+            movingPolygonOutline: null,
+            movingLabelPrimitive: null, // Label that updates during moving or dragging
+            movingPoint: null,
+            draggingPoint: null         // Currently dragged point primitive
+        };
 
         this._areaRecords = [];
     }
@@ -94,7 +96,7 @@ class Polygon {
         if (!Cesium.defined(cartesian)) return;
 
         // Check if the measurement has ended
-        if (this.isPolygonEnd) {
+        if (this.flags.isPolygonEnd) {
             const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
             // editable label features: If picked object is a label primitive, make it editable
@@ -109,45 +111,45 @@ class Polygon {
 
             // reset variables
             this._areaRecords.length = 0;
-            this.isPolygonEnd = false;
+            this.flags.isPolygonEnd = false;
         }
 
-        if (!this.isPolygonEnd) {
+        if (!this.flags.isPolygonEnd) {
             const cartesian = this.coordinate;
-            this.coordinateDataCache.push(cartesian);
+            this.coords.cache.push(cartesian);
 
             // create point entity
             const color = Cesium.Color.fromRandom({ alpha: 1.0 });
             const point = createPointPrimitive(this.coordinate, color);
-            point.id = generateId(this.coordinate, "polygon_point");
+            point.id = generateId(this.coordinate, "polygon_point_pending");
             this.pointCollection.add(point);
 
 
             // If three points create the polygon primitive
-            if (this.coordinateDataCache.length > 2) {
+            if (this.coords.cache.length > 2) {
                 // create polygon primitive
-                if (this.movingPolygon) this.viewer.scene.primitives.remove(this.movingPolygon);
-                if (this.movingPolygonOutline) this.viewer.scene.primitives.remove(this.movingPolygonOutline);
-                const polygonGeometry = createPolygonGeometryInstance(this.coordinateDataCache, "polygon");
+                if (this.interactivePrimitives.movingPolygon) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygon);
+                if (this.interactivePrimitives.movingPolygonOutline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygonOutline);
+                const polygonGeometry = createPolygonGeometryInstance(this.coords.cache, "polygon");
                 const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
-                this.movingPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
+                this.interactivePrimitives.movingPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
 
                 // create polygon outline primitive
-                const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coordinateDataCache, "polygon_outline");
+                const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.cache, "polygon_outline");
                 const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
-                this.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
+                this.interactivePrimitives.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
                 // create label primitive
-                const polygonArea = this._computePolygonArea(this.coordinateDataCache);
+                const polygonArea = this._computePolygonArea(this.coords.cache);
                 const midPoint = Cesium.Cartesian3.midpoint(
-                    this.coordinateDataCache[0],
-                    this.coordinateDataCache[this.coordinateDataCache.length - 1],
+                    this.coords.cache[0],
+                    this.coords.cache[this.coords.cache.length - 1],
                     new Cesium.Cartesian3()
                 );
-                if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-                this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(this.coordinateDataCache[0], this.coordinateDataCache[this.coordinateDataCache.length - 1], polygonArea));
-                this.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
-                this.movingLabelPrimitive.id = generateId(midPoint, "polygon_label");
+                if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
+                this.interactivePrimitives.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(this.coords.cache[0], this.coords.cache[this.coords.cache.length - 1], polygonArea));
+                this.interactivePrimitives.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
+                this.interactivePrimitives.movingLabelPrimitive.id = generateId(midPoint, "polygon_label");
             }
         }
     }
@@ -165,26 +167,26 @@ class Polygon {
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
         pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
-        if (this.isPolygonEnd) return;
+        if (this.flags.isPolygonEnd) return;
 
-        if (this.coordinateDataCache.length > 2) {
-            if (this.movingPoint) this.pointCollection.remove(this.movingPoint);
+        if (this.coords.cache.length > 2) {
+            if (this.interactivePrimitives.movingPoint) this.pointCollection.remove(this.interactivePrimitives.movingPoint);
             const movingPoint = createPointPrimitive(cartesian, Cesium.Color.RED);
             movingPoint.id = generateId(cartesian, "polygon_moving_point");
-            this.movingPoint = this.pointCollection.add(movingPoint);
+            this.interactivePrimitives.movingPoint = this.pointCollection.add(movingPoint);
 
             // remove and create the polygon primitive
-            if (this.movingPolygon) this.viewer.scene.primitives.remove(this.movingPolygon);
-            if (this.movingPolygonOutline) this.viewer.scene.primitives.remove(this.movingPolygonOutline);
-            const movingCoordinateDataCache = [...this.coordinateDataCache, cartesian];
+            if (this.interactivePrimitives.movingPolygon) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygon);
+            if (this.interactivePrimitives.movingPolygonOutline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygonOutline);
+            const movingCoordinateDataCache = [...this.coords.cache, cartesian];
             const polygonGeometry = createPolygonGeometryInstance(movingCoordinateDataCache, "polygon_moving");
             const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
-            this.movingPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
+            this.interactivePrimitives.movingPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
 
             // create polygon outline primitive
             const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(movingCoordinateDataCache, "polygon_moving_outline");
             const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
-            this.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
+            this.interactivePrimitives.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // create label primitive
             const polygonArea = this._computePolygonArea(movingCoordinateDataCache);
@@ -193,15 +195,15 @@ class Polygon {
                 movingCoordinateDataCache[movingCoordinateDataCache.length - 1],
                 new Cesium.Cartesian3()
             );
-            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-            this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(movingCoordinateDataCache[0], movingCoordinateDataCache[movingCoordinateDataCache.length - 1], polygonArea));
-            this.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
-            this.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
+            if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
+            this.interactivePrimitives.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(movingCoordinateDataCache[0], movingCoordinateDataCache[movingCoordinateDataCache.length - 1], polygonArea));
+            this.interactivePrimitives.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
+            this.interactivePrimitives.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
         }
     }
 
     handlePolygonRightClick(movement) {
-        if (!this.isPolygonEnd) {
+        if (!this.flags.isPolygonEnd) {
             const cartesian = this.coordinate;
 
             if (!Cesium.defined(cartesian)) return;
@@ -211,30 +213,36 @@ class Polygon {
             this.pointCollection.add(point);
 
             // update coordinate data cache
-            this.coordinateDataCache.push(this.coordinate);
-            this.groupCoords.push([...this.coordinateDataCache]);
+            this.coords.cache.push(this.coordinate);
+            this.coords.groups.push([...this.coords.cache]);
+
+            // update pending point id
+            const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"));
+            if (pendingPoints && pendingPoints.length > 0) {
+                pendingPoints.forEach(p => p.id = p.id.replace("_pending", ""));
+            }
 
             // remove moving point
-            if (this.movingPoint) this.pointCollection.remove(this.movingPoint);
+            if (this.interactivePrimitives.movingPoint) this.pointCollection.remove(this.interactivePrimitives.movingPoint);
 
             // remove and create the polygon primitive
-            if (this.movingPolygon) this.viewer.scene.primitives.remove(this.movingPolygon);
-            if (this.movingPolygonOutline) this.viewer.scene.primitives.remove(this.movingPolygonOutline);
-            const polygonGeometry = createPolygonGeometryInstance(this.coordinateDataCache, "polygon");
+            if (this.interactivePrimitives.movingPolygon) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygon);
+            if (this.interactivePrimitives.movingPolygonOutline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygonOutline);
+            const polygonGeometry = createPolygonGeometryInstance(this.coords.cache, "polygon");
             const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(polygonPrimitive);
 
             // create polygon outline primitive
-            const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coordinateDataCache, "polygon_outline");
+            const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.cache, "polygon_outline");
             const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // create label primitive
-            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-            const polygonArea = this._computePolygonArea(this.coordinateDataCache);
+            if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
+            const polygonArea = this._computePolygonArea(this.coords.cache);
             const midPoint = Cesium.Cartesian3.midpoint(
-                this.coordinateDataCache[0],
-                this.coordinateDataCache[this.coordinateDataCache.length - 1],
+                this.coords.cache[0],
+                this.coords.cache[this.coords.cache.length - 1],
                 new Cesium.Cartesian3()
             );
             const label = createLabelPrimitive(midPoint, midPoint, 0);
@@ -247,10 +255,10 @@ class Polygon {
             this.logRecordsCallback(polygonArea.toFixed(2));
 
             //set flag to the end drawing of polygon
-            this.isPolygonEnd = true;
+            this.flags.isPolygonEnd = true;
 
             // reset variables
-            this.coordinateDataCache.length = 0;
+            this.coords.cache.length = 0;
         }
     }
 
@@ -258,7 +266,7 @@ class Polygon {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.groupCoords.length > 0) {
+        if (this.coords.groups.length > 0) {
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
 
             const pointPrimitive = pickedObjects.find(p => {
@@ -276,25 +284,25 @@ class Polygon {
             }
 
             this.viewer.scene.screenSpaceCameraController.enableInputs = false;
-            this.isDragMode = true;
+            this.flags.isDragMode = true;
 
-            this.draggingPrimitive = pointPrimitive.primitive;
-            this.beforeDragPosition = pointPrimitive.primitive.position.clone();
+            this.interactivePrimitives.draggingPoint = pointPrimitive.primitive;
+            this.coords.dragStart = pointPrimitive.primitive.position.clone();
 
 
 
             // set label not show
-            const group = this.groupCoords.find(g => g.some(pos => Cesium.Cartesian3.equals(pos, this.beforeDragPosition)));
+            const group = this.coords.groups.find(g => g.some(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart)));
             const midPoint = Cesium.Cartesian3.midpoint(group[0], group[group.length - 1], new Cesium.Cartesian3());
 
-            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
 
             const targetLabelPrimitive = this.labelCollection._labels.find(label => Cesium.Cartesian3.equals(label.position, midPoint) && !label.id.includes("moving"));
             targetLabelPrimitive.show = false;
 
             // Set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handlePolygonDrag(movement, this.draggingPrimitive, group);
+                this.handlePolygonDrag(movement, this.interactivePrimitives.draggingPoint, group);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         }
 
@@ -311,18 +319,18 @@ class Polygon {
         pointEntity.position = cartesian;
 
         // moving coordinate data
-        // const group = this.groupCoords.find(g => g.some(pos => Cesium.Cartesian3.equals(pos, this.beforeDragPosition)));
-        const positionIndex = group.findIndex(pos => Cesium.Cartesian3.equals(pos, this.beforeDragPosition));
+        // const group = this.coords.groups.find(g => g.some(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart)));
+        const positionIndex = group.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
         const movingCoordinateData = [...group]
         movingCoordinateData[positionIndex] = cartesian;
 
         // update polygon and label primitive
-        if (this.movingPolygon) this.viewer.scene.primitives.remove(this.movingPolygon);
-        if (this.movingPolygonOutline) this.viewer.scene.primitives.remove(this.movingPolygonOutline);
+        if (this.interactivePrimitives.movingPolygon) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygon);
+        if (this.interactivePrimitives.movingPolygonOutline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygonOutline);
         // remove the polygon
         const polygonPrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id.startsWith("annotate") && p.geometryInstances.id.includes("polygon") && !p.geometryInstances.id.includes("moving"));
         if (polygonPrimitives.length > 0) {
-            const targetPolygonPrimitiveSet = polygonPrimitives.filter(p => p.geometryInstances.geometry._polygonHierarchy.positions.some(pos => Cesium.Cartesian3.equals(pos, this.beforeDragPosition)));
+            const targetPolygonPrimitiveSet = polygonPrimitives.filter(p => p.geometryInstances.geometry._polygonHierarchy.positions.some(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart)));
             if (targetPolygonPrimitiveSet.length > 0) {
                 targetPolygonPrimitiveSet.forEach(p => {
                     this.viewer.scene.primitives.remove(p);
@@ -332,44 +340,44 @@ class Polygon {
         // create polygon primitive
         const polygonGeometry = createPolygonGeometryInstance(movingCoordinateData, "polygon_moving");
         const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
-        this.movingPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
+        this.interactivePrimitives.movingPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
 
         // create polygon outline primitive
         const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(movingCoordinateData, "polygon_moving_outline");
         const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
-        this.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
+        this.interactivePrimitives.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
         // update moving label primitive
-        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+        if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
         const polygonArea = this._computePolygonArea(movingCoordinateData);
         const midPoint = Cesium.Cartesian3.midpoint(
             movingCoordinateData[0],
             movingCoordinateData[movingCoordinateData.length - 1],
             new Cesium.Cartesian3()
         );
-        this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(movingCoordinateData[0], movingCoordinateData[movingCoordinateData.length - 1], polygonArea));
-        this.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
-        this.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
+        this.interactivePrimitives.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(movingCoordinateData[0], movingCoordinateData[movingCoordinateData.length - 1], polygonArea));
+        this.interactivePrimitives.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
+        this.interactivePrimitives.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
     }
 
     handlePolygonDragEnd(movement) {
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.draggingPrimitive && this.isDragMode) {
-            const groupIndex = this.groupCoords.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.beforeDragPosition)));
+        if (this.interactivePrimitives.draggingPoint && this.flags.isDragMode) {
+            const groupIndex = this.coords.groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
             if (groupIndex === -1) {
                 console.error("No group coordinates found");
                 return;
             }
-            const group = this.groupCoords[groupIndex];
+            const group = this.coords.groups[groupIndex];
             // polygon and label primitives
             const polygonPrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id.startsWith("annotate") && p.geometryInstances.id.includes("polygon") && !p.geometryInstances.id.includes("moving"));
 
             // remove the polygon primitive
-            if (this.movingPolygon) this.viewer.scene.primitives.remove(this.movingPolygon);
-            if (this.movingPolygonOutline) this.viewer.scene.primitives.remove(this.movingPolygonOutline);
+            if (this.interactivePrimitives.movingPolygon) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygon);
+            if (this.interactivePrimitives.movingPolygonOutline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygonOutline);
             if (polygonPrimitives.length > 0) {
-                const targetPolygonPrimitiveSet = polygonPrimitives.filter(p => p.geometryInstances.geometry._polygonHierarchy.positions.some(pos => Cesium.Cartesian3.equals(pos, this.beforeDragPosition)));
+                const targetPolygonPrimitiveSet = polygonPrimitives.filter(p => p.geometryInstances.geometry._polygonHierarchy.positions.some(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart)));
                 if (targetPolygonPrimitiveSet.length > 0) {
                     targetPolygonPrimitiveSet.forEach(p => {
                         this.viewer.scene.primitives.remove(p);
@@ -389,26 +397,26 @@ class Polygon {
             );
 
             // update group coordinates
-            const positionIndex = group.findIndex(pos => Cesium.Cartesian3.equals(pos, this.beforeDragPosition));
-            this.groupCoords[groupIndex][positionIndex] = this.coordinate;
+            const positionIndex = group.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
+            this.coords.groups[groupIndex][positionIndex] = this.coordinate;
 
             // create polygon primitive
-            const polygonGeometry = createPolygonGeometryInstance(this.groupCoords[groupIndex], "polygon");
+            const polygonGeometry = createPolygonGeometryInstance(this.coords.groups[groupIndex], "polygon");
             const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(polygonPrimitive);
             // create polygon outline primitive
-            const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.groupCoords[groupIndex], "polygon_outline");
+            const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.groups[groupIndex], "polygon_outline");
             const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // update label primitive
-            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
             if (targetLabelPrimitive) {
                 targetLabelPrimitive.show = true;
-                const polygonArea = this._computePolygonArea(this.groupCoords[groupIndex]);
+                const polygonArea = this._computePolygonArea(this.coords.groups[groupIndex]);
                 const newMidPoint = Cesium.Cartesian3.midpoint(
-                    this.groupCoords[groupIndex][0],
-                    this.groupCoords[groupIndex][this.groupCoords[groupIndex].length - 1],
+                    this.coords.groups[groupIndex][0],
+                    this.coords.groups[groupIndex][this.coords.groups[groupIndex].length - 1],
                     new Cesium.Cartesian3()
                 );
                 targetLabelPrimitive.position = newMidPoint;
@@ -421,8 +429,8 @@ class Polygon {
             }
 
             // reset dragging primitive and flags
-            this.draggingPrimitive = null;
-            this.isDragMode = false;
+            this.interactivePrimitives.draggingPoint = null;
+            this.flags.isDragMode = false;
         }
         // set back to default polygon mouse moving actions
         this.handler.setInputAction((movement) => {
@@ -455,23 +463,26 @@ class Polygon {
     }
 
     resetValue() {
-        this.coordinate = new Cesium.Cartesian3();
+        this.coordinate = null;
 
         this.pointerOverlay.style.display = 'none';
 
-        this.isPolygonEnd = false;
-        this.isDragMode = false;
+        this.flags.isPolygonEnd = false;
+        this.flags.isDragMode = false;
 
-        this.draggingPrimitive = null;
-        this.beforeDragPosition = null;
+        this.interactivePrimitives.draggingPoint = null;
+        this.coords.dragStart = null;
 
-        this.coordinateDataCache = [];
+        this.coords.cache = [];
 
         // remove the moving primitives
-        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-        if (this.movingPolygon) this.viewer.scene.primitives.remove(this.movingPolygon);
-        if (this.movingPolygonOutline) this.viewer.scene.primitives.remove(this.movingPolygonOutline);
-        if (this.movingPoint) this.pointCollection.remove(this.movingPoint);
+        if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
+        if (this.interactivePrimitives.movingPolygon) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygon);
+        if (this.interactivePrimitives.movingPolygonOutline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygonOutline);
+        if (this.interactivePrimitives.movingPoint) this.pointCollection.remove(this.interactivePrimitives.movingPoint);
+
+        // remove pending point
+        this.pointCollection._pointPrimitives.filter(p => p?.id?.includes("pending")).forEach(p => this.pointCollection.remove(p));
     }
 }
 

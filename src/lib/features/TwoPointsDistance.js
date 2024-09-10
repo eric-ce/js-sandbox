@@ -130,10 +130,10 @@ class TwoPointsDistance {
             // create line and label
             if (this.coords.cache.length === 2) {
                 // update pending point id
-                const isPointPending = this.interactivePrimitives.firstPoint.id.includes("pending")
-                if (isPointPending) {
-                    this.interactivePrimitives.firstPoint.id = generateId(this.interactivePrimitives.firstPoint.position, "distance_point")
-                };
+                const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"));
+                if (pendingPoints && pendingPoints.length > 0) {
+                    pendingPoints.forEach(p => p.id = p.id.replace("_pending", ""));
+                }
 
                 // create line primitive
                 if (this.interactivePrimitives.movingPolyline) {
@@ -213,7 +213,7 @@ class TwoPointsDistance {
     handleDistanceDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-        if (this.coords.cache.length > 1) {
+        if (this.coords.groups.length > 1) {
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
 
             const pointPrimitive = pickedObjects.find(p => {
@@ -376,7 +376,7 @@ class TwoPointsDistance {
         if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
         if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
         // remove pending point
-        this.pointCollection._pointPrimitives.filter(p => p.id.includes("pending")).forEach(p => this.pointCollection.remove(p));
+        this.pointCollection._pointPrimitives.filter(p => p?.id?.includes("pending")).forEach(p => this.pointCollection.remove(p));
 
     }
 }

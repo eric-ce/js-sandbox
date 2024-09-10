@@ -28,31 +28,35 @@ class ThreePointsCurve {
 
         this.cesiumPkg = cesiumPkg;
 
-        // cesium primitives
-        // point primitives
-        this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
-        this.viewer.scene.primitives.add(this.pointCollection);
-        this.draggingPrimitive = null;
-        // line primitives
-        this.movingPolylinePrimitive = null;
-        // label primitives
-        this.labelCollection = new this.cesiumPkg.LabelCollection();
-        this.viewer.scene.primitives.add(this.labelCollection);
-        this.movingLabelPrimitive = null;
-
-        // flags
-        this.isCurveStarted = false;
-        this.isDragMode = false;
-
-        // coordinates data
         this.coordinate = new Cesium.Cartesian3();
-        this.beforeDragPosition = new Cesium.Cartesian3();
-        this.beforeDragPositionSet = [];
-        this.dragUpdatedPosition = [];
-        // coordinates orientated data: use for identify points, lines, labels
-        this.coordinateDataCache = [];
-        // all the click coordinates 
-        this.groupCoords = [];
+
+        // flags to control the state of the tool
+        this.flags = {
+            isCurveStarted: false,
+            isDragMode: false,
+        }
+
+        // Coordinate management and related properties
+        this.coords = {
+            cache: [],          // Stores temporary coordinates during operations
+            groups: [],         // Tracks all coordinates involved in operations
+            dragStart: null,    // Stores the initial position before a drag begins
+            dragSet: [],        // Stores the set of coordinates being dragged
+            dragUpdated: [],    // Stores the updated set of coordinates after a drag
+        };
+
+        // Initialize Cesium primitives collections
+        this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
+        this.labelCollection = new this.cesiumPkg.LabelCollection();
+        this.viewer.scene.primitives.add(this.pointCollection);
+        this.viewer.scene.primitives.add(this.labelCollection);
+
+        // Interactive primitives for dynamic actions
+        this.interactivePrimitives = {
+            movingPolylinePrimitive: null,  // Line that visualizes dragging or moving
+            movingLabelPrimitive: null,     // Label that updates during moving or dragging
+            draggingPoint: null             // Currently dragged point primitive
+        };
 
         this._curveRecords = [];
     }
@@ -94,7 +98,7 @@ class ThreePointsCurve {
     handleCurveLeftClick(movement) {
         // Check if the measurement has started
         // if pick the label primitive, make the label primitive editable
-        if (!this.isCurveStarted) {
+        if (!this.flags.isCurveStarted) {
             const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
             // If picked object is a label primitive, make it editable
@@ -108,25 +112,31 @@ class ThreePointsCurve {
             }
 
             // Set flag that the measurement has started
-            this.isCurveStarted = true;
+            this.flags.isCurveStarted = true;
         }
 
         // use mouse move position to control only one pickPosition is used
         const cartesian = this.coordinate;
-        this.coordinateDataCache.push(cartesian);
+        this.coords.cache.push(cartesian);
 
         // Check if the position is defined
         if (!Cesium.defined(cartesian)) return;
 
         const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-        point.id = generateId(this.coordinate, "curve_point");
+        point.id = generateId(this.coordinate, "curve_point_pending");
         this.pointCollection.add(point);
 
         // Check if it had collected 3 points, then measure the curve distance
-        if (this.coordinateDataCache.length === 3) {
-            this.groupCoords.push([...this.coordinateDataCache]);
+        if (this.coords.cache.length === 3) {
+            this.coords.groups.push([...this.coords.cache]);
 
-            const [start, middle, end] = this.coordinateDataCache;
+            const [start, middle, end] = this.coords.cache;
+
+            // update pending point id 
+            const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"));
+            if (pendingPoints && pendingPoints.length > 0) {
+                pendingPoints.forEach(p => p.id = p.id.replace("_pending", ""));
+            }
 
             // create curve points
             const numInterpolationPoints = Math.max(
@@ -161,9 +171,9 @@ class ThreePointsCurve {
             this.logRecordsCallback(totalDistance.toFixed(2));
 
             // set flag that the measurement has ended
-            this.isCurveStarted = false;
+            this.flags.isCurveStarted = false;
             // reset the coordinate data cache
-            this.coordinateDataCache.length = 0;
+            this.coords.cache = [];
         }
     }
 
@@ -186,7 +196,7 @@ class ThreePointsCurve {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.groupCoords.length === 0) return;
+        if (this.coords.groups.length === 0) return;
 
         const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
         const pointPrimitive = pickedObjects.find(p => p.primitive && p.primitive?.id?.startsWith("annotate_curve_point"));
@@ -199,14 +209,14 @@ class ThreePointsCurve {
 
         // disable camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = false;
-        this.isDragMode = true;
+        this.flags.isDragMode = true;
 
-        this.draggingPrimitive = pointPrimitive.primitive;
-        this.beforeDragPosition = pointPrimitive.primitive.position.clone();
-        this.beforeDragPositionSet = this.groupCoords.find(group => group.some(coord => Cesium.Cartesian3.equals(coord, this.beforeDragPosition)));
+        this.interactivePrimitives.draggingPoint = pointPrimitive.primitive;
+        this.coords.dragStart = pointPrimitive.primitive.position.clone();
+        this.coords.dragSet = this.coords.groups.find(group => group.some(coord => Cesium.Cartesian3.equals(coord, this.coords.dragStart)));
 
         // find the relative line primitive to the dragging point
-        const lookupId = generateId(this.beforeDragPosition, "curve_line").split("_").pop();
+        const lookupId = generateId(this.coords.dragStart, "curve_line").split("_").pop();
         const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_curve_line"));
         const linePrimitive = linePrimitives.find(p => p.geometryInstances.id.includes(lookupId));
 
@@ -214,7 +224,7 @@ class ThreePointsCurve {
         linePrimitive ? linePrimitive.show = false : console.error("No specific line primitives found");
 
         // find the relative label primitive to the dragging point
-        const [start, , end] = this.beforeDragPositionSet;
+        const [start, , end] = this.coords.dragSet;
         const midPoint = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
 
         const labelCollections = this.viewer.scene.primitives._primitives.filter(p => p._labels);
@@ -229,16 +239,16 @@ class ThreePointsCurve {
         labelPrimitive ? labelPrimitive.show = false : console.error("No specific label primitives found");
 
         // initialize an moving label primitive, and update it in handleCurveDrag()
-        this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(start, end, 0));
-        this.movingLabelPrimitive.id = generateId(midPoint, "curve_drag_moving_label");
-        this.movingLabelPrimitive.show = false;
+        this.interactivePrimitives.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(start, end, 0));
+        this.interactivePrimitives.movingLabelPrimitive.id = generateId(midPoint, "curve_drag_moving_label");
+        this.interactivePrimitives.movingLabelPrimitive.show = false;
 
-        // find the index in the group from this.groupCoords, so that it can know which position to update
-        const groupIndexForDragPoint = this.beforeDragPositionSet.findIndex(coord => Cesium.Cartesian3.equals(coord, this.beforeDragPosition));
+        // find the index in the group from this.coords.groups, so that it can know which position to update
+        const groupIndexForDragPoint = this.coords.dragSet.findIndex(coord => Cesium.Cartesian3.equals(coord, this.coords.dragStart));
 
         // set move event for dragging
         this.handler.setInputAction((movement) => {
-            this.handleCurveDrag(movement, this.draggingPrimitive, groupIndexForDragPoint);
+            this.handleCurveDrag(movement, this.interactivePrimitives.draggingPoint, groupIndexForDragPoint);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
@@ -247,12 +257,12 @@ class ThreePointsCurve {
      * 
      * @param {{endPosition: Cesium.Cartesian2}} movement 
      * @param {Cesium.Primitive} pointPrimitive - The dragging point primitive
-     * @param {Number} groupIndexForDragPoint - The index of before drag position in the group from this.groupCoords
+     * @param {Number} groupIndexForDragPoint - The index of before drag position in the group from this.coords.groups
      * @returns 
      */
     handleCurveDrag(movement, pointPrimitive, groupIndexForDragPoint) {
         // error handling: if not in drag mode then early exit
-        if (!this.isDragMode) return;
+        if (!this.flags.isDragMode) return;
 
         this.pointerOverlay.style.display = "none";
 
@@ -265,9 +275,9 @@ class ThreePointsCurve {
         pointPrimitive.position = cartesian;
 
         // update position: clone the before drag position set and update the dragging point position
-        const newSetPosition = [...this.beforeDragPositionSet];
+        const newSetPosition = [...this.coords.dragSet];
         newSetPosition[groupIndexForDragPoint] = cartesian;
-        this.dragUpdatedPosition = newSetPosition;
+        this.coords.dragUpdated = newSetPosition;
 
         // create curve points for the drag updated position
         const [start, middle, end] = newSetPosition;
@@ -281,31 +291,31 @@ class ThreePointsCurve {
         const curvePoints = this.createCurvePoints(start, middle, end, numInterpolationPoints);
 
         // update moving line primitive by remove the old one and create a new one
-        if (this.movingPolylinePrimitive) {
-            this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+        if (this.interactivePrimitives.movingPolylinePrimitive) {
+            this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolylinePrimitive);
         }
         const movingLineGeometryInstance = createLineGeometryInstance(curvePoints, "curve_drag_moving_line");
         const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
 
-        this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
+        this.interactivePrimitives.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
 
         // update moving label primitive
         const distance = this.measureCurveDistance(curvePoints);
-        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-        this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(start, end, distance));
+        if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
+        this.interactivePrimitives.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(start, end, distance));
         const midPoint = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
-        this.movingLabelPrimitive.id = generateId(midPoint, "curve_drag_moving_label");
+        this.interactivePrimitives.movingLabelPrimitive.id = generateId(midPoint, "curve_drag_moving_label");
     }
 
     handleCurveDragEnd(movement) {
         // set camera movement back to default
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.draggingPrimitive && this.isDragMode) {
-            const lookupId = generateId(this.beforeDragPosition, "curve_line").split("_").pop();
+        if (this.interactivePrimitives.draggingPoint && this.flags.isDragMode) {
+            const lookupId = generateId(this.coords.dragStart, "curve_line").split("_").pop();
 
             // calculate curvePoints for the drag updated position
-            const [start, middle, end] = this.dragUpdatedPosition;
+            const [start, middle, end] = this.coords.dragUpdated;
             const numInterpolationPoints = Math.max(
                 Math.round(
                     Cesium.Cartesian3.distance(start, middle) +
@@ -316,8 +326,8 @@ class ThreePointsCurve {
             const curvePoints = this.createCurvePoints(start, middle, end, numInterpolationPoints);
 
             // remove the moving line primitive
-            if (this.movingPolylinePrimitive) {
-                this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+            if (this.interactivePrimitives.movingPolylinePrimitive) {
+                this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolylinePrimitive);
             }
 
             // update the curve line primitive
@@ -339,12 +349,12 @@ class ThreePointsCurve {
 
             // update the curve label primitive
             // find the relative label primitive to the dragging point
-            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
 
             const labelCollections = this.viewer.scene.primitives._primitives.filter(p => p._labels);
 
             if (labelCollections.length > 0) {
-                const [oldStart, , oldEnd] = this.beforeDragPositionSet;
+                const [oldStart, , oldEnd] = this.coords.dragSet;
                 const oldMidPoint = Cesium.Cartesian3.midpoint(oldStart, oldEnd, new Cesium.Cartesian3());
 
                 const midPoint = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
@@ -374,10 +384,10 @@ class ThreePointsCurve {
                 return;
             }
 
-            // update the this.groupCoords with the new drag end positions
-            const groupIndex = this.groupCoords.findIndex(group => group.find(coord => Cesium.Cartesian3.equals(coord, this.beforeDragPosition)));
+            // update the this.coords.groups with the new drag end positions
+            const groupIndex = this.coords.groups.findIndex(group => group.find(coord => Cesium.Cartesian3.equals(coord, this.coords.dragStart)));
             if (groupIndex !== -1) {
-                this.groupCoords[groupIndex] = this.dragUpdatedPosition;
+                this.coords.groups[groupIndex] = this.coords.dragUpdated;
             }
         }
 
@@ -386,8 +396,8 @@ class ThreePointsCurve {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
         // reset dragging primitive and flags
-        this.draggingPrimitive = null;
-        this.isDragMode = false;
+        this.interactivePrimitives.draggingPoint = null;
+        this.flags.isDragMode = false;
     }
 
     /**
@@ -429,22 +439,28 @@ class ThreePointsCurve {
         );
     }
 
-    resetvalue() {
+    resetValue() {
         this.coordinate = null;
 
         this.pointerOverlay.style.display = 'none';
 
-        this.isCurveStarted = false;
-        this.isDragMode = false;
+        this.flags.isCurveStarted = false;
+        this.flags.isDragMode = false;
 
-        this.draggingPrimitive = null;
-        this.beforeDragPosition = null;
+        this.interactivePrimitives.draggingPoint = null;
+        this.coords.dragStart = null;
 
-        this.coordinateDataCache = [];
+        this.coords.cache = [];
 
         // remove moving primitives
-        if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
-        if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+        if (this.interactivePrimitives.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolylinePrimitive);
+        if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
+
+        // remove pending point
+        const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id.includes("pending"))
+        console.log("🚀  pendingPoints:", pendingPoints);
+
+        pendingPoints.forEach(p => this.pointCollection.remove(p));
     }
 }
 
