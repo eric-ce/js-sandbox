@@ -68,7 +68,7 @@ class MultiDistanceClamped {
     }
 
     /**
-     * Sets up input actions for three points curve mode.
+     * Sets up input actions for multi-distance clamped mode.
      */
     setupInputActions() {
         removeInputActions(this.handler);
@@ -95,7 +95,7 @@ class MultiDistanceClamped {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for multi-distance clamped mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

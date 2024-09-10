@@ -66,7 +66,7 @@ class Height {
     }
 
     /**
-     * Sets up input actions for three points curve mode.
+     * Sets up input actions for height mode.
      */
     setupInputActions() {
         removeInputActions(this.handler);
@@ -89,7 +89,7 @@ class Height {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for height mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

@@ -56,7 +56,7 @@ class Polygon {
     }
 
     /**
-     * Sets up input actions for three points curve mode.
+     * Sets up input actions for polygon mode.
      */
     setupInputActions() {
         removeInputActions(this.handler);
@@ -83,7 +83,7 @@ class Polygon {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for polygon mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

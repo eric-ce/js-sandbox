@@ -60,7 +60,7 @@ class TwoPointsDistance {
     }
 
     /**
-     * Sets up input actions for three points curve mode.
+     * Sets up input actions for two points distance mode.
      */
     setupInputActions() {
         removeInputActions(this.handler);
@@ -83,7 +83,7 @@ class TwoPointsDistance {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for two points distance mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

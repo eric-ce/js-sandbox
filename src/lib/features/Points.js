@@ -59,7 +59,7 @@ class Points {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for points mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

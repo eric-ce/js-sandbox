@@ -23,7 +23,7 @@ class Picker {
     }
 
     /**
-     * Sets up input actions for points mode.
+     * Sets up input actions for picker mode.
     */
     setupInputActions() {
         removeInputActions(this.handler);
@@ -38,7 +38,7 @@ class Picker {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for picker mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

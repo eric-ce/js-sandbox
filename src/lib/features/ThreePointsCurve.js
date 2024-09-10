@@ -85,7 +85,7 @@ class ThreePointsCurve {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for three points curve mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

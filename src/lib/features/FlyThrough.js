@@ -40,7 +40,7 @@ class FlyThrough {
     }
 
     /**
-     * Sets up input actions for three points curve mode.
+     * Sets up input actions for flyThrough mode.
      */
     setupInputActions() {
         removeInputActions(this.handler);
@@ -55,7 +55,7 @@ class FlyThrough {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for flyThrough mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

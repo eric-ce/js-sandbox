@@ -56,7 +56,7 @@ class Profile {
     }
 
     /**
-     * Sets up input actions for three points curve mode.
+     * Sets up input actions for profile mode.
      */
     setupInputActions() {
         removeInputActions(this.handler);
@@ -79,7 +79,7 @@ class Profile {
     }
 
     /**
-     * Removes input actions for height measurement mode.
+     * Removes input actions for profile mode.
      */
     removeInputAction() {
         removeInputActions(this.handler);

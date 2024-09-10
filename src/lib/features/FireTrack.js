@@ -32,6 +32,7 @@ class FireTrack {
         }
 
         this.selectedPolyline = null;
+        this.selectedPolylinePending = null;
     }
 
     /**
@@ -57,8 +58,23 @@ class FireTrack {
     }
 
     handleFireTackLeftClick(movement) {
+        const pickedObject = this.viewer.scene.pick(movement.position);
 
+        if (!Cesium.defined(pickedObject)) return;
 
+        if (pickedObject.id && pickedObject.id.includes("fire_track_line")) {
+
+            if (this.selectedPolylinePending) {
+                this.resetHighlightedPolyline();
+            }
+            this.highlightPolyline(pickedObject.primitive, Cesium.Color.BLUEVIOLET);
+            this.selectedPolyline = pickedObject.primitive;
+            const linePositions = this.selectedPolyline.geometryInstances.geometry._positions;
+            linePositions.forEach((position) => {
+                const point = createPointPrimitive(position, Cesium.Color.BLUEVIOLET);
+                this.pointCollection.add(point);
+            });
+        }
     }
 
     handleFireTackMouseMove(movement) {
@@ -72,16 +88,11 @@ class FireTrack {
 
         if (!Cesium.defined(pickedObject)) return;
 
-        if (pickedObject.id && pickedObject.id.includes("fire_track_line")) {
-            if (this.selectedPolyline !== pickedObject.primitive) {
-                this.resetHighlightedPolyline();
-                this.selectedPolyline = pickedObject.primitive;
+        if (pickedObject.id && pickedObject.id.includes("fire_track_line") && pickedObject.primitive !== this.selectedPolyline) {
+            this.resetHighlightedPolyline();
+            this.highlightPolyline(pickedObject.primitive);
+            this.selectedPolylinePending = pickedObject.primitive;
 
-                this.highlightPolyline(this.selectedPolyline)
-                console.log("🚀  this.selectedPolyline:", this.selectedPolyline);
-            } else {
-                this.resetHighlightedPolyline();
-            }
 
             // linePositions = linePrimitive.geometryInstances.geometry._positions;
             // console.log("🚀  linePositions:", linePositions);
@@ -110,7 +121,7 @@ class FireTrack {
                 color: color
             })
         });
-        linePrimitive.depthFailMaterial = new Cesium.PolylineMaterialAppearance({
+        linePrimitive.depthFailAppearance = new Cesium.PolylineMaterialAppearance({
             material: new Cesium.Material.fromType('Color', {
                 color: color
             })
@@ -118,24 +129,24 @@ class FireTrack {
     }
 
     resetHighlightedPolyline() {
-        if (this.selectedPolyline) {
+        if (this.selectedPolylinePending) {
             const polylines = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances?.id?.includes("line"));
-            const originalPolyline = polylines.find(p => p === this.selectedPolyline);
+            const originalPolyline = polylines.find(p => p === this.selectedPolylinePending);
 
             if (originalPolyline) {
-                this.selectedPolyline.appearance = new Cesium.PolylineMaterialAppearance({
+                originalPolyline.appearance = new Cesium.PolylineMaterialAppearance({
                     material: new Cesium.Material.fromType('Color', {
                         color: Cesium.Color.RED
                     })
                 });
-                this.selectedPolyline.depthFailMaterial = new Cesium.PolylineMaterialAppearance({
+                originalPolyline.depthFailAppearance = new Cesium.PolylineMaterialAppearance({
                     material: new Cesium.Material.fromType('Color', {
                         color: Cesium.Color.RED
                     })
                 });
             }
 
-            this.selectedPolyline = null;
+            this.selectedPolylinePending = null;
         }
     }
 
