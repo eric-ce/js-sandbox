@@ -38,11 +38,11 @@ class MultiDistance {
 
         // Coordinate management and related properties
         this.coords = {
-            cache: [],
-            groups: [],
+            cache: [],          // Stores temporary coordinates during operations
+            groups: [],         // Tracks all coordinates involved in operations
             _distanceCollection: [],
             _distanceRecords: [],
-            dragStart: null
+            dragStart: null     // Stores the initial position before a drag begins
         }
 
         // Label properties
@@ -59,12 +59,12 @@ class MultiDistance {
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
-            movingLabel: null,
+            movingLabel: null,      // Label that updates during moving or dragging
             movingLabel1: null,
             movingLabel2: null,
-            movingPolyline: null,
+            movingPolyline: null,   // Line that visualizes dragging or moving
             movingPolyline2: null,
-            draggingPoint: null,
+            draggingPoint: null,    // Currently dragged point primitive
         };
     }
 
@@ -225,9 +225,7 @@ class MultiDistance {
 
             // update pending points id
             const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"));
-            if (pendingPoints && pendingPoints.length > 0) {
-                pendingPoints.forEach(p => { p.id = p.id.replace("pending", "") });
-            }
+            pendingPoints.forEach(p => { p.id = p.id.replace("pending", "") });
             // update pending lines id
             const pendingLines = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.includes("pending"));
             pendingLines.forEach(p => { p.geometryInstances.id = p.geometryInstances.id.replace("pending", "") });
