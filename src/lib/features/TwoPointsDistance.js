@@ -213,54 +213,53 @@ class TwoPointsDistance {
     handleDistanceDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-        if (this.coords.groups.length > 1) {
-            const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
 
-            const pointPrimitive = pickedObjects.find(p => {
-                if (typeof p.primitive?.id !== 'string') {
-                    return false;
-                }
-                return p.primitive.id.startsWith("annotate_distance_point") &&
-                    !p.primitive.id.includes("moving");
-            });
+        if (this.coords.groups.length === 0) return;
 
-            // error handling: if no point primitives found then early exit
-            if (!Cesium.defined(pointPrimitive)) {
-                console.error("No point primitives found");
-                return;
+        const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
+
+        const pointPrimitive = pickedObjects.find(p => {
+            if (typeof p.primitive?.id !== 'string') {
+                return false;
             }
+            return p.primitive.id.startsWith("annotate_distance_point") &&
+                !p.primitive.id.includes("moving");
+        });
 
-            // disable camera movement
-            this.viewer.scene.screenSpaceCameraController.enableInputs = false;
-            this.flags.isDragMode = true;
-            this.interactivePrimitives.draggingPoint = pointPrimitive.primitive;
-            this.coords.dragStart = pointPrimitive.primitive.position.clone();
-
-            // find the relative line primitive to the dragging point
-            const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_distance_line"));
-            let linePrimitive = null;
-            if (linePrimitives.length > 0) {
-                linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
-                // set the relative line primitive to no show
-                linePrimitive ? linePrimitive.show = false : console.error("No specific line primitives found");
-            } else {
-                console.error("No line primitives found");
-                return;
-            }
-
-            // find the relative label primitive to the dragging point 
-            const linePrimitivePosition = linePrimitive.geometryInstances.geometry._positions; // [cart, cart]
-            const midpoint = Cesium.Cartesian3.midpoint(linePrimitivePosition[0], linePrimitivePosition[1], new Cesium.Cartesian3());
-            const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, midpoint) && label.id && label.id.startsWith("annotate_distance_label"));
-            targetLabelPrimitive.show = false;
-
-            // set move event for dragging
-            this.handler.setInputAction((movement) => {
-                this.handleDistanceDrag(movement, this.interactivePrimitives.draggingPoint, this.coords.dragStart);
-            }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-
+        // error handling: if no point primitives found then early exit
+        if (!Cesium.defined(pointPrimitive)) {
+            console.error("No point primitives found");
+            return;
         }
+
+        // disable camera movement
+        this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+        this.flags.isDragMode = true;
+        this.interactivePrimitives.draggingPoint = pointPrimitive.primitive;
+        this.coords.dragStart = pointPrimitive.primitive.position.clone();
+
+        // find the relative line primitive to the dragging point
+        const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_distance_line"));
+        let linePrimitive = null;
+        if (linePrimitives.length > 0) {
+            linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
+            // set the relative line primitive to no show
+            linePrimitive ? linePrimitive.show = false : console.error("No specific line primitives found");
+        } else {
+            console.error("No line primitives found");
+            return;
+        }
+
+        // find the relative label primitive to the dragging point 
+        const linePrimitivePosition = linePrimitive.geometryInstances.geometry._positions; // [cart, cart]
+        const midpoint = Cesium.Cartesian3.midpoint(linePrimitivePosition[0], linePrimitivePosition[1], new Cesium.Cartesian3());
+        const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, midpoint) && label.id && label.id.startsWith("annotate_distance_label"));
+        targetLabelPrimitive.show = false;
+
+        // set move event for dragging
+        this.handler.setInputAction((movement) => {
+            this.handleDistanceDrag(movement, this.interactivePrimitives.draggingPoint, this.coords.dragStart);
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     };
 
     handleDistanceDrag(movement, pointPrimitive, pointPrimitivePosition) {

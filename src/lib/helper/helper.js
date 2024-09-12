@@ -253,7 +253,7 @@ export function createDistanceLabel(
         position: new Cesium.CallbackProperty(() => midpoint, false),
         label: {
             text: labelString,
-            font: "14px sans-serif",
+            font: "14px Roboto, sans-serif",
             fillColor: Cesium.Color.WHITE,
             outlineWidth: 2,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
@@ -408,7 +408,7 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
         position: midpoint,
         pixelOffset: labelOffset,
         text: labelString,
-        font: "14px roboto",
+        font: "14px Roboto, sans-serif",
         fillColor: Cesium.Color.WHITE,
         outlineWidth: 2,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
@@ -623,48 +623,66 @@ export function removeInputActions(handler) {
  * @param {DOMRect} updatePositionCallback.containerRect - The bounding rectangle of the container.
  */
 export function makeDraggable(element, container, updatePositionCallback) {
-    let posInitialX = 0, posInitialY = 0;
-    let containerRect = container.getBoundingClientRect(); // Cache the container dimensions
+    let posInitialX = 0, posInitialY = 0;  // Variables to store the initial cursor position
 
+    // Function to fetch and update the container dimensions
+    // This is called to ensure we always have the current dimensions in case they change
+    const fetchContainerRect = () => container.getBoundingClientRect();
+
+    let containerRect = fetchContainerRect(); // Fetch initial dimensions of the container
+
+    // Function to update the position of the draggable element
     const updatePosition = (newTop, newLeft) => {
-        // Constrain the element within the container
+        // Refresh container dimensions on each drag event to handle dynamic layout changes
+        containerRect = fetchContainerRect();
+
+        // Ensure the element stays within the bounds of the container
         newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
         newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
 
-        // Update element's style
+        // Set the new position of the element
         element.style.left = `${newLeft}px`;
         element.style.top = `${newTop}px`;
 
-        // Call the callback to update stored positions if provided
+        // If a callback is provided, call it with the new positions and the updated container rectangle
         if (updatePositionCallback) {
             updatePositionCallback(newTop, newLeft, containerRect);
         }
     };
 
+    // Handles the drag movement
     const elementDrag = (event) => {
-        event.preventDefault();
+        event.preventDefault(); // Prevent default action to avoid any selection during drag
+        // Calculate the change in position
         const deltaX = posInitialX - event.clientX;
         const deltaY = posInitialY - event.clientY;
+
+        // Update initial position for the next call
         posInitialX = event.clientX;
         posInitialY = event.clientY;
 
+        // Calculate new position based on the delta
         const newTop = element.offsetTop - deltaY;
         const newLeft = element.offsetLeft - deltaX;
 
+        // Update the position of the element
         updatePosition(newTop, newLeft);
     };
 
+    // Cleanup function to remove event listeners once dragging ends
     const closeDragElement = () => {
+        // Detach mouse event listeners
         document.onmouseup = null;
         document.onmousemove = null;
-        // Recalculate container dimensions in case the window or container was resized
-        containerRect = container.getBoundingClientRect();
     };
 
+    // Initializes the dragging functionality
     element.onmousedown = (event) => {
-        event.preventDefault();
+        event.preventDefault(); // Prevent default action to avoid any selection during drag
+        // Store the initial position of the cursor
         posInitialX = event.clientX;
         posInitialY = event.clientY;
+        // Attach event listeners for mouse movement and release
         document.onmouseup = closeDragElement;
         document.onmousemove = elementDrag;
     };

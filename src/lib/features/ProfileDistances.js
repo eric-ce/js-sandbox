@@ -118,15 +118,13 @@ class ProfileDistances {
             const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
             // If picked object is a label primitive, make it editable
-            if (
-                Cesium.defined(pickedObject) &&
-                pickedObject?.id?.startsWith("annotate") &&
-                pickedObject?.id?.includes("label")
-            ) {
+            const isAnnotateLabel = pickedObject?.id?.startsWith("annotate") && pickedObject?.id?.includes("label");
+            if (isAnnotateLabel) {
                 editableLabel(this.viewer.container, pickedObject.primitive);
                 return; // Exit the function after making the label editable
             }
 
+            // reset the value
             this.coords._distanceCollection.length = 0;
             this.label._labelIndex = 0;
             this.flags.isProfileDistancesEnd = false;
@@ -193,17 +191,10 @@ class ProfileDistances {
             const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
             this.viewer.scene.primitives.add(linePrimitive);
 
-            // profile terrain for distances
-            // show the chart, if no chart then create the chart set it to show
-            if (this.chartDiv) {
-                this.chartDiv.style.display = "block";
-            } else {
-                this.setupChart();
-                this.chartDiv.style.display = "block";
-            }
-
+            // profile of terrain chart
             // line chart x-axis label
             const labelDistance = [0];
+
             for (let i = 0; i < this.coords.pickedCartesianArrayCache.length - 1; i++) {
                 const fragmentDistance = Cesium.Cartesian3.distance(
                     this.coords.pickedCartesianArrayCache[i],
@@ -218,8 +209,14 @@ class ProfileDistances {
                 return pickedCartographic.height
             })
 
-            // update the chart
-            this.chart && this.updateChart(diffHeight, labelDistance);
+            // show the chart, if no chart then create the chart set it to show
+            if (!this.chart) {
+                this.setupChart();
+                this.chartDiv.style.display = "block";
+                this.updateChart(diffHeight, labelDistance);
+            } else {
+                this.updateChart(diffHeight, labelDistance)
+            }
         }
     }
 
@@ -297,7 +294,7 @@ class ProfileDistances {
     }
 
     handleProfileDistancesRightClick(movement) {
-        if (!this.flags.isProfileDistancesEnd) {
+        if (!this.flags.isProfileDistancesEnd && this.coords.cache.length > 0) {
             // use mouse move position to control only one pickPosition is used
             const cartesian = this.coordinate;
 
@@ -400,7 +397,12 @@ class ProfileDistances {
             })
 
             // update the chart
-            this.chart && this.updateChart(diffHeight, labelDistance);
+            if (!this.chart) {
+                this.setupChart();
+                this.chartDiv.style.display = "block";
+            } else {
+                this.updateChart(diffHeight, labelDistance);
+            }
 
         }
 

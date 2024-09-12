@@ -164,16 +164,11 @@ export class MeasureToolbox extends HTMLElement {
                 name: "Profile-Distances",
                 icon: profileDistancesImg
             },
-            {
-                instance: new FlyThrough(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
-                name: "Fly-Through",
-                icon: pickerImg
-            },
-            {
-                instance: new FireTrack(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
-                name: "Fire-Track",
-                icon: pickerImg
-            },
+            // {
+            //     instance: new FlyThrough(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
+            //     name: "Fly-Through",
+            //     icon: pickerImg
+            // },
         ];
 
         this.measureModes = modes.map(mode => mode.instance);

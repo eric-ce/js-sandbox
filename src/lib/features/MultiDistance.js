@@ -113,20 +113,17 @@ class MultiDistance {
             const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
 
             // If picked object is a label primitive, make it editable
-            if (
-                Cesium.defined(pickedObject) &&
-                pickedObject?.id?.startsWith("annotate") &&
-                pickedObject?.id?.includes("label")
-            ) {
+            const isAnnotateLabel = pickedObject?.id?.startsWith("annotate") && pickedObject?.id?.includes("label");
+            if (isAnnotateLabel) {
                 editableLabel(this.viewer.container, pickedObject.primitive);
                 return; // Exit the function after making the label editable
             }
 
+            // reset the value
             this.coords._distanceCollection.length = 0;
+            this.label._labelIndex = 0;
 
             this.flags.isMultiDistanceEnd = false;
-
-            this.label._labelIndex = 0;
 
             // continue point 
             const continuePoint = createPointPrimitive(cartesian, Cesium.Color.RED);
@@ -213,7 +210,7 @@ class MultiDistance {
 
     handleMultiDistanceRightClick(movement) {
         // place last point and place last line
-        if (!this.flags.isMultiDistanceEnd) {
+        if (!this.flags.isMultiDistanceEnd && this.coords.cache.length > 0) {
             // use mouse move position to control only one pickPosition is used
             const cartesian = this.coordinate;
 
