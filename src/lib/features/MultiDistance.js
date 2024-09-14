@@ -126,23 +126,29 @@ class MultiDistance {
             this.flags.isMultiDistanceEnd = false;
 
             // continue point 
-            const continuePoint = createPointPrimitive(cartesian, Cesium.Color.RED);
-            continuePoint.id = generateId(cartesian, "multidistance_point_pending");
-            this.pointCollection.add(continuePoint);
+            // check if the current position is very close to coordinate in groups, if yes then don't create new point
+            const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
+            if (!isNearPoint) {
+                const continuePoint = createPointPrimitive(cartesian, Cesium.Color.RED);
+                continuePoint.id = generateId(cartesian, "multidistance_point_pending");
+                this.pointCollection.add(continuePoint);
 
-            // update coordinate data cache
-            this.coords.cache.push(cartesian);
-            return;
+                // update coordinate data cache
+                this.coords.cache.push(cartesian);
+                return;
+            }
         }
 
         // create point primitive
-        const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-        point.id = generateId(this.coordinate, "multidistance_point_pending");
-        this.pointCollection.add(point);
-
-        // update coordinate data cache
-        this.coords.cache.push(this.coordinate);
-
+        // check if the current position is very close to coordinate in groups, if yes then don't create new point
+        const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
+        if (!isNearPoint) {
+            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
+            point.id = generateId(this.coordinate, "multidistance_point_pending");
+            this.pointCollection.add(point);
+            // update coordinate data cache
+            this.coords.cache.push(this.coordinate);
+        }
         if (this.coords.cache.length > 1) {
             const prevIndex = this.coords.cache.length - 2;
             const currIndex = this.coords.cache.length - 1;

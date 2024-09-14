@@ -112,103 +112,90 @@ class Profile {
                 return; // Exit the function after making the label editable
             }
 
+            // Set flag that the measurement has started
+            this.flags.isDistanceStarted = true;
+
+            // reset variables
+            this.coords.cache.length = 0;
         }
 
-        // Set flag that the measurement has started
-        this.flags.isDistanceStarted = true;
-
-        // use cache to store only two coordinates, if more than two, reset the cache
-        if (this.coords.cache.length === 0) {
-            // create the first point
-            this.coords.cache.push(this.coordinate);
+        // create point primitive
+        // check if the current position is very close to coordinate in groups, if yes then don't create new point
+        const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
+        if (!isNearPoint) {
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "profile_point_pending");
             this.pointCollection.add(point);
-        } else if (this.coords.cache.length % 2 !== 0) {
-            // create the second point
             this.coords.cache.push(this.coordinate);
-            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            point.id = generateId(this.coordinate, "profile_point");
-            this.pointCollection.add(point);
+        }
 
-            // create line and label
-            if (this.coords.cache.length === 2) {
-                const pickedCartesianArray = this._computeDetailedPickPositions(this.coords.cache[0], this.coords.cache[1]);
-                // update the interpolated points group
-                this.coords.interpolatedPointsGroup.push([...pickedCartesianArray]);
-                this.coords.selectedGroupIndex = this.coords.interpolatedPointsGroup.length - 1;
+        // create line and label
+        if (this.coords.cache.length === 2) {
+            const pickedCartesianArray = this._computeDetailedPickPositions(this.coords.cache[0], this.coords.cache[1]);
+            // update the interpolated points group
+            this.coords.interpolatedPointsGroup.push([...pickedCartesianArray]);
+            this.coords.selectedGroupIndex = this.coords.interpolatedPointsGroup.length - 1;
 
-                // update pending point id
-                const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"))
-                pendingPoints.forEach(p => { p.id = generateId(p.position, "profile_point") });
+            // update pending point id
+            const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"))
+            pendingPoints.forEach(p => { p.id = generateId(p.position, "profile_point") });
 
+            // line chart x-axis label
+            // always start from 0 meters
+            const labelDistance = [0];
+
+            let totalDistance = null;
+            for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
+                const distance = Cesium.Cartesian3.distance(
+                    pickedCartesianArray[i],
+                    pickedCartesianArray[i + 1]
+                );
+
+                totalDistance += distance;
                 // line chart x-axis label
-                // always start from 0 meters
-                const labelDistance = [0];
-
-                let totalDistance = null;
-                for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
-                    const distance = Cesium.Cartesian3.distance(
-                        pickedCartesianArray[i],
-                        pickedCartesianArray[i + 1]
-                    );
-
-                    totalDistance += distance;
-                    // line chart x-axis label
-                    labelDistance.push(labelDistance[i] + Math.round(distance));
-                }
-
-                // create label primitive
-                // set moving label primitive to not show
-                if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-
-                const midPoint = Cesium.Cartesian3.midpoint(this.coords.cache[0], this.coords.cache[1], new Cesium.Cartesian3());
-                const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], totalDistance);
-                label.id = generateId(midPoint, "profile_label");
-                this.labelCollection.add(label);
-
-                // create line primitive
-                if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-
-                const lineGeometryInstance = createClampedLineGeometryInstance(this.coords.cache, "profile_line",);
-                const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
-                this.viewer.scene.primitives.add(linePrimitive);
-
-                // show the chart, if no chart then create the chart set it to show
-                if (this.chartDiv) {
-                    this.chartDiv.style.display = "block";
-                } else {
-                    this.setupChart();
-                    this.chartDiv.style.display = "block";
-                }
-
-                // line chart y-axis data
-                const diffHeight = pickedCartesianArray.map((pickedCartesian) => {
-                    const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedCartesian);
-                    return pickedCartographic.height
-                })
-
-                // update the chart
-                this.updateChart(diffHeight, labelDistance);
-                // records cache to track all coords, use shallow copy the cache
-                this.coords.groups.push([...this.coords.cache]);
-                // log distance
-                this._distanceRecords.push(totalDistance);
-                this.logRecordsCallback(totalDistance.toFixed(2));
-
-                // set flag that the measurement has ended
-                this.flags.isDistanceStarted = false;
+                labelDistance.push(labelDistance[i] + Math.round(distance));
             }
-        } else {
-            // reset the cache
-            this.coords.cache.length = 0;
 
-            // add a continue point to the cache so it doesn't need to click twice to start again
-            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            point.id = generateId(this.coordinate, "profile_point_pending");
-            this.pointCollection.add(point);
+            // create label primitive
+            // set moving label primitive to not show
+            if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
 
-            this.coords.cache.push(this.coordinate);
+            const midPoint = Cesium.Cartesian3.midpoint(this.coords.cache[0], this.coords.cache[1], new Cesium.Cartesian3());
+            const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], totalDistance);
+            label.id = generateId(midPoint, "profile_label");
+            this.labelCollection.add(label);
+
+            // create line primitive
+            if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
+
+            const lineGeometryInstance = createClampedLineGeometryInstance(this.coords.cache, "profile_line",);
+            const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
+            this.viewer.scene.primitives.add(linePrimitive);
+
+            // show the chart, if no chart then create the chart set it to show
+            if (this.chartDiv) {
+                this.chartDiv.style.display = "block";
+            } else {
+                this.setupChart();
+                this.chartDiv.style.display = "block";
+            }
+
+            // line chart y-axis data
+            const diffHeight = pickedCartesianArray.map((pickedCartesian) => {
+                const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedCartesian);
+                return pickedCartographic.height
+            })
+
+            // update the chart
+            this.updateChart(diffHeight, labelDistance);
+            // records cache to track all coords, use shallow copy the cache
+            this.coords.groups.push([...this.coords.cache]);
+            // log distance
+            this._distanceRecords.push(totalDistance);
+            this.logRecordsCallback(totalDistance.toFixed(2));
+
+            // set flag that the measurement has ended
+            this.flags.isDistanceStarted = false;
         }
     }
 
@@ -579,6 +566,21 @@ class Profile {
         // TODO: use another angle from the camera to get points cover by the object and use Set to create a unique array of picked coordinates
 
         // return groundCartesianArray;
+    }
+
+    /**
+     * calculate the clamped distance between two points
+     * @param {Cesium.Cartesian3} pointA 
+     * @param {Cesium.Cartesian3} pointB 
+     * @returns {Number} - the clamped distance between two points
+     */
+    calculateClampedDistance(pointA, pointB) {
+        const pickedCartesianArray = this._computeDetailedPickPositions(pointA, pointB);
+        let distance = null;
+        for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
+            distance += calculateDistance(pickedCartesianArray[i], pickedCartesianArray[i + 1]);
+        }
+        return distance
     }
 
     showTooltipAtIndex(chart, index) {

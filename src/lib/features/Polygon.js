@@ -120,10 +120,13 @@ class Polygon {
 
             // create point entity
             const color = Cesium.Color.fromRandom({ alpha: 1.0 });
-            const point = createPointPrimitive(this.coordinate, color);
-            point.id = generateId(this.coordinate, "polygon_point_pending");
-            this.pointCollection.add(point);
-
+            // check if the current position is very close to coordinate in groups, if yes then don't create new point
+            const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
+            if (!isNearPoint) {
+                const point = createPointPrimitive(this.coordinate, color);
+                point.id = generateId(this.coordinate, "polygon_point_pending");
+                this.pointCollection.add(point);
+            }
 
             // If three points create the polygon primitive
             if (this.coords.cache.length > 2) {

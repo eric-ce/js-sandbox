@@ -117,14 +117,20 @@ class ThreePointsCurve {
 
         // use mouse move position to control only one pickPosition is used
         const cartesian = this.coordinate;
-        this.coords.cache.push(cartesian);
 
         // Check if the position is defined
         if (!Cesium.defined(cartesian)) return;
 
-        const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-        point.id = generateId(this.coordinate, "curve_point_pending");
-        this.pointCollection.add(point);
+        // create point primitive
+        // check if the current position is very close to coordinate in groups, if yes then don't create new point
+        const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
+        if (!isNearPoint) {
+            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
+            point.id = generateId(this.coordinate, "curve_point_pending");
+            this.pointCollection.add(point);
+            // update coordinate data cache
+            this.coords.cache.push(cartesian);
+        }
 
         // Check if it had collected 3 points, then measure the curve distance
         if (this.coords.cache.length === 3) {
@@ -146,7 +152,6 @@ class ThreePointsCurve {
                 ) * 30,
                 50
             );
-
             const curvePoints = this.createCurvePoints(
                 start,
                 middle,

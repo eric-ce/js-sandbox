@@ -111,68 +111,55 @@ class TwoPointsDistance {
 
             // Set flag that the measurement has started
             this.flags.isDistanceStarted = true;
+
+            // reset variables
+            this.coords.cache.length = 0;
         }
 
-        // use cache to store only two coordinates, if more than two, reset the cache
-        if (this.coords.cache.length === 0) {
+        // check if the current position is very close to coordinate in groups, if yes then don't create new point
+        const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
+        if (!isNearPoint) {
             // create the first point
             this.coords.cache.push(this.coordinate);
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "distance_point_pending");
             this.interactivePrimitives.firstPoint = this.pointCollection.add(point);
-        } else if (this.coords.cache.length % 2 !== 0) {
-            // create the second point
-            this.coords.cache.push(this.coordinate);
-            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            point.id = generateId(this.coordinate, "distance_point");
-            this.interactivePrimitives.secondPoint = this.pointCollection.add(point);
+        }
 
-            // create line and label
-            if (this.coords.cache.length === 2) {
-                // update pending point id
-                const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"));
-                if (pendingPoints && pendingPoints.length > 0) {
-                    pendingPoints.forEach(p => p.id = p.id.replace("_pending", ""));
-                }
-
-                // create line primitive
-                if (this.interactivePrimitives.movingPolyline) {
-                    this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-                }
-                const lineGeometryInstance = createLineGeometryInstance(this.coords.cache, "distance_line");
-                const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
-                this.viewer.scene.primitives.add(linePrimitive);
-
-                // create label primitive
-                // set moving label primitive to not show
-                if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-                const distance = calculateDistance(this.coords.cache[0], this.coords.cache[1]);
-                const midPoint = Cesium.Cartesian3.midpoint(this.coords.cache[0], this.coords.cache[1], new Cesium.Cartesian3());
-                const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], distance)
-                label.id = generateId(midPoint, "distance_label");
-                this.labelCollection.add(label);
-
-                // log distance
-                this.logRecordsCallback(distance.toFixed(2));
-
-                // records cache to track all coords, use shallow copy the cache
-                this.coords.groups.push([...this.coords.cache]);
-
-                // set flag that the measure has ended
-                this.flags.isDistanceStarted = false;
+        // create line and label
+        if (this.coords.cache.length === 2) {
+            // update pending point id
+            const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"));
+            if (pendingPoints && pendingPoints.length > 0) {
+                pendingPoints.forEach(p => p.id = p.id.replace("_pending", ""));
             }
-        } else {
-            // reset the cache
-            this.coords.cache.length = 0;
-            // add a continue point to the cache so it doesn't need to click twice to start again
-            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            point.id = generateId(this.coordinate, "distance_point_pending");
-            this.interactivePrimitives.firstPoint = this.pointCollection.add(point);
+            // create line primitive
+            if (this.interactivePrimitives.movingPolyline) {
+                this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
+            }
+            const lineGeometryInstance = createLineGeometryInstance(this.coords.cache, "distance_line");
+            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+            this.viewer.scene.primitives.add(linePrimitive);
 
-            this.coords.cache.push(this.coordinate);
+            // create label primitive
+            // set moving label primitive to not show
+            if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
+            const distance = calculateDistance(this.coords.cache[0], this.coords.cache[1]);
+            const midPoint = Cesium.Cartesian3.midpoint(this.coords.cache[0], this.coords.cache[1], new Cesium.Cartesian3());
+            const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], distance)
+            label.id = generateId(midPoint, "distance_label");
+            this.labelCollection.add(label);
+
+            // log distance
+            this.logRecordsCallback(distance.toFixed(2));
+
+            // records cache to track all coords, use shallow copy the cache
+            this.coords.groups.push([...this.coords.cache]);
+
+            // set flag that the measure has ended
+            this.flags.isDistanceStarted = false;
         }
     }
-
 
     /**
      * Handles mouse move events to drawing moving line, update label, and display moving dot with mouse.

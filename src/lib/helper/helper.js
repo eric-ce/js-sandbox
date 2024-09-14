@@ -370,7 +370,7 @@ export function createClampedLineGeometryInstance(coordinateArray, mode) {
 
     const groundPolylineGeometryInstance = new Cesium.GeometryInstance({
         geometry: groundPolylineGeometry,
-        id: `${generateId(convertedCoordinates, mode)}-clamped`,
+        id: `${generateId(convertedCoordinates, mode)}`,
     });
 
     return groundPolylineGeometryInstance;
@@ -623,67 +623,75 @@ export function removeInputActions(handler) {
  * @param {DOMRect} updatePositionCallback.containerRect - The bounding rectangle of the container.
  */
 export function makeDraggable(element, container, updatePositionCallback) {
-    let posInitialX = 0, posInitialY = 0;  // Variables to store the initial cursor position
+    let posInitialX = 0, posInitialY = 0; // Initial cursor positions
+    let isDragging = false; // Flag to track dragging state
+    const threshold = 5; // Movement threshold to differentiate dragging from clicking
 
-    // Function to fetch and update the container dimensions
-    // This is called to ensure we always have the current dimensions in case they change
+    // Retrieves the bounding rectangle of the container
     const fetchContainerRect = () => container.getBoundingClientRect();
+    let containerRect = fetchContainerRect(); // Initial dimensions of the container
 
-    let containerRect = fetchContainerRect(); // Fetch initial dimensions of the container
-
-    // Function to update the position of the draggable element
+    // Updates the position of the draggable element
     const updatePosition = (newTop, newLeft) => {
-        // Refresh container dimensions on each drag event to handle dynamic layout changes
-        containerRect = fetchContainerRect();
-
-        // Ensure the element stays within the bounds of the container
+        containerRect = fetchContainerRect(); // Refresh dimensions for dynamic changes
+        // Ensure the element remains within container bounds
         newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
         newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
 
-        // Set the new position of the element
+        // Apply the new position styles to the element
         element.style.left = `${newLeft}px`;
         element.style.top = `${newTop}px`;
 
-        // If a callback is provided, call it with the new positions and the updated container rectangle
+        // Call the callback function with new position and updated container dimensions
         if (updatePositionCallback) {
             updatePositionCallback(newTop, newLeft, containerRect);
         }
     };
 
-    // Handles the drag movement
+    // Handles the mouse move event to update the element's position
     const elementDrag = (event) => {
-        event.preventDefault(); // Prevent default action to avoid any selection during drag
-        // Calculate the change in position
-        const deltaX = posInitialX - event.clientX;
-        const deltaY = posInitialY - event.clientY;
+        event.preventDefault(); // Prevent default to avoid text selection
+        if (!isDragging) {
+            // Calculate movement to determine if dragging should start
+            const deltaX = Math.abs(posInitialX - event.clientX);
+            const deltaY = Math.abs(posInitialY - event.clientY);
+            if (deltaX > threshold || deltaY > threshold) {
+                isDragging = true; // Start dragging if movement is above the threshold
+            }
+        }
+        if (isDragging) {
+            // Calculate new position
+            const deltaX = posInitialX - event.clientX;
+            const deltaY = posInitialY - event.clientY;
 
-        // Update initial position for the next call
-        posInitialX = event.clientX;
-        posInitialY = event.clientY;
+            // Update initial positions for the next move
+            posInitialX = event.clientX;
+            posInitialY = event.clientY;
 
-        // Calculate new position based on the delta
-        const newTop = element.offsetTop - deltaY;
-        const newLeft = element.offsetLeft - deltaX;
-
-        // Update the position of the element
-        updatePosition(newTop, newLeft);
+            // Calculate and update the new position of the element
+            const newTop = element.offsetTop - deltaY;
+            const newLeft = element.offsetLeft - deltaX;
+            updatePosition(newTop, newLeft);
+        }
     };
 
-    // Cleanup function to remove event listeners once dragging ends
+    // Cleans up event listeners when dragging ends
     const closeDragElement = () => {
-        // Detach mouse event listeners
         document.onmouseup = null;
         document.onmousemove = null;
+        isDragging = false; // Reset dragging flag
     };
 
-    // Initializes the dragging functionality
+    // Initiates dragging
     element.onmousedown = (event) => {
-        event.preventDefault(); // Prevent default action to avoid any selection during drag
-        // Store the initial position of the cursor
-        posInitialX = event.clientX;
-        posInitialY = event.clientY;
-        // Attach event listeners for mouse movement and release
-        document.onmouseup = closeDragElement;
-        document.onmousemove = elementDrag;
+        // Avoid dragging when clicking on input elements to allow normal interaction
+        if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
+            return; // Skip dragging initialization for input or textarea elements
+        }
+        event.preventDefault(); // Prevent default to avoid focus changes and text selection
+        posInitialX = event.clientX; // Record initial cursor X position
+        posInitialY = event.clientY; // Record initial cursor Y position
+        document.onmouseup = closeDragElement; // Set function to call on mouse up
+        document.onmousemove = elementDrag; // Set function to call on mouse move
     };
 }
