@@ -10,18 +10,18 @@ import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { FireTrack } from "./lib/features/FireTrack.js";
 import { removeInputActions, makeDraggable } from "./lib/helper/helper.js";
-import toolImg from "./assets/toolImg.svg";
-import pickerImg from "./assets/pickerImg.svg";
-import pointsImg from "./assets/pointsImg.svg";
-import distanceImg from "./assets/distanceImg.svg";
-import curveImg from "./assets/curveImg.svg";
-import heightImg from "./assets/heightImg.svg";
-import multiDImage from "./assets/multiDImg.svg";
-import multiDClampedImg from "./assets/multiDClampedImg.svg";
-import polygonImg from "./assets/polygonImg.svg";
-import profileImg from "./assets/profileImg.svg";
-import profileDistancesImg from "./assets/profileDistancesImg.svg";
-import clearImg from "./assets/clearImg.svg"
+import toolImg from "./assets/tool-img.svg";
+import pickerImg from "./assets/picker-img.svg";
+import pointsImg from "./assets/points-img.svg";
+import distanceImg from "./assets/distance-img.svg";
+import curveImg from "./assets/curve-img.svg";
+import heightImg from "./assets/height-img.svg";
+import multiDImage from "./assets/multi-d-img.svg";
+import multiDClampedImg from "./assets/multi-d-clamped-img.svg";
+import polygonImg from "./assets/polygon-img.svg";
+import profileImg from "./assets/profile-img.svg";
+import profileDistancesImg from "./assets/profile-distances-img.svg";
+import clearImg from "./assets/clear-img.svg";
 import { Picker } from "./lib/features/Picker.js";
 import { FlyThrough } from "./lib/features/FlyThrough.js";
 
@@ -95,9 +95,11 @@ export class MeasureToolbox extends HTMLElement {
     initialize() {
         // if there is pre-existing screenSpaceEventHandler, use it, otherwise create a new one
         if (this.viewer.screenSpaceEventHandler) {
-            this.handler = this.viewer.screenSpaceEventHandler
+            this.handler = this.viewer.screenSpaceEventHandler;
         } else {
-            this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+            this.handler = new Cesium.ScreenSpaceEventHandler(
+                this.viewer.scene.canvas
+            );
         }
 
         removeInputActions(this.handler);
@@ -115,54 +117,114 @@ export class MeasureToolbox extends HTMLElement {
         // all measure modes
         const modes = [
             {
-                instance: new Picker(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "picker"), this.measureModes),
+                instance: new Picker(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "picker"),
+                    this.measureModes
+                ),
                 name: "Picker",
-                icon: pickerImg
+                icon: pickerImg,
             },
             {
-                instance: new Points(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "points"), this.cesiumPkg),
+                instance: new Points(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "points"),
+                    this.cesiumPkg
+                ),
                 name: "Points",
-                icon: pointsImg
+                icon: pointsImg,
             },
             {
-                instance: new TwoPointsDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "distances"), this.cesiumPkg),
+                instance: new TwoPointsDistance(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "distances"),
+                    this.cesiumPkg
+                ),
                 name: "Distance",
-                icon: distanceImg
+                icon: distanceImg,
             },
             {
-                instance: new ThreePointsCurve(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "curves"), this.cesiumPkg),
+                instance: new ThreePointsCurve(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "curves"),
+                    this.cesiumPkg
+                ),
                 name: "Curve",
-                icon: curveImg
+                icon: curveImg,
             },
             {
-                instance: new Height(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "height"), this.cesiumPkg),
+                instance: new Height(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "height"),
+                    this.cesiumPkg
+                ),
                 name: "Height",
-                icon: heightImg
+                icon: heightImg,
             },
             {
-                instance: new MultiDistance(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance"), this.cesiumPkg),
+                instance: new MultiDistance(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "m-distance"),
+                    this.cesiumPkg
+                ),
                 name: "Multi-Distances",
-                icon: multiDImage
+                icon: multiDImage,
             },
             {
-                instance: new MultiDistanceClamped(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "m-distance-clamped"), this.cesiumPkg),
+                instance: new MultiDistanceClamped(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "m-distance-clamped"),
+                    this.cesiumPkg
+                ),
                 name: "Multi-Distances-Clamped",
-                icon: multiDClampedImg
+                icon: multiDClampedImg,
             },
             {
-                instance: new Polygon(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "polygons"), this.cesiumPkg),
+                instance: new Polygon(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "polygons"),
+                    this.cesiumPkg
+                ),
                 name: "Polygon",
-                icon: polygonImg
+                icon: polygonImg,
             },
             {
-                instance: new Profile(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile"), this.cesiumPkg),
+                instance: new Profile(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "profile"),
+                    this.cesiumPkg
+                ),
                 name: "Profile",
-                icon: profileImg
+                icon: profileImg,
             },
             {
-                instance: new ProfileDistances(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
+                instance: new ProfileDistances(
+                    this.viewer,
+                    this.handler,
+                    this.pointerOverlay,
+                    this.updateRecords.bind(this, "profile-distances"),
+                    this.cesiumPkg
+                ),
                 name: "Profile-Distances",
-                icon: profileDistancesImg
+                icon: profileDistancesImg,
             },
             // {
             //     instance: new FlyThrough(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
@@ -171,13 +233,16 @@ export class MeasureToolbox extends HTMLElement {
             // },
         ];
 
-        this.measureModes = modes.map(mode => mode.instance);
+        this.measureModes = modes.map((mode) => mode.instance);
 
-        const pickerInstance = modes.find(mode => mode.name === "Picker").instance;
+        const pickerInstance = modes.find(
+            (mode) => mode.name === "Picker"
+        ).instance;
         pickerInstance.measureModes = this.measureModes;
-        pickerInstance.activateModeCallback = this.activateModeByName.bind(this);
+        pickerInstance.activateModeCallback =
+            this.activateModeByName.bind(this);
 
-        modes.forEach(mode => {
+        modes.forEach((mode) => {
             this.createMeasureModeButton(mode.instance, mode.name, mode.icon);
         });
 
@@ -185,8 +250,6 @@ export class MeasureToolbox extends HTMLElement {
 
         this.setupButtonOverlay();
     }
-
-
 
     /**
      * Sets up measure toolbar including buttons, and style.
@@ -328,7 +391,7 @@ export class MeasureToolbox extends HTMLElement {
                 if (this.infoBox) {
                     this.infoBox.remove();
                     this.infoBox = null;
-                };
+                }
                 if (this.logBox) {
                     this.logBox.remove();
                     this.logBox = null;
@@ -381,11 +444,13 @@ export class MeasureToolbox extends HTMLElement {
      */
     toggleTools() {
         this.isToolsExpanded = !this.isToolsExpanded;
-        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button, index) => {
-            setTimeout(() => {
-                button.classList.toggle("show", this.isToolsExpanded);
-            }, index * 50 + 25);
-        });
+        this.shadowRoot
+            .querySelectorAll(".measure-mode-button")
+            .forEach((button, index) => {
+                setTimeout(() => {
+                    button.classList.toggle("show", this.isToolsExpanded);
+                }, index * 50 + 25);
+            });
     }
 
     /**
@@ -393,32 +458,69 @@ export class MeasureToolbox extends HTMLElement {
      */
     setupClearButton() {
         this.clearButton = document.createElement("button");
-        this.clearButton.className = "clear-button cesium-button measure-mode-button";
+        this.clearButton.className =
+            "clear-button cesium-button measure-mode-button";
         this.clearButton.innerHTML = `<img src="${clearImg}" alt="clear" style="width: 30px; height: 30px;">`;
 
         this.toolsContainer.appendChild(this.clearButton);
 
         this.clearButton.addEventListener("click", () => {
             // remove line primitives
-            const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate") && p.geometryInstances.id.includes("line"));
-            linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
+            const linePrimitives =
+                this.viewer.scene.primitives._primitives.filter(
+                    (p) =>
+                        p.geometryInstances &&
+                        p.geometryInstances.id &&
+                        p.geometryInstances.id.startsWith("annotate") &&
+                        p.geometryInstances.id.includes("line")
+                );
+            linePrimitives.forEach((p) =>
+                this.viewer.scene.primitives.remove(p)
+            );
             // remove polygon primitives
-            const polygonPrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate") && p.geometryInstances.id.includes("polygon"));
-            polygonPrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
+            const polygonPrimitives =
+                this.viewer.scene.primitives._primitives.filter(
+                    (p) =>
+                        p.geometryInstances &&
+                        p.geometryInstances.id &&
+                        p.geometryInstances.id.startsWith("annotate") &&
+                        p.geometryInstances.id.includes("polygon")
+                );
+            polygonPrimitives.forEach((p) =>
+                this.viewer.scene.primitives.remove(p)
+            );
             // remove point primitives from point collections
-            const pointCollections = this.viewer.scene.primitives._primitives.filter(p =>
-                p._pointPrimitives && p._pointPrimitives.some(point => point.id && point.id.startsWith("annotate") && point.id.includes("point"))
-            );
-            pointCollections && pointCollections.forEach(pointCollection =>
-                pointCollection.removeAll()
-            );
+            const pointCollections =
+                this.viewer.scene.primitives._primitives.filter(
+                    (p) =>
+                        p._pointPrimitives &&
+                        p._pointPrimitives.some(
+                            (point) =>
+                                point.id &&
+                                point.id.startsWith("annotate") &&
+                                point.id.includes("point")
+                        )
+                );
+            pointCollections &&
+                pointCollections.forEach((pointCollection) =>
+                    pointCollection.removeAll()
+                );
             // remove label primitives from label collections
-            const labelCollections = this.viewer.scene.primitives._primitives.filter(p =>
-                p._labels && p._labels.some(label => label.id && label.id.startsWith("annotate") && label.id.includes("label"))
-            );
-            labelCollections && labelCollections.forEach(labelCollection => {
-                labelCollection.removeAll(); // moving label was not remove, because same label cannot recreate and hence cause destory error
-            });
+            const labelCollections =
+                this.viewer.scene.primitives._primitives.filter(
+                    (p) =>
+                        p._labels &&
+                        p._labels.some(
+                            (label) =>
+                                label.id &&
+                                label.id.startsWith("annotate") &&
+                                label.id.includes("label")
+                        )
+                );
+            labelCollections &&
+                labelCollections.forEach((labelCollection) => {
+                    labelCollection.removeAll(); // moving label was not remove, because same label cannot recreate and hence cause destory error
+                });
 
             // reset handler
             removeInputActions(this.handler);
@@ -431,9 +533,13 @@ export class MeasureToolbox extends HTMLElement {
             // clear logbox
             this.logBox && this.logBox.remove();
 
-            this.measureModes.forEach(mode => {
+            this.measureModes.forEach((mode) => {
                 mode.resetValue && mode.resetValue();
-                if (mode instanceof ProfileDistances || mode instanceof MultiDistance || mode instanceof MultiDistanceClamped) {
+                if (
+                    mode instanceof ProfileDistances ||
+                    mode instanceof MultiDistance ||
+                    mode instanceof MultiDistanceClamped
+                ) {
                     mode._labelNumberIndex = 0;
                 }
             });
@@ -456,25 +562,30 @@ export class MeasureToolbox extends HTMLElement {
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out;";
         this.viewer.container.appendChild(this.buttonOverlay);
 
-        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
-            button.addEventListener("mouseover", (e) => {
-                // cesium container rectangle 
-                const cesiumRect = this.viewer.container.getBoundingClientRect();
-                // set overlay to display
-                this.buttonOverlay.style.display = "block";
-                // get description of the button
-                const description = button.querySelector("img")?.alt;
-                this.buttonOverlay.innerHTML = `${description} mode`;
-                // set position of the overlay
-                this.buttonOverlay.style.left = e.pageX - cesiumRect.x + 'px';  // Position the overlay right of the cursor
-                this.buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + 'px';
-            });
+        this.shadowRoot
+            .querySelectorAll(".measure-mode-button")
+            .forEach((button) => {
+                button.addEventListener("mouseover", (e) => {
+                    // cesium container rectangle
+                    const cesiumRect =
+                        this.viewer.container.getBoundingClientRect();
+                    // set overlay to display
+                    this.buttonOverlay.style.display = "block";
+                    // get description of the button
+                    const description = button.querySelector("img")?.alt;
+                    this.buttonOverlay.innerHTML = `${description} mode`;
+                    // set position of the overlay
+                    this.buttonOverlay.style.left =
+                        e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
+                    this.buttonOverlay.style.top =
+                        e.pageY - cesiumRect.y - 40 + "px";
+                });
 
-            button.addEventListener("mouseout", () => {
-                // set overlay to not display
-                this.buttonOverlay.style.display = "none";
+                button.addEventListener("mouseout", () => {
+                    // set overlay to not display
+                    this.buttonOverlay.style.display = "none";
+                });
             });
-        })
     }
 
     /**
@@ -507,23 +618,27 @@ export class MeasureToolbox extends HTMLElement {
         const messageTitle = "How to use:";
         const message1 = "Left Click: start measure";
         const message2 = "Right Click: finish measure";
-        const message3 = "Hold Left Click: drag point move annotation"
+        const message3 = "Hold Left Click: drag point move annotation";
         const messagePicker = "Left Click: pick an annotation";
         // create table first row for the title
         infoBoxTable.appendChild(this.createRow(messageTitle));
         // create table rows for the messages
-        if (this.activeButton &&
-            (
-                this.activeButton.classList.contains("multi-distances") ||
-                this.activeButton.classList.contains("multi-distances-clamped") ||
+        if (
+            this.activeButton &&
+            (this.activeButton.classList.contains("multi-distances") ||
+                this.activeButton.classList.contains(
+                    "multi-distances-clamped"
+                ) ||
                 this.activeButton.classList.contains("polygon") ||
-                this.activeButton.classList.contains("profile-distances")
-            )
+                this.activeButton.classList.contains("profile-distances"))
         ) {
             infoBoxTable.appendChild(this.createRow(message1));
             infoBoxTable.appendChild(this.createRow(message2));
             infoBoxTable.appendChild(this.createRow(message3));
-        } else if (this.activeButton && this.activeButton.classList.contains("picker")) {
+        } else if (
+            this.activeButton &&
+            this.activeButton.classList.contains("picker")
+        ) {
             infoBoxTable.appendChild(this.createRow(messagePicker));
         } else {
             infoBoxTable.appendChild(this.createRow(message1));
@@ -534,10 +649,16 @@ export class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(this.infoBox);
 
         // Make infoBox draggable
-        makeDraggable(this.infoBox, this.viewer.container, (newTop, newLeft, containerRect) => {
-            this.infoBoxPosition.top = `${newTop}px`;
-            this.infoBoxPosition.right = `${containerRect.width - newLeft - this.infoBox.offsetWidth}px`;
-        });
+        makeDraggable(
+            this.infoBox,
+            this.viewer.container,
+            (newTop, newLeft, containerRect) => {
+                this.infoBoxPosition.top = `${newTop}px`;
+                this.infoBoxPosition.right = `${
+                    containerRect.width - newLeft - this.infoBox.offsetWidth
+                }px`;
+            }
+        );
     }
 
     /**
@@ -548,7 +669,7 @@ export class MeasureToolbox extends HTMLElement {
 
         this.logBox = document.createElement("div");
         this.logBox.className = "log-box";
-        this.logBox.style.top = this.logBoxPosition.top || "190px"
+        this.logBox.style.top = this.logBoxPosition.top || "190px";
         this.logBox.style.right = this.logBoxPosition.right || "0px";
 
         const table = document.createElement("table");
@@ -561,10 +682,16 @@ export class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(this.logBox);
 
         // Make logBox draggable
-        makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
-            this.logBoxPosition.top = `${newTop}px`;
-            this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
-        });
+        makeDraggable(
+            this.logBox,
+            this.viewer.container,
+            (newTop, newLeft, containerRect) => {
+                this.logBoxPosition.top = `${newTop}px`;
+                this.logBoxPosition.right = `${
+                    containerRect.width - newLeft - this.logBox.offsetWidth
+                }px`;
+            }
+        );
     }
 
     /**
@@ -577,19 +704,33 @@ export class MeasureToolbox extends HTMLElement {
         const fragment = document.createDocumentFragment();
         fragment.appendChild(this.createRow("Actions"));
 
-        this._records.forEach(record => {
+        this._records.forEach((record) => {
             const key = Object.keys(record)[0];
             const recordData = record[key];
 
             if (key === "points") {
                 // recordData = {points: {add: {key: value}}}, and callback pass {add: {key: value}}
                 const action = Object.keys(recordData)[0];
-                const [coordinateKey, coordinateValue] = Object.entries(recordData[action])[0];
-                fragment.appendChild(this.createRow(`${key}: ${action}: (${coordinateKey}): ${coordinateValue}`));
-            } else if (key === "m-distance" || key === "profile-distances" || key === "m-distance-clamped") {
+                const [coordinateKey, coordinateValue] = Object.entries(
+                    recordData[action]
+                )[0];
+                fragment.appendChild(
+                    this.createRow(
+                        `${key}: ${action}: (${coordinateKey}): ${coordinateValue}`
+                    )
+                );
+            } else if (
+                key === "m-distance" ||
+                key === "profile-distances" ||
+                key === "m-distance-clamped"
+            ) {
                 const { distances, totalDistance } = recordData;
-                fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
-                fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));
+                fragment.appendChild(
+                    this.createRow(`${key}: distances: ${distances}`)
+                );
+                fragment.appendChild(
+                    this.createRow(`${key}: totalDistance: ${totalDistance}`)
+                );
             } else {
                 fragment.appendChild(this.createRow(`${key}: ${recordData}`));
             }
@@ -600,8 +741,8 @@ export class MeasureToolbox extends HTMLElement {
 
     /**
      * create the row for the table
-     * @param {string|number} value 
-     * @returns 
+     * @param {string|number} value
+     * @returns
      */
     createRow(value) {
         const row = document.createElement("tr");
@@ -615,17 +756,18 @@ export class MeasureToolbox extends HTMLElement {
 
     /**
      * Update the records of the measure modes
-     * @param {*} mode 
-     * @param {*} records 
+     * @param {*} mode
+     * @param {*} records
      */
     updateRecords(mode, records) {
         this._records.push({ [mode]: records });
         this.updateLogBox(); // Ensure the log box is updated every time records change
     }
 
-
     activateModeByName(modeName) {
-        const modeInstance = this.measureModes.find(mode => mode.button.classList.contains(modeName));
+        const modeInstance = this.measureModes.find((mode) =>
+            mode.button.classList.contains(modeName)
+        );
         const button = this.toolsContainer.querySelector(`.${modeName}`);
 
         if (modeInstance && button) {
