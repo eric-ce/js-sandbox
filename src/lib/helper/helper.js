@@ -1,7 +1,7 @@
 import * as Cesium from "cesium";
 
 /**
- * Opens a modal for the user to edit the label name and updates the label entity.
+ * Opens a modal for the user to edit the label name and updates the label primitive.
  * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
  * @param {Cesium.Label} label - the label primitive to be updated.
  * @returns {Promise<void>} - A promise that resolves when the label is updated.
@@ -38,7 +38,7 @@ export async function editableLabel(viewerContainer, label) {
  * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
  * @returns {Promise<string>} - A promise that resolves to the new label name.
  */
-export function setupEditableModal(viewerContainer) {
+function setupEditableModal(viewerContainer) {
     return new Promise((resolve, reject) => {
         const modal = document.createElement("div");
         modal.className = "edit-label-modal";
@@ -158,139 +158,6 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
         // anything other than annotate object will be blue
         pointerOverlay.style.backgroundColor = (!annotatePrimitives && !annotateEntity) ? "blue" : "yellow";
     }
-}
-
-
-// Cesium entity
-/**
- * Create a point entity setting at the given Cartesian coordinates with the specified color.
- * @param {Cesium.Cartesian3 | Cesium.Cartographic} coordinate - The coordinate of point entity
- * @param {Cesium.Color} color - The color of the point entity.
- * @return {Object} the property for point entity that can be added to the viewer. use viewer.entities.add()
- */
-export function createPointEntity(coordinate, color = Cesium.Color.RED) {
-    if (!coordinate) {
-        return; // Exit early if coordinate is not defined
-    }
-
-    //check if coordinate is cartographic degrees or radians or cartesian
-    const cartesian = convertToCartesian3(coordinate);
-
-    // Create a point entity with the given position and color
-    return {
-        // id: formatEntityId(cartesian), // Use a unique id for the point entity
-        position: cartesian,
-        point: {
-            pixelSize: 8,
-            color: color,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-    };
-}
-
-/**
- * Creates a line entity between two or more points using a mix of Cartesian3 and Cartographic coordinates.
- *
- * @param {(Cesium.Cartesian3|Cesium.Cartographic)[]} coordinateArray - An array of Cartesian3 or Cartographic coordinates representing the points of the line. The function will convert Cartographic points to Cartesian3 internally.
- * @param {Cesium.Color} [cesiumColor=Cesium.Color.RED] - The color of the line entity.
- * @returns {Object} the property for line entity that can be added to the viewer. use viewer.entities.add()
- */
-export function createLineEntity(
-    coordinateArray,
-    cesiumColor = Cesium.Color.RED,
-    isClamped = false,
-) {
-    // Check if the input is valid (an array of Cartesian3 points with at least two points)
-    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
-        return;
-    }
-    // convert unexpect coordinate to cartesian3
-    const convertedCoordinates = coordinateArray.map((item) =>
-        convertToCartesian3(item)
-    );
-
-    // unstable color fix using ColorMaterialProperty
-    const color = new Cesium.ColorMaterialProperty(cesiumColor);
-
-    return {
-        polyline: {
-            positions: convertedCoordinates,
-            width: 2,
-            material: color,
-            depthFailMaterial: color,
-            clampToGround: isClamped,
-        },
-    };
-}
-
-/**
- * Create a label entity for displaying the distance or area.
- * @param {Cesium.Cartesian3} startPoint - The Cartesian coordinates of the starting point.
- * @param {Cesium.Cartesian3} endPoint - The Cartesian coordinates of the ending point.
- * @param {number} distance - The distance between startPoint and endPoint.
- * @param {boolean} isTotal - state to determine if it is for total measurement.
- * @returns {object} the property for label entity that can be added to the viewer. use viewer.entities.add()
- */
-export function createDistanceLabel(
-    startPoint,
-    endPoint,
-    distance,
-) {
-    const midpoint = Cesium.Cartesian3.lerp(
-        startPoint,
-        endPoint,
-        0.5,
-        new Cesium.Cartesian3()
-    );
-
-    // Define the offset from the midpoint position
-    const labelOffset = new Cesium.Cartesian2(0, -20);
-
-    let labelString = formatDistance(distance);
-
-    // Create a label entity with the fixed position
-    return {
-        position: new Cesium.CallbackProperty(() => midpoint, false),
-        label: {
-            text: labelString,
-            font: "14px Roboto, sans-serif",
-            fillColor: Cesium.Color.WHITE,
-            outlineWidth: 2,
-            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            showBackground: true,
-            backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
-            pixelOffset: labelOffset,
-            scale: 1.5,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY, // Make the label always visible
-        },
-    };
-}
-
-/**
- * Create a polygon entity between three or more points.
- * @param {(Cesium.Cartesian3|Cesium.Cartographic)[]} coordinateArray - An array of Cartesian coordinates representing the points of the line.
- * @returns {Object} polygonEntity - The polygon entity created.
- */
-export function createPolygonEntity(coordinateArray) {
-    if (!Array.isArray(coordinateArray)) {
-        return; // Exit early if cartesianArray is not defined or contains less than 3 points
-    }
-    const cartesian3Array = coordinateArray.map((item) =>
-        convertToCartesian3(item)
-    );
-
-    return {
-        name: "measure tool polygon",
-        polygon: {
-            hierarchy: new Cesium.PolygonHierarchy(cartesian3Array),
-            perPositionHeight: true,
-            material: new Cesium.ColorMaterialProperty(Cesium.Color.GREEN.withAlpha(0.8)),
-            outline: true,
-            outlineColor: Cesium.Color.YELLOW,
-            outlineWidth: 4,
-        },
-    };
 }
 
 // Cesium primitive
@@ -537,8 +404,6 @@ export function convertToCartesian3(coordinate) {
     return cartesian;
 }
 
-
-
 export function cartesian3ToCartographicDegrees(cartesian) {
     const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
 
@@ -550,15 +415,38 @@ export function cartesian3ToCartographicDegrees(cartesian) {
 }
 
 /**
- * format the distance
- * @param {number} distance
- * @returns {number} distance - the formatted distance
+ * Format the distance.
+ * @param {number} distance - The distance in meters.
+ * @returns {string} The formatted distance string.
  */
 export function formatDistance(distance) {
-    if (distance > 1000) {
-        return (distance / 1000).toFixed(2) + " km";
-    } else {
+    if (distance >= 1_000) {
+        // Convert to kilometers
+        return (distance / 1_000).toFixed(2) + " km";
+    } else if (distance >= 1) {
+        // Keep in meters
         return distance.toFixed(2) + " m";
+    } else {
+        // Convert to centimeters
+        return (distance * 100).toFixed(2) + " cm";
+    }
+}
+
+/**
+ * Format the area.
+ * @param {number} area - The area in square meters.
+ * @returns {string} The formatted area string.
+ */
+export function formatArea(area) {
+    if (area >= 1_000_000) {
+        // Convert to square kilometers
+        return (area / 1_000_000).toFixed(2) + " km²";
+    } else if (area >= 1) {
+        // Keep in square meters
+        return area.toFixed(2) + " m²";
+    } else {
+        // Convert to square centimeters
+        return (area * 10_000).toFixed(2) + " cm²";
     }
 }
 
@@ -616,24 +504,33 @@ export function removeInputActions(handler) {
 /**
  * Makes an HTML element draggable within a specified container.
  * @param {HTMLElement} element - The HTML element to be made draggable.
- * @param {HTMLElement} container - The cesium viewer container within which the element can be dragged.
- * @param {function(number, number, DOMRect): void} updatePositionCallback - A callback function to update the position of the element.
- * @param {number} updatePositionCallback.newTop - The new top position of the element.
- * @param {number} updatePositionCallback.newLeft - The new left position of the element.
- * @param {DOMRect} updatePositionCallback.containerRect - The bounding rectangle of the container.
+ * @param {HTMLElement} container - The container within which the element can be dragged.
+ * @param {function(number, number, DOMRect): void} updatePositionCallback - Callback to update the position of the element.
+ * @param {function(boolean): void} [onDragStateChange] - Optional callback to notify when dragging starts or ends.
  */
-export function makeDraggable(element, container, updatePositionCallback) {
-    let posInitialX = 0, posInitialY = 0; // Initial cursor positions
-    let isDragging = false; // Flag to track dragging state
-    const threshold = 5; // Movement threshold to differentiate dragging from clicking
+export function makeDraggable(element, container, updatePositionCallback, onDragStateChange) {
+    let posInitialX = 0, posInitialY = 0;  // Initial cursor positions
+    let isDragging = false;  // Internal flag to track dragging state
+    const threshold = 5;  // Pixels to move before triggering a drag
+
+    // Function to emit drag state changes
+    const emitDragState = (newState) => {
+        if (isDragging !== newState) {
+            isDragging = newState;
+            if (typeof onDragStateChange === 'function') {
+                onDragStateChange(isDragging);
+            }
+        }
+    };
 
     // Retrieves the bounding rectangle of the container
     const fetchContainerRect = () => container.getBoundingClientRect();
-    let containerRect = fetchContainerRect(); // Initial dimensions of the container
+    let containerRect = fetchContainerRect();  // Initial dimensions of the container
 
     // Updates the position of the draggable element
     const updatePosition = (newTop, newLeft) => {
-        containerRect = fetchContainerRect(); // Refresh dimensions for dynamic changes
+        containerRect = fetchContainerRect();  // Refresh dimensions for dynamic changes
+
         // Ensure the element remains within container bounds
         newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
         newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
@@ -650,25 +547,21 @@ export function makeDraggable(element, container, updatePositionCallback) {
 
     // Handles the mouse move event to update the element's position
     const elementDrag = (event) => {
-        event.preventDefault(); // Prevent default to avoid text selection
-        if (!isDragging) {
-            // Calculate movement to determine if dragging should start
-            const deltaX = Math.abs(posInitialX - event.clientX);
-            const deltaY = Math.abs(posInitialY - event.clientY);
-            if (deltaX > threshold || deltaY > threshold) {
-                isDragging = true; // Start dragging if movement is above the threshold
-            }
+        event.preventDefault();
+        const deltaX = Math.abs(posInitialX - event.clientX);
+        const deltaY = Math.abs(posInitialY - event.clientY);
+
+        if (!isDragging && (deltaX > threshold || deltaY > threshold)) {
+            emitDragState(true);
         }
+
         if (isDragging) {
-            // Calculate new position
             const deltaX = posInitialX - event.clientX;
             const deltaY = posInitialY - event.clientY;
 
-            // Update initial positions for the next move
             posInitialX = event.clientX;
             posInitialY = event.clientY;
 
-            // Calculate and update the new position of the element
             const newTop = element.offsetTop - deltaY;
             const newLeft = element.offsetLeft - deltaX;
             updatePosition(newTop, newLeft);
@@ -679,19 +572,62 @@ export function makeDraggable(element, container, updatePositionCallback) {
     const closeDragElement = () => {
         document.onmouseup = null;
         document.onmousemove = null;
-        isDragging = false; // Reset dragging flag
+        if (isDragging) {
+            emitDragState(false);
+        }
     };
 
     // Initiates dragging
     element.onmousedown = (event) => {
         // Avoid dragging when clicking on input elements to allow normal interaction
         if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
-            return; // Skip dragging initialization for input or textarea elements
+            return;
         }
-        event.preventDefault(); // Prevent default to avoid focus changes and text selection
-        posInitialX = event.clientX; // Record initial cursor X position
-        posInitialY = event.clientY; // Record initial cursor Y position
-        document.onmouseup = closeDragElement; // Set function to call on mouse up
-        document.onmousemove = elementDrag; // Set function to call on mouse move
+        event.preventDefault();
+        posInitialX = event.clientX;
+        posInitialY = event.clientY;
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
     };
+
+    // Handle container resize using ResizeObserver
+    const handleResize = () => {
+        containerRect = fetchContainerRect();  // Refresh container dimensions
+
+        // Get current position of the element
+        let currentLeft = parseInt(element.style.left, 10) || 0;
+        let currentTop = parseInt(element.style.top, 10) || 0;
+
+        // Adjust position if it's outside the container bounds
+        const adjustedLeft = Math.max(0, Math.min(currentLeft, containerRect.width - element.offsetWidth));
+        const adjustedTop = Math.max(0, Math.min(currentTop, containerRect.height - element.offsetHeight));
+
+        // Update the position only if it has changed
+        if (currentLeft !== adjustedLeft || currentTop !== adjustedTop) {
+            element.style.left = `${adjustedLeft}px`;
+            element.style.top = `${adjustedTop}px`;
+
+            // Call the updatePositionCallback with new position
+            if (updatePositionCallback) {
+                updatePositionCallback(adjustedTop, adjustedLeft, containerRect);
+            }
+        }
+    };
+
+    // Set up ResizeObserver on the container
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(container);
+
+    // Clean up function to remove event listeners and observers when needed
+    const cleanup = () => {
+        resizeObserver.unobserve(container);
+        resizeObserver.disconnect();
+        element.onmousedown = null;
+        document.onmouseup = null;
+        document.onmousemove = null;
+    };
+
+    // Return the cleanup function optionally
+    return cleanup;
 }
+

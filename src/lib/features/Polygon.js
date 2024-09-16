@@ -9,8 +9,10 @@ import {
     createPolygonGeometryInstance,
     createPolygonPrimitive,
     createPolygonOutlinePrimitive,
-    createPolygonOutlineGeometryInstance
+    createPolygonOutlineGeometryInstance,
+    formatArea
 } from "../helper/helper.js";
+import { format } from "url";
 
 class Polygon {
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
@@ -151,7 +153,7 @@ class Polygon {
                 );
                 if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
                 this.interactivePrimitives.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(this.coords.cache[0], this.coords.cache[this.coords.cache.length - 1], polygonArea));
-                this.interactivePrimitives.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
+                this.interactivePrimitives.movingLabelPrimitive.text = formatArea(polygonArea);
                 this.interactivePrimitives.movingLabelPrimitive.id = generateId(midPoint, "polygon_label");
             }
         }
@@ -200,7 +202,7 @@ class Polygon {
             );
             if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
             this.interactivePrimitives.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(movingCoordinateDataCache[0], movingCoordinateDataCache[movingCoordinateDataCache.length - 1], polygonArea));
-            this.interactivePrimitives.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
+            this.interactivePrimitives.movingLabelPrimitive.text = formatArea(polygonArea);
             this.interactivePrimitives.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
         }
     }
@@ -249,7 +251,7 @@ class Polygon {
                 new Cesium.Cartesian3()
             );
             const label = createLabelPrimitive(midPoint, midPoint, 0);
-            label.text = `${polygonArea.toFixed(2)} m²`;
+            label.text = formatArea(polygonArea);
             label.id = generateId(midPoint, "polygon_label");
             this.labelCollection.add(label);
 
@@ -359,7 +361,7 @@ class Polygon {
             new Cesium.Cartesian3()
         );
         this.interactivePrimitives.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(movingCoordinateData[0], movingCoordinateData[movingCoordinateData.length - 1], polygonArea));
-        this.interactivePrimitives.movingLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
+        this.interactivePrimitives.movingLabelPrimitive.text = formatArea(polygonArea);
         this.interactivePrimitives.movingLabelPrimitive.id = generateId(midPoint, "polygon_moving_label");
     }
 
@@ -423,7 +425,7 @@ class Polygon {
                     new Cesium.Cartesian3()
                 );
                 targetLabelPrimitive.position = newMidPoint;
-                targetLabelPrimitive.text = `${polygonArea.toFixed(2)} m²`;
+                targetLabelPrimitive.text = formatArea(polygonArea);
                 targetLabelPrimitive.id = generateId(midPoint, "polygon_label");
 
                 // log area records

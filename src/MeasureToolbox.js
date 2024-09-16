@@ -8,22 +8,22 @@ import { MultiDistanceClamped } from "./lib/features/MultiDistanceClamped.js";
 import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
-import { FireTrack } from "./lib/features/FireTrack.js";
-import { removeInputActions, makeDraggable } from "./lib/helper/helper.js";
-import toolImg from "./assets/tool-img.svg";
-import pickerImg from "./assets/picker-img.svg";
-import pointsImg from "./assets/points-img.svg";
-import distanceImg from "./assets/distance-img.svg";
-import curveImg from "./assets/curve-img.svg";
-import heightImg from "./assets/height-img.svg";
-import multiDImage from "./assets/multi-d-img.svg";
-import multiDClampedImg from "./assets/multi-d-clamped-img.svg";
-import polygonImg from "./assets/polygon-img.svg";
-import profileImg from "./assets/profile-img.svg";
-import profileDistancesImg from "./assets/profile-distances-img.svg";
-import clearImg from "./assets/clear-img.svg";
 import { Picker } from "./lib/features/Picker.js";
+import { removeInputActions, makeDraggable } from "./lib/helper/helper.js";
+import { FireTrack } from "./lib/features/FireTrack.js";
 import { FlyThrough } from "./lib/features/FlyThrough.js";
+import toolIcon from "./assets/tool-icon.svg";
+import pickerIcon from "./assets/picker-icon.svg";
+import pointsIcon from "./assets/points-icon.svg";
+import distanceIcon from "./assets/distance-icon.svg";
+import curveIcon from "./assets/curve-icon.svg";
+import heightIcon from "./assets/height-icon.svg";
+import multiDImage from "./assets/multi-d-icon.svg";
+import multiDClampedIcon from "./assets/multi-d-clamped-icon.svg";
+import polygonIcon from "./assets/polygon-icon.svg";
+import profileIcon from "./assets/profile-icon.svg";
+import profileDistancesIcon from "./assets/profile-d-icon.svg";
+import clearIcon from "./assets/clear-icon.svg";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -97,9 +97,7 @@ export class MeasureToolbox extends HTMLElement {
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;
         } else {
-            this.handler = new Cesium.ScreenSpaceEventHandler(
-                this.viewer.scene.canvas
-            );
+            this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
 
         removeInputActions(this.handler);
@@ -125,7 +123,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.measureModes
                 ),
                 name: "Picker",
-                icon: pickerImg,
+                icon: pickerIcon,
             },
             {
                 instance: new Points(
@@ -136,7 +134,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Points",
-                icon: pointsImg,
+                icon: pointsIcon,
             },
             {
                 instance: new TwoPointsDistance(
@@ -147,7 +145,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Distance",
-                icon: distanceImg,
+                icon: distanceIcon,
             },
             {
                 instance: new ThreePointsCurve(
@@ -158,7 +156,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Curve",
-                icon: curveImg,
+                icon: curveIcon,
             },
             {
                 instance: new Height(
@@ -169,7 +167,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Height",
-                icon: heightImg,
+                icon: heightIcon,
             },
             {
                 instance: new MultiDistance(
@@ -191,7 +189,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Multi-Distances-Clamped",
-                icon: multiDClampedImg,
+                icon: multiDClampedIcon,
             },
             {
                 instance: new Polygon(
@@ -202,7 +200,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Polygon",
-                icon: polygonImg,
+                icon: polygonIcon,
             },
             {
                 instance: new Profile(
@@ -213,7 +211,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Profile",
-                icon: profileImg,
+                icon: profileIcon,
             },
             {
                 instance: new ProfileDistances(
@@ -224,7 +222,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Profile-Distances",
-                icon: profileDistancesImg,
+                icon: profileDistancesIcon,
             },
             // {
             //     instance: new FlyThrough(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
@@ -235,12 +233,9 @@ export class MeasureToolbox extends HTMLElement {
 
         this.measureModes = modes.map((mode) => mode.instance);
 
-        const pickerInstance = modes.find(
-            (mode) => mode.name === "Picker"
-        ).instance;
+        const pickerInstance = modes.find((mode) => mode.name === "Picker").instance;
         pickerInstance.measureModes = this.measureModes;
-        pickerInstance.activateModeCallback =
-            this.activateModeByName.bind(this);
+        pickerInstance.activateModeCallback = this.activateModeByName.bind(this);
 
         modes.forEach((mode) => {
             this.createMeasureModeButton(mode.instance, mode.name, mode.icon);
@@ -263,7 +258,7 @@ export class MeasureToolbox extends HTMLElement {
         // initialize tool button to control collapse/expand for buttons
         const toolButton = document.createElement("button");
         toolButton.className = "measure-tools cesium-button";
-        toolButton.innerHTML = `<img src="${toolImg}" alt="tool" style="width: 30px; height: 30px;">`;
+        toolButton.innerHTML = `<img src="${toolIcon}" alt="tool" style="width: 30px; height: 30px;">`;
         toolButton.addEventListener("click", () => {
             this.toggleTools();
         });
@@ -322,6 +317,13 @@ export class MeasureToolbox extends HTMLElement {
                 margin: 0;
                 padding: 0;
             }
+            .cesium-infoBox{
+                width: 250px;
+                padding: 5px;
+                font-size: 0.8rem;
+                border-radius: 7px;
+                cursor: grab; /* Indicates it can be moved */  
+            }
             .cesium-infoBox table{
                 width: 100%;
             }
@@ -329,14 +331,8 @@ export class MeasureToolbox extends HTMLElement {
                 padding: 5px 0;
                 border: none;
             }
-            .cesium-infoBox{
-                width: 250px;
-                padding: 5px;
-                font-size: 0.8rem;
-                cursor: grab; /* Indicates it can be moved */  
-            }
             .info-panel td{
-                border: 1px 0 solid #e6f8f8;
+                border: 1px 0 solid #edffff;
                 font-size: 0.8rem;
             }
             .log-box {
@@ -344,14 +340,16 @@ export class MeasureToolbox extends HTMLElement {
                 height: 250px;
                 overflow-y: auto;
                 width: 250px;
-                background: #303336;
-                opacity: 0.9; /* Adjusted for CSS readability */
+                background: rgba(38, 38, 38, 0.95);
+                opacity: 1; /* Adjusted for CSS readability */
                 padding: 5px;
-                border-radius: 5px;
-                box-shadow: 0 0 10px #000;
+                border-radius: 7px;
+                box-shadow: 0 0 10px 1px #000;
                 z-index: 1000;
-                color: #e6f8f8;
+                color: #edffff;
                 cursor: grab; /* Indicates it can be moved */
+                scrollbar-width: thin;
+                scrollbar-color: #888 rgba(38, 38, 38, 0.95);
             }
             `;
         this.shadowRoot.appendChild(style);
@@ -365,14 +363,14 @@ export class MeasureToolbox extends HTMLElement {
      * Creates a measurement mode button.
      * @param {Object} toolInstance - The instance of the measurement tool.
      * @param {string} buttonText - The text to display on the button.
-     * @param {string} iconImg - The image to display on the button.
+     * @param {string} icon - The image to display on the button.
      */
-    createMeasureModeButton(toolInstance, buttonText, iconImg) {
+    createMeasureModeButton(toolInstance, buttonText, icon) {
         // setup buttons
         const button = document.createElement("button");
         const lowerCaseString = buttonText.toLowerCase();
         button.className = `${lowerCaseString} cesium-button measure-mode-button`;
-        button.innerHTML = `<img src="${iconImg}" alt="${lowerCaseString}" style="width: 30px; height: 30px;">`;
+        button.innerHTML = `<img src="${icon}" alt="${lowerCaseString}" style="width: 30px; height: 30px;">`;
 
         // setup button actions
         button.addEventListener("click", () => {
@@ -399,8 +397,7 @@ export class MeasureToolbox extends HTMLElement {
             } else {
                 // if the click button is not the active button
                 // initialize button
-                this.activeButton &&
-                    this.deactivateButton(this.activeButton, this.activeTool);
+                this.activeButton && this.deactivateButton(this.activeButton, this.activeTool);
                 // activate button
                 this.activateButton(button, toolInstance);
                 // set state for the button and instance
@@ -444,13 +441,11 @@ export class MeasureToolbox extends HTMLElement {
      */
     toggleTools() {
         this.isToolsExpanded = !this.isToolsExpanded;
-        this.shadowRoot
-            .querySelectorAll(".measure-mode-button")
-            .forEach((button, index) => {
-                setTimeout(() => {
-                    button.classList.toggle("show", this.isToolsExpanded);
-                }, index * 50 + 25);
-            });
+        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button, index) => {
+            setTimeout(() => {
+                button.classList.toggle("show", this.isToolsExpanded);
+            }, index * 50 + 25);
+        });
     }
 
     /**
@@ -458,65 +453,54 @@ export class MeasureToolbox extends HTMLElement {
      */
     setupClearButton() {
         this.clearButton = document.createElement("button");
-        this.clearButton.className =
-            "clear-button cesium-button measure-mode-button";
-        this.clearButton.innerHTML = `<img src="${clearImg}" alt="clear" style="width: 30px; height: 30px;">`;
+        this.clearButton.className = "clear-button cesium-button measure-mode-button";
+        this.clearButton.innerHTML = `<img src="${clearIcon}" alt="clear" style="width: 30px; height: 30px;">`;
 
         this.toolsContainer.appendChild(this.clearButton);
 
         this.clearButton.addEventListener("click", () => {
             // remove line primitives
-            const linePrimitives =
-                this.viewer.scene.primitives._primitives.filter(
-                    (p) =>
-                        p.geometryInstances &&
-                        p.geometryInstances.id &&
-                        p.geometryInstances.id.startsWith("annotate") &&
-                        p.geometryInstances.id.includes("line")
-                );
-            linePrimitives.forEach((p) =>
-                this.viewer.scene.primitives.remove(p)
+            const linePrimitives = this.viewer.scene.primitives._primitives.filter(
+                (p) =>
+                    p.geometryInstances &&
+                    p.geometryInstances.id &&
+                    p.geometryInstances.id.startsWith("annotate") &&
+                    p.geometryInstances.id.includes("line")
             );
+            linePrimitives.forEach((p) => this.viewer.scene.primitives.remove(p));
             // remove polygon primitives
-            const polygonPrimitives =
-                this.viewer.scene.primitives._primitives.filter(
-                    (p) =>
-                        p.geometryInstances &&
-                        p.geometryInstances.id &&
-                        p.geometryInstances.id.startsWith("annotate") &&
-                        p.geometryInstances.id.includes("polygon")
-                );
-            polygonPrimitives.forEach((p) =>
-                this.viewer.scene.primitives.remove(p)
+            const polygonPrimitives = this.viewer.scene.primitives._primitives.filter(
+                (p) =>
+                    p.geometryInstances &&
+                    p.geometryInstances.id &&
+                    p.geometryInstances.id.startsWith("annotate") &&
+                    p.geometryInstances.id.includes("polygon")
             );
+            polygonPrimitives.forEach((p) => this.viewer.scene.primitives.remove(p));
             // remove point primitives from point collections
-            const pointCollections =
-                this.viewer.scene.primitives._primitives.filter(
-                    (p) =>
-                        p._pointPrimitives &&
-                        p._pointPrimitives.some(
-                            (point) =>
-                                point.id &&
-                                point.id.startsWith("annotate") &&
-                                point.id.includes("point")
-                        )
-                );
+            const pointCollections = this.viewer.scene.primitives._primitives.filter(
+                (p) =>
+                    p._pointPrimitives &&
+                    p._pointPrimitives.some(
+                        (point) =>
+                            point.id &&
+                            point.id.startsWith("annotate") &&
+                            point.id.includes("point")
+                    )
+            );
             pointCollections &&
-                pointCollections.forEach((pointCollection) =>
-                    pointCollection.removeAll()
-                );
+                pointCollections.forEach((pointCollection) => pointCollection.removeAll());
             // remove label primitives from label collections
-            const labelCollections =
-                this.viewer.scene.primitives._primitives.filter(
-                    (p) =>
-                        p._labels &&
-                        p._labels.some(
-                            (label) =>
-                                label.id &&
-                                label.id.startsWith("annotate") &&
-                                label.id.includes("label")
-                        )
-                );
+            const labelCollections = this.viewer.scene.primitives._primitives.filter(
+                (p) =>
+                    p._labels &&
+                    p._labels.some(
+                        (label) =>
+                            label.id &&
+                            label.id.startsWith("annotate") &&
+                            label.id.includes("label")
+                    )
+            );
             labelCollections &&
                 labelCollections.forEach((labelCollection) => {
                     labelCollection.removeAll(); // moving label was not remove, because same label cannot recreate and hence cause destory error
@@ -562,30 +546,25 @@ export class MeasureToolbox extends HTMLElement {
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out;";
         this.viewer.container.appendChild(this.buttonOverlay);
 
-        this.shadowRoot
-            .querySelectorAll(".measure-mode-button")
-            .forEach((button) => {
-                button.addEventListener("mouseover", (e) => {
-                    // cesium container rectangle
-                    const cesiumRect =
-                        this.viewer.container.getBoundingClientRect();
-                    // set overlay to display
-                    this.buttonOverlay.style.display = "block";
-                    // get description of the button
-                    const description = button.querySelector("img")?.alt;
-                    this.buttonOverlay.innerHTML = `${description} mode`;
-                    // set position of the overlay
-                    this.buttonOverlay.style.left =
-                        e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
-                    this.buttonOverlay.style.top =
-                        e.pageY - cesiumRect.y - 40 + "px";
-                });
-
-                button.addEventListener("mouseout", () => {
-                    // set overlay to not display
-                    this.buttonOverlay.style.display = "none";
-                });
+        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
+            button.addEventListener("mouseover", (e) => {
+                // cesium container rectangle
+                const cesiumRect = this.viewer.container.getBoundingClientRect();
+                // set overlay to display
+                this.buttonOverlay.style.display = "block";
+                // get description of the button
+                const description = button.querySelector("img")?.alt;
+                this.buttonOverlay.innerHTML = `${description} mode`;
+                // set position of the overlay
+                this.buttonOverlay.style.left = e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
+                this.buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
             });
+
+            button.addEventListener("mouseout", () => {
+                // set overlay to not display
+                this.buttonOverlay.style.display = "none";
+            });
+        });
     }
 
     /**
@@ -626,19 +605,14 @@ export class MeasureToolbox extends HTMLElement {
         if (
             this.activeButton &&
             (this.activeButton.classList.contains("multi-distances") ||
-                this.activeButton.classList.contains(
-                    "multi-distances-clamped"
-                ) ||
+                this.activeButton.classList.contains("multi-distances-clamped") ||
                 this.activeButton.classList.contains("polygon") ||
                 this.activeButton.classList.contains("profile-distances"))
         ) {
             infoBoxTable.appendChild(this.createRow(message1));
             infoBoxTable.appendChild(this.createRow(message2));
             infoBoxTable.appendChild(this.createRow(message3));
-        } else if (
-            this.activeButton &&
-            this.activeButton.classList.contains("picker")
-        ) {
+        } else if (this.activeButton && this.activeButton.classList.contains("picker")) {
             infoBoxTable.appendChild(this.createRow(messagePicker));
         } else {
             infoBoxTable.appendChild(this.createRow(message1));
@@ -649,16 +623,11 @@ export class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(this.infoBox);
 
         // Make infoBox draggable
-        makeDraggable(
-            this.infoBox,
-            this.viewer.container,
-            (newTop, newLeft, containerRect) => {
-                this.infoBoxPosition.top = `${newTop}px`;
-                this.infoBoxPosition.right = `${
-                    containerRect.width - newLeft - this.infoBox.offsetWidth
+        makeDraggable(this.infoBox, this.viewer.container, (newTop, newLeft, containerRect) => {
+            this.infoBoxPosition.top = `${newTop}px`;
+            this.infoBoxPosition.right = `${containerRect.width - newLeft - this.infoBox.offsetWidth
                 }px`;
-            }
-        );
+        });
     }
 
     /**
@@ -682,16 +651,11 @@ export class MeasureToolbox extends HTMLElement {
         this.shadowRoot.appendChild(this.logBox);
 
         // Make logBox draggable
-        makeDraggable(
-            this.logBox,
-            this.viewer.container,
-            (newTop, newLeft, containerRect) => {
-                this.logBoxPosition.top = `${newTop}px`;
-                this.logBoxPosition.right = `${
-                    containerRect.width - newLeft - this.logBox.offsetWidth
+        makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
+            this.logBoxPosition.top = `${newTop}px`;
+            this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth
                 }px`;
-            }
-        );
+        });
     }
 
     /**
@@ -711,13 +675,9 @@ export class MeasureToolbox extends HTMLElement {
             if (key === "points") {
                 // recordData = {points: {add: {key: value}}}, and callback pass {add: {key: value}}
                 const action = Object.keys(recordData)[0];
-                const [coordinateKey, coordinateValue] = Object.entries(
-                    recordData[action]
-                )[0];
+                const [coordinateKey, coordinateValue] = Object.entries(recordData[action])[0];
                 fragment.appendChild(
-                    this.createRow(
-                        `${key}: ${action}: (${coordinateKey}): ${coordinateValue}`
-                    )
+                    this.createRow(`${key}: ${action}: (${coordinateKey}): ${coordinateValue}`)
                 );
             } else if (
                 key === "m-distance" ||
@@ -725,12 +685,8 @@ export class MeasureToolbox extends HTMLElement {
                 key === "m-distance-clamped"
             ) {
                 const { distances, totalDistance } = recordData;
-                fragment.appendChild(
-                    this.createRow(`${key}: distances: ${distances}`)
-                );
-                fragment.appendChild(
-                    this.createRow(`${key}: totalDistance: ${totalDistance}`)
-                );
+                fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
+                fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));
             } else {
                 fragment.appendChild(this.createRow(`${key}: ${recordData}`));
             }
