@@ -1,166 +1,155 @@
 import * as Cesium from "cesium";
 
+///////////////////////////////
+// helper functions for general
+///////////////////////////////
 /**
- * Opens a modal for the user to edit the label name and updates the label primitive.
- * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
- * @param {Cesium.Label} label - the label primitive to be updated.
- * @returns {Promise<void>} - A promise that resolves when the label is updated.
+ * calculate the distance between two points
+ * @param {Cesium.Cartesian3} startPoint - the cartesian coordinates
+ * @param {Cesium.Cartesian3} endPoint - the cartesian coordinates
+ * @returns {number} distance - the distance between startPoint and endPoint
  */
-export async function editableLabel(viewerContainer, label) {
-    try {
-        // open a modal for user to edit the label name
-        const newLabelName = await setupEditableModal(viewerContainer);
+export function calculateDistance(startPoint, endPoint) {
+    const distance = Cesium.Cartesian3.distance(startPoint, endPoint);
+    return distance;
+}
 
-        const labelText = label.text
-        let value = null;
-        // check the label to see if it has ":"
-        if (labelText.includes(":")) {
-            // retrieve the distance value
-            const [labelName, distance] = label.text.split(":");
-            value = distance;
-        } else {
-            // if the label does not have ":", label value is the distance value
-            value = label.text;
+/**
+ * Convert the coordinate to cartesian3 coordinate
+ * @param {*} coordinate - cesium coordinate object. It could be either cartographic degrees or cartographic radians or cartesian3
+ * @returns {Cesium.Cartesian3} cartesian - the cartesian3 coordinate
+ */
+export function convertToCartesian3(coordinate) {
+    if (!Cesium.defined(coordinate)) return;
+
+    let cartesian = coordinate;
+
+    if (coordinate.longitude) {
+        const isCartographicDregrees = Math.abs(coordinate.longitude) > 10;
+        const isCartographicRadians = Math.abs(coordinate.longitude) <= 10;
+        switch (true) {
+            case isCartographicDregrees:
+                cartesian = Cesium.Cartesian3.fromDegrees(
+                    coordinate.longitude,
+                    coordinate.latitude,
+                    coordinate.height
+                );
+                break;
+            case isCartographicRadians:
+                cartesian = Cesium.Cartesian3.fromRadians(
+                    coordinate.longitude,
+                    coordinate.latitude,
+                    coordinate.height
+                );
+                break;
+            default:
+                break;
         }
-
-        // create the new label text
-        const newLabelText = `${newLabelName.trim()} : ${value.trim()}`;
-
-        // set the new label text
-        label.text = newLabelText;
-    } catch (error) {
-        return;
+    } else if (coordinate.x) {
+        return cartesian; // if it is already cartesian3
     }
+
+    return cartesian;
 }
 
 /**
- * Sets up a modal for the user to edit the label name.
- * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
- * @returns {Promise<string>} - A promise that resolves to the new label name.
+ * Convert the cartesian3 coordinate to cartographic degrees
+ * @param {Cesium.Cartesian3} cartesian - The Cartesian3 coordinate to convert to Cartographic degrees.
+ * @returns {Object} cartographic - The Cartographic degrees coordinate.
  */
-function setupEditableModal(viewerContainer) {
-    return new Promise((resolve, reject) => {
-        const modal = document.createElement("div");
-        modal.className = "edit-label-modal";
+export function cartesian3ToCartographicDegrees(cartesian) {
+    const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
 
-        const style = document.createElement('style');
-        style.textContent = `
-            .edit-label-modal{
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
-                display: flex; justify-content: center; align-items: center; z-index: 2000; color: white; font-size: 20px;
-            }
-            .edit-label-modal-container{
-                background-color: #242526 ; padding: 20px 30px 30px 30px; border-radius: 10px; border: 1px solid #3b4855
-            }
-            .edit-label-modal-input{
-                display: flex; flex-direction: column; gap: 20px;
-            }
-            .edit-label-modal-input p{
-                font-family:Roboto, sans-serif; font-size: 1.25rem
-            }  
-            .edit-label-modal-input input{
-                padding: 5px; margin: 0px 0px 20px 0px;
-            }
-            .edit-label-modal-buttons{
-                display: flex; justify-content: flex-end; gap: 10px; 
-            }
-            .edit-label-modal-buttons button{
-                padding: 5px 10px; border-radius: 5px; border: none; outline: none; cursor: pointer; transition: all .5s ease; 
-                font-family:Roboto, sans-serif; 
-            }
-            .edit-label-modal-buttons button:hover{
-                background-color: rgba(245, 245, 245, 0.8);
-            }
-        `;
+    const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+    const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+    const height = cartographic.height;
 
-        modal.innerHTML = `
-        <div class="edit-label-modal-container">
-            <div class="edit-label-modal-input">
-                <p>Enter new label name</p>
-                <input type="text" id="editableLabelInput" />
-            </div>
-            <div class="edit-label-modal-buttons">
-                <button class="label-submit-btn">Submit</button>
-                <button class="label-cancel-btn">Cancel</button>
-            </div>
-        </div>
-        `;
-        viewerContainer.appendChild(modal);
-        viewerContainer.append(style);
-
-        // Focus on the input field
-        const input = modal.querySelector("#editableLabelInput");
-        input.focus();
-
-        // Add event listener to cancel button
-        const removeModal = () => {
-            viewerContainer.removeChild(modal)
-            modal.removeEventListener("keydown", keyDownHandler);
-        };
-
-        const cancelBtn = modal.querySelector(".label-cancel-btn");
-        const cancelBtnHandler = () => {
-            removeModal();
-            reject(null);
-        }
-        cancelBtn.addEventListener("click", cancelBtnHandler);
-
-        // Add event listener to submit button
-        const submitBtn = modal.querySelector(".label-submit-btn");
-        const submitBtnHandler = () => {
-            const newLabel = modal.querySelector("#editableLabelInput").value;
-            removeModal();
-            resolve(newLabel);
-        }
-        submitBtn.addEventListener("click", submitBtnHandler);
-
-        // add event listener for "enter" and "esc" keydown
-        const keyDownHandler = (e) => {
-            if (e.key === "Enter") {
-                submitBtnHandler();
-            } else if (e.key === "Escape") {
-                cancelBtnHandler();
-            }
-        }
-        modal.addEventListener("keydown", keyDownHandler);
-    });
+    return { longitude, latitude, height };
 }
 
 /**
- * update the pointer overlay position and color based on the pickedObjects
- * @param {Cesium.Viewer} viewer 
- * @param {HTMLElement} pointerOverlay 
- * @param {Cesium.Cartesian3} cartesian 
- * @param {Array} pickedObjects 
+ * Format the distance.
+ * @param {number} distance - The distance in meters.
+ * @returns {string} The formatted distance string.
  */
-export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedObjects) {
-    // const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
-    // cesium api update for world position to WindowCoordinates
-    const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
-    pointerOverlay.style.display = 'block';
-    pointerOverlay.style.left = `${screenPosition.x - 5}px`;
-    pointerOverlay.style.top = `${screenPosition.y - 5}px`;
-    pointerOverlay.style.borderRadius = "50%";
-    pointerOverlay.style.width = "1px";
-    pointerOverlay.style.height = "1px";
-
-    if (pickedObjects.length === 0) {
-        pointerOverlay.style.backgroundColor = "yellow";
+export function formatDistance(distance) {
+    if (distance >= 1_000) {
+        // Convert to kilometers
+        return (distance / 1_000).toFixed(2) + " km";
+    } else if (distance >= 1) {
+        // Keep in meters
+        return distance.toFixed(2) + " m";
     } else {
-        const annotatePrimitives = pickedObjects.some(pickedObject => {
-            // check for its id is string type and start with "annotate"
-            return (typeof pickedObject.id === "string" && pickedObject.id.startsWith("annotate"));
-        });
-        const annotateEntity = pickedObjects.some(pickedObject => {
-            return (pickedObject.id instanceof Cesium.Entity);
-        });
-
-        // anything other than annotate object will be blue
-        pointerOverlay.style.backgroundColor = (!annotatePrimitives && !annotateEntity) ? "blue" : "yellow";
+        // Convert to centimeters
+        return (distance * 100).toFixed(2) + " cm";
     }
 }
 
-// Cesium primitive
+/**
+ * Format the area.
+ * @param {number} area - The area in square meters.
+ * @returns {string} The formatted area string.
+ */
+export function formatArea(area) {
+    if (area >= 1_000_000) {
+        // Convert to square kilometers
+        return (area / 1_000_000).toFixed(2) + " km²";
+    } else if (area >= 1) {
+        // Keep in square meters
+        return area.toFixed(2) + " m²";
+    } else {
+        // Convert to square centimeters
+        return (area * 10_000).toFixed(2) + " cm²";
+    }
+}
+
+/**
+ * Generate a unique id for annotation mode with its coordinates. 
+ * @param {Cesium.Cartesian3} cartesian - The Cartesian coordinates of the point.
+ * @param {string} mode - The mode name of the annotation tool.
+ * @returns {string} id - The unique id for entity or primitive.
+ */
+export function generateId(cartesian, mode) {
+    let coordsId = null;
+    // cartesian could be either array or cartesian3
+    if (Array.isArray(cartesian)) {
+        cartesian.forEach((cart) => {
+            const coordId = cartesianToId(cart);
+            coordsId = coordsId ? coordsId + "_" + coordId : coordId;
+        });
+    } else {
+        coordsId = cartesianToId(cartesian);
+    }
+    const modeString = mode.toString().toLowerCase();
+    // Create the entity id using the hash
+    return `annotate_${modeString}_${coordsId}`;
+}
+
+/**
+ * generate id for cartesian coordinate
+ * @param {Cesium.Cartesian3} cartesian 
+ * @returns {string} id - the id for the cartesian coordinate
+ */
+export function cartesianToId(cartesian) {
+    // Convert the cartesian position to a string
+    const positionString = cartesian.toString();
+
+    let hash = 0;
+    // Loop through the characters of the position string and calculate the hash
+    for (let i = 0; i < positionString.length; i++) {
+        const char = positionString.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash = hash & hash; // Convert to a 32-bit integer
+    }
+    // create id using hash
+    return `${Math.abs(hash).toString(36)}`;
+}
+
+
+
+////////////////////////////////////////
+// helper functions for Cesium Primitive
+////////////////////////////////////////
 // point primitive
 export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
     if (!coordinate) {
@@ -369,129 +358,11 @@ export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive
     });
 }
 
-/**
- * calculate the distance between two points
- * @param {Cesium.Cartesian3} startPoint - the cartesian coordinates
- * @param {Cesium.Cartesian3} endPoint - the cartesian coordinates
- * @returns {number} distance - the distance between startPoint and endPoint
- */
-export function calculateDistance(startPoint, endPoint) {
-    const distance = Cesium.Cartesian3.distance(startPoint, endPoint);
-    return distance;
-}
 
-export function convertToCartesian3(coordinate) {
-    if (!Cesium.defined(coordinate)) return;
 
-    let cartesian = coordinate;
-
-    if (coordinate.longitude) {
-        if (Math.abs(coordinate.longitude) > 10) {
-            cartesian = Cesium.Cartesian3.fromDegrees(
-                coordinate.longitude,
-                coordinate.latitude,
-                coordinate.height
-            );
-        } else {
-            cartesian = Cesium.Cartesian3.fromRadians(
-                coordinate.longitude,
-                coordinate.latitude,
-                coordinate.height
-            );
-        }
-    }
-
-    return cartesian;
-}
-
-export function cartesian3ToCartographicDegrees(cartesian) {
-    const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-
-    const longitude = Cesium.Math.toDegrees(cartographic.longitude);
-    const latitude = Cesium.Math.toDegrees(cartographic.latitude);
-    const height = cartographic.height;
-
-    return { longitude, latitude, height };
-}
-
-/**
- * Format the distance.
- * @param {number} distance - The distance in meters.
- * @returns {string} The formatted distance string.
- */
-export function formatDistance(distance) {
-    if (distance >= 1_000) {
-        // Convert to kilometers
-        return (distance / 1_000).toFixed(2) + " km";
-    } else if (distance >= 1) {
-        // Keep in meters
-        return distance.toFixed(2) + " m";
-    } else {
-        // Convert to centimeters
-        return (distance * 100).toFixed(2) + " cm";
-    }
-}
-
-/**
- * Format the area.
- * @param {number} area - The area in square meters.
- * @returns {string} The formatted area string.
- */
-export function formatArea(area) {
-    if (area >= 1_000_000) {
-        // Convert to square kilometers
-        return (area / 1_000_000).toFixed(2) + " km²";
-    } else if (area >= 1) {
-        // Keep in square meters
-        return area.toFixed(2) + " m²";
-    } else {
-        // Convert to square centimeters
-        return (area * 10_000).toFixed(2) + " cm²";
-    }
-}
-
-/**
- * Generate a unique id for annotation mode with its coordinates. 
- * @param {Cesium.Cartesian3} cartesian - The Cartesian coordinates of the point.
- * @param {string} mode - The mode name of the annotation tool.
- * @returns {string} id - The unique id for entity or primitive.
- */
-export function generateId(cartesian, mode) {
-    let coordsId = null;
-    // cartesian could be either array or cartesian3
-    if (Array.isArray(cartesian)) {
-        cartesian.forEach((cart) => {
-            const coordId = cartesianToId(cart);
-            coordsId = coordsId ? coordsId + "_" + coordId : coordId;
-        });
-    } else {
-        coordsId = cartesianToId(cartesian);
-    }
-    const modeString = mode.toString().toLowerCase();
-    // Create the entity id using the hash
-    return `annotate_${modeString}_${coordsId}`;
-}
-
-/**
- * generate id for cartesian coordinate
- * @param {Cesium.Cartesian3} cartesian 
- * @returns {string} id - the id for the cartesian coordinate
- */
-export function cartesianToId(cartesian) {
-    // Convert the cartesian position to a string
-    const positionString = cartesian.toString();
-
-    let hash = 0;
-    // Loop through the characters of the position string and calculate the hash
-    for (let i = 0; i < positionString.length; i++) {
-        const char = positionString.charCodeAt(i);
-        hash = (hash << 5) - hash + char;
-        hash = hash & hash; // Convert to a 32-bit integer
-    }
-    // create id using hash
-    return `${Math.abs(hash).toString(36)}`;
-}
-
+/////////////////////////////////////////////
+// helper functions for measure mode specific
+/////////////////////////////////////////////
 export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
@@ -499,6 +370,171 @@ export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
     // handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+}
+
+
+
+/////////////////////////////////
+// helper functions for features
+/////////////////////////////////
+/**
+ * Opens a modal for the user to edit the label name and updates the label primitive.
+ * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
+ * @param {Cesium.Label} label - the label primitive to be updated.
+ * @returns {Promise<void>} - A promise that resolves when the label is updated.
+ */
+export async function editableLabel(viewerContainer, label) {
+    try {
+        // open a modal for user to edit the label name
+        const newLabelName = await setupEditableModal(viewerContainer);
+
+        const labelText = label.text
+        let value = null;
+        // check the label to see if it has ":"
+        if (labelText.includes(":")) {
+            // retrieve the distance value
+            const [labelName, distance] = label.text.split(":");
+            value = distance;
+        } else {
+            // if the label does not have ":", label value is the distance value
+            value = label.text;
+        }
+
+        // create the new label text
+        const newLabelText = `${newLabelName.trim()} : ${value.trim()}`;
+
+        // set the new label text
+        label.text = newLabelText;
+    } catch (error) {
+        return;
+    }
+}
+
+/**
+ * Sets up a modal for the user to edit the label name.
+ * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
+ * @returns {Promise<string>} - A promise that resolves to the new label name.
+ */
+function setupEditableModal(viewerContainer) {
+    return new Promise((resolve, reject) => {
+        const modal = document.createElement("div");
+        modal.className = "edit-label-modal";
+
+        const style = document.createElement('style');
+        style.textContent = `
+            .edit-label-modal{
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
+                display: flex; justify-content: center; align-items: center; z-index: 2000; color: white; font-size: 20px;
+            }
+            .edit-label-modal-container{
+                background-color: #242526 ; padding: 20px 30px 30px 30px; border-radius: 10px; border: 1px solid #3b4855
+            }
+            .edit-label-modal-input{
+                display: flex; flex-direction: column; gap: 20px;
+            }
+            .edit-label-modal-input p{
+                font-family:Roboto, sans-serif; font-size: 1.25rem
+            }  
+            .edit-label-modal-input input{
+                padding: 5px; margin: 0px 0px 20px 0px;
+            }
+            .edit-label-modal-buttons{
+                display: flex; justify-content: flex-end; gap: 10px; 
+            }
+            .edit-label-modal-buttons button{
+                padding: 5px 10px; border-radius: 5px; border: none; outline: none; cursor: pointer; transition: all .5s ease; 
+                font-family:Roboto, sans-serif; 
+            }
+            .edit-label-modal-buttons button:hover{
+                background-color: rgba(245, 245, 245, 0.8);
+            }
+        `;
+
+        modal.innerHTML = `
+        <div class="edit-label-modal-container">
+            <div class="edit-label-modal-input">
+                <p>Enter new label name</p>
+                <input type="text" id="editableLabelInput" />
+            </div>
+            <div class="edit-label-modal-buttons">
+                <button class="label-submit-btn">Submit</button>
+                <button class="label-cancel-btn">Cancel</button>
+            </div>
+        </div>
+        `;
+        viewerContainer.appendChild(modal);
+        viewerContainer.append(style);
+
+        // Focus on the input field
+        const input = modal.querySelector("#editableLabelInput");
+        input.focus();
+
+        // Add event listener to cancel button
+        const removeModal = () => {
+            viewerContainer.removeChild(modal)
+            modal.removeEventListener("keydown", keyDownHandler);
+        };
+
+        const cancelBtn = modal.querySelector(".label-cancel-btn");
+        const cancelBtnHandler = () => {
+            removeModal();
+            reject(null);
+        }
+        cancelBtn.addEventListener("click", cancelBtnHandler);
+
+        // Add event listener to submit button
+        const submitBtn = modal.querySelector(".label-submit-btn");
+        const submitBtnHandler = () => {
+            const newLabel = modal.querySelector("#editableLabelInput").value;
+            removeModal();
+            resolve(newLabel);
+        }
+        submitBtn.addEventListener("click", submitBtnHandler);
+
+        // add event listener for "enter" and "esc" keydown
+        const keyDownHandler = (e) => {
+            if (e.key === "Enter") {
+                submitBtnHandler();
+            } else if (e.key === "Escape") {
+                cancelBtnHandler();
+            }
+        }
+        modal.addEventListener("keydown", keyDownHandler);
+    });
+}
+
+/**
+ * update the pointer overlay position and color based on the pickedObjects
+ * @param {Cesium.Viewer} viewer 
+ * @param {HTMLElement} pointerOverlay 
+ * @param {Cesium.Cartesian3} cartesian 
+ * @param {Array} pickedObjects 
+ */
+export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedObjects) {
+    // const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+    // cesium api update for world position to WindowCoordinates
+    const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+    pointerOverlay.style.display = 'block';
+    pointerOverlay.style.left = `${screenPosition.x - 5}px`;
+    pointerOverlay.style.top = `${screenPosition.y - 5}px`;
+    pointerOverlay.style.borderRadius = "50%";
+    pointerOverlay.style.width = "1px";
+    pointerOverlay.style.height = "1px";
+
+    if (pickedObjects.length === 0) {
+        pointerOverlay.style.backgroundColor = "yellow";
+    } else {
+        const annotatePrimitives = pickedObjects.some(pickedObject => {
+            // check for its id is string type and start with "annotate"
+            return (typeof pickedObject.id === "string" && pickedObject.id.startsWith("annotate"));
+        });
+        const annotateEntity = pickedObjects.some(pickedObject => {
+            return (pickedObject.id instanceof Cesium.Entity);
+        });
+
+        // anything other than annotate object will be blue
+        pointerOverlay.style.backgroundColor = (!annotatePrimitives && !annotateEntity) ? "blue" : "yellow";
+    }
 }
 
 /**
