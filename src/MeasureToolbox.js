@@ -260,6 +260,7 @@ export class MeasureToolbox extends HTMLElement {
         toolButton.className = "measure-tools cesium-button";
         toolButton.innerHTML = `<img src="${toolIcon}" alt="tool" style="width: 30px; height: 30px;">`;
         toolButton.addEventListener("click", () => {
+            toolButton.classList.toggle("active");
             this.toggleTools();
         });
         toolsContainer.appendChild(toolButton);

@@ -32,7 +32,7 @@ class MultiDistanceClamped {
 
         // flags to control the state of the tool
         this.flags = {
-            isMultiDistanceClampedEnd: false,
+            isMeasurementComplete: false,
             isDragMode: false,
             isAddMode: false,
             countMeasure: 0,
@@ -116,7 +116,7 @@ class MultiDistanceClamped {
         // Handle different scenarios based on the clicked primitive type and the state of the tool
         switch (pickedObjectType) {
             case "label":
-                if (this.flags.isMultiDistanceClampedEnd) {
+                if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {
                     editableLabel(this.viewer.container, pickedObject.primitive);
                 }
                 break;
@@ -126,23 +126,28 @@ class MultiDistanceClamped {
                 break;
             case "line":
                 const linePrimitive = pickedObject.primitive;
-                if (this.flags.isMultiDistanceClampedEnd) {
-                    this.addActionByLine(linePrimitive);
-                }
+                this.setAddModeByLine(linePrimitive);
+
                 break;
             case "other":
                 break;
             default:
-                if (this.flags.isMultiDistanceClampedEnd) {
-                    this.flags.isMultiDistanceClampedEnd = false;
-                }
-                if (!this.flags.isDragMode && !this.flags.isAddMode)
+                if (!this.flags.isDragMode && !this.flags.isAddMode) {
                     this.startMeasure();
+                }
+
+                if (this.flags.isAddMode) {
+                    this.addAction(this.selectedLine);
+                }
                 break;
         }
     }
 
     startMeasure() {
+        if (this.flags.isMeasurementComplete) {
+            this.flags.isMeasurementComplete = false;
+        }
+
         // create point primitive
         const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.3);
         if (!isNearPoint) {
@@ -194,29 +199,6 @@ class MultiDistanceClamped {
 
     }
 
-    addActionByLine(linePrimitive) {
-        // Reset previous hovered line if any
-        if (this.hoveredLine && this.hoveredLine !== linePrimitive) {
-            this.resetLineColor(this.hoveredLine);
-            this.hoveredLine = null;
-        }
-
-        // Reset previous selected line if different
-        if (this.selectedLine && this.selectedLine !== linePrimitive) {
-            this.resetLineColor(this.selectedLine);
-        }
-
-        // Change line color to indicate selection
-        this.changeLineColor(linePrimitive, Cesium.Color.RED);
-        this.selectedLine = linePrimitive;
-
-        // Set flag to indicate add mode
-        if (this.selectedLine) {
-            this.flags.isAddMode = true;
-        }
-
-    }
-
     removeActionByPoint(pointPrimitive) {
         const pointPosition = pointPrimitive.position.clone();
 
@@ -227,10 +209,10 @@ class MultiDistanceClamped {
         linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
         labelPrimitives.forEach(l => this.labelCollection.remove(l));
 
-        if (this.coords.cache.length > 0) {     // when the measure is starting
+        if (this.coords.cache.length > 0) {     // when it is during the measure
             // Update cache
             this._updatePrimitivesAndCache(pointPosition, this.coords.cache);
-        } else if (this.coords.groups.length > 0) {     // when the measure is ended
+        } else if (this.coords.groups.length > 0 && this.flags.isMeasurementComplete) {     // when the measure is ended
             const groupsIndex = this.coords.groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, pointPosition)));
             const group = this.coords.groups[groupsIndex];
 
@@ -241,8 +223,6 @@ class MultiDistanceClamped {
 
             this._updatePrimitivesAndCache(pointPosition, group);
 
-            //TODO: handle when there is only one point left in the group
-
             // update total distance label
             const { distances, totalDistance } = this.calculateClampedDistanceFromArray(group);
             const totalLabel = createLabelPrimitive(group[group.length - 1], group[group.length - 1], totalDistance);
@@ -251,12 +231,16 @@ class MultiDistanceClamped {
             this.labelCollection.add(totalLabel);
 
             // log distance result
-            const distanceRecord = {
-                distances: distances.map(d => d.toFixed(2)),
-                totalDistance: totalDistance.toFixed(2)
-            };
-            this.coords._distanceRecords.push(distanceRecord);
-            this.logRecordsCallback(distanceRecord);
+            this.updateLogRecords(distances, totalDistance, group);
+
+            //remove point and total label when there is only one point left in the group
+            if (group.length === 1) {
+                // remove the point and the total label
+                const targetPoint = this.pointCollection._pointPrimitives.find(p => p && Cesium.Cartesian3.equals(p.position, group[0]));
+                if (targetPoint) this.pointCollection.remove(targetPoint);
+                const targetTotalLabel = this.labelCollection._labels.find(label => label.id && label.id.includes("multidistance_clamped_total_label") && Cesium.Cartesian3.equals(label.position, group[0]));
+                if (targetTotalLabel) this.labelCollection.remove(targetTotalLabel);
+            }
         } else {
             return;
         }
@@ -316,31 +300,128 @@ class MultiDistanceClamped {
         });
     }
 
+    setAddModeByLine(linePrimitive) {
+        // Reset previous hovered line if any
+        if (this.hoveredLine && this.hoveredLine !== linePrimitive) {
+            this.resetLineColor(this.hoveredLine);
+            this.hoveredLine = null;
+        }
+
+        // Reset previous selected line if different
+        if (this.selectedLine && this.selectedLine !== linePrimitive) {
+            this.resetLineColor(this.selectedLine);
+        }
+
+        // Change line color to indicate selection
+        this.changeLineColor(linePrimitive, Cesium.Color.YELLOW);
+        this.selectedLine = linePrimitive;
+
+        // Set flag to indicate add mode
+        if (this.selectedLine) {
+            this.flags.isAddMode = true;
+        }
+    }
+
+    addAction(linePrimitive) {
+        const linePositions = linePrimitive.geometryInstances.geometry._positions;
+        const group = this.coords.groups.find(group => group.some(cart => Cesium.Cartesian3.equals(cart, linePositions[0])));
+        if (!group || group.length === 0) return;
+
+        // Find the smallest index of the line positions in the group
+        const linePositionIndex1 = group.findIndex(cart => Cesium.Cartesian3.equals(cart, linePositions[0]));
+        const linePositionIndex2 = group.findIndex(cart => Cesium.Cartesian3.equals(cart, linePositions[1]));
+        const positionIndex = Math.min(linePositionIndex1, linePositionIndex2);
+
+
+        const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.3);
+        if (!isNearPoint) {
+            // to create a new point primitive
+            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
+            point.id = generateId(this.coordinate, "multidistance_clamped_point_pending");
+            this.pointCollection.add(point);
+            // update cache
+            group.splice(positionIndex + 1, 0, this.coordinate);
+        }
+
+        // create line and label primitives
+        const neighbourPositions = this.findNeighbourPosition(group[positionIndex + 1], group); // find neighbour positions by the new added point
+
+        // remove selected line and its label
+        this.viewer.scene.primitives.remove(linePrimitive);
+        const midPoint = Cesium.Cartesian3.midpoint(linePositions[0], linePositions[1], new Cesium.Cartesian3());
+        const existedLabel = this.labelCollection._labels.find(l => l.id && l.id.includes("multidistance_clamped_label") && Cesium.Cartesian3.equals(l.position, midPoint));
+        if (existedLabel) this.labelCollection.remove(existedLabel);
+
+        if (neighbourPositions.length === 3) {
+            neighbourPositions.forEach((pos, i) => {
+                // create line primtives
+                if (i < neighbourPositions.length - 1) {
+                    const lineGeometryInstance = createClampedLineGeometryInstance([pos, neighbourPositions[i + 1]], "multidistance_clamped_line");
+                    const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
+                    this.viewer.scene.primitives.add(linePrimitive);
+
+                    // create label primitives
+                    const distance = this.calculateClampedDistance(pos, neighbourPositions[i + 1]);
+                    const midPoint = Cesium.Cartesian3.midpoint(pos, neighbourPositions[i + 1], new Cesium.Cartesian3());
+                    const label = createLabelPrimitive(pos, neighbourPositions[i + 1], distance);
+                    label.id = generateId(midPoint, "multidistance_clamped_label");
+                    const { currentLetter, labelNumberIndex } = this.getLabelProperties(neighbourPositions[i + 1], group);
+                    label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
+                    this.labelCollection.add(label);
+                }
+            });
+        }
+
+        // update following label primitives
+        const followingIndex = positionIndex + 1;
+        const followingPositions = group.slice(positionIndex + 1);
+        this._updateFollowingLabelPrimitives(followingPositions, followingIndex, group);
+        const { distances, totalDistance } = this.calculateClampedDistanceFromArray(group);
+
+        // update total distance label
+        const totalLabel = this.labelCollection._labels.find(label => label.id && label.id.includes("multidistance_clamped_total_label") && Cesium.Cartesian3.equals(label.position, group[group.length - 1]));
+        if (totalLabel) {
+            totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
+        }
+        // update log records
+        this.updateLogRecords(distances, totalDistance, group);
+
+        // reset flags
+        this.flags.isAddMode = false;
+        this.selectedLine = null;
+    }
+
     handleMultiDistanceMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
         // update coordinate
         this.coordinate = cartesian;
-
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
 
         // update pointerOverlay: the moving dot with mouse
         pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
         // Handle different scenarios based on the state of the tool
-        const isMeasuringActive = this.coords.cache.length > 0 && !this.flags.isMultiDistanceClampedEnd
-        const isMeasurementComplete = this.flags.isMultiDistanceClampedEnd;
+        const isMeasuring = this.coords.cache.length > 0 && !this.flags.isMeasurementComplete
+        // const isMeasurementComplete = this.coords.groups.length > 0 && this.flags.isMeasurementComplete;
 
         switch (true) {
-            case isMeasuringActive:
+            case isMeasuring:
                 this.handleActiveMeasure(cartesian);
                 break;
-            case isMeasurementComplete:
-                this.handleHoverHighlighting(pickedObjects);
+            // case isMeasurementComplete:
+            //     this.handleHoverHighlighting(pickedObjects);
+            //     break;
+            default:
+                this.handleHoverHighlighting(pickedObjects);  // highlight the line when hovering
                 break;
         }
     }
 
+    /**
+     * The default method to handle mouse movement during measure 
+     * @param {Cesium.Cartesian3} cartesian 
+     */
     handleActiveMeasure(cartesian) {
         // Calculate the distance between the last selected point and the current cartesian position
         const lastPointCartesian = this.coords.cache[this.coords.cache.length - 1]
@@ -368,6 +449,10 @@ class MultiDistanceClamped {
         this.interactivePrimitives.movingLabels.push(movingLabel);
     }
 
+    /**
+     * Hover to the clamped line to highlight it when the mouse move over it
+     * @param {*} pickedObjects - the picked objects from the drillPick method
+     */
     handleHoverHighlighting(pickedObjects) {
         // Find the clamped line under the mouse
         const pickedLine = pickedObjects.find(p =>
@@ -385,23 +470,21 @@ class MultiDistanceClamped {
             this.hoveredLine = null;
         }
 
+        // Highlight the picked line if it exists
         if (pickedLine && pickedLine.primitive) {
             // If the picked line is not the selected line
             if (pickedLine.primitive !== this.selectedLine) {
                 // Change the line color to highlight it
-                this.changeLineColor(pickedLine.primitive, Cesium.Color.ORANGE);
+                this.changeLineColor(pickedLine.primitive, Cesium.Color.BLUE);
                 this.hoveredLine = pickedLine.primitive;
             }
-        } else if (this.hoveredLine) {
-            // If no line is picked, reset the previously hovered line
+        } else if (this.hoveredLine) {  // If no line is picked, reset the previously hovered line
             if (this.hoveredLine !== this.selectedLine) {
                 this.resetLineColor(this.hoveredLine);
             }
             this.hoveredLine = null;
         }
     }
-
-
 
     handleMultiDistanceRightClick(movement) {
         // place last point and place last line
@@ -466,23 +549,18 @@ class MultiDistanceClamped {
             this.labelCollection.add(totalLabel);
 
             // log distance result
-            const distanceRecord = {
-                distances: distances.map(d => d.toFixed(2)),
-                totalDistance: totalDistance.toFixed(2)
-            };
-            this.coords._distanceRecords.push(distanceRecord);
-            this.logRecordsCallback(distanceRecord);
-        }
+            this.updateLogRecords(distances, totalDistance, [...this.coords.cache]);
 
-        this.flags.isMultiDistanceClampedEnd = true;
-        this.coords.cache.length = 0;
+            this.flags.isMeasurementComplete = true;
+            this.coords.cache.length = 0;
+        }
     }
 
     handleMultiDistanceDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.coords.groups.length > 0 && this.flags.isMultiDistanceClampedEnd) {
+        if (this.coords.groups.length > 0 && this.flags.isMeasurementComplete) { // when the measure is ended and with at least one measure
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
             const isClampedPoint = pickedObjects.find(p =>
                 p.primitive.id &&
@@ -653,12 +731,7 @@ class MultiDistanceClamped {
             }
 
             // update log records
-            const distanceRecord = {
-                distances: distances.map(d => d.toFixed(2)),
-                totalDistance: totalDistance.toFixed(2)
-            };
-            this.coords._distanceRecords.push(distanceRecord);
-            this.logRecordsCallback(distanceRecord);
+            this.updateLogRecords(distances, totalDistance, group);
 
             // reset dragging primitive and flags
             this.interactivePrimitives.draggingPoint = null;
@@ -670,13 +743,14 @@ class MultiDistanceClamped {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
-    //TODO: refine this method 
+    /**
+     * The method to setup button UI and toggle the label collection show or hide
+     * @returns {HTMLButtonElement} - the button element to toggle label show
+     */
     toggleLabelShow() {
         const button = document.createElement("button");
         button.addEventListener("click", () => {
-            this.labelCollection._labels.forEach(label => {
-                label.show = !label.show;
-            });
+            this.labelCollection.show = !this.labelCollection.show; // toggle labe collection to show or hide
         });
         button.textContent = "Show";
         button.style.position = "absolute";
@@ -688,17 +762,18 @@ class MultiDistanceClamped {
             const observer = new MutationObserver(() => {
                 const multiDClamped = measureToolbox.shadowRoot.querySelector(".multi-distances-clamped");
                 const toolbar = measureToolbox.shadowRoot.querySelector(".toolbar");
+                const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
 
                 if (multiDClamped && toolbar) {
-                    const rect = multiDClamped.getBoundingClientRect();
-                    button.style.top = `${rect.top - 40}px`; // Adjust the value as needed
-                    button.style.left = `${rect.left + 315}px`;
+                    button.style.top = "-40px";
+                    button.style.left = `${45 * 7}px`; // 7th button, each button width is 45px
                     toolbar.appendChild(button);
+
                     observer.disconnect(); // Stop observing once the button is appended
 
                     // Add event listener to toggle button visibility based on multi-distances-clamped button state
                     const toggleButtonVisibility = () => {
-                        button.style.display = multiDClamped.classList.contains('active') ? 'block' : 'none';
+                        button.style.display = (multiDClamped.classList.contains('active') && measureToolButton.classList.contains('active')) ? 'block' : 'none';
                     };
 
                     // Initial visibility check
@@ -707,18 +782,12 @@ class MultiDistanceClamped {
                     // Observe changes to the class attribute of multiDClamped
                     const classObserver = new MutationObserver(toggleButtonVisibility);
                     classObserver.observe(multiDClamped, { attributes: true, attributeFilter: ['class'] });
-
-                    // Add event listener to toolbar button to hide all modes
-                    const toolbarButton = measureToolbox.shadowRoot.querySelector(".toolbar-button");
-                    if (toolbarButton) {
-                        toolbarButton.addEventListener("click", () => {
-                            button.style.display = 'none';
-                        });
-                    }
                 }
             });
             observer.observe(measureToolbox.shadowRoot, { childList: true, subtree: true });
         }
+
+        return button;
     }
 
     /**
@@ -770,21 +839,35 @@ class MultiDistanceClamped {
         return [prevPosition, position, nextPosition].filter(pos => pos !== null);
     }
 
-    changeLineColor(linePrimitive, color) {
+    /**
+     * change the a line primitive color and clone the original color if not already stored
+     * @param {Cesium.Primitive} linePrimitive - the line primitive
+     * @param {Cesium.Color} color - the color to change
+     * @returns {Cesium.Primitive} - the line primitive with the new color
+     */
+    changeLineColor(linePrimitive, color = Cesium.Color.YELLOW) {
         // Store the original color if not already stored
         if (!linePrimitive.originalColor) {
+            // line primitives don't have the originalColor property by default so we need to create it
             linePrimitive.originalColor = linePrimitive.appearance.material.uniforms.color.clone();
         }
         // Change the color
         linePrimitive.appearance.material.uniforms.color = color;
+        return linePrimitive;
     }
 
+    /**
+     * reset the line primitive color by its original color
+     * @param {Cesium.Primitive} linePrimitive - the line primitive
+     * @returns {Cesium.Primitive} - the line primitive with the new color
+     */
     resetLineColor(linePrimitive) {
         if (linePrimitive.originalColor) {
             // Reset to the original color
             linePrimitive.appearance.material.uniforms.color = linePrimitive.originalColor.clone();
             linePrimitive.originalColor = null;
         }
+        return linePrimitive;
     }
 
     /**
@@ -951,6 +1034,25 @@ class MultiDistanceClamped {
         }
     }
 
+    /**
+     * update the log records with the distances and the total distance
+     * @param {Number[]} distances - the distances between each point
+     * @param {Number} totalDistance - the total distance
+     * @returns {Object} - the distance record object 
+     */
+    updateLogRecords(distances, totalDistance, positions) {
+        const distanceRecord = {
+            distances: distances.map(d => d.toFixed(2)),
+            totalDistance: totalDistance.toFixed(2)
+        };
+        this.coords._distanceRecords.push(distanceRecord);
+        this.logRecordsCallback(distanceRecord);
+
+        console.table(positions); // this will interact with the server for updated positions
+
+        return distanceRecord;
+    }
+
     resetValue() {
         this.coordinate = new Cesium.Cartesian3();
 
@@ -962,7 +1064,7 @@ class MultiDistanceClamped {
 
         this.coords.cache = [];
 
-        this.flags.isMultiDistanceClampedEnd = false;
+        this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
         this.interactivePrimitives.draggingPoint = null;
