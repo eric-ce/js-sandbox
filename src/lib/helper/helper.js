@@ -1,8 +1,8 @@
 import * as Cesium from "cesium";
 
-///////////////////////////////
-// helper functions for general
-///////////////////////////////
+/********************************
+ * HELPER FUNCTIONS FOR GENERAL *
+ ********************************/
 /**
  * calculate the distance between two points
  * @param {Cesium.Cartesian3} startPoint - the cartesian coordinates
@@ -147,9 +147,10 @@ export function cartesianToId(cartesian) {
 
 
 
-////////////////////////////////////////
-// helper functions for Cesium Primitive
-////////////////////////////////////////
+
+/*****************************************
+ * HELPER FUNCTIONS FOR CESIUM PRIMITIVE *
+ *****************************************/
 // point primitive
 export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
     if (!coordinate) {
@@ -360,9 +361,10 @@ export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive
 
 
 
-/////////////////////////////////////////////
-// helper functions for measure mode specific
-/////////////////////////////////////////////
+
+/**********************************************
+ * HELPER FUNCTIONS FOR MEASURE MODE SPECIFIC *
+ **********************************************/
 export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
@@ -374,9 +376,9 @@ export function removeInputActions(handler) {
 
 
 
-/////////////////////////////////
-// helper functions for features
-/////////////////////////////////
+/*********************************
+ * HELPER FUNCTIONS FOR FEATURES *
+ *********************************/
 /**
  * Opens a modal for the user to edit the label name and updates the label primitive.
  * @param {HTMLElement} viewerContainer - The container element of the Cesium viewer.
@@ -402,9 +404,10 @@ export async function editableLabel(viewerContainer, label) {
 
         // create the new label text
         const newLabelText = `${newLabelName.trim()} : ${value.trim()}`;
-
         // set the new label text
         label.text = newLabelText;
+
+        return label;
     } catch (error) {
         return;
     }
@@ -535,6 +538,7 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
         // anything other than annotate object will be blue
         pointerOverlay.style.backgroundColor = (!annotatePrimitives && !annotateEntity) ? "blue" : "yellow";
     }
+    return pointerOverlay;
 }
 
 /**

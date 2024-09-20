@@ -12,12 +12,17 @@ import {
     generateId,
 } from "../helper/helper.js";
 
+/**
+ * The class to handle multi-distance clamped mode
+ */
 class MultiDistanceClamped {
     /**
-     * Creates a new MultiDistance instance.
+     * Creates a new MultiDistance Clamped instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
      * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
      * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
+     * @param {Function} logRecordsCallback - The callback function to log records.
+     * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
@@ -99,12 +104,20 @@ class MultiDistanceClamped {
     }
 
     /**
-     * Removes input actions for multi-distance clamped mode.
+     * Removes input actions for handler.
      */
     removeInputAction() {
         removeInputActions(this.handler);
     }
 
+
+
+    /**
+     * The method to handle left-click Cesium handler events 
+     *
+     * @param {*} movement - The mouse movement data.
+     * @returns 
+     */
     handleMultiDistanceLeftClick(movement) {
         // use move position for the position
         const cartesian = this.coordinate
@@ -191,7 +204,7 @@ class MultiDistanceClamped {
             label.id = generateId(midPoint, "multidistance_clamped_label_pending");
 
             // label text
-            const { currentLetter, labelNumberIndex } = this._getLabelProperties(this.coordinate, this.coords.cache);
+            const { currentLetter, labelNumberIndex } = this._getLabelProperties(this.coordinate, this.coords.cache, this.coords.groups);
             label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
             // this.label._labelIndex++;
             this.labelCollection.add(label);
@@ -209,8 +222,13 @@ class MultiDistanceClamped {
         linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
         labelPrimitives.forEach(l => this.labelCollection.remove(l));
 
-        if (this.coords.cache.length > 0) {     // when it is during the measure
+        // Remove moving line and label primitives
+        this.interactivePrimitives.movingPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
+        this.interactivePrimitives.movingPolylines.length = 0;
+        this.interactivePrimitives.movingLabels.forEach(label => this.labelCollection.remove(label));
+        this.interactivePrimitives.movingLabels.length = 0;
 
+        if (this.coords.cache.length > 0 && !this.flags.isMeasurementComplete) {     // when it is during the measure
             // Create reconnect primitives
             const neighbourPositions = this.findNeighbourPosition(pointPosition, this.coords.cache);
             this._createReconnectPrimitives(neighbourPositions, this.coords.cache);
@@ -223,6 +241,10 @@ class MultiDistanceClamped {
             const followingPositions = this.coords.cache.slice(pointIndex);
             const followingIndex = pointIndex;
             this._updateFollowingLabelPrimitives(followingPositions, followingIndex, this.coords.cache);
+
+            if (this.coords.cache.length === 0) {
+                this.flags.isMeasurementComplete = true; // when remove the only point it is considered as that measure is ended
+            }
         } else if (this.coords.groups.length > 0 && this.flags.isMeasurementComplete) {     // when the measure is ended
             const groupsIndex = this.coords.groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, pointPosition)));
             const group = this.coords.groups[groupsIndex];
@@ -262,8 +284,10 @@ class MultiDistanceClamped {
                 // remove the point and the total label
                 const targetPoint = this.pointCollection._pointPrimitives.find(p => p && Cesium.Cartesian3.equals(p.position, group[0]));
                 if (targetPoint) this.pointCollection.remove(targetPoint);
-                const targetTotalLabel = this.labelCollection._labels.find(label => label.id && label.id.includes("multidistance_clamped_total_label") && Cesium.Cartesian3.equals(label.position, group[0]));
+                const targetTotalLabel = this.labelCollection._labels.find(label => label.id && label.id.includes("multidistance_clamped_total_label") && Cesium.Cartesian3.equals(label.position, group[group.length - 1]));
                 if (targetTotalLabel) this.labelCollection.remove(targetTotalLabel);
+                // remove the group
+                this.coords.groups.splice(groupsIndex, 1);
             }
         } else {
             return;
@@ -282,7 +306,7 @@ class MultiDistanceClamped {
             const midPoint = Cesium.Cartesian3.midpoint(neighbourPositions[0], neighbourPositions[2], new Cesium.Cartesian3());
             const label = createLabelPrimitive(neighbourPositions[0], neighbourPositions[2], distance);
             label.id = generateId(midPoint, "multidistance_clamped_label_pending");
-            const { currentLetter, labelNumberIndex } = this._getLabelProperties(neighbourPositions[1], group);
+            const { currentLetter, labelNumberIndex } = this._getLabelProperties(neighbourPositions[1], group, this.coords.groups);
             label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
             this.labelCollection.add(label);
         };
@@ -300,7 +324,7 @@ class MultiDistanceClamped {
         midPoints.forEach((midPoint, index) => {
             const relativeLabelPrimitives = labelPrimitives.filter(l => Cesium.Cartesian3.equals(l.position, midPoint));
             const currentLetter = String.fromCharCode(97 + followingIndex + index % 26);
-            const { labelNumberIndex } = this._getLabelProperties(followingPositions[index], group);
+            const { labelNumberIndex } = this._getLabelProperties(followingPositions[index], group, this.coords.groups);
             // const labelNumberIndex = this.coords.groups.length;
             const distance = this.calculateClampedDistance(followingPositions[index], followingPositions[index + 1]);
             relativeLabelPrimitives.forEach(l => {
@@ -374,7 +398,7 @@ class MultiDistanceClamped {
                     const midPoint = Cesium.Cartesian3.midpoint(pos, neighbourPositions[i + 1], new Cesium.Cartesian3());
                     const label = createLabelPrimitive(pos, neighbourPositions[i + 1], distance);
                     label.id = generateId(midPoint, "multidistance_clamped_label");
-                    const { currentLetter, labelNumberIndex } = this._getLabelProperties(neighbourPositions[i + 1], group);
+                    const { currentLetter, labelNumberIndex } = this._getLabelProperties(neighbourPositions[i + 1], group, this.coords.groups);
                     label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
                     this.labelCollection.add(label);
                 }
@@ -498,6 +522,7 @@ class MultiDistanceClamped {
     handleMultiDistanceRightClick(movement) {
         // place last point and place last line
         if (!this.isMultiDistanceEnd && this.coords.cache.length > 0) { // prevent user to right click on first action
+
             // use mouse move position to control only one pickPosition is used
             const cartesian = this.coordinate;
             if (!Cesium.defined(cartesian)) return;
@@ -512,37 +537,54 @@ class MultiDistanceClamped {
             const pendingLabels = this.labelCollection._labels.filter(l => l.id && l.id.includes("pending"));
             pendingLabels.forEach(l => { l.id = l.id.replace("_pending", "") });
 
-            // create last point
-            const lastPoint = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            lastPoint.id = generateId(this.coordinate, "multidistance_clamped_point");
-            this.pointCollection.add(lastPoint);
 
-            // create last line
-            // remove this.moving line entity
-            this.interactivePrimitives.movingPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
-            this.interactivePrimitives.movingPolylines.length = 0;
+            const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
+            const isClampedPoint = pickedObjects.find(p =>
+                p.primitive.id &&
+                p.primitive.id.startsWith("annotate_multidistance_clamped_point") &&
+                !p.primitive.id.includes("moving")
+            );
+            if (isClampedPoint) {
+                // remove moving line primitives
+                this.interactivePrimitives.movingPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
+                this.interactivePrimitives.movingPolylines.length = 0;
+                // Remove moving label primitives
+                this.interactivePrimitives.movingLabels.forEach(label => this.labelCollection.remove(label));
+                this.interactivePrimitives.movingLabels.length = 0;
 
-            // first point for last line
-            const firstPoint = this.coords.cache[this.coords.cache.length - 1];
-            const lineGeometryInstance = createClampedLineGeometryInstance([firstPoint, this.coordinate], "multidistance_clamped_line");
-            const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
-            this.viewer.scene.primitives.add(linePrimitive);
+            } else {
+                // create last point
+                const lastPoint = createPointPrimitive(this.coordinate, Cesium.Color.RED);
+                lastPoint.id = generateId(this.coordinate, "multidistance_clamped_point");
+                this.pointCollection.add(lastPoint);
 
-            // update coordinate data cache
-            this.coords.cache.push(this.coordinate);
+                // create last line
+                // remove moving line primitives
+                this.interactivePrimitives.movingPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
+                this.interactivePrimitives.movingPolylines.length = 0;
 
-            // create last label
-            // Remove existing moving lines and moving labels 
-            this.interactivePrimitives.movingLabels.forEach(label => this.labelCollection.remove(label));
-            this.interactivePrimitives.movingLabels.length = 0;
+                // first point for last line
+                const firstPoint = this.coords.cache[this.coords.cache.length - 1];
+                const lineGeometryInstance = createClampedLineGeometryInstance([firstPoint, this.coordinate], "multidistance_clamped_line");
+                const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
+                this.viewer.scene.primitives.add(linePrimitive);
 
-            const distance = this.calculateClampedDistance(firstPoint, this.coordinate);
-            const midPoint = Cesium.Cartesian3.midpoint(firstPoint, this.coordinate, new Cesium.Cartesian3());
-            const label = createLabelPrimitive(firstPoint, this.coordinate, distance)
-            const { currentLetter, labelNumberIndex } = this._getLabelProperties(this.coordinate, this.coords.cache);
-            label.id = generateId(midPoint, "multidistance_clamped_label");
-            label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`
-            this.labelCollection.add(label);
+                // update coordinate data cache
+                this.coords.cache.push(this.coordinate);
+
+                // create last label
+                // Remove moving label primitives
+                this.interactivePrimitives.movingLabels.forEach(label => this.labelCollection.remove(label));
+                this.interactivePrimitives.movingLabels.length = 0;
+
+                const distance = this.calculateClampedDistance(firstPoint, this.coordinate);
+                const midPoint = Cesium.Cartesian3.midpoint(firstPoint, this.coordinate, new Cesium.Cartesian3());
+                const label = createLabelPrimitive(firstPoint, this.coordinate, distance)
+                const { currentLetter, labelNumberIndex } = this._getLabelProperties(this.coordinate, this.coords.cache, this.coords.groups);
+                label.id = generateId(midPoint, "multidistance_clamped_label");
+                label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`
+                this.labelCollection.add(label);
+            }
 
             // update groups
             this.coords.groups.push([...this.coords.cache]);
@@ -957,7 +999,6 @@ class MultiDistanceClamped {
         //         surfaceHeight
         //     )
         // });
-
         // repick the position by convert back to window position to repick the carteisan, drawbacks is the current camera must see the whole target. 
         // const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
         //     const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
@@ -978,15 +1019,15 @@ class MultiDistanceClamped {
      * @param {Cesium.Cartesian3[]} positionsArray 
      * @returns {currentLetter: String, labelNumberIndex: Number} - the label text properties
      */
-    _getLabelProperties(position, positionsArray) {
-        const positionIndexInCache = positionsArray.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
+    _getLabelProperties(position, positionArray, groups) {
+        const positionIndexInCache = positionArray.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
 
         // cache length - 1 is the index
         const labelIndex = positionIndexInCache - 1;
         // index 0 means alphabet 'a' 
         const currentLetter = String.fromCharCode(97 + labelIndex % 26);
         // label number index
-        const groupIndex = this.coords.groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, position)));
+        const groupIndex = groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, position)));
         const labelNumberIndex = groupIndex !== -1 ? groupIndex : this.flags.countMeasure;
 
         return {
