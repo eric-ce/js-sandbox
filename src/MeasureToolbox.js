@@ -734,4 +734,4 @@ export class MeasureToolbox extends HTMLElement {
     }
 }
 
-customElements.define("measure-toolbox", MeasureToolbox);
+customElements.define("cesium-measure", MeasureToolbox);

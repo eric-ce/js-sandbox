@@ -1,9 +1,10 @@
 import * as Cesium from "cesium";
 import 'mainStyle';
 import "cesiumStyle";
-import { MeasureToolbox } from "./MeasureToolbox.js";
+// import { MeasureToolbox } from "./MeasureToolbox.js";
+import { MapCesium } from "./MapCesium.js";
 import { PointPrimitiveCollection, Primitive, LabelCollection, GroundPolylinePrimitive } from "cesium";
-class CesiumMap {
+class Navigator {
     constructor() {
         this.cesiumDivSetup();
 
@@ -61,21 +62,12 @@ class CesiumMap {
         this.viewSetup(this.viewer);
         await this.loadTileset(this.viewer);
 
-        // const measureToolBox = new MeasureToolbox(this.viewer);
-        // this.div.appendChild(measureToolBox);
-
-        const measureToolBox = document.createElement("measure-toolbox");
-        measureToolBox.viewer = this.viewer;
-        measureToolBox.cesiumPkg = {
-            PointPrimitiveCollection,
-            Primitive,
-            LabelCollection,
-            GroundPolylinePrimitive
-        }
-        this.div.appendChild(measureToolBox);
+        const mapCesium = document.createElement("map-cesium");
+        mapCesium.viewer = this.viewer;
+        this.div.appendChild(mapCesium);
     }
 }
 
-const map = new CesiumMap();
-map.initialMap();
+const navigator = new Navigator();
+navigator.initialMap();
 

@@ -539,11 +539,12 @@ class MultiDistanceClamped {
 
 
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
-            const isClampedPoint = pickedObjects.find(p =>
-                p.primitive.id &&
-                p.primitive.id.startsWith("annotate_multidistance_clamped_point") &&
-                !p.primitive.id.includes("moving")
-            );
+            const isClampedPoint = pickedObjects.find(p => {
+                const primitiveId = p.primitive.id;
+                return typeof primitiveId === 'string' &&
+                    primitiveId.startsWith("annotate_multidistance_clamped_point") &&
+                    !primitiveId.includes("moving");
+            });
             if (isClampedPoint) {
                 // remove moving line primitives
                 this.interactivePrimitives.movingPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
@@ -613,11 +614,12 @@ class MultiDistanceClamped {
 
         if (this.coords.groups.length > 0 && this.coords.cache.length === 0) { // when the measure is ended and with at least one completed measure
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
-            const isClampedPoint = pickedObjects.find(p =>
-                p.primitive.id &&
-                p.primitive.id.startsWith("annotate_multidistance_clamped_point") &&
-                !p.primitive.id.includes("moving")
-            );
+            const isClampedPoint = pickedObjects.find(p => {
+                const primitiveId = p.primitive.id;
+                return typeof primitiveId === 'string' &&
+                    primitiveId.startsWith("annotate_multidistance_clamped_point") &&
+                    !primitiveId.includes("moving");
+            });
 
             // error handling: if no point primitives found then early exit
             if (!Cesium.defined(isClampedPoint)) return;
@@ -808,7 +810,8 @@ class MultiDistanceClamped {
         button.style.position = "absolute";
         button.classList.add("cesium-button");
 
-        const measureToolbox = document.querySelector("measure-toolbox");
+        const mapCesium = document.querySelector("map-cesium");
+        const measureToolbox = mapCesium.shadowRoot.querySelector("cesium-measure");
 
         if (measureToolbox) {
             const observer = new MutationObserver(() => {
