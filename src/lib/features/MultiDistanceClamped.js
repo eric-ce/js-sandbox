@@ -166,7 +166,7 @@ class MultiDistanceClamped {
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
             // link both cache and groups to the same group
-            //when cache changed groups will be changed due to reference by address
+            // when cache changed groups will be changed due to reference by address
             const newGroup = [];
             this.coords.groups.push(newGroup);
             this.coords.cache = newGroup;
@@ -502,7 +502,7 @@ class MultiDistanceClamped {
     handleHoverHighlighting(pickedObject) {
         const pickedObjectType = getPickedObjectType(pickedObject, "multidistance_clamped");
 
-        // Helper function to reset highlighting
+        // reset highlighting
         const resetHighlighting = () => {
             if (this.interactivePrimitives.hoveredLine && this.interactivePrimitives.hoveredLine !== this.interactivePrimitives.selectedLine) {
                 resetLineColor(this.interactivePrimitives.hoveredLine);
@@ -655,6 +655,7 @@ class MultiDistanceClamped {
             // error handling: if no point primitives found then early exit
             if (!Cesium.defined(isPoint)) return;
 
+            // disable camera movement
             this.viewer.scene.screenSpaceCameraController.enableInputs = false;
             // this.flags.isDragMode = true;
 
@@ -671,7 +672,8 @@ class MultiDistanceClamped {
         };
     }
 
-    handleMultiDistanceClampedDrag(movement, pointEntity) {
+    handleMultiDistanceClampedDrag(movement, pointPrimitive) {
+        // Set drag flag by moving distance threshold
         const dragThreshold = 5;
         const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
         if (moveDistance > dragThreshold) {
@@ -679,8 +681,8 @@ class MultiDistanceClamped {
         };
 
         if (this.flags.isDragMode) {
-            pointEntity.outlineColor = Cesium.Color.YELLOW;
-            pointEntity.outlineWidth = 2;
+            pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+            pointPrimitive.outlineWidth = 2;
 
             const { linePrimitives, labelPrimitives } = this.getPrimitiveByPointPosition(this.coords.dragStart, "annotate_multidistance_clamped");
 
@@ -695,7 +697,7 @@ class MultiDistanceClamped {
             this.coordinate = cartesian;
 
             // update point entity to dragging position
-            pointEntity.position = cartesian;
+            pointPrimitive.position = cartesian;
 
             // create moving line primitives
             const groupIndex = this.coords.groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
@@ -749,8 +751,6 @@ class MultiDistanceClamped {
                 return;
             }
             const group = this.coords.groups[groupIndex];
-
-            // create and update line and label primitives
             const neighbourPositions = this.findNeighbourPosition(this.coords.dragStart, group);
 
             // error handling: if no neighbour positions found then early exit
@@ -1003,10 +1003,11 @@ class MultiDistanceClamped {
         this.coords.dragStart = null;
         this.coords.dragStartToCanvas = null;
         this.coords._distanceRecords = [];
-        // reset selected line
+        // reset interactive primitives
         this.interactivePrimitives.selectedLine = null;
-        // reset hovered line
         this.interactivePrimitives.hoveredLine = null;
+        this.interactivePrimitives.hoveredPoint = null;
+        this.interactivePrimitives.draggingPoint = null;
 
         // remove moving primitives
         this.interactivePrimitives.movingPolylines.forEach(p => this.viewer.scene.primitives.remove(p));
