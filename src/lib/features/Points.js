@@ -205,7 +205,7 @@ class Points {
         const displayInfo = `Lat: ${cartographicDegress.latitude.toFixed(6)}<br>Lon: ${cartographicDegress.longitude.toFixed(6)} <br>Alt: ${cartographicDegress.height.toFixed(2)}`;
         this.coordinateInfoOverlay.innerHTML = displayInfo;
 
-        const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
+        const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(this.viewer.scene, cartesian);
         this.coordinateInfoOverlay.style.display = 'block';
         this.coordinateInfoOverlay.style.left = `${screenPosition.x + 20}px`;
         this.coordinateInfoOverlay.style.top = `${screenPosition.y - 20}px`;

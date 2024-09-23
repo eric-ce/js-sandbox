@@ -661,6 +661,9 @@ class MultiDistanceClamped {
         };
 
         if (this.flags.isDragMode) {
+            pointEntity.outlineColor = Cesium.Color.YELLOW;
+            pointEntity.outlineWidth = 2;
+
             const { linePrimitives, labelPrimitives } = this.getPrimitiveByPointPosition(this.coords.dragStart, "annotate_multidistance_clamped");
 
             // set relative line and label primitives to no show
@@ -711,12 +714,17 @@ class MultiDistanceClamped {
                 this.interactivePrimitives.movingLabels.push(addedLabelPrimitive);
             });
         }
+
     }
 
     handleMultiDistanceClampedDragEnd(movement) {
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         if (this.interactivePrimitives.draggingPoint && this.flags.isDragMode) {
+            // reset dragging point style
+            this.interactivePrimitives.draggingPoint.outlineColor = Cesium.Color.RED;
+            this.interactivePrimitives.draggingPoint.outlineWidth = 0;
+
             const groupIndex = this.coords.groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
             if (groupIndex === -1) {
                 console.error("No group coordinates found");

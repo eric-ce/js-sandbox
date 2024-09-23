@@ -520,13 +520,6 @@ export class MeasureToolbox extends HTMLElement {
 
             this.measureModes.forEach((mode) => {
                 mode.resetValue && mode.resetValue();
-                if (
-                    mode instanceof ProfileDistances ||
-                    mode instanceof MultiDistance ||
-                    mode instanceof MultiDistanceClamped
-                ) {
-                    mode._labelNumberIndex = 0;
-                }
             });
 
             if (this.activeButton) {
@@ -654,8 +647,7 @@ export class MeasureToolbox extends HTMLElement {
         // Make logBox draggable
         makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
             this.logBoxPosition.top = `${newTop}px`;
-            this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth
-                }px`;
+            this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
         });
     }
 
