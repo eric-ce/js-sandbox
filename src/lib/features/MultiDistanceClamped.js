@@ -73,9 +73,11 @@ class MultiDistanceClamped {
             movingPolylines: [],    // Array of moving polylines
             movingLabels: [],       // Array of moving labels
             draggingPoint: null,    // Currently dragged point primitive
+            hoveredLine: null,
+            selectedLine: null,
+            hoveredPoint: null,
+            hoveredLabel: null,
         };
-        this.hoveredLine = null;
-        this.selectedLine = null;
 
         this.toggleLabelShow();
     }
@@ -142,7 +144,6 @@ class MultiDistanceClamped {
             case "line":
                 const linePrimitive = pickedObject.primitive;
                 this.setAddModeByLine(linePrimitive);
-
                 break;
             case "other":
                 break;
@@ -150,9 +151,8 @@ class MultiDistanceClamped {
                 if (!this.flags.isDragMode && !this.flags.isAddMode) {
                     this.startMeasure();
                 }
-
                 if (this.flags.isAddMode) {
-                    this.addAction(this.selectedLine);
+                    this.addAction(this.interactivePrimitives.selectedLine);
                 }
                 break;
         }
@@ -348,22 +348,22 @@ class MultiDistanceClamped {
 
     setAddModeByLine(linePrimitive) {
         // Reset previous hovered line if any
-        if (this.hoveredLine && this.hoveredLine !== linePrimitive) {
-            resetLineColor(this.hoveredLine);
-            this.hoveredLine = null;
+        if (this.interactivePrimitives.hoveredLine && this.interactivePrimitives.hoveredLine !== linePrimitive) {
+            resetLineColor(this.interactivePrimitives.hoveredLine);
+            this.interactivePrimitives.hoveredLine = null;
         }
 
         // Reset previous selected line if different
-        if (this.selectedLine && this.selectedLine !== linePrimitive) {
-            resetLineColor(this.selectedLine);
+        if (this.interactivePrimitives.selectedLine && this.interactivePrimitives.selectedLine !== linePrimitive) {
+            resetLineColor(this.interactivePrimitives.selectedLine);
         }
 
         // Change line color to indicate selection
         changeLineColor(linePrimitive, Cesium.Color.YELLOW);
-        this.selectedLine = linePrimitive;
+        this.interactivePrimitives.selectedLine = linePrimitive;
 
         // Set flag to indicate add mode
-        if (this.selectedLine) {
+        if (this.interactivePrimitives.selectedLine) {
             this.flags.isAddMode = true;
         }
     }
@@ -434,7 +434,7 @@ class MultiDistanceClamped {
 
         // reset flags
         this.flags.isAddMode = false;
-        this.selectedLine = null;
+        this.interactivePrimitives.selectedLine = null;
     }
 
     handleMultiDistanceClampedMouseMove(movement) {
@@ -459,7 +459,7 @@ class MultiDistanceClamped {
             //     this.handleHoverHighlighting(pickedObjects);
             //     break;
             default:
-                this.handleHoverHighlighting(pickedObjects);  // highlight the line when hovering
+                this.handleHoverHighlighting(pickedObjects[0]);  // highlight the line when hovering
                 break;
         }
     }
@@ -499,36 +499,54 @@ class MultiDistanceClamped {
      * Hover to the clamped line to highlight it when the mouse move over it
      * @param {*} pickedObjects - the picked objects from the drillPick method
      */
-    handleHoverHighlighting(pickedObjects) {
-        // Find the clamped line under the mouse
-        const pickedLine = pickedObjects.find(p =>
-            p.primitive.geometryInstances &&
-            p.primitive.geometryInstances.id &&
-            p.primitive.geometryInstances.id.includes("multidistance_clamped_line")
-        );
+    handleHoverHighlighting(pickedObject) {
+        const pickedObjectType = getPickedObjectType(pickedObject, "multidistance_clamped");
 
-        // Reset the previously hovered line if necessary
-        if (this.hoveredLine && this.hoveredLine !== pickedLine?.primitive) {
-            // Ensure we don't reset the selected line
-            if (this.hoveredLine !== this.selectedLine) {
-                resetLineColor(this.hoveredLine);
+        // Helper function to reset highlighting
+        const resetHighlighting = () => {
+            if (this.interactivePrimitives.hoveredLine && this.interactivePrimitives.hoveredLine !== this.interactivePrimitives.selectedLine) {
+                resetLineColor(this.interactivePrimitives.hoveredLine);
+                this.interactivePrimitives.hoveredLine = null;
             }
-            this.hoveredLine = null;
-        }
+            if (this.interactivePrimitives.hoveredPoint) {
+                this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
+                this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
+                this.interactivePrimitives.hoveredPoint = null;
+            }
+            if (this.interactivePrimitives.hoveredLabel) {
+                this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
+                this.interactivePrimitives.hoveredLabel = null;
+            }
+        };
+        resetHighlighting();
 
-        // Highlight the picked line if it exists
-        if (pickedLine && pickedLine.primitive) {
-            // If the picked line is not the selected line
-            if (pickedLine.primitive !== this.selectedLine) {
-                // Change the line color to highlight it
-                changeLineColor(pickedLine.primitive, Cesium.Color.BLUE);
-                this.hoveredLine = pickedLine.primitive;
-            }
-        } else if (this.hoveredLine) {  // If no line is picked, reset the previously hovered line
-            if (this.hoveredLine !== this.selectedLine) {
-                resetLineColor(this.hoveredLine);
-            }
-            this.hoveredLine = null;
+        switch (pickedObjectType) {
+            case "line": // highlight the line when hovering
+                const linePrimitive = pickedObject.primitive;
+
+                if (linePrimitive && linePrimitive !== this.interactivePrimitives.selectedLine) {
+                    // Highlight the line
+                    changeLineColor(linePrimitive, Cesium.Color.BLUE);
+                    this.interactivePrimitives.hoveredLine = linePrimitive;
+                }
+                break;
+            case "point":  // highlight the point when hovering
+                const pointPrimitive = pickedObject.primitive;
+                if (pointPrimitive) {
+                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineWidth = 2;
+                    this.interactivePrimitives.hoveredPoint = pointPrimitive;
+                }
+                break;
+            case "label":   // highlight the label when hovering
+                const labelPrimitive = pickedObject.primitive;
+                if (labelPrimitive) {
+                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    this.interactivePrimitives.hoveredLabel = labelPrimitive;
+                }
+                break;
+            default:
+                break;
         }
     }
 
@@ -986,9 +1004,9 @@ class MultiDistanceClamped {
         this.coords.dragStartToCanvas = null;
         this.coords._distanceRecords = [];
         // reset selected line
-        this.selectedLine = null;
+        this.interactivePrimitives.selectedLine = null;
         // reset hovered line
-        this.hoveredLine = null;
+        this.interactivePrimitives.hoveredLine = null;
 
         // remove moving primitives
         this.interactivePrimitives.movingPolylines.forEach(p => this.viewer.scene.primitives.remove(p));

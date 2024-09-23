@@ -180,7 +180,7 @@ export function createLineGeometryInstance(coordinateArray, mode) {
 
     const polylineGeometry = new Cesium.PolylineGeometry({
         positions: convertedCoordinates,
-        width: 2,
+        width: 3,
         vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
     });
 
@@ -222,7 +222,7 @@ export function createClampedLineGeometryInstance(coordinateArray, mode) {
 
     const groundPolylineGeometry = new Cesium.GroundPolylineGeometry({
         positions: convertedCoordinates,
-        width: 2
+        width: 3
     });
 
     const groundPolylineGeometryInstance = new Cesium.GeometryInstance({
@@ -273,6 +273,7 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
         showBackground: true,
         backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
         scale: 1.5,
+        style: Cesium.LabelStyle.FILL,
         disableDepthTestDistance: Number.POSITIVE_INFINITY, // Make the label always visible
     }
 }

@@ -64,7 +64,7 @@ export class MeasureToolbox extends HTMLElement {
         this._records = [];
 
         // element style position variable
-        this.logBoxPosition = { top: "190px", right: "0px" };
+        this.logBoxPosition = { top: "280px", right: "0px" };
         this.infoBoxPosition = { top: "70px", right: "0px" };
     }
 
@@ -591,7 +591,9 @@ export class MeasureToolbox extends HTMLElement {
         const messageTitle = "How to use:";
         const message1 = "Left Click: start measure";
         const message2 = "Right Click: finish measure";
-        const message3 = "Hold Left Click: drag point move annotation";
+        const message3 = "Hold Left Click: drag point to move annotation";
+        const message4 = "Add line: select line and click to add line";
+        const message5 = "Remove point: click point to remove";
         const messagePicker = "Left Click: pick an annotation";
         // create table first row for the title
         infoBoxTable.appendChild(this.createRow(messageTitle));
@@ -599,7 +601,6 @@ export class MeasureToolbox extends HTMLElement {
         if (
             this.activeButton &&
             (this.activeButton.classList.contains("multi-distances") ||
-                this.activeButton.classList.contains("multi-distances-clamped") ||
                 this.activeButton.classList.contains("polygon") ||
                 this.activeButton.classList.contains("profile-distances"))
         ) {
@@ -608,6 +609,12 @@ export class MeasureToolbox extends HTMLElement {
             infoBoxTable.appendChild(this.createRow(message3));
         } else if (this.activeButton && this.activeButton.classList.contains("picker")) {
             infoBoxTable.appendChild(this.createRow(messagePicker));
+        } else if (this.activeButton && this.activeButton.classList.contains("multi-distances-clamped")) {
+            infoBoxTable.appendChild(this.createRow(message1));
+            infoBoxTable.appendChild(this.createRow(message2));
+            infoBoxTable.appendChild(this.createRow(message3));
+            infoBoxTable.appendChild(this.createRow(message4));
+            infoBoxTable.appendChild(this.createRow(message5));
         } else {
             infoBoxTable.appendChild(this.createRow(message1));
             infoBoxTable.appendChild(this.createRow(message3));
