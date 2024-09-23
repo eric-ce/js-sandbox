@@ -359,6 +359,47 @@ export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive
     });
 }
 
+/**
+ * change a line primitive color and clone the original color if not already stored
+ * @param {Cesium.Primitive} linePrimitive - the line primitive
+ * @param {Cesium.Color} color - the color to change
+ * @returns {Cesium.Primitive} - the line primitive with the new color
+ */
+export function changeLineColor(linePrimitive, color = Cesium.Color.YELLOW) {
+    // Store the original color if not already stored
+    if (!linePrimitive.originalColor) {
+        // line primitives don't have the originalColor property by default so we need to create it
+        linePrimitive.originalColor = linePrimitive.appearance.material.uniforms.color.clone();
+        if (linePrimitive.depthFailAppearance) {
+            linePrimitive.originalCOlor = linePrimitive.depthFailAppearance.material.uniforms.color.clone();
+        }
+    }
+    // Change the color
+    linePrimitive.appearance.material.uniforms.color = color;
+    // if linePrimitive has depthFailAppearance, change the color as well
+    if (linePrimitive.depthFailAppearance) {
+        linePrimitive.depthFailAppearance.material.uniforms.color = color;
+    }
+    return linePrimitive;
+}
+
+/**
+ * reset the line primitive color by its original color
+ * @param {Cesium.Primitive} linePrimitive - the line primitive
+ * @returns {Cesium.Primitive} - the line primitive with the new color
+ */
+export function resetLineColor(linePrimitive) {
+    if (linePrimitive.originalColor) {
+        // Reset to the original color
+        linePrimitive.appearance.material.uniforms.color = linePrimitive.originalColor.clone();
+        // if linePrimitive has depthFailAppearance, reset the color as well
+        if (linePrimitive.depthFailAppearance) {
+            linePrimitive.depthFailAppearance.material.uniforms.color = linePrimitive.originalColor.clone();
+        }
+        linePrimitive.originalColor = null;
+    }
+    return linePrimitive;
+}
 
 
 
@@ -373,6 +414,183 @@ export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
     // handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
 }
+
+/**
+ * get the type of the Cesium picked object
+ * @param {*} pickedObject - viewer.scene.pick
+ * @param {String} modeString - the mode string to filter the picked object. e.g. "multi_distance"
+ * @returns {String} - the type of the picked object
+ */
+export function getPickedObjectType(pickedObject, modeString) {
+    const searchString = modeString ? "annotate_" + modeString : "annotate";
+    if (Cesium.defined(pickedObject) &&
+        pickedObject.id &&
+        pickedObject.id.startsWith(searchString) &&
+        !pickedObject.id.includes("moving")) {
+        if (pickedObject.id.includes("point")) {
+            return "point"
+        } else if (pickedObject.id.includes("line")) {
+            return "line"
+        } else if (pickedObject.id.includes("label")) {
+            return "label"
+        } else {
+            return "other"
+        }
+    }
+}
+/**
+ * Interpolates points between two points based on the interval.
+ * @param {Cesium.Cartesian3} pointA - The Cartesian coordinate of the first point.
+ * @param {Cesium.Cartesian3} pointB - The Cartesian coordinate of the second point.
+ * @param {Scene} scene - viewer.scene
+ * @param {Number} [interval=2] - The interval between the two points.
+ * @returns {Cesium.Cartesian3[]} - The interpolated points.
+ */
+export function interpolatePoints(pointA, pointB, interval = 2) {
+    const points = [];
+
+    // Calculate the distance between the two points
+    const distance = Cesium.Cartesian3.distance(pointA, pointB);
+
+    // Determine the number of interpolation points based on the interval
+    let numberOfPoints = Math.floor(distance / interval);
+    // Error handling: prevent numberOfPoints from being 0
+    if (numberOfPoints === 0) numberOfPoints = 1;
+
+    for (let i = 0; i <= numberOfPoints; i++) {
+        const t = i / numberOfPoints;
+        const interpolatedPoint = Cesium.Cartesian3.lerp(
+            pointA,
+            pointB,
+            t,
+            new Cesium.Cartesian3()
+        );
+        points.push(interpolatedPoint);
+    }
+
+    return points;
+}
+
+/**
+ * Computes detailed pick positions by interpolating points and clamping their heights.
+ * @param {Cesium.Cartesian3} startPosition - The starting Cartesian position.
+ * @param {Cesium.Cartesian3} endPosition - The ending Cartesian position.
+ * @param {Scene} scene - viewer.scene
+ * @param {Number} [interval=2] - The interval between interpolated points.
+ * @returns {Cesium.Cartesian3[]} - The clamped positions with ground heights.
+ */
+export function computeDetailedPickPositions(startPosition, endPosition, scene, interval = 2) {
+    // Interpolate points between the start and end positions
+    const interpolatedPoints = interpolatePoints(startPosition, endPosition, interval);
+
+    // Convert interpolated points to Cartographic coordinates
+    const interpolatedCartographics = interpolatedPoints.map(point => Cesium.Cartographic.fromCartesian(point));
+
+    // Sample height if supported
+    if (scene.sampleHeightSupported) { // sampleHeight() only supports in 3D mode
+        const clampedPositions = interpolatedCartographics.map((cartographic) => {
+            const height = scene.sampleHeight(cartographic);
+            return Cesium.Cartesian3.fromRadians(
+                cartographic.longitude,
+                cartographic.latitude,
+                height !== undefined ? height : cartographic.height // Fallback to original height if sampling fails
+            );
+        });
+        return clampedPositions;
+    }
+    // getHeight() approach
+    // the height of the surface
+    // const groundCartesianArray = interpolatedCartographics.map((cartographic) => {
+    //     const height = this.viewer.scene.globe.getHeight(cartographic);
+    //     return Cesium.Cartesian3.fromRadians(
+    //         cartographic.longitude,
+    //         cartographic.latitude,
+    //         height
+    //     )
+    // });
+
+    // sampleTerrainMostDetailed() approach
+    // const groundPositions = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, interpolatedCartographics);
+
+    // const groundCartesianArray = interpolatedCartographics.map((cartograhpic) => {
+    //     return Cesium.Cartesian3.fromRadians(
+    //         cartograhpic.longitude,
+    //         cartograhpic.latitude,
+    //         surfaceHeight
+    //     )
+    // });
+    // repick the position by convert back to window position to repick the carteisan, drawbacks is the current camera must see the whole target. 
+    // const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
+    //     const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
+    //     if (windowPosition) {
+    //         const cartesian = this.viewer.scene.pickPosition(windowPosition);
+    //         if (Cesium.defined(cartesian)) {
+    //             return cartesian;
+    //         }
+    //     }
+    // }).filter(cart => cart !== undefined);
+
+    // return groundCartesianArray;
+
+    // Fallback: return original interpolated points if sampling is not supported
+    return interpolatedPoints;
+}
+
+/**
+ * Calculates the clamped distance between two points by interpolating and summing segment distances.
+ * @param {Cesium.Cartesian3} pointA - The first Cartesian coordinate.
+ * @param {Cesium.Cartesian3} pointB - The second Cartesian coordinate.
+ * @param {Scene} scene - viwer.scene
+ * @param {Number} [interval=2] - The interval between interpolated points.
+ * @returns {Number} - The clamped distance between the two points.
+ */
+export function calculateClampedDistance(pointA, pointB, scene, interval = 2) {
+    const pickedCartesianArray = computeDetailedPickPositions(pointA, pointB, scene, interval);
+    let distance = 0; // Initialize to 0 instead of null
+
+    for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
+        distance += Cesium.Cartesian3.distance(pickedCartesianArray[i], pickedCartesianArray[i + 1]);
+    }
+
+    return distance;
+}
+
+/**
+ * Calculates the clamped distances between each pair of points in the array and the total distance.
+ * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian coordinates.
+ * @param {Scene} scene - viewer.scene
+ * @param {Number} [interval=2] - The interval between interpolated points.
+ * @returns {{ distances: Number[], totalDistance: Number }} - The distances between each pair of points and the total distance.
+ */
+export function calculateClampedDistanceFromArray(cartesianArray, scene, interval = 2) {
+    const distances = [];
+
+    for (let i = 0; i < cartesianArray.length - 1; i++) {
+        const distance = calculateClampedDistance(cartesianArray[i], cartesianArray[i + 1], scene, interval);
+        distances.push(distance);
+    }
+
+    const totalDistance = distances.reduce((a, b) => a + b, 0);
+    return { distances, totalDistance };
+}
+
+/**
+ * Calculates the distance between each pair of points in the array and the total distance.
+ * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian coordinates.
+ * @returns  {{ distances: Number[], totalDistance: Number }} - The distances between each pair of points and the total distance.
+ */
+export function calculateDistanceFromArray(cartesianArray) {
+    const distances = [];
+
+    for (let i = 0; i < cartesianArray.length - 1; i++) {
+        const distance = Cesium.Cartesian3.distance(cartesianArray[i], cartesianArray[i + 1]);
+        distances.push(distance);
+    }
+
+    const totalDistance = distances.reduce((a, b) => a + b, 0);
+    return { distances, totalDistance };
+}
+
 
 
 
