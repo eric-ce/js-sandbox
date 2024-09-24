@@ -260,6 +260,11 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
 
     let labelString = formatDistance(distance);
 
+    const scaleByDistance = new Cesium.NearFarScalar(
+        1000.0, 1.0,    // Near: 1000 meters, scale factor 1.0
+        20000.0, 0.5    // Far: 20000 meters, scale factor 0.5
+    );
+
     // create label primtive
     return {
         position: midpoint,
@@ -272,7 +277,8 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         showBackground: true,
         backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
-        scale: 1.5,
+        scale: 1.2,
+        scaleByDistance: scaleByDistance,
         style: Cesium.LabelStyle.FILL,
         disableDepthTestDistance: Number.POSITIVE_INFINITY, // Make the label always visible
     }
@@ -735,7 +741,13 @@ function setupEditableModal(viewerContainer) {
 export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedObjects) {
     // const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
     // cesium api update for world position to WindowCoordinates
-    const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+    // const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+    let screenPosition;
+    if (Cesium.SceneTransforms.worldToWindowCoordinates) {
+        screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+    } else if (Cesium.SceneTransforms.wgs84ToWindowCoordinates) {
+        screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+    }
     pointerOverlay.style.display = 'block';
     pointerOverlay.style.left = `${screenPosition.x - 5}px`;
     pointerOverlay.style.top = `${screenPosition.y - 5}px`;
