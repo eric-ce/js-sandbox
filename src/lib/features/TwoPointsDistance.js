@@ -267,8 +267,9 @@ class TwoPointsDistance {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.coords.groups.length > 0 && this.flags.isMeasurementComplete) {
+        if (this.coords.groups.length > 0 && this.coords.cache.length === 0) {
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
+
             const isPoint = pickedObjects.find(p => {
                 const primitiveId = p.primitive.id;
                 return typeof primitiveId === 'string' &&
@@ -458,7 +459,9 @@ class TwoPointsDistance {
         this.interactivePrimitives.movingLabel = null;
 
         // remove pending point
-        this.pointCollection._pointPrimitives.filter(p => p?.id?.includes("pending")).forEach(p => this.pointCollection.remove(p));
+        this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending")).forEach(p => { this.pointCollection.remove(p) });
+        this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.includes("pending")).forEach(p => { this.viewer.scene.primitives.remove(p) });
+        this.labelCollection._labels.filter(l => l.id && l.id.includes("pending")).forEach(l => { this.labelCollection.remove(l) });
     }
 }
 

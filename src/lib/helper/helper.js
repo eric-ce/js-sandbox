@@ -247,7 +247,7 @@ export function createClampedLinePrimitive(geometryInstance, color = Cesium.Colo
 }
 
 // label primitive
-export function createLabelPrimitive(startPoint, endPoint, distance) {
+export function createLabelPrimitive(startPoint, endPoint, distanceOrText) {
     const midpoint = Cesium.Cartesian3.lerp(
         startPoint,
         endPoint,
@@ -258,14 +258,22 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
     // Define the offset from the midpoint position
     const labelOffset = new Cesium.Cartesian2(0, -20);
 
-    let labelString = formatDistance(distance);
+    // Determine the label text based on the type of the distanceOrText parameter
+    let labelString;
+    if (typeof distanceOrText === 'number') {
+        labelString = formatDistance(distanceOrText);
+    } else if (typeof distanceOrText === 'string') {
+        labelString = distanceOrText;
+    } else {
+        throw new Error('Invalid distanceOrText parameter. Must be a number or a string.');
+    }
 
     const scaleByDistance = new Cesium.NearFarScalar(
         1000.0, 1.0,    // Near: 1000 meters, scale factor 1.0
         20000.0, 0.5    // Far: 20000 meters, scale factor 0.5
     );
 
-    // create label primtive
+    // create label primitive
     return {
         position: midpoint,
         pixelOffset: labelOffset,
@@ -280,8 +288,9 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
         scaleByDistance: scaleByDistance,
         style: Cesium.LabelStyle.FILL,
         disableDepthTestDistance: Number.POSITIVE_INFINITY, // Make the label always visible
-    }
+    };
 }
+
 // polygon primitive
 export function createPolygonGeometryInstance(coordinateArray, mode) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) {
