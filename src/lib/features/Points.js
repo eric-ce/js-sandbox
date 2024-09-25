@@ -207,9 +207,9 @@ class Points {
 
         let screenPosition;
         if (Cesium.SceneTransforms.worldToWindowCoordinates) {
-            screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+            screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(this.viewer.scene, cartesian);
         } else if (Cesium.SceneTransforms.wgs84ToWindowCoordinates) {
-            screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+            screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
         }
         this.coordinateInfoOverlay.style.display = 'block';
         this.coordinateInfoOverlay.style.left = `${screenPosition.x + 20}px`;

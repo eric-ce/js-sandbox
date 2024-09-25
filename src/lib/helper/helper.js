@@ -272,7 +272,6 @@ export function createLabelPrimitive(startPoint, endPoint, distance) {
         text: labelString,
         font: "14px Roboto, sans-serif",
         fillColor: Cesium.Color.WHITE,
-        outlineWidth: 2,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         showBackground: true,
