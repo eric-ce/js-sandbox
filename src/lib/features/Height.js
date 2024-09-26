@@ -1,3 +1,4 @@
+import { format } from "url";
 import {
     convertToCartesian3,
     removeInputActions,
@@ -130,11 +131,11 @@ class Height {
 
                         // create top and bottom points primitiives
                         const topPointPrimitive = createPointPrimitive(topCartesian, Cesium.Color.RED);
-                        topPointPrimitive.id = generateId(topCartesian, "height_top_point");
+                        topPointPrimitive.id = generateId(topCartesian, "height_point_top");
                         this.pointCollection.add(topPointPrimitive);
 
                         const bottomPointPrimitive = createPointPrimitive(bottomCartesian, Cesium.Color.RED);
-                        bottomPointPrimitive.id = generateId(bottomCartesian, "height_bottom_point");
+                        bottomPointPrimitive.id = generateId(bottomCartesian, "height_point_bottom");
                         this.pointCollection.add(bottomPointPrimitive);
 
                         // create line primitive
@@ -155,6 +156,7 @@ class Height {
                         // this._heightRecords.push(distance);
                         this.logRecordsCallback(distance.toFixed(2));
                     }
+
                 }
                 break;
         }
@@ -177,47 +179,47 @@ class Height {
             if (!Cesium.defined(cartesian)) return;
             this.coordinate = cartesian;
 
-            const cartographic = Cesium.Cartographic.fromCartesian(this.coordinate);
-            const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
-            const groundCartographic = new Cesium.Cartographic(
-                cartographic.longitude,
-                cartographic.latitude,
-                groundHeight
-            );
-            if (!groundCartographic) return;
-
             // ground position relevant to movement position
-            const groundCartesian = convertToCartesian3(groundCartographic);
-
+            // const groundCartesian = convertToCartesian3(groundCartographic);
+            const [_, groundCartesian] = this.getGroundPositionsByPosition(this.coordinate)
             this.coords.cache = [this.coordinate, groundCartesian];
 
-            // create top and bottom points primitiives
-            this.interactivePrimitives.movingPoints.forEach(p => {
-                this.movingPointCollection.remove(p);
-            });
-
-            this.coords.cache.forEach((cart, index) => {
-                const pointPrimitive = createPointPrimitive(cart, Cesium.Color.RED);
-                pointPrimitive.id = generateId(cart, `height_moving_${index === 0 ? "top" : "bottom"}_point`);
-                const point = this.movingPointCollection.add(pointPrimitive);
-                this.interactivePrimitives.movingPoints.push(point);
-            });
+            // create top and bottom points primitiives if existed update the position instead of recreate it
+            if (this.interactivePrimitives.movingPoints.length === 2) {
+                // update the moving points instead of removing it
+                const [topPoint, bottomPoint] = this.interactivePrimitives.movingPoints
+                topPoint.position = this.coords.cache[0];
+                bottomPoint.position = this.coords.cache[1];
+            } else {
+                this.coords.cache.forEach((cart, index) => {
+                    const pointPrimitive = createPointPrimitive(cart, Cesium.Color.RED);
+                    pointPrimitive.id = generateId(cart, `height_point_moving`);
+                    const point = this.movingPointCollection.add(pointPrimitive);
+                    this.interactivePrimitives.movingPoints.push(point);
+                });
+            }
 
             // create line primitive
             if (this.interactivePrimitives.movingPolyline) {
                 this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
             }
-            const lineGeometryInstance = createLineGeometryInstance(this.coords.cache, "height_moving_line");
+            const lineGeometryInstance = createLineGeometryInstance(this.coords.cache, "height_line_moving");
             const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(linePrimitive);
 
             // create label primitive
             const distance = Cesium.Cartesian3.distance(this.coords.cache[0], this.coords.cache[1]);
-            if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-            const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], distance);
-            this.interactivePrimitives.movingLabel = this.labelCollection.add(label);
+            if (this.interactivePrimitives.movingLabel) {
+                this.interactivePrimitives.movingLabel.position = Cesium.Cartesian3.midpoint(this.coords.cache[0], this.coords.cache[1], new Cesium.Cartesian3());
+                this.interactivePrimitives.movingLabel.text = formatDistance(distance);
+            } else {
+                if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
+                const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], distance);
+                this.interactivePrimitives.movingLabel = this.labelCollection.add(label);
+            }
+            // update the id of the moving label
             const midPoint = Cesium.Cartesian3.midpoint(this.coords.cache[0], this.coords.cache[1], new Cesium.Cartesian3());
-            this.interactivePrimitives.movingLabel.id = generateId(midPoint, "height_moving_label");
+            this.interactivePrimitives.movingLabel.id = generateId(midPoint, "height_label_moving");
         }
     };
 
@@ -242,7 +244,6 @@ class Height {
             this.viewer.scene.screenSpaceCameraController.enableInputs = false;
 
             // set the dragging point
-            // this.interactivePrimitives.draggingPoint = isPoint.primitive;
             this.coords.dragStart = isPoint.primitive.position.clone();
             this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
 
@@ -251,6 +252,7 @@ class Height {
             const otherPositionIndex = positionIndex === 0 ? 1 : 0;
             const otherPoint = this.pointCollection._pointPrimitives.find(p => Cesium.Cartesian3.equals(p.position, this.coords.groups[groupIndex][otherPositionIndex]));
             this.interactivePrimitives.draggingPoints = [isPoint.primitive, otherPoint];
+
             // set move event for dragging
             this.handler.setInputAction((movement) => {
                 this.handleHeightDrag(movement, this.interactivePrimitives.draggingPoints);
@@ -277,65 +279,37 @@ class Height {
             if (!Cesium.defined(cartesian)) return;
             this.coordinate = cartesian;
 
-            const cartographic = Cesium.Cartographic.fromCartesian(this.coordinate);
-            const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
-
-            // ground position relevant to movement position
-            const groundCartesian = convertToCartesian3(
-                new Cesium.Cartographic(
-                    cartographic.longitude,
-                    cartographic.latitude,
-                    groundHeight
-                )
-            );
-            const draggingPosition = [this.coordinate, groundCartesian];
-
+            const [_, groundCartesian] = this.getGroundPositionsByPosition(cartesian);
             // update the point
             pointPrimitives[0].position = this.coordinate;
+            pointPrimitives[0].id = generateId(this.coordinate, "height_point_moving")
             pointPrimitives[1].position = groundCartesian;
+            pointPrimitives[1].id = generateId(groundCartesian, "height_point_moving")
 
             // remove existed line and labels
             const { linePrimitives, labelPrimitives } = this.getPrimitiveByPointPosition(this.coords.dragStart, "annotate_height")
             linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
-            labelPrimitives.forEach(p => this.labelCollection.remove(p));
+            labelPrimitives.forEach(p => p.show = false);
             // remove moving point
             this.interactivePrimitives.movingPoints.forEach(p => this.movingPointCollection.remove(p));
+
             // remove and recreate moving line
             if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-            const lineGeometryInstance = createLineGeometryInstance(draggingPosition, "height_line");
+            const lineGeometryInstance = createLineGeometryInstance([this.coordinate, groundCartesian], "height_line_moving");
             const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(linePrimitive);
 
             // update moving label
             if (this.interactivePrimitives.movingLabel) {
-                const distance = Cesium.Cartesian3.distance(draggingPosition[0], draggingPosition[1]);
-                const midPoint = Cesium.Cartesian3.midpoint(draggingPosition[0], draggingPosition[1], new Cesium.Cartesian3());
+                const distance = Cesium.Cartesian3.distance(this.coordinate, groundCartesian);
+                const midPoint = Cesium.Cartesian3.midpoint(this.coordinate, groundCartesian, new Cesium.Cartesian3());
                 this.interactivePrimitives.movingLabel.position = midPoint;
                 this.interactivePrimitives.movingLabel.text = formatDistance(distance);
                 this.interactivePrimitives.movingLabel.id = generateId(midPoint, "height_label");
             }
-            // // update moving point primitive to dragging position
-            // this.movingTopPointPrimitive.show = true;
-            // this.movingTopPointPrimitive.position = draggingPosition[0];
-            // this.movingTopPointPrimitive.id = generateId(draggingPosition[0], "height_moving_top_point");
 
-            // this.movingBottomPointPrimitive.show = true;
-            // this.movingBottomPointPrimitive.position = draggingPosition[1];
-            // this.movingBottomPointPrimitive.id = generateId(draggingPosition[1], "height_moving_bottom_point");
-
-            // // update line primitive to dragging position
-            // if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
-            // const movingLineGeometryInstance = createLineGeometryInstance(draggingPosition, "height_moving_line");
-            // const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
-            // this.movingPolylinePrimitive = this.viewer.scene.primitives.add(movingLinePrimitive);
-
-            // // update label primitive to dragging position
-            // if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-            // const distance = Cesium.Cartesian3.distance(draggingPosition[0], draggingPosition[1]);
-            // this.movingLabelPrimitive = this.labelCollection.add(createLabelPrimitive(draggingPosition[0], draggingPosition[1], distance));
-            // const midPoint = Cesium.Cartesian3.midpoint(draggingPosition[0], draggingPosition[1], new Cesium.Cartesian3());
-            // this.movingLabelPrimitive.id = generateId(midPoint, "height_moving_label");
-
+            // update cache
+            this.coords.cache = [this.coordinate, groundCartesian];
         }
     }
 
@@ -343,77 +317,88 @@ class Height {
         // set camera movement back to default
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.draggingTopPrimitive && this.isDragMode) {
-
-            const cartographic = Cesium.Cartographic.fromCartesian(this.coordinate);
-
-            const groundCartographic = new Cesium.Cartographic(
-                cartographic.longitude,
-                cartographic.latitude,
-                this.viewer.scene.globe.getHeight(cartographic)
-            );
-            if (!groundCartographic) return;
-
-
-            // ground position relevant to movement position
-            const groundCartesian = convertToCartesian3(groundCartographic);
-
-            const draggingPosition = [this.coordinate, groundCartesian];
+        if (this.interactivePrimitives.draggingPoints.length === 2 && this.isDragMode) {
+            const [_, groundCartesian] = this.getGroundPositionsByPosition(this.coordinate)
 
             // update the point
-            if (this.movingTopPointPrimitive) this.movingTopPointPrimitive.show = false;
-            if (this.draggingTopPrimitive) {
-                this.draggingTopPrimitive.show = true;
-                this.draggingTopPrimitive.position = draggingPosition[0];
+            if (this.interactivePrimitives.draggingPoints) {
+                this.interactivePrimitives.draggingPoints[0].position = this.coordinate;
+                this.interactivePrimitives.draggingPoints[0].id = generateId(this.coordinate, "height_point_top");
+                this.interactivePrimitives.draggingPoints[1].position = groundCartesian;
+                this.interactivePrimitives.draggingPoints[1].id = generateId(this.coordinate, "height_point_bottom");
             }
 
-            if (this.movingBottomPointPrimitive) this.movingBottomPointPrimitive.show = false;
-            if (this.draggingBottomPrimitive) {
-                this.draggingBottomPrimitive.show = true;
-                this.draggingBottomPrimitive.position = draggingPosition[1];
+            // recreate line
+            if (this.interactivePrimitives.movingPolyline) {
+                this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline)
             }
-            // update the line
-            if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
-
-            const lineGeometryInstance = createLineGeometryInstance(draggingPosition, "height_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            this.interactivePrimitives.movingPolyline = null;
+            const lineGeometryInstance = createLineGeometryInstance([this.coordinate, groundCartesian], "height_line")
+            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN);
             this.viewer.scene.primitives.add(linePrimitive);
 
-            // update the label
-            if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
-            const existedMidPoint = Cesium.Cartesian3.midpoint(this.coords.dragStartTop, this.coords.dragStartBottom, new Cesium.Cartesian3());
-            const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label?.id && label?.id?.startsWith("annotate_height_label"));
-
-            const newMidPoint = Cesium.Cartesian3.midpoint(draggingPosition[0], draggingPosition[1], new Cesium.Cartesian3());
-            const distance = Cesium.Cartesian3.distance(draggingPosition[0], draggingPosition[1]);
-            if (targetLabelPrimitive) {
-                targetLabelPrimitive.show = true;
-                targetLabelPrimitive.position = newMidPoint;
-                targetLabelPrimitive.text = formatDistance(distance);
-                targetLabelPrimitive.id = generateId(newMidPoint, "height_label");
+            // update label
+            const groupIndex = this.coords.groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)))
+            const positions = this.coords.groups[groupIndex];
+            const midPoint = Cesium.Cartesian3.midpoint(this.coordinate, groundCartesian);
+            const { labelPrimitives } = this.getPrimitiveByPointPosition(positions[0]);
+            if (labelPrimitives) {
+                labelPrimitives.forEach(l => {
+                    l.show = true
+                    l.position = midPoint
+                    l.id = generateId(midPoint, "height_label")
+                })
             }
 
-            // update the groupCoords
-            const topPositionIndex = this.coords.groups.findIndex(p => Cesium.Cartesian3.equals(p[0], this.coords.dragStartTop));
-            const bottomPositionIndex = this.coords.groups.findIndex(p => Cesium.Cartesian3.equals(p[1], this.coords.dragStartBottom));
-            if (topPositionIndex !== -1) {
-                this.coords.groups[topPositionIndex] = draggingPosition;
-            }
-            if (bottomPositionIndex !== -1) {
-                this.coords.groups[bottomPositionIndex] = draggingPosition;
-            }
+            this.coords.groups[groupIndex] = this.coords.cache;
+
+
+
+            // if (this.movingBottomPointPrimitive) this.movingBottomPointPrimitive.show = false;
+            // if (this.draggingBottomPrimitive) {
+            //     this.draggingBottomPrimitive.show = true;
+            //     this.draggingBottomPrimitive.position = draggingPosition[1];
+            // }
+            // // update the line
+            // if (this.movingPolylinePrimitive) this.viewer.scene.primitives.remove(this.movingPolylinePrimitive);
+
+            // const lineGeometryInstance = createLineGeometryInstance(draggingPosition, "height_line");
+            // const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            // this.viewer.scene.primitives.add(linePrimitive);
+
+            // // update the label
+            // if (this.movingLabelPrimitive) this.labelCollection.remove(this.movingLabelPrimitive);
+            // const existedMidPoint = Cesium.Cartesian3.midpoint(this.coords.dragStartTop, this.coords.dragStartBottom, new Cesium.Cartesian3());
+            // const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label?.id && label?.id?.startsWith("annotate_height_label"));
+
+            // const newMidPoint = Cesium.Cartesian3.midpoint(draggingPosition[0], draggingPosition[1], new Cesium.Cartesian3());
+            // const distance = Cesium.Cartesian3.distance(draggingPosition[0], draggingPosition[1]);
+            // if (targetLabelPrimitive) {
+            //     targetLabelPrimitive.show = true;
+            //     targetLabelPrimitive.position = newMidPoint;
+            //     targetLabelPrimitive.text = formatDistance(distance);
+            //     targetLabelPrimitive.id = generateId(newMidPoint, "height_label");
+            // }
+
+            // // update the groupCoords
+            // const topPositionIndex = this.coords.groups.findIndex(p => Cesium.Cartesian3.equals(p[0], this.coords.dragStartTop));
+            // const bottomPositionIndex = this.coords.groups.findIndex(p => Cesium.Cartesian3.equals(p[1], this.coords.dragStartBottom));
+            // if (topPositionIndex !== -1) {
+            //     this.coords.groups[topPositionIndex] = draggingPosition;
+            // }
+            // if (bottomPositionIndex !== -1) {
+            //     this.coords.groups[bottomPositionIndex] = draggingPosition;
+            // }
 
             // log the height result
             this.logRecordsCallback(distance.toFixed(2));
 
+            // reset dragging primitive and flags
+            this.flags.isDragMode = false;
         }
-
         this.handler.setInputAction((movement) => {
             this.handleHeightMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        // reset dragging primitive and flags
-        this.isDragMode = false;
     }
 
     /**
@@ -447,6 +432,26 @@ class Height {
         ).filter(label => label !== undefined);
 
         return { pointPrimitive, linePrimitives, labelPrimitives };
+    }
+
+    /**
+     * get the position and its ground position by a position
+     * @param {Cesium.Cartesian3} position 
+     * @return {Cesium.Cartesian3[]} 
+     */
+    getGroundPositionsByPosition(cartesian) {
+        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+        const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
+
+        // ground position relevant to movement position
+        const groundCartesian = convertToCartesian3(
+            new Cesium.Cartographic(
+                cartographic.longitude,
+                cartographic.latitude,
+                groundHeight
+            )
+        );
+        return [cartesian, groundCartesian];
     }
 
     resetValue() {
