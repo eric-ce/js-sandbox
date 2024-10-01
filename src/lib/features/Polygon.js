@@ -15,6 +15,14 @@ import {
 import { format } from "url";
 
 class Polygon {
+    /**
+     * Creates a new Polygon instance.
+     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
+     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
+     * @param {Function} logRecordsCallback - The callback function to log records.
+     * @param {Object} cesiumPkg - The Cesium package object.
+     */
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
@@ -39,11 +47,9 @@ class Polygon {
             dragStart: null // Stores the initial position before a drag begins
         };
 
-        // Initialize Cesium primitives collections
-        this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
-        this.labelCollection = new this.cesiumPkg.LabelCollection();
-        this.viewer.scene.primitives.add(this.pointCollection);
-        this.viewer.scene.primitives.add(this.labelCollection);
+        // lookup and set Cesium primitives collections
+        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
+        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -480,14 +486,10 @@ class Polygon {
 
         this.coords.cache = [];
 
-        // remove the moving primitives
-        if (this.interactivePrimitives.movingLabelPrimitive) this.labelCollection.remove(this.interactivePrimitives.movingLabelPrimitive);
-        if (this.interactivePrimitives.movingPolygon) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygon);
-        if (this.interactivePrimitives.movingPolygonOutline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolygonOutline);
-        if (this.interactivePrimitives.movingPoint) this.pointCollection.remove(this.interactivePrimitives.movingPoint);
-
-        // remove pending point
-        this.pointCollection._pointPrimitives.filter(p => p?.id?.includes("pending")).forEach(p => this.pointCollection.remove(p));
+        this.interactivePrimitives.movingLabelPrimitive = null;
+        this.interactivePrimitives.movingPolygon = null;
+        this.interactivePrimitives.movingPolygonOutline = null;
+        this.interactivePrimitives.movingPoint = null;
     }
 }
 

@@ -19,6 +19,14 @@ import {
  * @param {Function} logRecordsCallback - The callback function to log records.
  */
 class Points {
+    /**
+     * Creates a new Point instance.
+     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
+     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
+     * @param {Function} logRecordsCallback - The callback function to log records.
+     * @param {Object} cesiumPkg - The Cesium package object.
+     */
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
@@ -42,17 +50,14 @@ class Points {
             dragStart: null // Stores the initial position before a drag begins
         }
 
-        // Initialize Cesium primitives collections
-        this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
-        this.labelCollection = new this.cesiumPkg.LabelCollection();
-        this.pointCollection.blendOption = Cesium.BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, perforamnce improve 2x
-        this.labelCollection.blendOption = Cesium.BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, perforamnce improve 2x
-        this.viewer.scene.primitives.add(this.pointCollection);
-        this.viewer.scene.primitives.add(this.labelCollection);
+        // lookup and set Cesium primitives collections
+        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
+        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
-            draggingPoint: null,    // Currently dragged point primitive
+            dragPoint: null,    // Currently dragged point primitive
+            dragLabel: null,    // Currently dragged label primitive
             hoveredPoint: null,
             hoveredLabel: null
         }
@@ -102,22 +107,21 @@ class Points {
                 editableLabel(this.viewer.container, pickedObject.primitive);
                 break;
             case "point":
-                const primtiveToRemove = this.pointCollection._pointPrimitives.find(primitive => primitive.id === pickedObject.id);
+                const pointPrimitive = pickedObject.primitive;
+                const primtiveToRemove = this.pointCollection._pointPrimitives.find(primitive => primitive.id === pointPrimitive.id);
+
                 if (primtiveToRemove) {
                     // remove the point
                     this.pointCollection.remove(primtiveToRemove);
 
                     // remove the label
                     const labelToRemove = this.labelCollection._labels.find(label => Cesium.Cartesian3.equals(label.position, primtiveToRemove.position));
-                    if (labelToRemove) {
-                        this.labelCollection.remove(labelToRemove);
-                    }
+                    if (labelToRemove) this.labelCollection.remove(labelToRemove);
 
                     // remove the point position from cache
                     const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, primtiveToRemove.position))
-                    if (positionIndex > -1) {
-                        this.coords.cache.splice(positionIndex, 1);
-                    }
+                    if (positionIndex !== -1) this.coords.cache.splice(positionIndex, 1);
+
                     // log the points records
                     this._updateBookmarkLogRecords(primtiveToRemove.position, "remove");
                 }
@@ -125,26 +129,25 @@ class Points {
             default:
                 // use mouse move position to control only one pickPosition is used
                 const cartesian = this.coordinate;
+                if (!Cesium.defined(cartesian)) return;
 
-                // primitive way to add point
-                if (Cesium.defined(cartesian)) {
-                    const point = createPointPrimitive(cartesian, Cesium.Color.RED);
-                    point.id = generateId(cartesian, "bookmark_point");
-                    this.pointCollection.add(point);
+                // create point primitive
+                const point = createPointPrimitive(cartesian, Cesium.Color.RED);
+                point.id = generateId(cartesian, "bookmark_point");
+                this.pointCollection.add(point);
 
-                    // update the points position cache
-                    this.coords.cache.push(cartesian);
+                // update the coords cache
+                this.coords.cache.push(cartesian);
 
-                    const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, cartesian));
-                    const labelString = `Point ${positionIndex + 1}`;
-                    const label = createLabelPrimitive(cartesian, cartesian, labelString)
-                    label.id = generateId(cartesian, "bookmark_label");
-                    this.labelCollection.add(label);
+                // create label primitive
+                const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, cartesian));
+                const labelString = `Point ${positionIndex + 1}`;
+                const label = createLabelPrimitive(cartesian, cartesian, labelString)
+                label.id = generateId(cartesian, "bookmark_label");
+                this.labelCollection.add(label);
 
-
-                    // log the points records
-                    this._updateBookmarkLogRecords(cartesian, "add");
-                }
+                // log the points records
+                this._updateBookmarkLogRecords(cartesian, "add");
                 break;
         }
     }
@@ -162,6 +165,7 @@ class Points {
 
         // update pointerOverlay: the moving dot with mouse
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
+
         updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
         this.handleHoverHighlighting(pickedObjects[0]);
@@ -221,26 +225,21 @@ class Points {
                 !primitiveId.includes("moving");
         });
         if (Cesium.defined(isPoint)) {
-            // set point overlay no show
-            this.pointerOverlay.style.display = 'none';
-
             // disable camera movement
             this.viewer.scene.screenSpaceCameraController.enableInputs = false;
 
-            // set the dragging point
-            this.interactivePrimitives.draggingPoint = isPoint.primitive;
             this.coords.dragStart = isPoint.primitive.position.clone();
             this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
 
             // set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handlePointsDrag(movement, this.interactivePrimitives.draggingPoint);
+                this.handlePointsDrag(movement, isPoint);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         }
 
     };
 
-    handlePointsDrag(movement, pointPrimitive) {
+    handlePointsDrag(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
         const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
@@ -249,32 +248,51 @@ class Points {
         };
 
         if (this.flags.isDragMode) {
-            // highlight the point primitive
-            pointPrimitive.outlineColor = Cesium.Color.YELLOW;
-            pointPrimitive.outlineWidth = 2;
+            // set existed point, label primitives to no show
+            selectedPoint.primitive.show = false;
+            const existedLabel = this.labelCollection._labels.find(l =>
+                l.id &&
+                l.id.startsWith("annotate_bookmark_label") &&
+                !l.id.includes("moving") &&
+                Cesium.Cartesian3.equals(l.position, this.coords.dragStart)
+            );
+            if (existedLabel) existedLabel.show = false;
+
+            // set point overlay no show
+            this.pointerOverlay.style.display = 'none';
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
             if (!Cesium.defined(cartesian)) return;
             this.coordinate = cartesian;
 
-            // remove the existed label
-            const labelToRemove = this.labelCollection._labels.find(label => Cesium.Cartesian3.equals(label.position, pointPrimitive.position));
-            const labelTORemoveText = labelToRemove && labelToRemove.text;
-            if (labelToRemove) {
-                this.labelCollection.remove(labelToRemove);
+            // create or update dragging point primitive
+            if (this.interactivePrimitives.dragPoint) {     // if dragging point existed, update the point
+                // highlight the point primitive
+                this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.YELLOW;
+                this.interactivePrimitives.dragPoint.outlineWidth = 2;
+                // update moving point primitive
+                this.interactivePrimitives.dragPoint.position = cartesian;
+                this.interactivePrimitives.dragPoint.id = generateId(cartesian, "bookmark_point_moving");
+            } else {    // if dragging point not existed, create a new point
+                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Cesium.Color.RED);
+                pointPrimitive.id = generateId(selectedPoint.primitive.position.clone(), "bookmark_point_moving");
+                this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 
-            // update point primitive to dragging position
-            pointPrimitive.position = cartesian;
+            // create or update dragging label primitive
+            const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
 
-            // create moving label primitive
-            if (this.interactivePrimitives.movingLabel) {
-                this.labelCollection.remove(this.interactivePrimitives.movingLabel);
+            if (this.interactivePrimitives.dragLabel) {    // if dragging label existed, update the label
+                this.interactivePrimitives.dragLabel.id = generateId(cartesian, "bookmark_label_moving");
+                this.interactivePrimitives.dragLabel.position = cartesian;
+                this.interactivePrimitives.dragLabel.showBackground = false;
+            } else {    // if dragging label not existed, create a new label
+                const labelString = `Point ${positionIndex + 1}`;
+                const label = createLabelPrimitive(cartesian, cartesian, labelString)
+                label.id = generateId(cartesian, "bookmark_label_moving");
+                label.showBackground = false;
+                this.interactivePrimitives.dragLabel = this.labelCollection.add(label)
             }
-            const label = createLabelPrimitive(cartesian, cartesian, labelTORemoveText)
-            label.id = generateId(cartesian, "bookmark_moving_label");
-            label.showBackground = false;
-            this.interactivePrimitives.movingLabel = this.labelCollection.add(label);
 
             // update coordinateInfoOverlay
             this.coordinateInfoOverlay && this.updateCoordinateInfoOverlay(this.coordinate);
@@ -283,31 +301,52 @@ class Points {
 
     handlePointsDragEnd() {
         // update the drag primitive to the finish position;
-        if (this.interactivePrimitives.draggingPoint && this.flags.isDragMode) {
+        if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
+            // reset dragging point style
+            this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.RED;
+            this.interactivePrimitives.dragPoint.outlineWidth = 0;
+
+            // remove the dragging point and label
+            if (this.interactivePrimitives.dragPoint) this.pointCollection.remove(this.interactivePrimitives.dragPoint);
+            this.interactivePrimitives.dragPoint = null;
+            if (this.interactivePrimitives.dragLabel) this.labelCollection.remove(this.interactivePrimitives.dragLabel);
+            this.interactivePrimitives.dragLabel = null;
+
+            // update existed point
+            const existedPoint = this.pointCollection._pointPrimitives.find(p =>
+                p.id &&
+                p.id.startsWith("annotate_bookmark_point") &&
+                Cesium.Cartesian3.equals(p.position, this.coords.dragStart)
+            );
+            if (existedPoint) {
+                existedPoint.show = true;
+                existedPoint.id = generateId(this.coordinate, "bookmark_point");
+                existedPoint.position = this.coordinate;
+            }
+
+            // update existed label 
+            const existedLabel = this.labelCollection._labels.find(l =>
+                l.id &&
+                l.id.startsWith("annotate_bookmark_label") &&
+                Cesium.Cartesian3.equals(l.position, this.coords.dragStart)
+            );
+            if (existedLabel) {
+                existedLabel.show = true;
+                existedLabel.id = generateId(this.coordinate, "bookmark_label");
+                existedLabel.position = this.coordinate;
+                existedLabel.showBackground = true;
+            }
+
             // update the cache position
             const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
             if (positionIndex > -1) {
                 this.coords.cache[positionIndex] = this.coordinate;
             }
 
-            // reset dragging point style
-            this.interactivePrimitives.draggingPoint.outlineColor = Cesium.Color.RED;
-            this.interactivePrimitives.draggingPoint.outlineWidth = 0;
-
-            // update the label
-            if (this.interactivePrimitives.movingLabel) {
-                this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-            }
-            const labelString = `Point ${positionIndex + 1}`;
-            const label = createLabelPrimitive(this.interactivePrimitives.draggingPoint.position, this.interactivePrimitives.draggingPoint.position, labelString)
-            label.id = generateId(this.interactivePrimitives.draggingPoint.position, "bookmark_label");
-            this.labelCollection.add(label);
-
             // log the points records
             this._updateBookmarkLogRecords(this.coordinate, "update");
 
             // reset dragging primitive and flags
-            this.interactivePrimitives.draggingPoint = null;
             this.flags.isDragMode = false;
         }
         // set back to default multi distance mouse moving actions
@@ -346,6 +385,10 @@ class Points {
         this.coordinateInfoOverlay.style.fontFamily = 'Roboto, sans-serif';
     }
 
+
+    /********************
+     * HELPER FUNCTIONS *
+     ********************/
     /**
      * Update the bookmark log records.
      * @param {Cesium.Cartesian3} cartesian - The Cartesian3 coordinate.
@@ -386,17 +429,11 @@ class Points {
         // reset flags
         this.flags.isDragMode = false;
 
-        // remove moving primitives
-        if (this.interactivePrimitives.movingLabel) {
-            this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-        }
-        this.interactivePrimitives.movingLabel = null;
-
-        // reset interactive primitives
-        this.interactivePrimitives.draggingPoint = null;
+        // reset and remove moving primitives
+        this.interactivePrimitives.dragPoint = null;
+        this.interactivePrimitives.dragLabel = null;
         this.interactivePrimitives.hoveredPoint = null;
         this.interactivePrimitives.hoveredLabel = null;
-
     }
 }
 

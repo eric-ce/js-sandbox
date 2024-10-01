@@ -2,6 +2,14 @@ import * as Cesium from "cesium";
 import { removeInputActions, updatePointerOverlay } from "../helper/helper.js";
 
 class Picker {
+    /**
+     * Creates a new Picker instance.
+     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
+     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
+     * @param {Function} logRecordsCallback - The callback function to log records.
+     * @param {Object} cesiumPkg - The Cesium package object.
+     */
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, measureModes, activateModeCallback) {
         this.viewer = viewer;
         this.handler = handler;
@@ -47,7 +55,6 @@ class Picker {
     handlePickerLeftClick(movement) {
         const pickedObject = this.viewer.scene.pick(movement.position);
         if (Cesium.defined(pickedObject) && pickedObject.id && pickedObject.id.startsWith("annotate")) {
-            console.log("🚀  pickedObject:", pickedObject);
 
             const modeMapping = {
                 "annotate_multidistance_clamped": "multi-distances-clamped", // More specific goes first

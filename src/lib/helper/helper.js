@@ -105,7 +105,7 @@ export function formatArea(area) {
 
 /**
  * Generate a unique id for annotation mode with its coordinates. 
- * @param {Cesium.Cartesian3} cartesian - The Cartesian coordinates of the point.
+ * @param {Cesium.Cartesian3 | Cesium.Cartesian3[]} cartesian - The Cartesian coordinates of the point.
  * @param {string} mode - The mode name of the annotation tool.
  * @returns {string} id - The unique id for entity or primitive.
  */
@@ -152,10 +152,14 @@ export function cartesianToId(cartesian) {
  * HELPER FUNCTIONS FOR CESIUM PRIMITIVE *
  *****************************************/
 // point primitive
+/**
+ * Create a point primitive.
+ * @param {Cesium.Cartesian3} coordinate - The Cartesian3 coordinate of the point.
+ * @param {Cesium.Color} color - The color of the point.
+ * @returns {Cesium.PointPrimitive} - The point primitive.
+ */
 export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
-    if (!coordinate) {
-        return; // Exit early if coordinate is not defined
-    }
+    if (!coordinate) return; // Exit early if coordinate is not defined
 
     //check if coordinate is cartographic degrees or radians or cartesian
     const cartesian = convertToCartesian3(coordinate);
@@ -169,6 +173,12 @@ export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
 }
 
 // line primitive
+/**
+ * Create a line geometry instance.
+ * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
+ * @returns {Cesium.GeometryInstance} - The geometry instance of the line.
+ */
 export function createLineGeometryInstance(coordinateArray, mode) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
         return;
@@ -192,6 +202,13 @@ export function createLineGeometryInstance(coordinateArray, mode) {
     return geometryInstance
 }
 
+/**
+ * Create a line primitive.
+ * @param {Cesium.GeometryInstance} geometryInstance - line geometry instance
+ * @param {Cesium.Color} color - the color of the line
+ * @param {Cesium.Primitive} Primitive - the cesium primitive
+ * @returns {Cesium.Primitive} - the line primitive
+ */
 export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, Primitive) {
     return new Primitive({
         geometryInstances: geometryInstance,
@@ -211,6 +228,12 @@ export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, 
     });
 }
 
+/**
+ * Create a clamped line geometry instance.
+ * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
+ * @returns {Cesium.GeometryInstance} - The geometry instance of the clamped line.
+ */
 export function createClampedLineGeometryInstance(coordinateArray, mode) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
         return;
@@ -233,6 +256,13 @@ export function createClampedLineGeometryInstance(coordinateArray, mode) {
     return groundPolylineGeometryInstance;
 }
 
+/**
+ * Create a clamped line primitive.
+ * @param {Cesium.GeometryInstance} geometryInstance - the geometry instance of the clamped line
+ * @param {Cesium.Color} color - the color of the line
+ * @param {Cesium.GroundPolylinePrimitive} GroundPolylinePrimitive - the cesium GroundPolylinePrimitive
+ * @returns {Cesium.GroundPolylinePrimitive} - the clamped line primitive
+ */
 export function createClampedLinePrimitive(geometryInstance, color = Cesium.Color.RED, GroundPolylinePrimitive) {
     return new GroundPolylinePrimitive({
         geometryInstances: geometryInstance,
@@ -247,6 +277,13 @@ export function createClampedLinePrimitive(geometryInstance, color = Cesium.Colo
 }
 
 // label primitive
+/**
+ * Create a label primitive.
+ * @param {Cesium.Cartesian3} startPoint - the start point of the line
+ * @param {Cesium.Cartesian3} endPoint - the end point of the line
+ * @param {number|string} distanceOrText - the distance or text to display on the label
+ * @returns {Object} - The label primitive.
+ */
 export function createLabelPrimitive(startPoint, endPoint, distanceOrText) {
     const midpoint = Cesium.Cartesian3.lerp(
         startPoint,
@@ -292,6 +329,12 @@ export function createLabelPrimitive(startPoint, endPoint, distanceOrText) {
 }
 
 // polygon primitive
+/**
+ * Create a polygon geometry instance.
+ * @param {Cesium.Cartsian3[]} coordinateArray - the array of cartesian3 coordinates of the polygon
+ * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance" 
+ * @returns {Cesium.GeometryInstance} - The geometry instance of the polygon.
+ */
 export function createPolygonGeometryInstance(coordinateArray, mode) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) {
         return;
@@ -314,6 +357,13 @@ export function createPolygonGeometryInstance(coordinateArray, mode) {
 
     return polygonGeometryInstance;
 }
+/**
+ * Create a polygon primitive.
+ * @param {Cesium.PolygonGeometry} polygonGeometryInstance 
+ * @param {Cesium.Color} color 
+ * @param {Cesium.Primitive} Primitive 
+ * @returns {Cesium.Primitive} - The polygon primitive.
+ */
 export function createPolygonPrimitive(polygonGeometryInstance, color = Cesium.Color.GREEN.withAlpha(0.8), Primitive) {
     return new Primitive({
         geometryInstances: polygonGeometryInstance,
@@ -331,7 +381,13 @@ export function createPolygonPrimitive(polygonGeometryInstance, color = Cesium.C
         releaseGeometryInstances: false
     });
 }
-
+/**
+ * Create a polygon outline geometry instance.
+ * @param {Cesium.Cartsian3[]} coordinateArray - the array of cartesian3 coordinates of the polygon
+ * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
+ * @param {Cesium.Color} color - the color of the polygon outline 
+ * @returns {Cesium.GeometryInstance} - The geometry instance of the polygon outline.
+ */
 export function createPolygonOutlineGeometryInstance(coordinateArray, mode, color = Cesium.Color.YELLOW) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) {
         return;
@@ -357,7 +413,12 @@ export function createPolygonOutlineGeometryInstance(coordinateArray, mode, colo
 
     return polygonOutlineGeometryInstance;
 }
-
+/**
+ * Create a polygon outline primitive.
+ * @param {Cesium.OutlineGeometryInstance} outlineGeometryInstance - the outline geometry instance
+ * @param {Cesium.Primitive} Primitive - the cesium primitive
+ * @returns {Cesium.Primitive} - the polygon outline primitive
+ */
 export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive) {
     return new Primitive({
         geometryInstances: outlineGeometryInstance,
@@ -376,7 +437,7 @@ export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive
 
 /**
  * change a line primitive color and clone the original color if not already stored
- * @param {Cesium.Primitive} linePrimitive - the line primitive
+ * @param {Cesium.Primitive} linePrimitive - the line geometry primitive
  * @param {Cesium.Color} color - the color to change
  * @returns {Cesium.Primitive} - the line primitive with the new color
  */
@@ -400,7 +461,7 @@ export function changeLineColor(linePrimitive, color = Cesium.Color.YELLOW) {
 
 /**
  * reset the line primitive color by its original color
- * @param {Cesium.Primitive} linePrimitive - the line primitive
+ * @param {Cesium.Primitive} linePrimitive - the line geometry primitive
  * @returns {Cesium.Primitive} - the line primitive with the new color
  */
 export function resetLineColor(linePrimitive) {
@@ -421,6 +482,10 @@ export function resetLineColor(linePrimitive) {
 /**********************************************
  * HELPER FUNCTIONS FOR MEASURE MODE SPECIFIC *
  **********************************************/
+/**
+ * Remove the input actions from the screen space event handler - left click, mouse move, right click, left down, left up
+ * @param {Cesium.ScreenSpaceEventHandler} handler - The screen space event handler
+ */
 export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
@@ -428,37 +493,40 @@ export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
     // handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+    return handler;
 }
 
 /**
  * get the type of the Cesium picked object
  * @param {*} pickedObject - viewer.scene.pick
- * @param {String} modeString - the mode string to filter the picked object. e.g. "multi_distance"
- * @returns {String} - the type of the picked object
+ * @param {string} modeString - the mode string to filter the picked object. e.g. "multi_distance"
+ * @returns {string} - the type of the picked object
  */
 export function getPickedObjectType(pickedObject, modeString) {
-    const searchString = modeString ? "annotate_" + modeString : "annotate";
+    const searchString = "annotate_" + modeString;
     if (Cesium.defined(pickedObject) &&
         pickedObject.id &&
         pickedObject.id.startsWith(searchString) &&
         !pickedObject.id.includes("moving")) {
-        if (pickedObject.id.includes("point")) {
+        if (pickedObject.id.startsWith(`${searchString}_point`)) {
             return "point"
-        } else if (pickedObject.id.includes("line")) {
+        } else if (pickedObject.id.startsWith(`${searchString}_line`)) {
             return "line"
-        } else if (pickedObject.id.includes("label")) {
+        } else if (pickedObject.id.startsWith(`${searchString}_label`)) {
             return "label"
         } else {
             return "other"
         }
     }
+    return null;
 }
+
 /**
  * Interpolates points between two points based on the interval.
  * @param {Cesium.Cartesian3} pointA - The Cartesian coordinate of the first point.
  * @param {Cesium.Cartesian3} pointB - The Cartesian coordinate of the second point.
  * @param {Scene} scene - viewer.scene
- * @param {Number} [interval=2] - The interval between the two points.
+ * @param {number} [interval=2] - The interval between the two points.
  * @returns {Cesium.Cartesian3[]} - The interpolated points.
  */
 export function interpolatePoints(pointA, pointB, interval = 2) {
@@ -491,7 +559,7 @@ export function interpolatePoints(pointA, pointB, interval = 2) {
  * @param {Cesium.Cartesian3} startPosition - The starting Cartesian position.
  * @param {Cesium.Cartesian3} endPosition - The ending Cartesian position.
  * @param {Scene} scene - viewer.scene
- * @param {Number} [interval=2] - The interval between interpolated points.
+ * @param {number} [interval=2] - The interval between interpolated points.
  * @returns {Cesium.Cartesian3[]} - The clamped positions with ground heights.
  */
 export function computeDetailedPickPositions(startPosition, endPosition, scene, interval = 2) {
@@ -556,43 +624,46 @@ export function computeDetailedPickPositions(startPosition, endPosition, scene, 
  * @param {Cesium.Cartesian3} pointA - The first Cartesian coordinate.
  * @param {Cesium.Cartesian3} pointB - The second Cartesian coordinate.
  * @param {Scene} scene - viwer.scene
- * @param {Number} [interval=2] - The interval between interpolated points.
- * @returns {Number} - The clamped distance between the two points.
+ * @param {number} [interval=2] - The interval between interpolated points.
+ * @returns {{distance: number, pickedCartesianGroup: Cesium.Cartesian3[]}} - An object containing:
+ *  - `distance`: The total clamped distance between the two points.
+ *  - `pickedCartesianGroup`: An array of interpolated Cartesian coordinates used in the calculation.
  */
 export function calculateClampedDistance(pointA, pointB, scene, interval = 2) {
-    const pickedCartesianArray = computeDetailedPickPositions(pointA, pointB, scene, interval);
+    const pickedCartesianGroup = computeDetailedPickPositions(pointA, pointB, scene, interval);
     let distance = 0; // Initialize to 0 instead of null
 
-    for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
-        distance += Cesium.Cartesian3.distance(pickedCartesianArray[i], pickedCartesianArray[i + 1]);
+    for (let i = 0; i < pickedCartesianGroup.length - 1; i++) {
+        distance += Cesium.Cartesian3.distance(pickedCartesianGroup[i], pickedCartesianGroup[i + 1]);
     }
 
-    return distance;
+    return { distance, pickedCartesianGroup };
 }
 
 /**
  * Calculates the clamped distances between each pair of points in the array and the total distance.
  * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian coordinates.
  * @param {Scene} scene - viewer.scene
- * @param {Number} [interval=2] - The interval between interpolated points.
- * @returns {{ distances: Number[], totalDistance: Number }} - The distances between each pair of points and the total distance.
+ * @param {number} [interval=2] - The interval between interpolated points.
+ * @returns {{ distances: number[], totalDistance: number, pickedCartesianGroups: Cesium.Cartesian3[] }} - The distances between each pair of points and the total distance.
  */
 export function calculateClampedDistanceFromArray(cartesianArray, scene, interval = 2) {
     const distances = [];
-
+    const pickedCartesianGroups = [];
     for (let i = 0; i < cartesianArray.length - 1; i++) {
-        const distance = calculateClampedDistance(cartesianArray[i], cartesianArray[i + 1], scene, interval);
+        const { distance, pickedCartesianGroup } = calculateClampedDistance(cartesianArray[i], cartesianArray[i + 1], scene, interval);
         distances.push(distance);
+        pickedCartesianGroups.push(pickedCartesianGroup);
     }
 
     const totalDistance = distances.reduce((a, b) => a + b, 0);
-    return { distances, totalDistance };
+    return { distances, totalDistance, pickedCartesianGroups };
 }
 
 /**
  * Calculates the distance between each pair of points in the array and the total distance.
  * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian coordinates.
- * @returns  {{ distances: Number[], totalDistance: Number }} - The distances between each pair of points and the total distance.
+ * @returns  {{ distances: number[], totalDistance: number }} - The distances between each pair of points and the total distance.
  */
 export function calculateDistanceFromArray(cartesianArray) {
     const distances = [];
@@ -606,6 +677,47 @@ export function calculateDistanceFromArray(cartesianArray) {
     return { distances, totalDistance };
 }
 
+/**
+ * Get relevant point primitive, line primitive, and label primitive filtered by the position
+ * @param {Cesium.Cartesian3} position 
+ * @param {string} startsWithMeasureMode - the string of the id starts with, example "annotation_multi_distance"
+ * @param {Object} scene - The Cesium scene containing the primitives
+ * @param {Object} pointCollection - The point collection to search in
+ * @param {Object} labelCollection - The label collection to search in
+ * @returns {Object} An object containing the found pointPrimitive, linePrimitives, and labelPrimitives
+ */
+export function getPrimitiveByPointPosition(position, startsWithMeasureMode, scene, pointCollection, labelCollection) {
+    // get point primitive by position
+    const pointPrimitive = pointCollection._pointPrimitives.find(p => p.id && p.id.startsWith(startsWithMeasureMode) &&
+        !p.id.includes("moving") &&
+        Cesium.Cartesian3.equals(p.position, position)
+    );
+
+    // get line primitives by position
+    const linePrimitives = scene.primitives._primitives.filter(p =>
+        p.geometryInstances &&
+        p.geometryInstances.id &&
+        p.geometryInstances.id.includes(startsWithMeasureMode) &&
+        !p.geometryInstances.id.includes("moving") &&
+        p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, position))
+    );
+
+    // get label primitives by lines positions
+    // it can only be 1 lines or 2 lines, each line has 2 positions [[1,2],[3,4]] | [[1,2]]
+    const linePositions = linePrimitives.map(p => p.geometryInstances.geometry._positions);
+    const midPoints = linePositions.map((positions) => Cesium.Cartesian3.midpoint(positions[0], positions[1], new Cesium.Cartesian3()));
+    const labelPrimitives = midPoints.map(midPoint =>
+        labelCollection._labels.find(l => l.id && l.id.startsWith(startsWithMeasureMode) &&
+            !l.id.includes("moving") &&
+            Cesium.Cartesian3.equals(l.position, midPoint)
+        )
+    ).filter(label => label !== undefined);
+
+    // Sort labelPrimitives by their text
+    labelPrimitives.sort((a, b) => a.text.toUpperCase().localeCompare(b.text.toUpperCase()));
+
+    return { pointPrimitive, linePrimitives, labelPrimitives };
+}
 
 
 

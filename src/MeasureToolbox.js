@@ -9,7 +9,7 @@ import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { Picker } from "./lib/features/Picker.js";
-import { removeInputActions, makeDraggable } from "./lib/helper/helper.js";
+import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
 import { FireTrack } from "./lib/features/FireTrack.js";
 import { FlyThrough } from "./lib/features/FlyThrough.js";
 import toolIcon from "./assets/tool-icon.svg";
@@ -101,6 +101,21 @@ export class MeasureToolbox extends HTMLElement {
         }
 
         removeInputActions(this.handler);
+
+        // Initialize Cesium primitives collections
+        const pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
+        const labelCollection = new this.cesiumPkg.LabelCollection();
+        pointCollection.blendOption = Cesium.BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, perforamnce improve 2x
+        labelCollection.blendOption = Cesium.BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, perforamnce improve 2x
+        pointCollection.id = "annotate_point_collection";
+        labelCollection.id = "annotate_label_collection";
+        this.pointCollection = this.viewer.scene.primitives.add(pointCollection);
+        this.labelCollection = this.viewer.scene.primitives.add(labelCollection);
+
+        // initiate clamped line due to the delay for the first clamped line creation
+        const lineGeometryInstance = createClampedLineGeometryInstance([Cesium.Cartesian3.fromDegrees(0, 0), Cesium.Cartesian3.fromDegrees(0, 0)], "line_initiate");
+        const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
+        this.initialLine = this.viewer.scene.primitives.add(linePrimitive);
 
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();
@@ -435,6 +450,26 @@ export class MeasureToolbox extends HTMLElement {
         button.classList.remove("active");
         toolInstance.removeInputAction && toolInstance.removeInputAction();
         toolInstance.resetValue && toolInstance.resetValue();
+
+        // remove moving or pending primitives
+        this.viewer.scene.primitives._primitives.filter(p =>
+            p.geometryInstances &&
+            p.geometryInstances.id &&
+            p.geometryInstances.id.startsWith("annotate") &&
+            (p.geometryInstances.id.includes("moving") || p.geometryInstances.id.includes("pending") || p.geometryInstances.id.includes("line_initiate"))
+        ).forEach(p => { this.viewer.scene.primitives.remove(p) });
+
+        this.labelCollection._labels.filter(l =>
+            l &&
+            l.id &&
+            (l.id.includes("moving") || l.id.includes("pending"))
+        ).forEach(l => { this.labelCollection.remove(l) });
+
+        this.pointCollection._pointPrimitives.filter(p =>
+            p &&
+            p.id &&
+            (p.id.includes("moving") || p.id.includes("pending"))
+        ).forEach(p => { this.pointCollection.remove(p) });
     }
 
     /**

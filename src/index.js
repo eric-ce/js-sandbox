@@ -30,14 +30,14 @@ class Navigator {
     viewSetup(viewer) {
         viewer.scene.camera.setView({
             destination: new Cesium.Cartesian3(
-                4401744.644145314,
-                225051.41078911052,
-                4595420.374784433
+                1216356.033078094,
+                -4736402.278325668,
+                4081270.375520902
             ),
             orientation: new Cesium.HeadingPitchRoll(
-                5.646733805039757,
-                -0.276607153839886,
-                6.281110875400085
+                0.08033365594766728,
+                -0.29519015695063455,
+                0.00027759141518046704
             ),
         });
     }
@@ -45,11 +45,11 @@ class Navigator {
     async loadTileset(viewer) {
         try {
             // Load the 3D tileset using the ion asset ID
-            const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(16421);
+            const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(40866);
 
             // Set the point size for the tileset style
             tileset.style = new Cesium.Cesium3DTileStyle();
-            tileset.style.pointSize = "5";
+            // tileset.style.pointSize = "5";
 
             // Add the loaded tileset to the Cesium viewer's scene primitives
             viewer.scene.primitives.add(tileset);

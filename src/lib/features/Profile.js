@@ -10,10 +10,23 @@ import {
     formatDistance,
     createClampedLineGeometryInstance,
     makeDraggable,
+    getPickedObjectType,
+    computeDetailedPickPositions,
+    calculateClampedDistanceFromArray,
+    getPrimitiveByPointPosition,
+    calculateClampedDistance,
 } from "../helper/helper.js";
 import Chart from "chart.js/auto";
 
 class Profile {
+    /**
+     * Creates a new Profile instance.
+     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
+     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
+     * @param {Function} logRecordsCallback - The callback function to log records.
+     * @param {Object} cesiumPkg - The Cesium package object.
+     */
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
@@ -27,7 +40,7 @@ class Profile {
 
         // flags to control the state of the tool
         this.flags = {
-            isDistanceStarted: false,
+            isMeasurementComplete: false,
             isDragMode: false,
         };
 
@@ -37,28 +50,29 @@ class Profile {
             groups: [],             // Tracks all coordinates involved in operations
             interpolatedPointsGroup: [],    // Tracks all interpolated points
             selectedGroupIndex: null,       // Tracks the index of the selected group
-            dragStart: null,        // Stores the initial position before a drag begins
+            dragStart: null,            // Stores the initial position before a drag begins
+            dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
+            _distanceRecords: []        // Stores the distance records
         };
-
-        // log
-        this._distanceRecords = [];
 
         // chart
         this.chart = null;
         this.chartDiv = null;
 
-        // Initialize Cesium primitives collections
-        this.pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
-        this.labelCollection = new this.cesiumPkg.LabelCollection();
-        this.viewer.scene.primitives.add(this.pointCollection);
-        this.viewer.scene.primitives.add(this.labelCollection);
+        // lookup and set Cesium primitives collections
+        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
+        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
-            draggingPoint: null,    // Currently dragged point primitive
-            hoverPoint: null,
             movingPolyline: null,   // Line that visualizes dragging or moving
             movingLabel: null,      // Label that updates during moving or dragging
+            dragPoint: null,        // Currently dragged point primitive
+            dragPolyline: null,     // Line that visualizes dragging
+            dragLabel: null,        // Label that updates during dragging
+            hoveredPoint: null,       // Point that is currently hovered
+            hoveredLabel: null,     // Label that is currently hovered
+            chartHoveredPoint: null,
         };
     }
 
@@ -97,105 +111,112 @@ class Profile {
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
     handleProfileLeftClick(movement) {
-        // Check if the measurement has started
-        // if pick the label entity, make the label entity editable
-        if (!this.flags.isDistanceStarted) {
-            const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+        // use move position for the position
+        const cartesian = this.coordinate
+        if (!Cesium.defined(cartesian)) return;
 
-            // If picked object is a label primitive, make it editable
-            if (
-                Cesium.defined(pickedObject) &&
-                pickedObject?.id?.startsWith("annotate") &&
-                pickedObject.id.includes("label")
-            ) {
-                editableLabel(this.viewer.container, pickedObject.primitive);
-                return; // Exit the function after making the label editable
-            }
+        const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+        const pickedObjectType = getPickedObjectType(pickedObject, "profile");
 
-            // Set flag that the measurement has started
-            this.flags.isDistanceStarted = true;
+        // Handle different scenarios based on the clicked primitive type and the state of the tool
+        switch (pickedObjectType) {
+            case "label":
+                if (this.flags.isMeasurementComplete) {
+                    editableLabel(this.viewer.container, pickedObject.primitive);
+                }
+                break;
+            case "point":
+                break;
+            case "line":
+                break;
+            case "other":
+                break;
+            default:
+                if (!this.flags.isDragMode) {
+                    this.startMeasure();
+                }
+                break;
+        }
+    }
 
-            // reset variables
-            this.coords.cache.length = 0;
+    startMeasure() {
+        if (this.flags.isMeasurementComplete) {
+            this.flags.isMeasurementComplete = false;
+            this.coords.cache = [];
         }
 
-        // create point primitive
+        // Initiate cache if it is empty, start a new group and assign cache to it
+        if (this.coords.cache.length === 0) {
+            // link both cache and groups to the same group
+            // when cache changed groups will be changed due to reference by address
+            const newGroup = [];
+            this.coords.groups.push(newGroup);
+            this.coords.cache = newGroup;
+        }
+
         // check if the current position is very close to coordinate in groups, if yes then don't create new point
         const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
         if (!isNearPoint) {
+            this.coords.cache.push(this.coordinate);
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "profile_point_pending");
             this.pointCollection.add(point);
-            this.coords.cache.push(this.coordinate);
         }
-
         // create line and label
         if (this.coords.cache.length === 2) {
-            const pickedCartesianArray = this._computeDetailedPickPositions(this.coords.cache[0], this.coords.cache[1]);
-            // update the interpolated points group
-            this.coords.interpolatedPointsGroup.push([...pickedCartesianArray]);
-            this.coords.selectedGroupIndex = this.coords.interpolatedPointsGroup.length - 1;
-
             // update pending point id
             const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"))
-            pendingPoints.forEach(p => { p.id = generateId(p.position, "profile_point") });
-
-            // line chart x-axis label
-            // always start from 0 meters
-            const labelDistance = [0];
-
-            let totalDistance = null;
-            for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
-                const distance = Cesium.Cartesian3.distance(
-                    pickedCartesianArray[i],
-                    pickedCartesianArray[i + 1]
-                );
-
-                totalDistance += distance;
-                // line chart x-axis label
-                labelDistance.push(labelDistance[i] + Math.round(distance));
-            }
-
-            // create label primitive
-            // set moving label primitive to not show
-            if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-
-            const midPoint = Cesium.Cartesian3.midpoint(this.coords.cache[0], this.coords.cache[1], new Cesium.Cartesian3());
-            const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], totalDistance);
-            label.id = generateId(midPoint, "profile_label");
-            this.labelCollection.add(label);
+            pendingPoints.forEach(p => { p.id = p.id.replace("_pending", "") });
 
             // create line primitive
             if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-
-            const lineGeometryInstance = createClampedLineGeometryInstance(this.coords.cache, "profile_line",);
+            this.interactivePrimitives.movingPolyline = null;
+            const lineGeometryInstance = createClampedLineGeometryInstance(this.coords.cache, "profile_line");
             const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
             this.viewer.scene.primitives.add(linePrimitive);
 
-            // show the chart, if no chart then create the chart set it to show
-            if (this.chartDiv) {
+            // create label primitive
+            const { distance, pickedCartesianGroup } = calculateClampedDistance(this.coords.cache[0], this.coords.cache[1], this.viewer.scene, 2);
+            if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
+            this.interactivePrimitives.movingLabel = null;
+            const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], distance);
+            label.id = generateId(this.coords.cache, "profile_label");
+            this.labelCollection.add(label);
+
+            // update the interpolated points group
+            this.coords.interpolatedPointsGroup.push([...pickedCartesianGroup]);
+            this.coords.selectedGroupIndex = this.coords.interpolatedPointsGroup.length - 1;
+
+            // set chart to show or update the chart
+            if (this.chartDiv) {    // if chart already exist then update the chart
                 this.chartDiv.style.display = "block";
-            } else {
+            } else {    // if chart doesn't exist then create a new chart
                 this.setupChart();
                 this.chartDiv.style.display = "block";
             }
 
+            // line chart x-axis label
+            const labelDistance = [0];  // always start from 0 meters
+            for (let i = 0; i < pickedCartesianGroup.length - 1; i++) {
+                const distance = Cesium.Cartesian3.distance(pickedCartesianGroup[i], pickedCartesianGroup[i + 1]);
+                // line chart x-axis label
+                labelDistance.push(labelDistance[i] + Math.round(distance));
+            };
             // line chart y-axis data
-            const diffHeight = pickedCartesianArray.map((pickedCartesian) => {
+            const diffHeight = pickedCartesianGroup.map((pickedCartesian) => {
                 const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedCartesian);
                 return pickedCartographic.height
-            })
-
+            });
             // update the chart
             this.updateChart(diffHeight, labelDistance);
-            // records cache to track all coords, use shallow copy the cache
-            this.coords.groups.push([...this.coords.cache]);
+
             // log distance
-            this._distanceRecords.push(totalDistance);
-            this.logRecordsCallback(totalDistance.toFixed(2));
+            this.coords._distanceRecords.push(distance);
+            this.logRecordsCallback(distance.toFixed(2));
 
             // set flag that the measurement has ended
-            this.flags.isDistanceStarted = false;
+            this.flags.isMeasurementComplete = true;
+            this.coords.cache = [];
         }
     }
 
@@ -205,383 +226,299 @@ class Profile {
      */
     handleProfileMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-
-        // Check if the position is defined
         if (!Cesium.defined(cartesian)) return;
+        // update coordinate
         this.coordinate = cartesian;
+        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
 
         // update pointerOverlay: the moving dot with mouse
-        const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
         pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
 
-        if (this.coords.cache.length > 0 && this.coords.cache.length < 2) {
-            // create line primitive
-            if (this.interactivePrimitives.movingPolyline) {
-                this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-            }
-            const firstCoordsCartesian = this.coords.cache[0];
-
-            const movingLineGeometryInstance = createClampedLineGeometryInstance([firstCoordsCartesian, this.coordinate], "profile_moving_line");
-            const movingLinePrimitive = createClampedLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
-
-            this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(movingLinePrimitive);
-
-
-            // update moving label primitive and set it to show
-            const pickedCartesianArray = this._computeDetailedPickPositions(firstCoordsCartesian, this.coordinate);
-
-            let totalDistance = null;
-
-            for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
-                const distance = Cesium.Cartesian3.distance(
-                    pickedCartesianArray[i],
-                    pickedCartesianArray[i + 1]
-                );
-                totalDistance += distance;
-            }
-
-            if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-            this.interactivePrimitives.movingLabel = this.labelCollection.add(createLabelPrimitive(firstCoordsCartesian, cartesian, totalDistance));
-            const midPoint = Cesium.Cartesian3.midpoint(firstCoordsCartesian, cartesian, new Cesium.Cartesian3());
-            this.interactivePrimitives.movingLabel.id = generateId(midPoint, "profile_moving_label");
-        }
-
-        // move along the line to show the tooltip for corresponding point
+        // Handle different scenarios based on the state of the tool
+        const isMeasuring = this.coords.cache.length > 0 && !this.flags.isMeasurementComplete
         const pickedLine = pickedObjects.find(p => p.id && p.id.startsWith("annotate_profile_line"));
-        if (pickedLine && this.chart) {
-            const pickPosition = this.viewer.scene.pickPosition(movement.endPosition);
-            const cartographic = Cesium.Cartographic.fromCartesian(pickPosition);
-            const groundHeight = this.viewer.scene.sampleHeight(cartographic);
+        const isPickedLIne = pickedLine && this.coords.groups.length > 0;
+        switch (true) {
+            case isMeasuring:
+                if (this.coords.cache.length > 0 && this.coords.cache.length < 2) {
+                    // create line primitive
+                    if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
+                    const movingLineGeometryInstance = createClampedLineGeometryInstance([this.coords.cache[0], this.coordinate], "profile_line_moving");
+                    const movingLinePrimitive = createClampedLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
+                    this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(movingLinePrimitive);
 
-            const pickCartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, groundHeight);
-
-            if (!Cesium.defined(pickCartesian)) return;
-
-            const closestCoord = this.coords.interpolatedPointsGroup[this.coords.selectedGroupIndex].map(cart => {
-                // get the closest point to the pickPosition by comparing the distance
-                const distance = Cesium.Cartesian3.distance(cart, pickCartesian);
-                if (distance < 0.5) {
-                    return cart;
+                    // Create or update label primitive
+                    const midPoint = Cesium.Cartesian3.midpoint(this.coords.cache[0], cartesian, new Cesium.Cartesian3());
+                    const { distance } = calculateClampedDistance(this.coords.cache[0], this.coordinate, this.viewer.scene, 2);
+                    if (this.interactivePrimitives.movingLabel) {   // if label exists, update existing label
+                        this.interactivePrimitives.movingLabel.position = midPoint;
+                        this.interactivePrimitives.movingLabel.show = true;
+                        this.interactivePrimitives.movingLabel.showBackground = true;
+                        this.interactivePrimitives.movingLabel.text = formatDistance(distance);
+                        this.interactivePrimitives.movingLabel.id = generateId([this.coords.cache[0], cartesian], "profile_label_moving");
+                    } else {  // if label doesn't exist, create a new label
+                        const label = createLabelPrimitive(this.coords.cache[0], cartesian, distance);
+                        label.id = generateId(midPoint, "profile_label_moving");
+                        label.showBackground = false
+                        this.interactivePrimitives.movingLabel = this.labelCollection.add(label);
+                    }
                 }
-            }).filter(cart => cart !== undefined);
+                break;
+            case isPickedLIne:
+                this.pointerOverlay.style.display = "none";
+                // move along the line to show the tooltip for corresponding point
+                const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+                const groundHeight = this.viewer.scene.sampleHeight(cartographic);
 
-            // create point for the first corrds of closestCoord
-            if (closestCoord.length > 0) this.createPointForChartHoverPoint(closestCoord[0]);
+                const pickCartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, groundHeight);
 
-            // find the index of pickPosition from this.coords.interpolatedPointsGroup
-            const index = this.coords.interpolatedPointsGroup[this.coords.selectedGroupIndex].findIndex(cart => Cesium.Cartesian3.equals(cart, closestCoord[0]));
+                if (!Cesium.defined(pickCartesian)) return;
 
-            if (this.chart && index !== -1) this.showTooltipAtIndex(this.chart, index);
+                const closestCoord = this.coords.interpolatedPointsGroup[this.coords.selectedGroupIndex].map(cart => {
+                    // get the closest point to the pickPosition by comparing the distance
+                    const distance = Cesium.Cartesian3.distance(cart, pickCartesian);
+                    if (distance < 0.5) {
+                        return cart;
+                    }
+                }).filter(cart => cart !== undefined);
+
+                // create point for the first corrds of closestCoord
+                if (closestCoord.length > 0) this.createPointForChartHoverPoint(closestCoord[0]);
+
+                // find the index of pickPosition from this.coords.interpolatedPointsGroup
+                const index = this.coords.interpolatedPointsGroup[this.coords.selectedGroupIndex].findIndex(cart => Cesium.Cartesian3.equals(cart, closestCoord[0]));
+                if (index === -1) return;
+                if (this.chart) this.showTooltipAtIndex(this.chart, index);
+
+                break;
+            default:
+                this.handleHoverHighlighting(pickedObjects[0]);
+                break;
+        }
+    }
+
+    handleHoverHighlighting(pickedObject) {
+        const pickedObjectType = getPickedObjectType(pickedObject, "profile");
+
+        // reset highlighting
+        const resetHighlighting = () => {
+            if (this.interactivePrimitives.hoveredPoint) {
+                this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
+                this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
+                this.interactivePrimitives.hoveredPoint = null;
+            }
+            if (this.interactivePrimitives.hoveredLabel) {
+                this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
+                this.interactivePrimitives.hoveredLabel = null;
+            }
+        }
+        resetHighlighting();
+        switch (pickedObjectType) {
+            case "point":  // highlight the point when hovering
+                const pointPrimitive = pickedObject.primitive;
+                if (pointPrimitive) {
+                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineWidth = 2;
+                    this.interactivePrimitives.hoveredPoint = pointPrimitive;
+                }
+                break;
+            case "label":   // highlight the label when hovering
+                const labelPrimitive = pickedObject.primitive;
+                if (labelPrimitive) {
+                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    this.interactivePrimitives.hoveredLabel = labelPrimitive;
+                }
+                break;
+            default:
+                break;
         }
     }
 
     handleProfileDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-        if (this.coords.groups.length > 0) {
+
+        if (this.coords.groups.length > 0 && this.coords.cache.length === 0) {
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
 
-            const pointPrimitive = pickedObjects.find(p => {
-                if (typeof p.primitive?.id !== 'string') {
-                    return false;
-                }
-                return p.primitive.id.startsWith("annotate_profile_point") &&
-                    !p.primitive.id.includes("moving");
+            const isPoint = pickedObjects.find(p => {
+                const primitiveId = p.primitive.id;
+                return typeof primitiveId === 'string' &&
+                    primitiveId.startsWith("annotate_profile_point") &&
+                    !primitiveId.includes("moving");
             });
 
             // error handling: if no point primitives found then early exit
-            if (!Cesium.defined(pointPrimitive)) {
-                console.error("No point primitives found");
-                return;
-            }
+            if (!Cesium.defined(isPoint)) return;
 
             // disable camera movement
             this.viewer.scene.screenSpaceCameraController.enableInputs = false;
-            this.flags.isDragMode = true;
-            this.interactivePrimitives.draggingPoint = pointPrimitive.primitive;
-            this.coords.dragStart = pointPrimitive.primitive.position.clone();
 
-            // find the relative line primitive to the dragging point
-            const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_profile_line"));
-            let linePrimitive = null;
-            if (linePrimitives.length > 0) {
-                linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
-                // set the relative line primitive to no show
-                linePrimitive ? linePrimitive.show = false : console.error("No specific line primitives found");
-            } else {
-                console.error("No line primitives found");
-                return;
-            }
-
-            // find the relative label primitive to the dragging point 
-            const linePrimitivePosition = linePrimitive.geometryInstances.geometry._positions; // [cart, cart]
-            const midpoint = Cesium.Cartesian3.midpoint(linePrimitivePosition[0], linePrimitivePosition[1], new Cesium.Cartesian3());
-            const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, midpoint) && label.id && label.id.startsWith("annotate_profile_label"));
-            targetLabelPrimitive.show = false;
+            this.coords.dragStart = isPoint.primitive.position.clone();
+            this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
 
             // set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handleProfileDrag(movement, this.interactivePrimitives.draggingPoint, this.coords.dragStart);
+                this.handleProfileDrag(movement, isPoint);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         }
     };
 
-    handleProfileDrag(movement, pointPrimitive, pointPrimitivePosition) {
+    handleProfileDrag(movement, selectedPoint) {
+        // Set drag flag by moving distance threshold
+        const dragThreshold = 5;
+        const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
+        if (moveDistance > dragThreshold) {
+            this.flags.isDragMode = true
+        };
+
         if (this.flags.isDragMode) {
+            // set existed point, label primitives to no show, line primitive to remove 
+            const { linePrimitives, labelPrimitives } = getPrimitiveByPointPosition(this.coords.dragStart, "annotate_profile", this.viewer.scene, this.pointCollection, this.labelCollection);
+            selectedPoint.primitive.show = false;
+            linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
+            labelPrimitives.forEach(l => l.show = false);
+            // remove the hover point
+            if (this.interactivePrimitives.chartHoveredPoint) this.pointCollection.remove(this.interactivePrimitives.chartHoveredPoint);
+
+
+            // set point overlay no show
             this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-
             if (!Cesium.defined(cartesian)) return;
             this.coordinate = cartesian;
 
-            // update point primitive to dragging position
-            pointPrimitive.position = cartesian;
-            // remove the hover point
-            if (this.interactivePrimitives.hoverPoint) this.pointCollection.remove(this.interactivePrimitives.hoverPoint);
+            // create or update point primitive to dragging position
+            if (this.interactivePrimitives.dragPoint) {
+                // highlight the point primitive
+                this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.YELLOW;
+                this.interactivePrimitives.dragPoint.outlineWidth = 2;
+                // update moving point primitive
+                this.interactivePrimitives.dragPoint.position = cartesian;
+                this.interactivePrimitives.dragPoint.id = generateId(cartesian, "profile_point_moving");
+            } else {
+                const pointPrimitive = createPointPrimitive(cartesian, Cesium.Color.RED);
+                pointPrimitive.id = generateId(cartesian, "profile_point_moving");
+                this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
+            }
 
             // identify the group of coordinates that contains the dragging position
-            const group = this.coords.groups.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, pointPrimitivePosition)));
-
-            const otherPointCoords = group.find(p => !Cesium.Cartesian3.equals(p, pointPrimitivePosition));
+            const group = this.coords.groups.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
+            const otherPointCoords = group.find(p => !Cesium.Cartesian3.equals(p, this.coords.dragStart));
 
             // update moving line primitive by remove the old one and create a new one
-            if (this.interactivePrimitives.movingPolyline) {
-                this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-            }
-            const movingLineGeometryInstance = createClampedLineGeometryInstance([otherPointCoords, this.coordinate], "profile_drag_moving_line");
+            if (this.interactivePrimitives.dragPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.dragPolyline);
+            const movingLineGeometryInstance = createClampedLineGeometryInstance([otherPointCoords, this.coordinate], "profile_line_moving");
             const movingLinePrimitive = createClampedLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
-
-            this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(movingLinePrimitive);
+            this.interactivePrimitives.dragPolyline = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // update moving label primitive
-            const pickedCartesianArray = this._computeDetailedPickPositions(otherPointCoords, this.coordinate);
-
-            let totalDistance = null;
-            for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
-                const distance = Cesium.Cartesian3.distance(
-                    pickedCartesianArray[i],
-                    pickedCartesianArray[i + 1]
-                );
-                totalDistance += distance;
-            }
-
-            if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-            this.interactivePrimitives.movingLabel = this.labelCollection.add(createLabelPrimitive(otherPointCoords, this.coordinate, totalDistance));
+            const { distance } = calculateClampedDistance(otherPointCoords, this.coordinate, this.viewer.scene, 2);
             const midPoint = Cesium.Cartesian3.midpoint(otherPointCoords, this.coordinate, new Cesium.Cartesian3());
-            this.interactivePrimitives.movingLabel.id = generateId(midPoint, "profile_drag_moving_label");
+            if (this.interactivePrimitives.dragLabel) {
+                this.interactivePrimitives.dragLabel.position = midPoint;
+                this.interactivePrimitives.dragLabel.text = formatDistance(distance);
+                this.interactivePrimitives.dragLabel.showBackground = false;
+                this.interactivePrimitives.dragLabel.id = generateId([otherPointCoords, this.coordinate], "profile_label_moving");
+            } else {
+                const label = createLabelPrimitive(otherPointCoords, this.coordinate, distance);
+                label.id = generateId([otherPointCoords, this.coordinate], "profile_label_moving");
+                label.showBackground = false;
+                this.interactivePrimitives.dragLabel = this.labelCollection.add(label);
+            }
         }
     }
 
-    handleProfileDragEnd(movement) {
+    handleProfileDragEnd() {
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.interactivePrimitives.draggingPoint && this.flags.isDragMode) {
-            // update the group coordinates by replace the new set of coordinates
-            // find the relative line primitive to the dragging point
-            const linePrimitives = this.viewer.scene.primitives._primitives.filter(p => p.geometryInstances && p.geometryInstances.id && p.geometryInstances.id.startsWith("annotate_profile_line"));
+        if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
+            // reset dragging point style
+            this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.RED;
+            this.interactivePrimitives.dragPoint.outlineWidth = 0;
 
-            if (linePrimitives.length > 0) {
-                const linePrimitive = linePrimitives.find(p => p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
-                const targetLinePrimitivePosition = linePrimitive.geometryInstances.geometry._positions; // [cart, cart]
-
-                // update the this.coords.groups with the new drag end positions, 2 points coordinates
-                const group = this.coords.groups.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
-                const otherPointCoords = group.find(p => !Cesium.Cartesian3.equals(p, this.coords.dragStart));
-
-                const newCoords = [otherPointCoords, this.coordinate];
-                const index = this.coords.groups.findIndex(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
-                this.coords.groups[index] = newCoords;
-                // update the interpolated points group
-                this.coords.selectedGroupIndex = index;
+            // update the this.coords.groups with the new drag end positions, 2 points coordinates
+            const group = this.coords.groups.find(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
+            const groupIndex = this.coords.groups.findIndex(pair => pair.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart)));
+            if (groupIndex.length === -1) return;
+            const otherPointCoords = group.find(p => !Cesium.Cartesian3.equals(p, this.coords.dragStart));
+            this.coords.groups[groupIndex] = [otherPointCoords, this.coordinate];
 
 
-                // update the line primitive by remove the old one and create a new one
-                if (this.interactivePrimitives.movingPolyline) {
-                    this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-                }
-                if (linePrimitive) {
-                    this.viewer.scene.primitives.remove(linePrimitive);
-                }
-                // create new line primitive
-                const lineGeometryInstance = createClampedLineGeometryInstance(newCoords, "profile_line");
-                const newlinePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
-                this.viewer.scene.primitives.add(newlinePrimitive);
+            // remove dragging point, line and label
+            if (this.interactivePrimitives.dragPoint) this.pointCollection.remove(this.interactivePrimitives.dragPoint);
+            this.interactivePrimitives.dragPoint = null;
+            if (this.interactivePrimitives.dragPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.dragPolyline);
+            this.interactivePrimitives.dragPolyline = null;
+            if (this.interactivePrimitives.dragLabel) this.labelCollection.remove(this.interactivePrimitives.dragLabel);
+            this.interactivePrimitives.dragLabel = null;
 
-                // update the distance label
-                if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
+            // update existed point primitive
+            const existedPoint = this.pointCollection._pointPrimitives.find(p => p.id && p.id.startsWith("annotate_profile_point") && Cesium.Cartesian3.equals(p.position, this.coords.dragStart));
+            existedPoint.show = true;
+            existedPoint.position = this.coordinate;
+            existedPoint.id = generateId(this.coordinate, "profile_point");
 
-                const existedMidPoint = Cesium.Cartesian3.midpoint(targetLinePrimitivePosition[0], targetLinePrimitivePosition[1], new Cesium.Cartesian3());
-                const targetLabelPrimitive = this.labelCollection._labels.find(label => label.position && Cesium.Cartesian3.equals(label.position, existedMidPoint) && label.id && label.id.startsWith("annotate_profile_label"));
+            // create new line primitive
+            const lineGeometryInstance = createClampedLineGeometryInstance([otherPointCoords, this.coordinate], "profile_line");
+            const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
+            this.viewer.scene.primitives.add(linePrimitive);
 
-                const pickedCartesianArray = this._computeDetailedPickPositions(newCoords[1], newCoords[0]);
-                // update the interpolated points group
-                this.coords.interpolatedPointsGroup[index] = [...pickedCartesianArray];
-
-                // line chart x-axis label
-                // always start from 0 meters
-                const labelDistance = [0];
-
-                let totalDistance = null;
-
-                for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
-                    const distance = Cesium.Cartesian3.distance(
-                        pickedCartesianArray[i],
-                        pickedCartesianArray[i + 1]
-                    );
-                    totalDistance += distance;
-                    // line chart x-axis label
-                    labelDistance.push(labelDistance[i] + Math.round(distance));
-                }
-
-                const newMidPoint = Cesium.Cartesian3.midpoint(newCoords[0], newCoords[1], new Cesium.Cartesian3());
-                targetLabelPrimitive.position = newMidPoint;
-                targetLabelPrimitive.text = formatDistance(totalDistance);
-                targetLabelPrimitive.show = true;
-                targetLabelPrimitive.id = generateId(newMidPoint, "profile_label");
-
-                // line chart y-axis data
-                const diffHeight = pickedCartesianArray.map((pickedCartesian) => {
-                    const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedCartesian);
-                    return pickedCartographic.height
-                })
-
-                // update the chart
-                if (this.chartDiv) {
-                    this.updateChart(diffHeight, labelDistance);
-                } else {
-                    this.setupChart();
-                    this.chartDiv.style.display = "block";
-                    this.updateChart(diffHeight, labelDistance);
-                }
-
-
-                // log distance
-                this.logRecordsCallback(totalDistance.toFixed(2));
-            } else {
-                console.error("No line primitives found");
-                return;
+            // Find and update the existing label primitive
+            const oldMidPoint = Cesium.Cartesian3.midpoint(otherPointCoords, this.coords.dragStart, new Cesium.Cartesian3());
+            const newMidPoint = Cesium.Cartesian3.midpoint(otherPointCoords, this.coordinate, new Cesium.Cartesian3());
+            const { distance, pickedCartesianGroup } = calculateClampedDistance(otherPointCoords, this.coordinate, this.viewer.scene, 2);
+            const existedLabel = this.labelCollection._labels.find(l =>
+                l.id &&
+                l.id.startsWith("annotate_profile_label") &&
+                !l.id.includes("moving") &&
+                Cesium.Cartesian3.equals(l.position, oldMidPoint)
+            );
+            if (existedLabel) {
+                existedLabel.text = formatDistance(distance);
+                existedLabel.id = generateId(newMidPoint, "profile_label");
+                existedLabel.position = newMidPoint;
+                existedLabel.show = true;
             }
 
-        }
+            // update the interpolated points group
+            this.coords.interpolatedPointsGroup[groupIndex] = pickedCartesianGroup;
+            this.coords.selectedGroupIndex = groupIndex;    // update the selected group index
 
+            // line chart x-axis label
+            // always start from 0 meters
+            const labelDistance = [0];
+            for (let i = 0; i < pickedCartesianGroup.length - 1; i++) {
+                const distance = Cesium.Cartesian3.distance(pickedCartesianGroup[i], pickedCartesianGroup[i + 1]);
+                // line chart x-axis label
+                labelDistance.push(labelDistance[i] + Math.round(distance));
+            }
+            // line chart y-axis data
+            const diffHeight = pickedCartesianGroup.map((cartesian) => {
+                const pickedCartographic = Cesium.Cartographic.fromCartesian(cartesian);
+                return pickedCartographic.height
+            })
+            // update the chart
+            if (this.chartDiv) {
+                this.updateChart(diffHeight, labelDistance);
+            } else {
+                this.setupChart();
+                this.chartDiv.style.display = "block";
+                this.updateChart(diffHeight, labelDistance);
+            }
+
+            // log distance
+            this.logRecordsCallback(distance.toFixed(2));
+
+            // reset dragging flags
+            this.flags.isDragMode = false;
+        }
         // reset to default profile mouse movement action
         this.handler.setInputAction((movement) => {
             this.handleProfileMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        // reset dragging primitive and flags
-        this.interactivePrimitives.draggingPoint = null;
-        this.flags.isDragMode = false;
     };
-
-    /**
-     * Interpolates points between two points based on the interval.
-     * @param {Cesium.Cartesian3} pointA - the cartesian coordinate of the first point
-     * @param {Cesium.Cartesian3} pointB - the cartesian coordinate of the second point
-     * @param {Number} interval  - the interval between the two points
-     * @returns {Cesium.Cartesian3[]} - the interpolated points
-     */
-    interpolatePoints(pointA, pointB, interval = 0.9) {
-        const points = [];
-
-        // Calculate the distance between the two points
-        const distance = Cesium.Cartesian3.distance(pointA, pointB);
-
-        // Determine the number of interpolation points based on the interval
-        let numberOfPoints = Math.floor(distance / interval);
-        // error handling: prevent numberOfPoints to be 0
-        if (numberOfPoints === 0) numberOfPoints = 1;
-
-        for (let i = 0; i <= numberOfPoints; i++) {
-            const t = i / numberOfPoints;
-            const interpolatedPoint = Cesium.Cartesian3.lerp(
-                pointA,
-                pointB,
-                t,
-                new Cesium.Cartesian3()
-            );
-            points.push(interpolatedPoint);
-        }
-
-        return points;
-    }
-
-    _computeDetailedPickPositions(startPosition, endPosition) {
-        // interpolate points between the first and second point
-        const interpolatedPoints = this.interpolatePoints(
-            startPosition,
-            endPosition,
-        );
-
-        // get the ground height of the interpolated points
-        const interpolatedCartographics = interpolatedPoints.map(point => Cesium.Cartographic.fromCartesian(point));
-
-        // sample height 
-        if (this.viewer.scene.sampleHeightSupported) { // sampleHeight() only supports in 3d mode
-            const clampedPositions = interpolatedCartographics.map((cartographic) => {
-                const height = this.viewer.scene.sampleHeight(cartographic);
-                return Cesium.Cartesian3.fromRadians(
-                    cartographic.longitude,
-                    cartographic.latitude,
-                    height
-                )
-            });
-            return clampedPositions;
-        }
-        return [];
-
-        // getHeight() approach
-        // the height of the surface
-        // const groundCartesianArray = interpolatedCartographics.map((cartographic) => {
-        //     const height = this.viewer.scene.globe.getHeight(cartographic);
-        //     return Cesium.Cartesian3.fromRadians(
-        //         cartographic.longitude,
-        //         cartographic.latitude,
-        //         height
-        //     )
-        // });
-
-        // sampleTerrainMostDetailed() approach
-        // const groundPositions = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, interpolatedCartographics);
-
-        // const groundCartesianArray = interpolatedCartographics.map((cartograhpic) => {
-        //     return Cesium.Cartesian3.fromRadians(
-        //         cartograhpic.longitude,
-        //         cartograhpic.latitude,
-        //         surfaceHeight
-        //     )
-        // });
-
-        // repick the position by convert back to window position to repick the carteisan, drawbacks is the current camera must see the whole target. 
-        // const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
-        //     const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
-        //     if (windowPosition) {
-        //         const cartesian = this.viewer.scene.pickPosition(windowPosition);
-        //         if (Cesium.defined(cartesian)) {
-        //             return cartesian;
-        //         }
-        //     }
-        // }).filter(cart => cart !== undefined);
-        // TODO: use another angle from the camera to get points cover by the object and use Set to create a unique array of picked coordinates
-
-        // return groundCartesianArray;
-    }
-
-    /**
-     * calculate the clamped distance between two points
-     * @param {Cesium.Cartesian3} pointA 
-     * @param {Cesium.Cartesian3} pointB 
-     * @returns {Number} - the clamped distance between two points
-     */
-    calculateClampedDistance(pointA, pointB) {
-        const pickedCartesianArray = this._computeDetailedPickPositions(pointA, pointB);
-        let distance = null;
-        for (let i = 0; i < pickedCartesianArray.length - 1; i++) {
-            distance += calculateDistance(pickedCartesianArray[i], pickedCartesianArray[i + 1]);
-        }
-        return distance
-    }
 
     showTooltipAtIndex(chart, index) {
         if (chart.data.datasets.length > 0 && chart.data.datasets[0].data.length > 1) {
@@ -671,10 +608,10 @@ class Profile {
 
     createPointForChartHoverPoint(cartesian) {
         if (!Cesium.defined(cartesian)) return;
-        if (this.interactivePrimitives.hoverPoint) this.pointCollection.remove(this.interactivePrimitives.hoverPoint);
+        if (this.interactivePrimitives.chartHoveredPoint) this.pointCollection.remove(this.interactivePrimitives.chartHoveredPoint);
         const point = createPointPrimitive(cartesian, Cesium.Color.BLUE);
         point.id = generateId(cartesian, "profile_chart_hover_point");
-        this.interactivePrimitives.hoverPoint = this.pointCollection.add(point);
+        this.interactivePrimitives.chartHoveredPoint = this.pointCollection.add(point);
     }
 
     resetValue() {
@@ -684,20 +621,23 @@ class Profile {
 
         this.pointerOverlay.style.display = 'none';
 
-        this.flags.isDistanceStarted = false;
+        // reset flags
+        this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
-
+        // reset coords
         this.coords.cache = [];
-
-        this.interactivePrimitives.draggingPoint = null;
         this.coords.dragStart = null;
+        this.coords.dragStartToCanvas = null;
 
-        // remove moving primitives
-        if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-        if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-
-        // remove pending primitives 
-        this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending")).forEach(p => { this.pointCollection.remove(p) });
+        // reset interactive primitives
+        this.interactivePrimitives.movingPolyline = null;
+        this.interactivePrimitives.movingLabel = null;
+        this.interactivePrimitives.dragPoint = null;
+        this.interactivePrimitives.dragPolyline = null;
+        this.interactivePrimitives.dragLabel = null;
+        this.interactivePrimitives.hoveredPoint = null;
+        this.interactivePrimitives.hoveredLabel = null;
+        this.interactivePrimitives.chartHoveredPoint = null;
     }
 }
 
