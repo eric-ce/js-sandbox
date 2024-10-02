@@ -272,7 +272,7 @@ export function createClampedLinePrimitive(geometryInstance, color = Cesium.Colo
             })
         }),
         asynchronous: true,
-        releaseGeometryInstances: false
+        releaseGeometryInstances: false,
     });
 }
 
@@ -896,8 +896,8 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
  * Makes an HTML element draggable within a specified container.
  * @param {HTMLElement} element - The HTML element to be made draggable.
  * @param {HTMLElement} container - The container within which the element can be dragged.
- * @param {function(number, number, DOMRect): void} updatePositionCallback - Callback to update the position of the element.
- * @param {function(boolean): void} [onDragStateChange] - Optional callback to notify when dragging starts or ends.
+ * @param {function(number, number, DOMRect): void} [updatePositionCallback] - Callback function to update the position of the element.
+ * @param {function(boolean): void} [onDragStateChange] - Optional callback function to notify when dragging starts or ends.
  */
 export function makeDraggable(element, container, updatePositionCallback, onDragStateChange) {
     let posInitialX = 0, posInitialY = 0;  // Initial cursor positions

@@ -712,7 +712,7 @@ class MultiDistanceClamped {
             // error handling: if no neighbour positions found then early exit
             if (!neighbourPositions || neighbourPositions.length === 0) return
 
-            // Remove existing moving lines and moving labels 
+            // Remove existing moving lines
             this.interactivePrimitives.dragPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
             this.interactivePrimitives.dragPolylines.length = 0;
 
@@ -743,7 +743,6 @@ class MultiDistanceClamped {
                 }
             });
         }
-
     }
 
     handleMultiDistanceClampedDragEnd() {
@@ -765,7 +764,6 @@ class MultiDistanceClamped {
             // remove dragging point, line and label
             if (this.interactivePrimitives.dragPoint) this.pointCollection.remove(this.interactivePrimitives.dragPoint);
             this.interactivePrimitives.dragPoint = null;
-            // Remove existing moving lines and moving labels 
             this.interactivePrimitives.dragPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
             this.interactivePrimitives.dragPolylines.length = 0;
             this.interactivePrimitives.dragLabels.forEach(label => this.labelCollection.remove(label));
