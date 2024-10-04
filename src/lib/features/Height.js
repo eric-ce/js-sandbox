@@ -312,7 +312,7 @@ class Height {
             this.interactivePrimitives.movingPoints.forEach(p => p.show = false);
             if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
             this.interactivePrimitives.movingPolyline = null;
-            this.interactivePrimitives.movingLabel.show = false;
+            if (this.interactivePrimitives.movingLabel) this.interactivePrimitives.movingLabel.show = false;
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
             if (!Cesium.defined(cartesian)) return;

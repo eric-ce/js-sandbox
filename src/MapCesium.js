@@ -4,7 +4,8 @@ import {
     PointPrimitiveCollection,
     Primitive,
     LabelCollection,
-    GroundPolylinePrimitive
+    GroundPolylinePrimitive,
+    PolylineCollection,
 } from "cesium";
 
 export class MapCesium extends HTMLElement {
@@ -43,6 +44,7 @@ export class MapCesium extends HTMLElement {
             Primitive,
             LabelCollection,
             GroundPolylinePrimitive,
+            PolylineCollection,
         }
         this.shadowRoot.appendChild(this.measureToolbox);
     }

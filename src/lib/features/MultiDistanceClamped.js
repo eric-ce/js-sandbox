@@ -68,7 +68,7 @@ class MultiDistanceClamped {
         this.interactivePrimitives = {
             movingPolylines: [],    // Array of moving polylines
             movingLabels: [],       // Array of moving labels
-            dragPoint: null,    // Currently dragged point primitive
+            dragPoint: null,        // Currently dragged point primitive
             dragPolylines: [],      // Array of dragging polylines
             dragLabels: [],         // Array of dragging labels
             hoveredLine: null,      // Hovered line primitive
@@ -186,8 +186,8 @@ class MultiDistanceClamped {
         }
 
         if (this.coords.cache.length > 1) {
-            const positionIndex = this.coords.cache.findIndex(cart => Cesium.Cartesian3.equals(cart, this.coordinate)); // find the index of the current position
-            if (positionIndex === -1) return;   // early exit to prevent duplication creation of the line
+            // const positionIndex = this.coords.cache.findIndex(cart => Cesium.Cartesian3.equals(cart, this.coordinate)); // find the index of the current position
+            // if (positionIndex === -1) return;   // early exit to prevent duplication creation of the line
 
             // remove the moving line and label primitives
             this.interactivePrimitives.movingPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
@@ -551,7 +551,6 @@ class MultiDistanceClamped {
     handleMultiDistanceClampedRightClick(movement) {
         // place last point and place last line
         if (!this.flags.isMeasurementComplete && this.coords.cache.length > 0) { // prevent user to right click on first action
-
             // use mouse move position to control only one pickPosition is used
             const cartesian = this.coordinate;
             if (!Cesium.defined(cartesian)) return;
@@ -612,8 +611,6 @@ class MultiDistanceClamped {
                 this.labelCollection.add(label);
             }
 
-            // update groups
-            // this.coords.groups.push([...this.coords.cache]);
             // update total measure count
             this.flags.countMeasure++;
 
@@ -827,7 +824,7 @@ class MultiDistanceClamped {
             // update log records
             this.updateMultiDistancesLogRecords(distances, totalDistance, group);
 
-            // reset dragging primitive and flags
+            // reset flag
             this.flags.isDragMode = false;
         }
         // set back to default multi distance mouse moving actions
@@ -849,7 +846,14 @@ class MultiDistanceClamped {
         button.textContent = this.labelCollection.show ? "Hide" : "Show";
         button.classList.add("cesium-button", "toggle-label-button");
         button.addEventListener("click", () => {
-            this.labelCollection.show = !this.labelCollection.show; // toggle labe collection to show or hide
+            // this.labelCollection.show = !this.labelCollection.show; // toggle labe collection to show or hide
+            this.labelCollection._labels.filter(label =>
+                label.id &&
+                label.id.includes("multidistance_clamped_label") &&
+                !label.id.includes("moving") &&
+                !label.id.includes("pending")
+            ).forEach(label => label.show = !label.show);
+
             button.textContent = this.labelCollection.show ? "Hide" : "Show";
         });
         button.style.position = "absolute";

@@ -11,8 +11,6 @@ import {
     createClampedLineGeometryInstance,
     makeDraggable,
     getPickedObjectType,
-    computeDetailedPickPositions,
-    calculateClampedDistanceFromArray,
     getPrimitiveByPointPosition,
     calculateClampedDistance,
 } from "../helper/helper.js";
@@ -606,11 +604,11 @@ class Profile {
         }
     }
 
-    createPointForChartHoverPoint(cartesian) {
+    createPointForChartHoverPoint(cartesian, color = Cesium.Color.ALICEBLUE) {
         if (!Cesium.defined(cartesian)) return;
         if (this.interactivePrimitives.chartHoveredPoint) this.pointCollection.remove(this.interactivePrimitives.chartHoveredPoint);
-        const point = createPointPrimitive(cartesian, Cesium.Color.BLUE);
-        point.id = generateId(cartesian, "profile_chart_hover_point");
+        const point = createPointPrimitive(cartesian, color);
+        point.id = generateId(cartesian, "profile_point_chart_moving");
         this.interactivePrimitives.chartHoveredPoint = this.pointCollection.add(point);
     }
 

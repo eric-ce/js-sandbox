@@ -621,39 +621,46 @@ export class MeasureToolbox extends HTMLElement {
         this.infoBox.style.right = this.infoBoxPosition.right || "0px";
 
         const infoBoxTable = document.createElement("table");
-
         // show different message to different mode
-        const messageTitle = "How to use:";
-        const message1 = "Left Click: start measure";
-        const message2 = "Right Click: finish measure";
-        const message3 = "Hold Left Click: drag point to move annotation";
-        const message4 = "Add line: select line and click to add line";
-        const message5 = "Remove point: click point to remove";
-        const messagePicker = "Left Click: pick an annotation";
-        // create table first row for the title
-        infoBoxTable.appendChild(this.createRow(messageTitle));
-        // create table rows for the messages
-        if (
-            this.activeButton &&
-            (this.activeButton.classList.contains("multi-distances") ||
-                this.activeButton.classList.contains("polygon") ||
-                this.activeButton.classList.contains("profile-distances"))
-        ) {
-            infoBoxTable.appendChild(this.createRow(message1));
-            infoBoxTable.appendChild(this.createRow(message2));
-            infoBoxTable.appendChild(this.createRow(message3));
-        } else if (this.activeButton && this.activeButton.classList.contains("picker")) {
-            infoBoxTable.appendChild(this.createRow(messagePicker));
-        } else if (this.activeButton && this.activeButton.classList.contains("multi-distances-clamped")) {
-            infoBoxTable.appendChild(this.createRow(message1));
-            infoBoxTable.appendChild(this.createRow(message2));
-            infoBoxTable.appendChild(this.createRow(message3));
-            infoBoxTable.appendChild(this.createRow(message4));
-            infoBoxTable.appendChild(this.createRow(message5));
-        } else {
-            infoBoxTable.appendChild(this.createRow(message1));
-            infoBoxTable.appendChild(this.createRow(message3));
+        const messages = {
+            title: "How to use:",
+            default: [
+                "Left Click: start measure",
+                "Hold Left Click: drag point to move annotation"
+            ],
+            multiDistances: [
+                "Left Click: start measure",
+                "Right Click: finish measure",
+                "Hold Left Click: drag point to move annotation",
+                "Add line: select line and click to add line",
+                "Remove point: click point to remove"
+            ],
+            picker: ["Left Click: pick an annotation"],
+            polygon: [
+                "Left Click: start measure",
+                "Right Click: finish measure",
+                "Hold Left Click: drag point to move annotation"
+            ]
+        };
+        // Add title row
+        infoBoxTable.appendChild(this.createRow(messages.title));
+        // Determine which messages to show based on active button
+        let messageSet = messages.default;
+        if (this.activeButton) {
+            if (
+                this.activeButton.classList.contains("multi-distances") ||
+                this.activeButton.classList.contains("multi-distances-clamped") ||
+                this.activeButton.classList.contains("profile-distances")
+            ) {
+                messageSet = messages.multiDistances;
+            } else if (this.activeButton.classList.contains("picker")) {
+                messageSet = messages.picker;
+            } else if (this.activeButton.classList.contains("polygon")) {
+                messageSet = messages.polygon;
+            }
         }
+        // Add message rows
+        messageSet.forEach((message) => infoBoxTable.appendChild(this.createRow(message)));
 
         this.infoBox.appendChild(infoBoxTable);
         this.shadowRoot.appendChild(this.infoBox);

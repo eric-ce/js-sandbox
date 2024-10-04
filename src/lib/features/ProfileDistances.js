@@ -15,7 +15,7 @@ import {
     calculateClampedDistanceFromArray,
     getPrimitiveByPointPosition,
     changeLineColor,
-    resetLineColor
+    resetLineColor,
 } from "../helper/helper.js";
 import Chart from "chart.js/auto";
 
@@ -226,9 +226,6 @@ class ProfileDistances {
             label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
             this.labelCollection.add(label);
 
-            // update picked positions
-            this.coords.pickedCartesianCache.push(...pickedCartesianGroup);
-
             // set chart to show or update the chart
             if (this.chartDiv) {    // if chart already exist then update the chart
                 this.chartDiv.style.display = "block";
@@ -236,13 +233,16 @@ class ProfileDistances {
                 this.setupChart();
                 this.chartDiv.style.display = "block";
             }
-
-            const { diffHeight, labelDistance } = this._computeChartMetrics(this.coords.pickedCartesianCache);
+            const { diffHeight, labelDistance } = this._computeChartMetrics(pickedCartesianGroup);
             // update the chart
             this.updateChart(diffHeight, labelDistance);
 
+            // update picked positions
+            this.coords.pickedCartesianCache = [...pickedCartesianGroup];
+
             // log distance result
             this.coords._distanceCollection.push(distance);
+
         }
     }
 
@@ -302,7 +302,7 @@ class ProfileDistances {
             const followingIndex = pointIndex;
             this._updateFollowingLabelPrimitives(followingPositions, followingIndex, group);
 
-            const { distances, totalDistance } = calculateClampedDistanceFromArray(group, this.viewer.scene, 4);
+            const { distances, totalDistance, pickedCartesianGroups } = calculateClampedDistanceFromArray(group, this.viewer.scene, 4);
 
             // update total distance label
             if (targetTotalLabel) {
@@ -311,6 +311,21 @@ class ProfileDistances {
                 targetTotalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
                 targetTotalLabel.position = group[group.length - 1];
             }
+
+            // set chart to show or update the chart
+            if (this.chartDiv) {    // if chart already exist then update the chart
+                this.chartDiv.style.display = "block";
+            } else {    // if chart doesn't exist then create a new chart
+                this.setupChart();
+                this.chartDiv.style.display = "block";
+            }
+
+            // update chart
+            const { diffHeight, labelDistance } = this._computeChartMetrics(pickedCartesianGroups);
+            this.updateChart(diffHeight, labelDistance);
+
+            // update chart tooltip
+            this._updateChartTooltip(pickedCartesianGroups);
 
             // log distance result
             this.updateDistancesLogRecords(distances, totalDistance, group);
@@ -448,13 +463,29 @@ class ProfileDistances {
         const followingIndex = positionIndex + 1;
         const followingPositions = group.slice(positionIndex + 1);
         this._updateFollowingLabelPrimitives(followingPositions, followingIndex, group);
-        const { distances, totalDistance } = calculateClampedDistanceFromArray(group, this.viewer.scene, 4);
+        const { distances, totalDistance, pickedCartesianGroups } = calculateClampedDistanceFromArray(group, this.viewer.scene, 4);
 
         // update total distance label
         const totalLabel = this.labelCollection._labels.find(label => label.id && label.id.includes("profile_distances_label_total") && Cesium.Cartesian3.equals(label.position, group[group.length - 1]));
         if (totalLabel) {
             totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
         }
+
+        // set chart to show or update the chart
+        if (this.chartDiv) {    // if chart already exist then update the chart
+            this.chartDiv.style.display = "block";
+        } else {    // if chart doesn't exist then create a new chart
+            this.setupChart();
+            this.chartDiv.style.display = "block";
+        }
+
+        // update chart
+        const { diffHeight, labelDistance } = this._computeChartMetrics(pickedCartesianGroups);
+        this.updateChart(diffHeight, labelDistance);
+
+        // update chart tooltip
+        this._updateChartTooltip(pickedCartesianGroups);
+
         // update log records
         this.updateDistancesLogRecords(distances, totalDistance, group);
 
@@ -485,10 +516,12 @@ class ProfileDistances {
                 if (this.chart) {
                     const pickPosition = this.viewer.scene.pickPosition(movement.endPosition);
                     const cartographic = Cesium.Cartographic.fromCartesian(pickPosition);
-                    const groundHeight = this.viewer.scene.globe.getHeight(cartographic);
 
-                    const pickCartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, groundHeight);
-
+                    const pickCartesian = Cesium.Cartesian3.fromRadians(
+                        cartographic.longitude,
+                        cartographic.latitude,
+                        this.viewer.scene.sampleHeight(cartographic) // ground height
+                    );
                     if (!Cesium.defined(pickCartesian)) return;
 
                     const closestCoord = this.coords.pickedCartesianGroups[this.coords.selectedGroupIndex].map(cart => {
@@ -498,6 +531,7 @@ class ProfileDistances {
                         }
                     }).filter(cart => cart !== undefined);
 
+
                     // create point for the first corrds of closestCoord
                     if (closestCoord.length > 0) this.createPointForChartHoverPoint(closestCoord[0]);
 
@@ -506,7 +540,6 @@ class ProfileDistances {
 
                     if (this.chart && index !== -1) this.showTooltipAtIndex(this.chart, index);
                 }
-
                 this.handleHoverHighlighting(pickedObjects[0]);
                 break;
             default:
@@ -658,9 +691,8 @@ class ProfileDistances {
                 this.labelCollection.add(label);
 
                 // update picked positions
-                // const pickedCartesianArray = this._computeDetailedPickPositions(firstPoint, this.coordinate);
                 this.coords.pickedCartesianCache.push(...pickedCartesianGroup);
-                this.coords.pickedCartesianGroups.push([...this.coords.pickedCartesianCache]);
+                this.coords.pickedCartesianGroups.push(this.coords.pickedCartesianCache);
                 this.coords.selectedGroupIndex = this.coords.pickedCartesianGroups.length - 1;
             }
 
@@ -741,6 +773,7 @@ class ProfileDistances {
             labelPrimitives.forEach(l => l.show = false);
             // remove the chart hovered point primitive
             if (this.interactivePrimitives.chartHoveredPoint) this.pointCollection.remove(this.interactivePrimitives.chartHoveredPoint);
+            this.interactivePrimitives.chartHoveredPoint = null;
 
             this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
@@ -880,20 +913,30 @@ class ProfileDistances {
             if (totalLabel) {
                 totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
                 totalLabel.position = group[group.length - 1];
-                totalLabel.id = generateId(group[group.length - 1], "profile_distances_total_label");
+                totalLabel.id = generateId(group[group.length - 1], "profile_distances_label_total");
+            }
+
+            // set chart to show or update the chart
+            if (this.chartDiv) {    // if chart already exist then update the chart
+                this.chartDiv.style.display = "block";
+            } else {    // if chart doesn't exist then create a new chart
+                this.setupChart();
+                this.chartDiv.style.display = "block";
             }
 
             // update chart
             const { diffHeight, labelDistance } = this._computeChartMetrics(pickedCartesianGroups);
-
-            // update the chart
             if (this.chart) this.updateChart(diffHeight, labelDistance);
+
+            // update chart tooltip
+            this._updateChartTooltip(pickedCartesianGroups);
 
             // update log records
             this.updateDistancesLogRecords(distances, totalDistance, group);
 
             // reset dragging primitive and flags
             this.flags.isDragMode = false;
+            this.coords.pickedCartesianCache = [];
         }
         // set back to default profile distance mouse moving actions
         this.handler.setInputAction((movement) => {
@@ -1067,6 +1110,26 @@ class ProfileDistances {
         });
 
         makeDraggable(this.chartDiv, this.viewer.container);
+        return this.chart;
+    }
+
+    _updateChartTooltip(pickedCartesianGroups) {
+        // Update picked cartesian groups
+        const groupIndex = this.coords.groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, this.coordinate)));
+        this.coords.pickedCartesianGroups[groupIndex] = [...pickedCartesianGroups.flat(1)];
+
+        // Update selected group index
+        this.coords.selectedGroupIndex = groupIndex;
+
+        // Update chart tooltip
+        const index = this.coords.pickedCartesianGroups[this.coords.selectedGroupIndex].findIndex(cart => Cesium.Cartesian3.equals(cart, this.coordinate));
+        if (this.interactivePrimitives.chartHoveredPoint) {
+            this.pointCollection.remove(this.interactivePrimitives.chartHoveredPoint);
+        }
+        this.interactivePrimitives.chartHoveredPoint = null;
+        if (index !== -1) {
+            this.showTooltipAtIndex(this.chart, index);
+        }
     }
 
     updateChart(data, labels) {
@@ -1074,6 +1137,7 @@ class ProfileDistances {
         this.chart.data.labels = labels
         this.chart.data.datasets[0].data = data;
         this.chart.update();
+        return this.chart;
     }
 
     removeChart() {
@@ -1082,7 +1146,9 @@ class ProfileDistances {
             this.chart = null;
             this.chartDiv = null;
         }
+        return this.chart;
     }
+
     showTooltipAtIndex(chart, index) {
         if (chart.data.datasets.length > 0 && chart.data.datasets[0].data.length > 1) {
             chart.tooltip.setActiveElements([{ datasetIndex: 0, index: index }], chart.getDatasetMeta(0).data[1].element);
@@ -1090,14 +1156,21 @@ class ProfileDistances {
         } else {
             console.error('Data is not sufficient to trigger tooltip at index 1');
         }
+        return chart;
     }
 
-    createPointForChartHoverPoint(cartesian) {
+    createPointForChartHoverPoint(cartesian, color = Cesium.Color.ALICEBLUE) {
         if (!Cesium.defined(cartesian)) return;
-        if (this.interactivePrimitives.chartHoveredPoint) this.pointCollection.remove(this.interactivePrimitives.chartHoveredPoint);
-        const point = createPointPrimitive(cartesian, Cesium.Color.BLUE);
-        point.id = generateId(cartesian, "profile_distances_chart_hover_point");
-        this.interactivePrimitives.chartHoveredPoint = this.pointCollection.add(point);
+        if (this.interactivePrimitives.chartHoveredPoint) {
+            this.interactivePrimitives.chartHoveredPoint.show = true;
+            this.interactivePrimitives.chartHoveredPoint.position = cartesian;
+            this.interactivePrimitives.chartHoveredPoint.id = generateId(cartesian, "profile_distances_point_chart_moving");
+        } else {
+            const point = createPointPrimitive(cartesian, color);
+            point.id = generateId(cartesian, "profile_distances_point_chart_moving");
+            this.interactivePrimitives.chartHoveredPoint = this.pointCollection.add(point);
+        }
+        return this.interactivePrimitives.chartHoveredPoint;
     }
 
     resetValue() {
