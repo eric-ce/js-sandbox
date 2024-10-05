@@ -122,9 +122,9 @@ class ProfileDistances {
         removeInputActions(this.handler);
     }
 
-    /********************
-     * LEFT CLICK EVENT *
-     ********************/
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * The method to handle left-click Cesium handler events 
      *
@@ -494,6 +494,10 @@ class ProfileDistances {
         this.interactivePrimitives.selectedLine = null;
     }
 
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     handleProfileDistancesMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
@@ -628,6 +632,10 @@ class ProfileDistances {
         }
     }
 
+
+    /************************
+     * RIGHT CLICK FEATURES *
+     ************************/
     handleProfileDistancesRightClick(movement) {
         if (!this.flags.isMeasurementComplete && this.coords.cache.length > 0) {
 
@@ -723,9 +731,9 @@ class ProfileDistances {
     }
 
 
-    /***********************
-     * DRAG FEATURES EVENT *
-     ***********************/
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handleProfileDistancesDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
@@ -945,111 +953,9 @@ class ProfileDistances {
     }
 
 
-
-    /********************
-     * HELPER FUNCTIONS *
-     ********************/
-    /**
-     * found the next index and previous index position from group of positions
-     * @param {Cesium.Cartesian3} position - the Cartesian3 coordinate
-     * @param {Cesium.Cartesian3[]} group - the group of Cartesian3 coordinates
-     * @returns {Cesium.Cartesian3[]} - the previous position, current position, and next position
-     */
-    findNeighbourPosition(position, group) {
-        const pointIndex = group.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
-
-        if (pointIndex === -1) return;
-
-        const prevPosition = pointIndex > 0 ? group[pointIndex - 1] : null;
-        const nextPosition = pointIndex < group.length - 1 ? group[pointIndex + 1] : null;
-
-        return [prevPosition, position, nextPosition].filter(pos => pos !== null);
-    }
-
-    /**
-     * get the label text properties based on the position and the positions array
-     * @param {Cesium.Cartesian3} position 
-     * @param {Cesium.Cartesian3[]} positionsArray 
-     * @returns {currentLetter: String, labelNumberIndex: Number} - the label text properties
-     */
-    _getLabelProperties(position, positionArray, groups) {
-        const positionIndexInCache = positionArray.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
-
-        // cache length - 1 is the index
-        const labelIndex = positionIndexInCache - 1;
-        // index 0 means alphabet 'a' 
-        const currentLetter = String.fromCharCode(97 + labelIndex % 26);
-        // label number index
-        const groupIndex = groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, position)));
-        const labelNumberIndex = groupIndex !== -1 ? groupIndex : this.flags.countMeasure;
-
-        return { currentLetter, labelNumberIndex }
-    }
-
-    /**
-     * Compute the chart metrics based on the picked cartesian input
-     * @param {Cesium.Cartesian3[[]]| Cesium.Cartesian3[]} pickedCartesianInput 
-     * @returns {{labelDistance: Number[], diffHeight: Number[]}} - the chart metrics object:
-     * labelDistance: x label metrics - the distance between each point
-     * diffHeight: y label metrics - the height difference between each point
-     */
-    _computeChartMetrics(pickedCartesianInput) {
-        // Validate input
-        if (!Array.isArray(pickedCartesianInput)) {
-            throw new TypeError("pickedCartesianInput must be an array or an array of arrays of Cesium.Cartesian3.");
-        }
-
-        // Determine if the input is nested (array of arrays) or flat
-        const isNested = Array.isArray(pickedCartesianInput[0]);
-
-        // Flatten the input into a single array of Cartesian3 coordinates
-        const flatCartesian = isNested ? pickedCartesianInput.flat() : pickedCartesianInput;
-
-        // Initialize labelDistance with the starting distance
-        const labelDistance = [0];
-
-        // Compute cumulative distances
-        for (let i = 0; i < flatCartesian.length - 1; i++) {
-            const currentPoint = flatCartesian[i];
-            const nextPoint = flatCartesian[i + 1];
-
-            // Calculate the distance between currentPoint and nextPoint
-            const distance = Cesium.Cartesian3.distance(currentPoint, nextPoint);
-
-            // Accumulate the distance, rounding to the nearest integer
-            const cumulativeDistance = labelDistance[labelDistance.length - 1] + Math.round(distance);
-            labelDistance.push(cumulativeDistance);
-        }
-
-        // Extract heights from each Cartesian3 coordinate
-        const diffHeight = flatCartesian.map(cartesian => {
-            const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-            return cartographic.height;
-        });
-
-        return { labelDistance, diffHeight };
-    }
-
-    /**
-     * update the log records with the distances and the total distance
-     * @param {Number[]} distances - the distances between each point
-     * @param {Number} totalDistance - the total distance
-     * @returns {Object} - the distance record object 
-     */
-    updateDistancesLogRecords(distances, totalDistance, positions) {
-        const distanceRecord = {
-            distances: distances.map(d => d.toFixed(2)),
-            totalDistance: totalDistance.toFixed(2)
-        };
-        this.coords._distanceRecords.push(distanceRecord);
-        this.logRecordsCallback(distanceRecord);
-
-        if (positions) {
-            console.table(positions); // this will interact with the server for updated positions
-        }
-        return distanceRecord;
-    }
-
+    /******************
+     * OTHER FEATURES *
+     ******************/
     setupChart() {
         this.chartDiv = document.createElement("div");
         this.chartDiv.className = "chart";
@@ -1172,6 +1078,112 @@ class ProfileDistances {
         }
         return this.interactivePrimitives.chartHoveredPoint;
     }
+
+
+    /********************
+     * HELPER FUNCTIONS *
+     ********************/
+    /**
+     * found the next index and previous index position from group of positions
+     * @param {Cesium.Cartesian3} position - the Cartesian3 coordinate
+     * @param {Cesium.Cartesian3[]} group - the group of Cartesian3 coordinates
+     * @returns {Cesium.Cartesian3[]} - the previous position, current position, and next position
+     */
+    findNeighbourPosition(position, group) {
+        const pointIndex = group.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
+
+        if (pointIndex === -1) return;
+
+        const prevPosition = pointIndex > 0 ? group[pointIndex - 1] : null;
+        const nextPosition = pointIndex < group.length - 1 ? group[pointIndex + 1] : null;
+
+        return [prevPosition, position, nextPosition].filter(pos => pos !== null);
+    }
+
+    /**
+     * get the label text properties based on the position and the positions array
+     * @param {Cesium.Cartesian3} position 
+     * @param {Cesium.Cartesian3[]} positionsArray 
+     * @returns {currentLetter: String, labelNumberIndex: Number} - the label text properties
+     */
+    _getLabelProperties(position, positionArray, groups) {
+        const positionIndexInCache = positionArray.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
+
+        // cache length - 1 is the index
+        const labelIndex = positionIndexInCache - 1;
+        // index 0 means alphabet 'a' 
+        const currentLetter = String.fromCharCode(97 + labelIndex % 26);
+        // label number index
+        const groupIndex = groups.findIndex(group => group.some(cart => Cesium.Cartesian3.equals(cart, position)));
+        const labelNumberIndex = groupIndex !== -1 ? groupIndex : this.flags.countMeasure;
+
+        return { currentLetter, labelNumberIndex }
+    }
+
+    /**
+     * Compute the chart metrics based on the picked cartesian input
+     * @param {Cesium.Cartesian3[[]]| Cesium.Cartesian3[]} pickedCartesianInput 
+     * @returns {{labelDistance: Number[], diffHeight: Number[]}} - the chart metrics object:
+     * labelDistance: x label metrics - the distance between each point
+     * diffHeight: y label metrics - the height difference between each point
+     */
+    _computeChartMetrics(pickedCartesianInput) {
+        // Validate input
+        if (!Array.isArray(pickedCartesianInput)) {
+            throw new TypeError("pickedCartesianInput must be an array or an array of arrays of Cesium.Cartesian3.");
+        }
+
+        // Determine if the input is nested (array of arrays) or flat
+        const isNested = Array.isArray(pickedCartesianInput[0]);
+
+        // Flatten the input into a single array of Cartesian3 coordinates
+        const flatCartesian = isNested ? pickedCartesianInput.flat() : pickedCartesianInput;
+
+        // Initialize labelDistance with the starting distance
+        const labelDistance = [0];
+
+        // Compute cumulative distances
+        for (let i = 0; i < flatCartesian.length - 1; i++) {
+            const currentPoint = flatCartesian[i];
+            const nextPoint = flatCartesian[i + 1];
+
+            // Calculate the distance between currentPoint and nextPoint
+            const distance = Cesium.Cartesian3.distance(currentPoint, nextPoint);
+
+            // Accumulate the distance, rounding to the nearest integer
+            const cumulativeDistance = labelDistance[labelDistance.length - 1] + Math.round(distance);
+            labelDistance.push(cumulativeDistance);
+        }
+
+        // Extract heights from each Cartesian3 coordinate
+        const diffHeight = flatCartesian.map(cartesian => {
+            const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+            return cartographic.height;
+        });
+
+        return { labelDistance, diffHeight };
+    }
+
+    /**
+     * update the log records with the distances and the total distance
+     * @param {Number[]} distances - the distances between each point
+     * @param {Number} totalDistance - the total distance
+     * @returns {Object} - the distance record object 
+     */
+    updateDistancesLogRecords(distances, totalDistance, positions) {
+        const distanceRecord = {
+            distances: distances.map(d => d.toFixed(2)),
+            totalDistance: totalDistance.toFixed(2)
+        };
+        this.coords._distanceRecords.push(distanceRecord);
+        this.logRecordsCallback(distanceRecord);
+
+        if (positions) {
+            console.table(positions); // this will interact with the server for updated positions
+        }
+        return distanceRecord;
+    }
+
 
     resetValue() {
         this.removeChart();

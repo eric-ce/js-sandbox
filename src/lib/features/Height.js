@@ -95,6 +95,10 @@ class Height {
         removeInputActions(this.handler);
     }
 
+
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * Handles left-click events to place top and ground points, draw line in between.
      */
@@ -149,6 +153,10 @@ class Height {
         }
     }
 
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     /**
      * Handles mouse move events to remove and add moving line, moving points, label, and display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
@@ -251,6 +259,10 @@ class Height {
         }
     }
 
+
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handleHeightDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
@@ -436,6 +448,10 @@ class Height {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
+
+    /********************
+     * HELPER FUNCTIONS *
+     ********************/
     /**
      * get the position and its ground position by a position
      * @param {Cesium.Cartesian3} position 

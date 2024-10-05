@@ -91,6 +91,10 @@ class ThreePointsCurve {
         removeInputActions(this.handler);
     }
 
+
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * Handles left-click events to place points, draw and calculate curves.
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
@@ -202,6 +206,11 @@ class ThreePointsCurve {
             this.coords.cache = [];
         }
     }
+
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     /**
      * Handles mouse move events to display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
@@ -302,6 +311,10 @@ class ThreePointsCurve {
         }
     }
 
+
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handleCurveDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
@@ -504,6 +517,9 @@ class ThreePointsCurve {
             lineGeometryInstance.id = generateId(group, "curve_line");
             this.viewer.scene.primitives.add(linePrimitive);
 
+            // log the curve record
+            this.logRecordsCallback(this.measureCurveDistance(group).toFixed(2));
+
             // reset dragging primitive and flags
             this.flags.isDragMode = false;
         }
@@ -513,6 +529,10 @@ class ThreePointsCurve {
 
     }
 
+
+    /********************
+     * HELPER FUNCTIONS *
+     ********************/
     /**
     * Creates curve points between three specified points.
     * @param {Cesium.Cartesian3} startPoint - The starting point of the curve.
@@ -572,7 +592,7 @@ class ThreePointsCurve {
         // reset coords
         this.coords.cache = [];
         this.coords.dragStart = null;
-        // reset and remove moving primitives
+        // reset primitives
         this.interactivePrimitives.movingPolyline = null;
         this.interactivePrimitives.movingLabel = null;
         this.interactivePrimitives.dragPoint = null;

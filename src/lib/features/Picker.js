@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { removeInputActions, updatePointerOverlay } from "../helper/helper.js";
+import { changeLineColor, removeInputActions, resetLineColor, updatePointerOverlay } from "../helper/helper.js";
 
 class Picker {
     /**
@@ -14,14 +14,26 @@ class Picker {
         this.viewer = viewer;
         this.handler = handler;
         this.pointerOverlay = pointerOverlay;
+
+        // Callback functions
         this.logRecordsCallback = logRecordsCallback;
         this.activateModeCallback = activateModeCallback;
 
+        // mesaure toolbox measure modes
         this._measureModes = measureModes;
 
+        // Coordinate management and related properties
         this.coordinate = null;
+
+        // Interactive primitives for dynamic actions
+        this.interactivePrimitives = {
+            hoveredLabel: null,
+            hoveredPoint: null,
+            hoveredLine: null,
+        }
     }
 
+    // Getters and setters
     get measureModes() {
         return this._measureModes;
     }
@@ -52,6 +64,10 @@ class Picker {
         removeInputActions(this.handler);
     }
 
+
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     handlePickerLeftClick(movement) {
         const pickedObject = this.viewer.scene.pick(movement.position);
         if (Cesium.defined(pickedObject) && pickedObject.id && pickedObject.id.startsWith("annotate")) {
@@ -96,6 +112,10 @@ class Picker {
         }
     }
 
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     handlePickerMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
@@ -106,8 +126,85 @@ class Picker {
         // update pointerOverlay: the moving dot with mouse
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
         updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
+
+        // Highlight the hovered line
+        this.handleHoverHighlighting(pickedObjects[0]);
     }
 
+
+    /**
+     * Hover to the clamped line to highlight it when the mouse move over it
+     * @param {*} pickedObjects - the picked objects from the drillPick method
+     */
+    handleHoverHighlighting(pickedObject) {
+        let pickedObjectType = null;
+        if (Cesium.defined(pickedObject) &&
+            pickedObject.id &&
+            pickedObject.id.startsWith("annotate_") &&
+            !pickedObject.id.includes("moving")) {
+            if (pickedObject.id.includes(`point`)) {
+                pickedObjectType = "point"
+            } else if (pickedObject.id.includes(`line`)) {
+                pickedObjectType = "line"
+            } else if (pickedObject.id.includes(`label`)) {
+                pickedObjectType = "label"
+            } else {
+                pickedObjectType = "other"
+            }
+        }
+
+        // reset highlighting
+        const resetHighlighting = () => {
+            if (this.interactivePrimitives.hoveredLine) {
+                resetLineColor(this.interactivePrimitives.hoveredLine);
+                this.interactivePrimitives.hoveredLine = null;
+            }
+            if (this.interactivePrimitives.hoveredPoint) {
+                this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
+                this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
+                this.interactivePrimitives.hoveredPoint = null;
+            }
+            if (this.interactivePrimitives.hoveredLabel) {
+                this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
+                this.interactivePrimitives.hoveredLabel = null;
+            }
+        };
+        resetHighlighting();
+
+        switch (pickedObjectType) {
+            case "line": // highlight the line when hovering
+                const linePrimitive = pickedObject.primitive;
+
+                if (linePrimitive) {
+                    // Highlight the line
+                    changeLineColor(linePrimitive, Cesium.Color.BLUE);
+                    this.interactivePrimitives.hoveredLine = linePrimitive;
+                }
+                break;
+            case "point":  // highlight the point when hovering
+                const pointPrimitive = pickedObject.primitive;
+                if (pointPrimitive) {
+                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineWidth = 2;
+                    this.interactivePrimitives.hoveredPoint = pointPrimitive;
+                }
+                break;
+            case "label":   // highlight the label when hovering
+                const labelPrimitive = pickedObject.primitive;
+                if (labelPrimitive) {
+                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    this.interactivePrimitives.hoveredLabel = labelPrimitive;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+
+    /********************
+     * HELPER FUNCTIONS *
+     ********************/
     /**
      * Activates a measurement tool button.
      * @param {HTMLElement} button - The button element to activate.
@@ -132,8 +229,12 @@ class Picker {
     resetValue() {
         this.coordinate = null;
 
-        this.pointerOverlay.style.display = "none";
+        this.pointerOverlay.style.display = 'none';
 
+        // reset primitives
+        this.interactivePrimitives.hoveredLabel = null;
+        this.interactivePrimitives.hoveredPoint = null;
+        this.interactivePrimitives.hoveredLine = null;
     }
 }
 

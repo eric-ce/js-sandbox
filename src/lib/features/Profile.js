@@ -104,6 +104,10 @@ class Profile {
         removeInputActions(this.handler);
     }
 
+
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * Handles left-click events to place points, draw and calculate distance.
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
@@ -218,6 +222,10 @@ class Profile {
         }
     }
 
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     /**
      * Handles mouse move events to drawing moving line, update label, and display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
@@ -332,6 +340,10 @@ class Profile {
         }
     }
 
+
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handleProfileDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
@@ -518,6 +530,10 @@ class Profile {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     };
 
+
+    /******************
+     * OTHER FEATURES *
+     ******************/
     showTooltipAtIndex(chart, index) {
         if (chart.data.datasets.length > 0 && chart.data.datasets[0].data.length > 1) {
             chart.tooltip.setActiveElements([{ datasetIndex: 0, index: index }], chart.getDatasetMeta(0).data[1].element);
@@ -612,6 +628,9 @@ class Profile {
         this.interactivePrimitives.chartHoveredPoint = this.pointCollection.add(point);
     }
 
+    /********************
+     * HELPER FUNCTIONS *
+     ********************/
     resetValue() {
         this.removeChart();
 

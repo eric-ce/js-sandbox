@@ -94,6 +94,10 @@ class TwoPointsDistance {
         removeInputActions(this.handler);
     }
 
+
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * Handles left-click events to place points, draw and calculate distance.
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
@@ -180,6 +184,10 @@ class TwoPointsDistance {
         }
     }
 
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     /**
      * Handles mouse move events to drawing moving line, update label, and display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
@@ -266,6 +274,10 @@ class TwoPointsDistance {
         }
     }
 
+
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handleDistanceDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;

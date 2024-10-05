@@ -416,12 +416,6 @@ export class MeasureToolbox extends HTMLElement {
                 this.activeButton && this.deactivateButton(this.activeButton, this.activeTool);
                 // activate button
                 this.activateButton(button, toolInstance);
-                // set state for the button and instance
-                this.activeButton = button;
-                this.activeTool = toolInstance;
-
-                this.setupInfoBox();
-                this.setupLogBox();
             }
         });
 
@@ -687,7 +681,7 @@ export class MeasureToolbox extends HTMLElement {
         const table = document.createElement("table");
         table.className = "info-panel";
         table.style.width = "100%";
-        const title = this.createRow("Records");
+        const title = this.createRow("Actions");
         table.appendChild(title);
 
         this.logBox.appendChild(table);

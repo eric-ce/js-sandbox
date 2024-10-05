@@ -100,6 +100,10 @@ class Polygon {
         removeInputActions(this.handler);
     }
 
+
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     handlePolygonLeftClick(movement) {
         // use move position for the position
         const cartesian = this.coordinate
@@ -167,8 +171,10 @@ class Polygon {
     }
 
 
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     handlePolygonMouseMove(movement) {
-        console.log(this.pointCollection._pointPrimitives)
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
         // update coordinate
@@ -273,6 +279,10 @@ class Polygon {
         }
     }
 
+
+    /************************
+     * RIGHT CLICK FEATURES *
+     ************************/
     handlePolygonRightClick(movement) {
         if (!this.flags.isMeasurementComplete && this.coords.cache.length > 0) { // prevent user to right click on first action
             // use mouse move position to control only one pickPosition is used
@@ -342,6 +352,11 @@ class Polygon {
         }
     }
 
+
+
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handlePolygonDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
@@ -552,6 +567,10 @@ class Polygon {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
+
+    /********************
+     * HELPER FUNCTIONS *
+     ********************/
     /**
      * To compute the area of the polygon
      * THIS METHOD IS PROVIDED BY CESIUM

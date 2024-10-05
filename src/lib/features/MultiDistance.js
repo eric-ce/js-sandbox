@@ -112,6 +112,10 @@ class MultiDistance {
         removeInputActions(this.handler);
     }
 
+
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * The method to handle left-click Cesium handler events 
      *
@@ -430,9 +434,9 @@ class MultiDistance {
     }
 
 
-    /********************
-     * MOUSE MOVE EVENT *
-     ********************/
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     handleMultiDistanceMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
@@ -543,6 +547,10 @@ class MultiDistance {
         }
     }
 
+
+    /************************
+     * RIGHT CLICK FEATURES *
+     ************************/
     handleMultiDistanceRightClick(movement) {
         // place last point and place last line
         if (!this.flags.isMeasurementComplete && this.coords.cache.length > 0) { // prevent user to right click on first action
@@ -637,9 +645,10 @@ class MultiDistance {
         }
     }
 
-    /***********************
-     * DRAG FEATURES EVENT *
-     ***********************/
+
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handleMultiDistanceDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;

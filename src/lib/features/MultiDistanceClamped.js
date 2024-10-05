@@ -114,9 +114,9 @@ class MultiDistanceClamped {
         removeInputActions(this.handler);
     }
 
-    /********************
-     * LEFT CLICK EVENT *
-     ********************/
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * The method to handle left-click Cesium handler events 
      *
@@ -434,9 +434,9 @@ class MultiDistanceClamped {
     }
 
 
-    /********************
-     * MOUSE MOVE EVENT *
-     ********************/
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     handleMultiDistanceClampedMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
@@ -548,6 +548,10 @@ class MultiDistanceClamped {
         }
     }
 
+
+    /************************
+     * RIGHT CLICK FEATURES *
+     ************************/
     handleMultiDistanceClampedRightClick(movement) {
         // place last point and place last line
         if (!this.flags.isMeasurementComplete && this.coords.cache.length > 0) { // prevent user to right click on first action
@@ -632,9 +636,9 @@ class MultiDistanceClamped {
     }
 
 
-    /***********************
-     * DRAG FEATURES EVENT *
-     ***********************/
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handleMultiDistanceClampedDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;

@@ -93,6 +93,10 @@ class Points {
         removeInputActions(this.handler);
     }
 
+
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * Handles left-click events to place points, if selected point existed remove the point
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
@@ -152,6 +156,10 @@ class Points {
         }
     }
 
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
     /**
      * Handles mouse move events to display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
@@ -211,6 +219,10 @@ class Points {
         }
     }
 
+
+    /*****************
+     * DRAG FEATURES *
+     *****************/
     handlePointsDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
@@ -355,6 +367,10 @@ class Points {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     };
 
+
+    /******************
+     * OTHER FEATURES *
+     ******************/
     createCoordinateInfoOverlay() {
         this.coordinateInfoOverlay = document.createElement("div");
         this.coordinateInfoOverlay.className = "coordinate-info-overlay";
