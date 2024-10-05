@@ -367,6 +367,17 @@ export class MeasureToolbox extends HTMLElement {
                 scrollbar-width: thin;
                 scrollbar-color: #888 rgba(38, 38, 38, 0.95);
             }
+            .toggle-log-box-button{
+                borderRadius : 5px;
+                cursor : pointer;
+                transition : all 0.2s ease-out;
+                color :  #e6f8f8;
+                opacity : 0.9;
+                display : flex;
+                justifyContent : center;
+                alignItems : center;
+                padding: 5px 7px;
+            }
             `;
         this.shadowRoot.appendChild(style);
         this.shadowRoot.appendChild(toolsContainer);
@@ -614,7 +625,7 @@ export class MeasureToolbox extends HTMLElement {
         this.infoBox.style.top = this.infoBoxPosition.top || "70px";
         this.infoBox.style.right = this.infoBoxPosition.right || "0px";
 
-        const infoBoxTable = document.createElement("table");
+        const table = document.createElement("table");
         // show different message to different mode
         const messages = {
             title: "How to use:",
@@ -637,7 +648,7 @@ export class MeasureToolbox extends HTMLElement {
             ]
         };
         // Add title row
-        infoBoxTable.appendChild(this.createRow(messages.title));
+        table.appendChild(this.createRow(messages.title));
         // Determine which messages to show based on active button
         let messageSet = messages.default;
         if (this.activeButton) {
@@ -654,9 +665,48 @@ export class MeasureToolbox extends HTMLElement {
             }
         }
         // Add message rows
-        messageSet.forEach((message) => infoBoxTable.appendChild(this.createRow(message)));
+        messageSet.forEach((message) => table.appendChild(this.createRow(message)));
 
-        this.infoBox.appendChild(infoBoxTable);
+        // toggle collapse/expand button
+        const toggleButton = document.createElement("button");
+        toggleButton.className = "toggle-log-box-button cesium-button";
+        // set button to use collapse button initially
+        toggleButton.innerHTML = `<img src="${pickerIcon}" alt="collpase" style="width: 30px; height: 30px;">`;
+        toggleButton.style.marginBottom = "5px";
+
+        toggleButton.onclick = () => {  // expand
+            if (table.style.display === "none") {
+                table.style.display = "table";
+                toggleButton.innerHTML = `<img src="${pickerIcon}" alt="expand" style="width: 30px; height: 30px;">`;
+                toggleButton.style.marginBottom = "5px";
+                this.infoBox.style.width = "250px";
+                this.infoBox.style.top = this.infoBoxPosition.top;
+                this.infoBox.style.right = this.infoBoxPosition.right;
+                this.infoBox.style.backgroundColor = "rgba(38, 38, 38, 0.95)";
+                // Make logBox draggable
+                makeDraggable(this.infoBox, this.viewer.container, (newTop, newLeft, containerRect) => {
+                    this.infoBoxPosition.top = `${newTop}px`;
+                    this.infoBoxPosition.right = `${containerRect.width - newLeft - this.infoBox.offsetWidth}px`;
+                });
+            } else {    // collapse
+                table.style.display = "none";
+                toggleButton.innerHTML = `<img src="${heightIcon}" alt="collapse" style="width: 30px; height: 30px;">`;
+                this.infoBox.style.width = "fit-content";
+                this.infoBox.style.height = "fit-content";
+                // trasparent background
+                this.infoBox.style.backgroundColor = "transparent";
+                this.infoBox.style.border = "none";
+                this.infoBox.style.boxShadow = "none";
+                toggleButton.style.marginBottom = "0";
+            }
+
+            makeDraggable(this.infoBox, this.viewer.container, (newTop, newLeft, containerRect) => {
+                this.infoBoxPosition.top = `${newTop}px`;
+                this.infoBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
+            });
+        };
+        this.infoBox.appendChild(toggleButton);
+        this.infoBox.appendChild(table);
         this.shadowRoot.appendChild(this.infoBox);
 
         // Make infoBox draggable
@@ -685,6 +735,48 @@ export class MeasureToolbox extends HTMLElement {
         table.appendChild(title);
 
         this.logBox.appendChild(table);
+
+        // toggle collapse/expand button
+        const toggleButton = document.createElement("button");
+        toggleButton.className = "toggle-log-box-button cesium-button";
+        // set button to use collapse button initially
+        toggleButton.innerHTML = `<img src="${pickerIcon}" alt="collpase" style="width: 30px; height: 30px;">`;
+        toggleButton.style.marginTop = "10px";
+
+        toggleButton.onclick = () => {  // expand
+            if (table.style.display === "none") {
+                table.style.display = "table";
+                toggleButton.innerHTML = `<img src="${pickerIcon}" alt="expand" style="width: 30px; height: 30px;">`;
+                toggleButton.style.marginTop = "10px";
+                this.logBox.style.width = "250px";
+                this.logBox.style.height = "250px";
+                this.logBox.style.top = this.logBoxPosition.top;
+                this.logBox.style.right = this.logBoxPosition.right;
+                this.logBox.style.backgroundColor = "rgba(38, 38, 38, 0.95)";
+                // Make logBox draggable
+                makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
+                    this.logBoxPosition.top = `${newTop}px`;
+                    this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
+                });
+            } else {    // collapse
+                table.style.display = "none";
+                toggleButton.innerHTML = `<img src="${heightIcon}" alt="collapse" style="width: 30px; height: 30px;">`;
+                this.logBox.style.width = "fit-content";
+                this.logBox.style.height = "fit-content";
+                // trasparent background
+                this.logBox.style.backgroundColor = "transparent";
+                this.logBox.style.border = "none";
+                this.logBox.style.boxShadow = "none";
+                toggleButton.style.marginTop = "0";
+            }
+
+            makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
+                this.logBoxPosition.top = `${newTop}px`;
+                this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
+            });
+        };
+        this.logBox.appendChild(toggleButton);
+
         this.shadowRoot.appendChild(this.logBox);
 
         // Make logBox draggable
