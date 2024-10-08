@@ -834,6 +834,7 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 export function makeDraggable(element, container, updatePositionCallback, onDragStateChange) {
     let posInitialX = 0, posInitialY = 0;  // Initial cursor positions
     let isDragging = false;  // Internal flag to track dragging state
+    let dragStarted = false; // Flag to indicate if dragging has started
     const threshold = 5;  // Pixels to move before triggering a drag
 
     // Function to emit drag state changes
@@ -876,6 +877,7 @@ export function makeDraggable(element, container, updatePositionCallback, onDrag
 
         if (!isDragging && (deltaX > threshold || deltaY > threshold)) {
             emitDragState(true);
+            dragStarted = true;  // Indicate that dragging has started
         }
 
         if (isDragging) {
@@ -900,8 +902,17 @@ export function makeDraggable(element, container, updatePositionCallback, onDrag
         }
     };
 
+    // Prevent click event if dragging has occurred
+    const preventClickAfterDrag = (event) => {
+        if (dragStarted) {
+            event.stopPropagation();
+            event.preventDefault();
+            dragStarted = false;  // Reset the flag
+        }
+    };
+
     // Initiates dragging
-    element.onmousedown = (event) => {
+    element.addEventListener('mousedown', (event) => {
         // Avoid dragging when clicking on input elements to allow normal interaction
         if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
             return;
@@ -909,9 +920,13 @@ export function makeDraggable(element, container, updatePositionCallback, onDrag
         event.preventDefault();
         posInitialX = event.clientX;
         posInitialY = event.clientY;
+        dragStarted = false;  // Reset the flag
         document.onmouseup = closeDragElement;
         document.onmousemove = elementDrag;
-    };
+    });
+
+    // Attach the click event listener to prevent click after drag
+    element.addEventListener('click', preventClickAfterDrag, true);
 
     // Handle container resize using ResizeObserver
     const handleResize = () => {
@@ -945,7 +960,8 @@ export function makeDraggable(element, container, updatePositionCallback, onDrag
     const cleanup = () => {
         resizeObserver.unobserve(container);
         resizeObserver.disconnect();
-        element.onmousedown = null;
+        element.removeEventListener('mousedown', this);
+        element.removeEventListener('click', preventClickAfterDrag, true);
         document.onmouseup = null;
         document.onmousemove = null;
     };
@@ -953,4 +969,6 @@ export function makeDraggable(element, container, updatePositionCallback, onDrag
     // Return the cleanup function optionally
     return cleanup;
 }
+
+
 

@@ -10,8 +10,8 @@ import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { Picker } from "./lib/features/Picker.js";
 import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
-import { FireTrack } from "./lib/features/FireTrack.js";
 import { FlyThrough } from "./lib/features/FlyThrough.js";
+import { StateManager } from "./lib/features/stateManager.js";
 import toolIcon from "./assets/tool-icon.svg";
 import pickerIcon from "./assets/picker-icon.svg";
 import pointsIcon from "./assets/points-icon.svg";
@@ -24,6 +24,8 @@ import polygonIcon from "./assets/polygon-icon.svg";
 import profileIcon from "./assets/profile-icon.svg";
 import profileDistancesIcon from "./assets/profile-d-icon.svg";
 import clearIcon from "./assets/clear-icon.svg";
+import helpBoxIcon from "./assets/help-box-icon.svg";
+import logBoxIcon from "./assets/log-box-icon.svg";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -44,30 +46,50 @@ export class MeasureToolbox extends HTMLElement {
         // cesium variables
         this._viewer = null;
         this.handler = null;
-
-        this.pointerOverlay = null;
-        this.infoBox = null;
-        this.logBox = null;
-
         this.cesiumPkg = null;
 
-        // buttons variables
-        this.toolsContainer = null;
-        this.clearButton = null;
-        this.activeButton = null;
-        this.activeTool = null;
-        this.measureModes = [];
-        this.isToolsExpanded = false;
-        this.buttonOverlay = null;
+        this.pointCollection = null;
+        this.labelCollection = null;
+
+        // Overlay variables
+        this.overlay = {
+            pointer: null,
+            button: null,
+        };
+
+        // UI element variables
+        this.element = {
+            helpBox: null,
+            logBox: null,
+            toolsContainer: null,
+        };
+
+        // Button state variables
+        this.button = {
+            activeButton: { current: null },  // handle dynamic active button state
+            activeTool: null,
+            clearButton: null,
+            measureModes: [],
+            isToolsExpanded: false,
+        };
 
         // log variables
         this._records = [];
 
-        // element style position variable
-        this.logBoxPosition = { top: "280px", right: "0px" };
-        this.infoBoxPosition = { top: "70px", right: "0px" };
+        // Element style position variables
+        this.position = {
+            logBox: { top: "280px", right: "0px" },
+            helpBox: { top: "70px", right: "0px" },
+        };
+
+        // state manager
+        this.stateManager = null;
     }
 
+
+    /*********************
+     * GETTER AND SETTER *
+     *********************/
     set viewer(viewer) {
         this._viewer = viewer;
     }
@@ -76,6 +98,10 @@ export class MeasureToolbox extends HTMLElement {
         return this._viewer;
     }
 
+
+    /**********************
+     * CONNECTED CALLBACK *
+     **********************/
     async connectedCallback() {
         // link cesium package default style
         const link = document.createElement("link");
@@ -89,18 +115,60 @@ export class MeasureToolbox extends HTMLElement {
         }
     }
 
+    disconnectedCallback() {    // clean up when the web component is removed from the DOM
+        // Clean up event listeners for buttons
+        if (this.button.clearButton) {
+            this.button.clearButton.removeEventListener("click", this.clearButtonHandler);
+        }
+
+        // Clean up measure mode buttons
+        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
+            button.removeEventListener("click", this.modeButtonClickHandler);
+        });
+
+        // Clean up Cesium handlers
+        if (this.handler) {
+            removeInputActions(this.handler);
+        }
+
+        // Remove Cesium primitives
+        if (this.pointCollection) {     // point collection is the annotate point collection, remove called if create it agian will throw destroy error 
+            this.viewer.scene.primitives.remove(this.pointCollection);
+        }
+        if (this.labelCollection) {     // label collection is the annotate label collection, remove called if create it agian will throw destroy error 
+            this.viewer.scene.primitives.remove(this.labelCollection);
+        }
+
+        // Clean up references to avoid memory leaks
+        this._viewer = null;
+        this.handler = null;
+        this.pointCollection = null;
+        this.labelCollection = null;
+        this.overlay = null;
+        this.element = null;
+        this.button = null;
+    }
+
+
+    /************
+     * FEATURES *
+     ************/
     /**
      * Initializes the MeasureToolbox, setting up event handlers
      */
     initialize() {
-        // if there is pre-existing screenSpaceEventHandler, use it, otherwise create a new one
+        // if screenSpaceEventHandler existed use it, if not create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;
         } else {
             this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
 
+        // remove relevant input actions assgined to the handler
         removeInputActions(this.handler);
+
+        // initialize state manager
+        this.stateManager = new StateManager();
 
         // Initialize Cesium primitives collections
         const pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
@@ -133,9 +201,9 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Picker(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "picker"),
-                    this.measureModes
+                    this.button.measureModes
                 ),
                 name: "Picker",
                 icon: pickerIcon,
@@ -144,7 +212,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Points(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "points"),
                     this.cesiumPkg
                 ),
@@ -155,7 +223,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new TwoPointsDistance(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "distances"),
                     this.cesiumPkg
                 ),
@@ -166,7 +234,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new ThreePointsCurve(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "curves"),
                     this.cesiumPkg
                 ),
@@ -177,7 +245,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Height(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "height"),
                     this.cesiumPkg
                 ),
@@ -188,7 +256,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new MultiDistance(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "m-distance"),
                     this.cesiumPkg
                 ),
@@ -199,7 +267,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new MultiDistanceClamped(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "m-distance-clamped"),
                     this.cesiumPkg
                 ),
@@ -210,7 +278,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Polygon(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "polygons"),
                     this.cesiumPkg
                 ),
@@ -221,7 +289,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Profile(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "profile"),
                     this.cesiumPkg
                 ),
@@ -232,24 +300,31 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new ProfileDistances(
                     this.viewer,
                     this.handler,
-                    this.pointerOverlay,
+                    this.overlay.pointer,
                     this.updateRecords.bind(this, "profile-distances"),
                     this.cesiumPkg
                 ),
                 name: "Profile-Distances",
                 icon: profileDistancesIcon,
             },
-            // {
-            //     instance: new FlyThrough(this.viewer, this.handler, this.pointerOverlay, this.updateRecords.bind(this, "profile-distances"), this.cesiumPkg),
-            //     name: "Fly-Through",
-            //     icon: pickerImg
-            // },
+            {
+                instance: new FlyThrough(
+                    this.viewer,
+                    this.handler,
+                    this.overlay.pointer,
+                    this.button.activeButton,   // pass as object for dynamic update of active button state
+                    this.updateRecords.bind(this, "fly-through"),
+                    this.cesiumPkg
+                ),
+                name: "Fly-Through",
+                icon: pickerIcon
+            },
         ];
 
-        this.measureModes = modes.map((mode) => mode.instance);
+        this.button.measureModes = modes.map((mode) => mode.instance);
 
         const pickerInstance = modes.find((mode) => mode.name === "Picker").instance;
-        pickerInstance.measureModes = this.measureModes;
+        pickerInstance.measureModes = this.button.measureModes;
         pickerInstance.activateModeCallback = this.activateModeByName.bind(this);
 
         modes.forEach((mode) => {
@@ -268,7 +343,7 @@ export class MeasureToolbox extends HTMLElement {
         const toolsContainer = document.createElement("div");
         toolsContainer.className = "toolbar";
 
-        this.toolsContainer = toolsContainer;
+        this.element.toolsContainer = toolsContainer;
 
         // initialize tool button to control collapse/expand for buttons
         const toolButton = document.createElement("button");
@@ -347,36 +422,37 @@ export class MeasureToolbox extends HTMLElement {
                 padding: 5px 0;
                 border: none;
             }
-            .info-panel td{
-                border: 1px 0 solid #edffff;
-                font-size: 0.8rem;
-            }
             .log-box {
                 position: absolute;
                 height: 250px;
                 overflow-y: auto;
-                width: 250px;
-                background: rgba(38, 38, 38, 0.95);
-                opacity: 1; /* Adjusted for CSS readability */
-                padding: 5px;
-                border-radius: 7px;
-                box-shadow: 0 0 10px 1px #000;
                 z-index: 1000;
-                color: #edffff;
                 cursor: grab; /* Indicates it can be moved */
                 scrollbar-width: thin;
                 scrollbar-color: #888 rgba(38, 38, 38, 0.95);
             }
             .toggle-log-box-button{
-                borderRadius : 5px;
                 cursor : pointer;
-                transition : all 0.2s ease-out;
+                transition : all 0.2s ease-in-out;
                 color :  #e6f8f8;
                 opacity : 0.9;
-                display : flex;
-                justifyContent : center;
-                alignItems : center;
-                padding: 5px 7px;
+                padding: 3px 7px;
+            }
+            .helpBox-expanded{
+                width: 250px;
+                background-color: rgba(38, 38, 38, 0.95);
+            }
+            .messageBox-collapsed{
+                width: fit-content;
+                height: fit-content;
+                background-color: transparent;
+                border: none;
+                box-shadow: none;
+            }
+            .logBox-expanded{
+                width: 250px;
+                height: 250px;
+                background-color: rgba(38, 38, 38, 0.95);
             }
             `;
         this.shadowRoot.appendChild(style);
@@ -401,36 +477,42 @@ export class MeasureToolbox extends HTMLElement {
 
         // setup button actions
         button.addEventListener("click", () => {
-            if (!this.logBox) this.setupLogBox();
-            if (!this.infoBox) this.setupInfoBox();
+            if (!this.element.logBox) this.setupLogBox();
+            if (!this.element.helpBox) this.setupHelpBox();
 
-            this.pointerOverlay.style.display = "none";
+            this.overlay.pointer.style.display = "none";
 
             // if the click button the same as active button then deactivate it
-            if (this.activeButton === button) {
+            if (this.button.activeButton.current === button) {
                 this.deactivateButton(button, toolInstance);
                 // set state for the button
-                this.activeButton = null;
-                this.activeTool = null;
+                this.button.activeButton.current = null;
+                this.button.activeTool = null;
 
-                if (this.infoBox) {
-                    this.infoBox.remove();
-                    this.infoBox = null;
+                if (this.element.helpBox) {
+                    this.element.helpBox.remove();
+                    this.element.helpBox = null;
                 }
-                if (this.logBox) {
-                    this.logBox.remove();
-                    this.logBox = null;
+                if (this.element.logBox) {
+                    this.element.logBox.remove();
+                    this.element.logBox = null;
                 }
             } else {
                 // if the click button is not the active button
                 // initialize button
-                this.activeButton && this.deactivateButton(this.activeButton, this.activeTool);
+                this.button.activeButton.current && this.deactivateButton(this.button.activeButton.current, this.button.activeTool);
                 // activate button
                 this.activateButton(button, toolInstance);
+                // set state for the button and instance
+                this.button.activeButton.current = button;
+                this.button.activeTool = toolInstance;
+
+                this.setupHelpBox();
+                // this.setupLogBox();
             }
         });
 
-        this.toolsContainer.appendChild(button);
+        this.element.toolsContainer.appendChild(button);
         toolInstance.button = button; // Use the setter to store the button in the measure mode instance
     }
 
@@ -442,8 +524,8 @@ export class MeasureToolbox extends HTMLElement {
     activateButton(button, toolInstance) {
         button.classList.add("active");
         toolInstance.setupInputActions && toolInstance.setupInputActions();
-        this.activeButton = button;
-        this.activeTool = toolInstance;
+        this.button.activeButton.current = button;
+        this.button.activeTool = toolInstance;
     }
 
     /**
@@ -481,10 +563,10 @@ export class MeasureToolbox extends HTMLElement {
      * toggle action for the tool button to show/hide measure modes
      */
     toggleTools() {
-        this.isToolsExpanded = !this.isToolsExpanded;
+        this.button.isToolsExpanded = !this.button.isToolsExpanded;
         this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button, index) => {
             setTimeout(() => {
-                button.classList.toggle("show", this.isToolsExpanded);
+                button.classList.toggle("show", this.button.isToolsExpanded);
             }, index * 50 + 25);
         });
     }
@@ -493,13 +575,13 @@ export class MeasureToolbox extends HTMLElement {
      * Sets up the clear button.
      */
     setupClearButton() {
-        this.clearButton = document.createElement("button");
-        this.clearButton.className = "clear-button cesium-button measure-mode-button";
-        this.clearButton.innerHTML = `<img src="${clearIcon}" alt="clear" style="width: 30px; height: 30px;">`;
+        this.button.clearButton = document.createElement("button");
+        this.button.clearButton.className = "clear-button cesium-button measure-mode-button";
+        this.button.clearButton.innerHTML = `<img src="${clearIcon}" alt="clear" style="width: 30px; height: 30px;">`;
 
-        this.toolsContainer.appendChild(this.clearButton);
+        this.element.toolsContainer.appendChild(this.button.clearButton);
 
-        this.clearButton.addEventListener("click", () => {
+        this.button.clearButton.addEventListener("click", () => {
             // remove line primitives
             const linePrimitives = this.viewer.scene.primitives._primitives.filter(
                 (p) =>
@@ -551,21 +633,21 @@ export class MeasureToolbox extends HTMLElement {
             removeInputActions(this.handler);
 
             // reset pointerOverlay
-            this.pointerOverlay.style.display = "none";
+            this.overlay.pointer.style.display = "none";
 
-            // clear infobox
-            this.infoBox && this.infoBox.remove();
+            // clear helpBox
+            this.element.helpBox && this.element.helpBox.remove();
             // clear logbox
-            this.logBox && this.logBox.remove();
+            this.element.logBox && this.element.logBox.remove();
 
-            this.measureModes.forEach((mode) => {
+            this.button.measureModes.forEach((mode) => {
                 mode.resetValue && mode.resetValue();
             });
 
-            if (this.activeButton) {
-                this.activeButton.classList.remove("active");
-                this.activeButton = null;
-                this.activeTool = null;
+            if (this.button.activeButton.current) {
+                this.button.activeButton.current.classList.remove("active");
+                this.button.activeButton.current = null;
+                this.button.activeTool = null;
             }
         });
     }
@@ -574,29 +656,29 @@ export class MeasureToolbox extends HTMLElement {
      * Sets up the button overlay to display the description of the button when mouse hover.
      */
     setupButtonOverlay() {
-        this.buttonOverlay = document.createElement("div");
-        this.buttonOverlay.className = "button-overlay";
-        this.buttonOverlay.style.cssText =
+        this.overlay.button = document.createElement("div");
+        this.overlay.button.className = "button-overlay";
+        this.overlay.button.style.cssText =
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out;";
-        this.viewer.container.appendChild(this.buttonOverlay);
+        this.viewer.container.appendChild(this.overlay.button);
 
         this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
             button.addEventListener("mouseover", (e) => {
                 // cesium container rectangle
                 const cesiumRect = this.viewer.container.getBoundingClientRect();
                 // set overlay to display
-                this.buttonOverlay.style.display = "block";
+                this.overlay.button.style.display = "block";
                 // get description of the button
                 const description = button.querySelector("img")?.alt;
-                this.buttonOverlay.innerHTML = `${description} mode`;
+                this.overlay.button.innerHTML = `${description} mode`;
                 // set position of the overlay
-                this.buttonOverlay.style.left = e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
-                this.buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
+                this.overlay.button.style.left = e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
+                this.overlay.button.style.top = e.pageY - cesiumRect.y - 40 + "px";
             });
 
             button.addEventListener("mouseout", () => {
                 // set overlay to not display
-                this.buttonOverlay.style.display = "none";
+                this.overlay.button.style.display = "none";
             });
         });
     }
@@ -605,28 +687,33 @@ export class MeasureToolbox extends HTMLElement {
      * Setup the moving yellow dot to show the pointer position at cesium viewer
      */
     setupPointerOverlay() {
-        this.pointerOverlay = document.createElement("div");
-        this.pointerOverlay.className = "backdrop";
-        this.pointerOverlay.style.cssText =
+        this.overlay.pointer = document.createElement("div");
+        this.overlay.pointer.className = "backdrop";
+        this.overlay.pointer.style.cssText =
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
-        this.viewer.container.appendChild(this.pointerOverlay);
+        this.viewer.container.appendChild(this.overlay.pointer);
     }
 
     /**
-     * Setup the infoBox to show the instruction of the measure modes, how to use
+     * Setup messageBox of helpBox to show the instructions of how to use
      */
-    setupInfoBox() {
-        // remove infoBox if it exists
-        if (this.infoBox) this.infoBox.remove();
+    setupHelpBox() {
+        // Remove the existing helpBox if it exists to avoid duplicates
+        if (this.element.helpBox) {
+            this.element.helpBox.remove()
+        }
 
-        // create infoBox div
-        this.infoBox = document.createElement("div");
-        this.infoBox.className = "cesium-infoBox cesium-infoBox-visible";
-        this.infoBox.style.top = this.infoBoxPosition.top || "70px";
-        this.infoBox.style.right = this.infoBoxPosition.right || "0px";
+        // Create a new helpBox div element
+        this.element.helpBox = document.createElement("div");
+        this.element.helpBox.className = "cesium-infoBox cesium-infoBox-visible infoBox-expanded";
+        this.element.helpBox.style.top = this.position.helpBox.top || "70px"; // Set initial position
+        this.element.helpBox.style.right = this.position.helpBox.right || "0px";
 
+        // Create a table element to hold the instructions
         const table = document.createElement("table");
-        // show different message to different mode
+        table.style.display = "table";
+
+        // Define the messages to show based on the active mode
         const messages = {
             title: "How to use:",
             default: [
@@ -647,150 +734,96 @@ export class MeasureToolbox extends HTMLElement {
                 "Hold Left Click: drag point to move annotation"
             ]
         };
-        // Add title row
-        table.appendChild(this.createRow(messages.title));
-        // Determine which messages to show based on active button
-        let messageSet = messages.default;
-        if (this.activeButton) {
-            if (
-                this.activeButton.classList.contains("multi-distances") ||
-                this.activeButton.classList.contains("multi-distances-clamped") ||
-                this.activeButton.classList.contains("profile-distances")
-            ) {
-                messageSet = messages.multiDistances;
-            } else if (this.activeButton.classList.contains("picker")) {
-                messageSet = messages.picker;
-            } else if (this.activeButton.classList.contains("polygon")) {
-                messageSet = messages.polygon;
+
+        // Map button classes to message sets
+        const modeClassToMessageSet = {
+            'multi-distances': messages.multiDistances,
+            'multi-distances-clamped': messages.multiDistances,
+            'profile-distances': messages.multiDistances,
+            'picker': messages.picker,
+            'polygon': messages.polygon,
+        };
+
+        // Function to determine the message set based on the active button
+        const getMessageSet = () => {
+            const defaultSet = messages.default;
+            const currentButton = this.button.activeButton.current;
+            if (!currentButton) return defaultSet;
+
+            const classList = currentButton.classList;
+            for (const [className, messageArray] of Object.entries(modeClassToMessageSet)) {
+                if (classList.contains(className)) {
+                    return messageArray;
+                }
             }
-        }
-        // Add message rows
+            return defaultSet;
+        };
+
+        // Build the instructions table
+        const messageSet = getMessageSet();
+        table.appendChild(this.createRow(messages.title));
         messageSet.forEach((message) => table.appendChild(this.createRow(message)));
 
-        // toggle collapse/expand button
-        const toggleButton = document.createElement("button");
-        toggleButton.className = "toggle-log-box-button cesium-button";
-        // set button to use collapse button initially
-        toggleButton.innerHTML = `<img src="${pickerIcon}" alt="collpase" style="width: 30px; height: 30px;">`;
-        toggleButton.style.marginBottom = "5px";
+        // Append table to the helpBox
+        this.element.helpBox.appendChild(table);
+        // Append the helpBox to the shadow DOM
+        this.shadowRoot.appendChild(this.element.helpBox);
 
-        toggleButton.onclick = () => {  // expand
-            if (table.style.display === "none") {
-                table.style.display = "table";
-                toggleButton.innerHTML = `<img src="${pickerIcon}" alt="expand" style="width: 30px; height: 30px;">`;
-                toggleButton.style.marginBottom = "5px";
-                this.infoBox.style.width = "250px";
-                this.infoBox.style.top = this.infoBoxPosition.top;
-                this.infoBox.style.right = this.infoBoxPosition.right;
-                this.infoBox.style.backgroundColor = "rgba(38, 38, 38, 0.95)";
-                // Make logBox draggable
-                makeDraggable(this.infoBox, this.viewer.container, (newTop, newLeft, containerRect) => {
-                    this.infoBoxPosition.top = `${newTop}px`;
-                    this.infoBoxPosition.right = `${containerRect.width - newLeft - this.infoBox.offsetWidth}px`;
-                });
-            } else {    // collapse
-                table.style.display = "none";
-                toggleButton.innerHTML = `<img src="${heightIcon}" alt="collapse" style="width: 30px; height: 30px;">`;
-                this.infoBox.style.width = "fit-content";
-                this.infoBox.style.height = "fit-content";
-                // trasparent background
-                this.infoBox.style.backgroundColor = "transparent";
-                this.infoBox.style.border = "none";
-                this.infoBox.style.boxShadow = "none";
-                toggleButton.style.marginBottom = "0";
-            }
-
-            makeDraggable(this.infoBox, this.viewer.container, (newTop, newLeft, containerRect) => {
-                this.infoBoxPosition.top = `${newTop}px`;
-                this.infoBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
-            });
+        // Function to update the position of the helpBox
+        const updateHelpBoxPosition = (newTop, newLeft, containerRect) => {
+            this.position.helpBox.top = `${newTop}px`;
+            this.position.helpBox.right = `${containerRect.width - newLeft - this.element.helpBox.offsetWidth}px`;
         };
-        this.infoBox.appendChild(toggleButton);
-        this.infoBox.appendChild(table);
-        this.shadowRoot.appendChild(this.infoBox);
 
-        // Make infoBox draggable
-        makeDraggable(this.infoBox, this.viewer.container, (newTop, newLeft, containerRect) => {
-            this.infoBoxPosition.top = `${newTop}px`;
-            this.infoBoxPosition.right = `${containerRect.width - newLeft - this.infoBox.offsetWidth
-                }px`;
-        });
+        // Setup the toggle button for the helpBox
+        const toggleButton = this.setupMessageBoxToggleButton(this.element.helpBox, helpBoxIcon, updateHelpBoxPosition, "helpBox");
+        this.element.helpBox.appendChild(toggleButton);
+
+        // Make the helpBox draggable within the viewer container
+        makeDraggable(this.element.helpBox, this.viewer.container, updateHelpBoxPosition);
     }
 
     /**
-     * Setup the logBox to show the records of the measure modes
+     * Setup the messageBox of logBox to show the records of the measure modes
      */
     setupLogBox() {
-        if (this.logBox) this.logBox.remove();
+        if (this.element.logBox) this.element.logBox.remove();
 
-        this.logBox = document.createElement("div");
-        this.logBox.className = "log-box";
-        this.logBox.style.top = this.logBoxPosition.top || "190px";
-        this.logBox.style.right = this.logBoxPosition.right || "0px";
+        this.element.logBox = document.createElement("div");
+        this.element.logBox.className = "cesium-infoBox cesium-infoBox-visible log-box log-box-expanded";
+        this.element.logBox.style.top = this.position.logBox.top || "190px";
+        this.element.logBox.style.right = this.position.logBox.right || "0px";
 
         const table = document.createElement("table");
-        table.className = "info-panel";
-        table.style.width = "100%";
+        table.style.display = "table";
+
         const title = this.createRow("Actions");
         table.appendChild(title);
 
-        this.logBox.appendChild(table);
+        // Append table to the logBox
+        this.element.logBox.appendChild(table);
+        // Append the logBox to the shadow DOM
+        this.shadowRoot.appendChild(this.element.logBox);
 
-        // toggle collapse/expand button
-        const toggleButton = document.createElement("button");
-        toggleButton.className = "toggle-log-box-button cesium-button";
-        // set button to use collapse button initially
-        toggleButton.innerHTML = `<img src="${pickerIcon}" alt="collpase" style="width: 30px; height: 30px;">`;
-        toggleButton.style.marginTop = "10px";
-
-        toggleButton.onclick = () => {  // expand
-            if (table.style.display === "none") {
-                table.style.display = "table";
-                toggleButton.innerHTML = `<img src="${pickerIcon}" alt="expand" style="width: 30px; height: 30px;">`;
-                toggleButton.style.marginTop = "10px";
-                this.logBox.style.width = "250px";
-                this.logBox.style.height = "250px";
-                this.logBox.style.top = this.logBoxPosition.top;
-                this.logBox.style.right = this.logBoxPosition.right;
-                this.logBox.style.backgroundColor = "rgba(38, 38, 38, 0.95)";
-                // Make logBox draggable
-                makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
-                    this.logBoxPosition.top = `${newTop}px`;
-                    this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
-                });
-            } else {    // collapse
-                table.style.display = "none";
-                toggleButton.innerHTML = `<img src="${heightIcon}" alt="collapse" style="width: 30px; height: 30px;">`;
-                this.logBox.style.width = "fit-content";
-                this.logBox.style.height = "fit-content";
-                // trasparent background
-                this.logBox.style.backgroundColor = "transparent";
-                this.logBox.style.border = "none";
-                this.logBox.style.boxShadow = "none";
-                toggleButton.style.marginTop = "0";
-            }
-
-            makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
-                this.logBoxPosition.top = `${newTop}px`;
-                this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
-            });
+        // Function to update the position of the logBox
+        const updateLogBoxPosition = (newTop, newLeft, containerRect) => {
+            this.position.logBox.top = `${newTop}px`;
+            this.position.logBox.right = `${containerRect.width - newLeft - this.element.logBox.offsetWidth}px`;
         };
-        this.logBox.appendChild(toggleButton);
 
-        this.shadowRoot.appendChild(this.logBox);
+        // Setup the toggle button for the logBox
+        const toggleButton = this.setupMessageBoxToggleButton(this.element.logBox, logBoxIcon, updateLogBoxPosition, "logBox");
+        this.element.logBox.appendChild(toggleButton);
 
         // Make logBox draggable
-        makeDraggable(this.logBox, this.viewer.container, (newTop, newLeft, containerRect) => {
-            this.logBoxPosition.top = `${newTop}px`;
-            this.logBoxPosition.right = `${containerRect.width - newLeft - this.logBox.offsetWidth}px`;
-        });
+        makeDraggable(this.element.logBox, this.viewer.container, updateLogBoxPosition);
     }
 
     /**
      * Update the logBox with the records of the measure modes
      */
     updateLogBox() {
-        const table = this.logBox.querySelector("table");
+        const table = this.element.logBox.querySelector("table");
         table.innerHTML = ""; // Clear the table
 
         const fragment = document.createDocumentFragment();
@@ -824,6 +857,50 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     /**
+     * Setup a toggle button for expanding and collapsing boxes (helpBox or logBox)
+     * @param {HTMLElement} targetBox - The box to toggle
+     * @param {string} toggleButtonImageSrc - The image source for the toggle button
+     * @param {Function} updatePositionFn - The function to update the position of the box
+     * @param {string} expandedClass - The class name for the expanded
+     * @returns {HTMLElement} The toggle button element
+     */
+    setupMessageBoxToggleButton(targetBox, toggleButtonImageSrc, updatePositionFn, expandedClass) {
+        const table = targetBox.querySelector("table");
+        const toggleButton = document.createElement("button");
+        toggleButton.className = "toggle-log-box-button cesium-button";
+        toggleButton.innerHTML = `<img src="${toggleButtonImageSrc}" alt="toggle button" style="width: 30px; height: 30px;">`;
+        toggleButton.style.display = "none"; // Initially hidden
+
+        // Handle the expand action when the toggle button is clicked
+        toggleButton.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (table.style.display === "none") {
+                table.style.display = "table"; // Show the table
+                toggleButton.style.display = "none"; // Hide the toggle button
+                targetBox.classList.add(`${expandedClass}-expanded`);
+                targetBox.classList.remove("messageBox-collapsed");
+            }
+
+            // Make sure it stays within the container
+            makeDraggable(targetBox, this.viewer.container, updatePositionFn);
+        });
+
+        // Handle the collapse action when clicking on the target box
+        targetBox.addEventListener("click", (event) => {
+            if (table.style.display !== "none") {
+                table.style.display = "none"; // Hide the table
+                toggleButton.style.display = "block"; // Show the toggle button
+
+                targetBox.classList.add("messageBox-collapsed");
+                targetBox.classList.remove(`${expandedClass}-expanded`);
+                event.stopPropagation(); // Prevent triggering any parent click events
+            }
+        });
+
+        return toggleButton;
+    }
+
+    /**
      * create the row for the table
      * @param {string|number} value
      * @returns
@@ -849,13 +926,13 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     activateModeByName(modeName) {
-        const modeInstance = this.measureModes.find((mode) =>
+        const modeInstance = this.button.measureModes.find((mode) =>
             mode.button.classList.contains(modeName)
         );
-        const button = this.toolsContainer.querySelector(`.${modeName}`);
+        const button = this.element.toolsContainer.querySelector(`.${modeName}`);
 
         if (modeInstance && button) {
-            this.deactivateButton(this.activeButton, this.activeTool); // Deactivate old
+            this.deactivateButton(this.button.activeButton.current, this.button.activeTool); // Deactivate old
             this.activateButton(button, modeInstance); // Activate new
         }
     }
