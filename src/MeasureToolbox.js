@@ -11,7 +11,7 @@ import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { Picker } from "./lib/features/Picker.js";
 import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
 import { FlyThrough } from "./lib/features/FlyThrough.js";
-import { StateManager } from "./lib/features/stateManager.js";
+// import { StateManager } from "./lib/features/stateManager.js";
 import toolIcon from "./assets/tool-icon.svg";
 import pickerIcon from "./assets/picker-icon.svg";
 import pointsIcon from "./assets/points-icon.svg";
@@ -168,7 +168,7 @@ export class MeasureToolbox extends HTMLElement {
         removeInputActions(this.handler);
 
         // initialize state manager
-        this.stateManager = new StateManager();
+        // this.stateManager = new StateManager();
 
         // Initialize Cesium primitives collections
         const pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
@@ -193,7 +193,14 @@ export class MeasureToolbox extends HTMLElement {
      * Initialize all the measure modes
      */
     async initializeMeasureModes() {
-        this.setupButtons();
+        // setup tool button
+        this.setupToolButton();
+
+        // initialize style of pointerOverlay, the moving dot
+        this.setupPointerOverlay();
+
+        // apply style for the web component
+        this.applyStyle();
 
         // all measure modes
         const modes = [
@@ -321,25 +328,30 @@ export class MeasureToolbox extends HTMLElement {
             },
         ];
 
+        // set measure modes 
         this.button.measureModes = modes.map((mode) => mode.instance);
 
+        // picker modes 
         const pickerInstance = modes.find((mode) => mode.name === "Picker").instance;
         pickerInstance.measureModes = this.button.measureModes;
         pickerInstance.activateModeCallback = this.activateModeByName.bind(this);
 
+        // create measure mode buttons
         modes.forEach((mode) => {
             this.createMeasureModeButton(mode.instance, mode.name, mode.icon);
         });
 
+        // setup clear button
         this.setupClearButton();
 
+        // setup button overlay
         this.setupButtonOverlay();
     }
 
     /**
-     * Sets up measure toolbar including buttons, and style.
+     * Sets up measure tool button to control collapse/expand for buttons.
      */
-    setupButtons() {
+    setupToolButton() {
         const toolsContainer = document.createElement("div");
         toolsContainer.className = "toolbar";
 
@@ -355,9 +367,15 @@ export class MeasureToolbox extends HTMLElement {
         });
         toolsContainer.appendChild(toolButton);
 
-        // initialize style of pointerOverlay, the moving dot
-        this.setupPointerOverlay();
 
+
+        this.shadowRoot.appendChild(toolsContainer);
+
+        // make toolsContainer draggable
+        makeDraggable(toolsContainer, this.viewer.container);
+    }
+
+    applyStyle() {
         // add style to the shadowRoot for this web component
         const style = document.createElement("style");
         style.textContent = `
@@ -456,17 +474,13 @@ export class MeasureToolbox extends HTMLElement {
             }
             `;
         this.shadowRoot.appendChild(style);
-        this.shadowRoot.appendChild(toolsContainer);
-
-        // make toolsContainer draggable
-        makeDraggable(toolsContainer, this.viewer.container);
     }
 
     /**
-     * Creates a measurement mode button.
-     * @param {Object} toolInstance - The instance of the measurement tool.
+     * Creates a measurement mode button, setting up event listeners and setup helpBox and logBox based on buttons interaction. 
+     * @param {Object} toolInstance - The instance of the measurement mode class.
      * @param {string} buttonText - The text to display on the button.
-     * @param {string} icon - The image to display on the button.
+     * @param {string} icon - The image src to display on the button.
      */
     createMeasureModeButton(toolInstance, buttonText, icon) {
         // setup buttons
@@ -489,6 +503,7 @@ export class MeasureToolbox extends HTMLElement {
                 this.button.activeButton.current = null;
                 this.button.activeTool = null;
 
+                // remove and reset helpBox and logBox 
                 if (this.element.helpBox) {
                     this.element.helpBox.remove();
                     this.element.helpBox = null;
@@ -498,22 +513,25 @@ export class MeasureToolbox extends HTMLElement {
                     this.element.logBox = null;
                 }
             } else {
-                // if the click button is not the active button
-                // initialize button
-                this.button.activeButton.current && this.deactivateButton(this.button.activeButton.current, this.button.activeTool);
+                // if the click button is not the active button - switch to the other button
+                if (this.button.activeButton.current) {
+                    this.deactivateButton(this.button.activeButton.current, this.button.activeTool)
+                }
                 // activate button
                 this.activateButton(button, toolInstance);
                 // set state for the button and instance
                 this.button.activeButton.current = button;
                 this.button.activeTool = toolInstance;
 
+                // recreate helpBox for update
                 this.setupHelpBox();
+
                 // this.setupLogBox();
             }
         });
 
         this.element.toolsContainer.appendChild(button);
-        toolInstance.button = button; // Use the setter to store the button in the measure mode instance
+        toolInstance.button = button;   // Use the setter to store the button in the measure mode instance
     }
 
     /**
@@ -640,10 +658,12 @@ export class MeasureToolbox extends HTMLElement {
             // clear logbox
             this.element.logBox && this.element.logBox.remove();
 
+            // call reset value method in all measure modes
             this.button.measureModes.forEach((mode) => {
                 mode.resetValue && mode.resetValue();
             });
 
+            // reset active button
             if (this.button.activeButton.current) {
                 this.button.activeButton.current.classList.remove("active");
                 this.button.activeButton.current = null;
