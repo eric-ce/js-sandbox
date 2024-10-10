@@ -107,6 +107,7 @@ class FlyThrough {
 
         this.cameraMoveRecord();
         this.flyThroughReplay();
+        this.startRecording();
     }
 
     cameraMoveRecord() {
@@ -139,7 +140,7 @@ class FlyThrough {
         //     });
         // }
         // createPointPrimitiveForFly();
-        this.setupReplayButton(this.coords._flyRecords);
+        this.setupReplayButton();
     }
 
     setupReplayButton() {
@@ -149,8 +150,7 @@ class FlyThrough {
         button.style.position = "absolute";
 
         button.addEventListener("click", () => {
-            console.log(this.flags.isComplete)
-            this.flyTo(0);
+            this.flyTo(0, this.coords._flyRecords, 3);
         });
 
         const mapCesium = document.querySelector("map-cesium");
@@ -200,27 +200,29 @@ class FlyThrough {
         }
     }
 
-    flyTo(index) {
-        if (index >= this.coords._flyRecords.length) {
+    flyTo(index, data, duration = 3) {
+        console.log("🚀  data:", data);
+
+        if (index >= data.length) {
             console.log("flyComplete");
             return;
         }
 
         console.log(this.flags.isComplete)
-        const position = this.coords._flyRecords[index].position;
-        const direction = this.coords._flyRecords[index].direction;
-        const up = this.coords._flyRecords[index].up;
-        const right = this.coords._flyRecords[index].right;
-        const hpr = new Cesium.HeadingPitchRoll(this.coords._flyRecords[index].hpr.heading, this.coords._flyRecords[index].hpr.pitch, this.coords._flyRecords[index].hpr.roll);
+        const position = data[index].position;
+        const direction = data[index].direction;
+        const up = data[index].up;
+        const right = data[index].right;
+        const hpr = new Cesium.HeadingPitchRoll(data[index].hpr.heading, data[index].hpr.pitch, data[index].hpr.roll);
         const nextIndex = index + 1;
 
         // flyTo approach
         // this.viewer.camera.flyTo({
         //     destination: position,
         //     orientation: {
-        //         heading: this.coords._flyRecords[index].hpr.heading,
-        //         pitch: this.coords._flyRecords[index].hpr.pitch,
-        //         roll: this.coords._flyRecords[index].hpr.roll
+        //         heading: data[index].hpr.heading,
+        //         pitch: data[index].hpr.pitch,
+        //         roll: data[index].hpr.roll
         //     },
         //     duration: 3, // Duration in seconds
         //     complete: () => {
@@ -237,16 +239,16 @@ class FlyThrough {
         // flyToBoundingSphere approach 
         const pointBoundingSphere = new Cesium.BoundingSphere(position, 100);
         this.viewer.camera.flyToBoundingSphere(pointBoundingSphere, {
-            offset: new Cesium.HeadingPitchRange(this.coords._flyRecords[index].hpr.heading,
-                this.coords._flyRecords[index].hpr.pitch, 100),
-            duration: 3,
+            offset: new Cesium.HeadingPitchRange(data[index].hpr.heading,
+                data[index].hpr.pitch, 100),
+            duration: duration,
             easingEffects: Cesium.EasingFunction.QUADRATIC_IN_OUT,
             flyOverLongitude: Cesium.Cartographic.fromCartesian(position).longitude,
             flyOverLongitudeWeight: 0.5,
             complete: () => {
                 // this.viewer.camera.moveBackward(70);
                 setTimeout(() => {
-                    this.flyTo(nextIndex); // Recursively fly to the next point
+                    this.flyTo(nextIndex, this.coords._flyRecords, 3); // Recursively fly to the next point
                 }, 1000);
             },
             cancel: () => {
@@ -254,6 +256,56 @@ class FlyThrough {
             },
         })
     }
+
+    // Request camera access
+    async startRecording() {
+        try {
+            console.log("start recording")
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+            // Show the live camera feed
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+            document.body.appendChild(video);
+
+            // Start recording the video stream
+            const recorder = new MediaRecorder(stream);
+            let chunks = [];
+
+            // Collect video data as it's recorded
+            recorder.ondataavailable = event => {
+                if (event.data.size > 0) {
+                    chunks.push(event.data);
+                }
+            };
+
+            // When recording stops, save the video to a file
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+
+                // Create a download link for the video file
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'recorded-video.webm';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                // Clean up
+                URL.revokeObjectURL(url);
+            };
+
+            // Start recording (optional duration for demo purposes)
+            recorder.start();
+            setTimeout(() => recorder.stop(), 5000); // Stop recording after 5 seconds
+        } catch (err) {
+            console.error('Error accessing media devices.', err);
+        }
+    }
+
+
 
     resetValue() {
         this.coordinate = null;
