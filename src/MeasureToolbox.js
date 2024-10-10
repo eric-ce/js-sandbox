@@ -26,6 +26,7 @@ import profileDistancesIcon from "./assets/profile-d-icon.svg";
 import clearIcon from "./assets/clear-icon.svg";
 import helpBoxIcon from "./assets/help-box-icon.svg";
 import logBoxIcon from "./assets/log-box-icon.svg";
+import recordIcon from "./assets/record-icon.svg";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -324,7 +325,7 @@ export class MeasureToolbox extends HTMLElement {
                     this.cesiumPkg
                 ),
                 name: "Fly-Through",
-                icon: pickerIcon
+                icon: recordIcon
             },
         ];
 
