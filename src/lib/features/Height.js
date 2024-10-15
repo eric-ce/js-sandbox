@@ -22,10 +22,10 @@ class Height {
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
+    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
-        this.pointerOverlay = pointerOverlay;
+        this.stateManager = stateManager;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -475,7 +475,8 @@ class Height {
     resetValue() {
         this.coordinate = null;
 
-        this.pointerOverlay.style.display = 'none';
+        // const pointer = this.stateManager.getOverlayState('pointer')
+        // pointer && (pointer.style.display = 'none');
 
         // reset flags
         this.isDragMode = false;

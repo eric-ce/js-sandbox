@@ -25,10 +25,10 @@ class Profile {
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
+    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
-        this.pointerOverlay = pointerOverlay;
+        this.stateManager = stateManager;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -238,7 +238,8 @@ class Profile {
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
 
         // update pointerOverlay: the moving dot with mouse
-        pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
+        const pointer = this.stateManager.getOverlayState("pointer");
+        pickedObjects && updatePointerOverlay(this.viewer, pointer, cartesian, pickedObjects)
 
         // Handle different scenarios based on the state of the tool
         const isMeasuring = this.coords.cache.length > 0 && !this.flags.isMeasurementComplete
@@ -271,7 +272,8 @@ class Profile {
                 }
                 break;
             case isPickedLIne:
-                this.pointerOverlay.style.display = "none";
+                const pointer = this.stateManager.getOverlayState("pointer");
+                pointer.style.display = "none";
                 // move along the line to show the tooltip for corresponding point
                 const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
                 const groundHeight = this.viewer.scene.sampleHeight(cartographic);
@@ -393,7 +395,8 @@ class Profile {
 
 
             // set point overlay no show
-            this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
+            const pointer = this.stateManager.getOverlayState("pointer");
+            pointer.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
             if (!Cesium.defined(cartesian)) return;
@@ -636,7 +639,8 @@ class Profile {
 
         this.coordinate = null;
 
-        this.pointerOverlay.style.display = 'none';
+        const pointer = this.stateManager.getOverlayState('pointer')
+        pointer && (pointer.style.display = 'none');
 
         // reset flags
         this.flags.isMeasurementComplete = false;

@@ -10,17 +10,17 @@ class Picker {
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, pointerOverlay, logRecordsCallback, measureModes, activateModeCallback) {
+    constructor(viewer, handler, stateManager, logRecordsCallback, activateModeCallback) {
         this.viewer = viewer;
         this.handler = handler;
-        this.pointerOverlay = pointerOverlay;
+        this.stateManager = stateManager;
 
         // Callback functions
         this.logRecordsCallback = logRecordsCallback;
         this.activateModeCallback = activateModeCallback;
 
         // mesaure toolbox measure modes
-        this._measureModes = measureModes;
+        this._measureModes = this.stateManager.getButtonState("measureModes");
 
         // Coordinate management and related properties
         this.coordinate = null;
@@ -125,7 +125,8 @@ class Picker {
 
         // update pointerOverlay: the moving dot with mouse
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 4, 1, 1);
-        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
+        const pointer = this.stateManager.getOverlayState("pointer");
+        updatePointerOverlay(this.viewer, pointer, cartesian, pickedObjects)
 
         // Highlight the hovered line
         this.handleHoverHighlighting(pickedObjects[0]);
@@ -229,7 +230,8 @@ class Picker {
     resetValue() {
         this.coordinate = null;
 
-        this.pointerOverlay.style.display = 'none';
+        const pointer = this.stateManager.getOverlayState('pointer')
+        pointer && (pointer.style.display = 'none');
 
         // reset primitives
         this.interactivePrimitives.hoveredLabel = null;

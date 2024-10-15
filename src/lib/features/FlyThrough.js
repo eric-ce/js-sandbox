@@ -4,12 +4,12 @@ import playIcon from "../../assets/play-icon.svg";
 import stopIcon from "../../assets/stop-icon.svg";
 
 class FlyThrough {
-    constructor(viewer, handler, pointerOverlay, activeButton, logRecordsCallback, cesiumPkg) {
+    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
-        this.pointerOverlay = pointerOverlay;
+        this.stateManager = stateManager;
 
-        this.activeButton = activeButton;
+        this.activeButton = this.stateManager.getButtonState("activeButton");
 
         this.logRecordsCallback = logRecordsCallback;
 

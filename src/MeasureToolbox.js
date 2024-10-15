@@ -11,7 +11,7 @@ import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { Picker } from "./lib/features/Picker.js";
 import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
 import { FlyThrough } from "./lib/features/FlyThrough.js";
-// import { StateManager } from "./lib/features/stateManager.js";
+import { StateManager } from "./lib/features/StateManager.js";
 import toolIcon from "./assets/tool-icon.svg";
 import pickerIcon from "./assets/picker-icon.svg";
 import pointsIcon from "./assets/points-icon.svg";
@@ -27,6 +27,8 @@ import clearIcon from "./assets/clear-icon.svg";
 import helpBoxIcon from "./assets/help-box-icon.svg";
 import logBoxIcon from "./assets/log-box-icon.svg";
 import recordIcon from "./assets/record-icon.svg";
+import playIcon from "./assets/play-icon.svg";
+import stopIcon from "./assets/stop-icon.svg";
 
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
@@ -62,16 +64,7 @@ export class MeasureToolbox extends HTMLElement {
         this.element = {
             helpBox: null,
             logBox: null,
-            toolsContainer: null,
-        };
-
-        // Button state variables
-        this.button = {
-            activeButton: { current: null },  // handle dynamic active button state
-            activeTool: null,
-            clearButton: null,
-            measureModes: [],
-            isToolsExpanded: false,
+            // toolsContainer: null,
         };
 
         // log variables
@@ -84,7 +77,95 @@ export class MeasureToolbox extends HTMLElement {
         };
 
         // state manager
-        this.stateManager = null;
+        this.stateManager = new StateManager();
+
+        // fly through variables
+        this.coords = {
+            _flyRecords: [],
+            _mockFlyRecords: [
+                {
+                    "position": {
+                        "x": 1216112.9570234974,
+                        "y": -4736576.765693975,
+                        "z": 4081200.1481931447
+                    },
+                    "hpr": {
+                        "heading": 0.13000450388900298,
+                        "pitch": -0.3625899685123126,
+                        "roll": 0.000004638299138548518
+                    }
+                },
+                {
+                    "position": {
+                        "x": 1216149.8221629532,
+                        "y": -4736602.9220574815,
+                        "z": 4081452.05891825
+                    },
+                    "hpr": {
+                        "heading": 0.05783204009360077,
+                        "pitch": -1.3214516649608017,
+                        "roll": 0.000017948732042860627
+                    }
+                },
+                {
+                    "position": {
+                        "x": 1216231.817715611,
+                        "y": -4737091.234564315,
+                        "z": 4081695.533198552
+                    },
+                    "hpr": {
+                        "heading": 0.057832040093592774,
+                        "pitch": -1.3214516649608137,
+                        "roll": 0.000017948732044636984
+                    }
+                },
+                {
+                    "position": {
+                        "x": 1216214.812668742,
+                        "y": -4736968.679816875,
+                        "z": 4081895.7453294657
+                    },
+                    "hpr": {
+                        "heading": 6.226051845613029,
+                        "pitch": -1.5347377349911553,
+                        "roll": 0
+                    }
+                },
+                {
+                    "position": {
+                        "x": 1216404.8079792114,
+                        "y": -4737868.763048155,
+                        "z": 4082919.5627028756
+                    },
+                    "hpr": {
+                        "heading": 6.2260518456130285,
+                        "pitch": -1.5347377349911953,
+                        "roll": 0
+                    }
+                },
+                {
+                    "position": {
+                        "x": 1216701.9791077161,
+                        "y": -4738017.830972404,
+                        "z": 4080125.5256115044
+                    },
+                    "hpr": {
+                        "heading": 6.169643854213871,
+                        "pitch": -0.15128947599652376,
+                        "roll": 0.000010379170224616985
+                    }
+                }
+            ]
+        }
+        this.flags = {
+            isRecording: false,
+            isScreenRecording: false,
+        }
+
+        // Screen recording variables
+        this.stream = null;
+        this.mediaRecorder = null;
+        this.chunks = [];
     }
 
 
@@ -118,9 +199,8 @@ export class MeasureToolbox extends HTMLElement {
 
     disconnectedCallback() {    // clean up when the web component is removed from the DOM
         // Clean up event listeners for buttons
-        if (this.button.clearButton) {
-            this.button.clearButton.removeEventListener("click", this.clearButtonHandler);
-        }
+        const clearButton = this.stateManager.getButtonState("clearButton");
+        clearButton && clearButton.removeEventListener("click", this.clearButtonHandler);
 
         // Clean up measure mode buttons
         this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
@@ -168,9 +248,6 @@ export class MeasureToolbox extends HTMLElement {
         // remove relevant input actions assgined to the handler
         removeInputActions(this.handler);
 
-        // initialize state manager
-        // this.stateManager = new StateManager();
-
         // Initialize Cesium primitives collections
         const pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
         const labelCollection = new this.cesiumPkg.LabelCollection();
@@ -188,6 +265,8 @@ export class MeasureToolbox extends HTMLElement {
 
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();
+
+        this.flyThrough();
     }
 
     /**
@@ -209,9 +288,9 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Picker(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "picker"),
-                    this.button.measureModes
+                    this.activateModeByName.bind(this)
                 ),
                 name: "Picker",
                 icon: pickerIcon,
@@ -220,7 +299,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Points(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "points"),
                     this.cesiumPkg
                 ),
@@ -231,7 +310,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new TwoPointsDistance(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "distances"),
                     this.cesiumPkg
                 ),
@@ -242,7 +321,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new ThreePointsCurve(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "curves"),
                     this.cesiumPkg
                 ),
@@ -253,7 +332,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Height(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "height"),
                     this.cesiumPkg
                 ),
@@ -264,7 +343,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new MultiDistance(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "m-distance"),
                     this.cesiumPkg
                 ),
@@ -275,7 +354,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new MultiDistanceClamped(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "m-distance-clamped"),
                     this.cesiumPkg
                 ),
@@ -286,7 +365,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Polygon(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "polygons"),
                     this.cesiumPkg
                 ),
@@ -297,7 +376,7 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new Profile(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "profile"),
                     this.cesiumPkg
                 ),
@@ -308,34 +387,23 @@ export class MeasureToolbox extends HTMLElement {
                 instance: new ProfileDistances(
                     this.viewer,
                     this.handler,
-                    this.overlay.pointer,
+                    this.stateManager,
                     this.updateRecords.bind(this, "profile-distances"),
                     this.cesiumPkg
                 ),
                 name: "Profile-Distances",
                 icon: profileDistancesIcon,
             },
-            {
-                instance: new FlyThrough(
-                    this.viewer,
-                    this.handler,
-                    this.overlay.pointer,
-                    this.button.activeButton,   // pass as object for dynamic update of active button state
-                    this.updateRecords.bind(this, "fly-through"),
-                    this.cesiumPkg
-                ),
-                name: "Fly-Through",
-                icon: recordIcon
-            },
         ];
 
         // set measure modes 
-        this.button.measureModes = modes.map((mode) => mode.instance);
+        this.stateManager.setButtonState("measureModes", modes.map((mode) => mode.instance));
 
         // picker modes 
-        const pickerInstance = modes.find((mode) => mode.name === "Picker").instance;
-        pickerInstance.measureModes = this.button.measureModes;
-        pickerInstance.activateModeCallback = this.activateModeByName.bind(this);
+        // const pickerInstance = modes.find((mode) => mode.name === "Picker").instance;
+        // pickerInstance.measureModes = this.button.measureModes;
+        // pickerInstance.measureModes = this.stateManager.getButtonState("measureModes");
+        // pickerInstance.activateModeCallback = this.activateModeByName.bind(this);
 
         // create measure mode buttons
         modes.forEach((mode) => {
@@ -356,7 +424,8 @@ export class MeasureToolbox extends HTMLElement {
         const toolsContainer = document.createElement("div");
         toolsContainer.className = "toolbar";
 
-        this.element.toolsContainer = toolsContainer;
+        // set state for the toolsContainer
+        this.stateManager.setElementState("toolsContainer", toolsContainer);
 
         // initialize tool button to control collapse/expand for buttons
         const toolButton = document.createElement("button");
@@ -367,8 +436,6 @@ export class MeasureToolbox extends HTMLElement {
             this.toggleTools();
         });
         toolsContainer.appendChild(toolButton);
-
-
 
         this.shadowRoot.appendChild(toolsContainer);
 
@@ -495,14 +562,14 @@ export class MeasureToolbox extends HTMLElement {
             if (!this.element.logBox) this.setupLogBox();
             if (!this.element.helpBox) this.setupHelpBox();
 
-            this.overlay.pointer.style.display = "none";
+            this.stateManager.getOverlayState("pointer").style.display = "none";
 
             // if the click button the same as active button then deactivate it
-            if (this.button.activeButton.current === button) {
+            if (this.stateManager.getButtonState("activeButton") === button) {
                 this.deactivateButton(button, toolInstance);
                 // set state for the button
-                this.button.activeButton.current = null;
-                this.button.activeTool = null;
+                this.stateManager.setButtonState("activeButton", null);
+                this.stateManager.setButtonState("activeTool", null);
 
                 // remove and reset helpBox and logBox 
                 if (this.element.helpBox) {
@@ -515,14 +582,16 @@ export class MeasureToolbox extends HTMLElement {
                 }
             } else {
                 // if the click button is not the active button - switch to the other button
-                if (this.button.activeButton.current) {
-                    this.deactivateButton(this.button.activeButton.current, this.button.activeTool)
+                if (this.stateManager.getButtonState("activeButton")) {
+                    const activeTool = this.stateManager.getButtonState("activeTool");
+                    const activeButton = this.stateManager.getButtonState("activeButton");
+                    this.deactivateButton(activeButton, activeTool)
                 }
                 // activate button
                 this.activateButton(button, toolInstance);
                 // set state for the button and instance
-                this.button.activeButton.current = button;
-                this.button.activeTool = toolInstance;
+                this.stateManager.setButtonState("activeButton", button);
+                this.stateManager.setButtonState("activeTool", toolInstance)
 
                 // recreate helpBox for update
                 this.setupHelpBox();
@@ -531,7 +600,8 @@ export class MeasureToolbox extends HTMLElement {
             }
         });
 
-        this.element.toolsContainer.appendChild(button);
+        // append button to the toolsContainer
+        this.stateManager.getElementState("toolsContainer").appendChild(button);
         toolInstance.button = button;   // Use the setter to store the button in the measure mode instance
     }
 
@@ -543,8 +613,8 @@ export class MeasureToolbox extends HTMLElement {
     activateButton(button, toolInstance) {
         button.classList.add("active");
         toolInstance.setupInputActions && toolInstance.setupInputActions();
-        this.button.activeButton.current = button;
-        this.button.activeTool = toolInstance;
+        this.stateManager.setButtonState("activeButton", button);
+        this.stateManager.setButtonState("activeTool", toolInstance);
     }
 
     /**
@@ -582,10 +652,11 @@ export class MeasureToolbox extends HTMLElement {
      * toggle action for the tool button to show/hide measure modes
      */
     toggleTools() {
-        this.button.isToolsExpanded = !this.button.isToolsExpanded;
+        const isToolsExpanded = this.stateManager.getFlagState("isToolsExpanded");
+        this.stateManager.setFlagState("isToolsExpanded", !isToolsExpanded);
         this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button, index) => {
             setTimeout(() => {
-                button.classList.toggle("show", this.button.isToolsExpanded);
+                button.classList.toggle("show", this.stateManager.getFlagState("isToolsExpanded"));
             }, index * 50 + 25);
         });
     }
@@ -594,13 +665,15 @@ export class MeasureToolbox extends HTMLElement {
      * Sets up the clear button.
      */
     setupClearButton() {
-        this.button.clearButton = document.createElement("button");
-        this.button.clearButton.className = "clear-button cesium-button measure-mode-button";
-        this.button.clearButton.innerHTML = `<img src="${clearIcon}" alt="clear" style="width: 30px; height: 30px;">`;
+        const clearButton = document.createElement("button");
+        clearButton.className = "clear-button cesium-button measure-mode-button";
+        clearButton.innerHTML = `<img src="${clearIcon}" alt="clear" style="width: 30px; height: 30px;">`;
+        this.stateManager.setButtonState("clearButton", clearButton);
 
-        this.element.toolsContainer.appendChild(this.button.clearButton);
+        const toolsContainer = this.stateManager.getElementState("toolsContainer");
+        toolsContainer.appendChild(clearButton);
 
-        this.button.clearButton.addEventListener("click", () => {
+        this.stateManager.getButtonState("clearButton").addEventListener("click", () => {
             // remove line primitives
             const linePrimitives = this.viewer.scene.primitives._primitives.filter(
                 (p) =>
@@ -652,7 +725,7 @@ export class MeasureToolbox extends HTMLElement {
             removeInputActions(this.handler);
 
             // reset pointerOverlay
-            this.overlay.pointer.style.display = "none";
+            this.stateManager.getOverlayState("pointer").style.display = "none";
 
             // clear helpBox
             this.element.helpBox && this.element.helpBox.remove();
@@ -660,15 +733,15 @@ export class MeasureToolbox extends HTMLElement {
             this.element.logBox && this.element.logBox.remove();
 
             // call reset value method in all measure modes
-            this.button.measureModes.forEach((mode) => {
+            this.stateManager.getButtonState("measureModes").forEach((mode) => {
                 mode.resetValue && mode.resetValue();
             });
 
             // reset active button
-            if (this.button.activeButton.current) {
-                this.button.activeButton.current.classList.remove("active");
-                this.button.activeButton.current = null;
-                this.button.activeTool = null;
+            if (this.stateManager.getButtonState("activeButton")) {
+                this.stateManager.getButtonState("activeButton").classList.remove("active");
+                this.stateManager.setButtonState("activeButton", null);
+                this.stateManager.setButtonState("activeTool", null);
             }
         });
     }
@@ -708,11 +781,12 @@ export class MeasureToolbox extends HTMLElement {
      * Setup the moving yellow dot to show the pointer position at cesium viewer
      */
     setupPointerOverlay() {
-        this.overlay.pointer = document.createElement("div");
-        this.overlay.pointer.className = "backdrop";
-        this.overlay.pointer.style.cssText =
+        const pointer = document.createElement("div");
+        pointer.className = "backdrop";
+        pointer.style.cssText =
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
-        this.viewer.container.appendChild(this.overlay.pointer);
+        this.viewer.container.appendChild(pointer);
+        this.stateManager.setOverlayState("pointer", pointer);
     }
 
     /**
@@ -768,7 +842,7 @@ export class MeasureToolbox extends HTMLElement {
         // Function to determine the message set based on the active button
         const getMessageSet = () => {
             const defaultSet = messages.default;
-            const currentButton = this.button.activeButton.current;
+            const currentButton = this.stateManager.getButtonState("activeButton")
             if (!currentButton) return defaultSet;
 
             const classList = currentButton.classList;
@@ -947,16 +1021,287 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     activateModeByName(modeName) {
-        const modeInstance = this.button.measureModes.find((mode) =>
+        const modeInstance = this.stateManager.getButtonState("measureModes").find((mode) =>
             mode.button.classList.contains(modeName)
         );
-        const button = this.element.toolsContainer.querySelector(`.${modeName}`);
+        // const button = this.element.toolsContainer.querySelector(`.${modeName}`);
+        const button = this.stateManager.getElementState("toolsContainer").querySelector(`.${modeName}`);
 
         if (modeInstance && button) {
-            this.deactivateButton(this.button.activeButton.current, this.button.activeTool); // Deactivate old
+            const activeTool = this.stateManager.getButtonState("activeTool");
+            const activeButton = this.stateManager.getButtonState("activeButton");
+            this.deactivateButton(activeButton, activeTool); // Deactivate old
             this.activateButton(button, modeInstance); // Activate new
         }
     }
+
+
+    /************************
+     * FLY THROUGH FEATURES *
+     ************************/
+    flyThrough() {
+        this.setupRecordButton();
+        this.setupReplayButton();
+        this.setupRecordScreenButton();
+    }
+
+    setupRecordButton() {
+        const button = document.createElement("button");
+        button.className = "cesium-button fly-through";
+        button.innerHTML = `<img src="${recordIcon}" alt="Record" style="width: 30px; height: 30px;"/>`;
+        button.style.position = "absolute";
+
+        let moveEndListener;
+
+        button.addEventListener("click", () => {
+            this.flags.isRecording = !this.flags.isRecording;
+            button.classList.toggle("active", this.flags.isRecording);
+
+            // Update the icon based on the recording state
+            button.innerHTML = `<img src="${this.flags.isRecording ? stopIcon : recordIcon}" alt="${this.flags.isRecording ? 'Stop' : 'Record'}" style="width: 30px; height: 30px;"/>`;
+
+            if (this.flags.isRecording) {
+                if (this.activeButton?.current === button) {
+                    this.activeButton = { current: button };
+                }
+                moveEndListener = this.cameraMoveRecord();
+            } else {
+                if (moveEndListener) {
+                    this.viewer.camera.moveEnd.removeEventListener(moveEndListener);
+                    moveEndListener = null;
+                }
+            }
+        });
+
+        this.appendButtonToToolbar(button, 13, 0);
+
+        return button;
+    }
+
+    cameraMoveRecord() {
+        const listener = () => {
+            console.log(this.viewer.camera);
+            const position = this.viewer.camera.positionWC;
+            const heading = this.viewer.camera.heading;
+            const pitch = this.viewer.camera.pitch;
+            const roll = this.viewer.camera.roll;
+            this.coords._flyRecords.push({ position: { ...position }, hpr: { heading, pitch, roll } });
+            console.log(this.coords._flyRecords);
+        };
+
+        this.viewer.camera.moveEnd.addEventListener(listener);
+        return listener;
+    }
+
+    setupReplayButton() {
+        const button = document.createElement("button");
+        button.className = "cesium-button replay-button";
+        button.innerHTML = `<img src="${playIcon}" alt="Play" style="width: 30px; height: 30px;"/>`;
+        button.style.position = "absolute";
+
+        button.addEventListener("click", () => {
+            if (!this.flags.isRecording) {
+                this.flyTo(0, this.coords._flyRecords, 3);
+            } else {
+                alert("Please stop recording before replaying.");
+            }
+        });
+
+        this.appendButtonToToolbar(button, 13, -40);
+
+        return button;
+    }
+
+    flyTo(index, data, duration = 3) {
+        if (index >= data.length) {
+            console.log("flyComplete");
+            return;
+        }
+
+        const position = data[index].position;
+        const nextIndex = index + 1;
+
+        // flyToBoundingSphere approach 
+        const pointBoundingSphere = new Cesium.BoundingSphere(position, 100);
+        this.viewer.camera.flyToBoundingSphere(pointBoundingSphere, {
+            offset: new Cesium.HeadingPitchRange(data[index].hpr.heading,
+                data[index].hpr.pitch, 100),
+            duration: duration,
+            easingEffects: Cesium.EasingFunction.QUADRATIC_IN_OUT,
+            flyOverLongitude: Cesium.Cartographic.fromCartesian(position).longitude,
+            flyOverLongitudeWeight: 0.5,
+            complete: () => {
+                // this.viewer.camera.moveBackward(70);
+                setTimeout(() => {
+                    this.flyTo(nextIndex, this.coords._flyRecords, 3); // Recursively fly to the next point
+                }, 1000);
+            },
+            cancel: () => {
+                console.log('Fly-through was canceled.');
+            },
+        })
+    }
+
+    appendButtonToToolbar(button, buttonIndex, buttonTopOffset) {
+        const mapCesium = document.querySelector("map-cesium");
+        const measureToolbox = mapCesium?.shadowRoot?.querySelector("cesium-measure");
+
+        if (measureToolbox) {
+            const observer = new MutationObserver((_, obs) => {
+                const toolbar = measureToolbox.shadowRoot.querySelector(".toolbar");
+                const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
+
+                if (toolbar && measureToolButton) {
+                    const BUTTON_WIDTH = 45; // Width of each button in pixels
+                    button.style.left = `${BUTTON_WIDTH * buttonIndex}px`;
+                    button.style.top = `${buttonTopOffset}px`;
+                    toolbar.appendChild(button);
+
+                    obs.disconnect(); // Stop observing once the button is appended
+
+                    const toggleButtonVisibility = () => {
+                        if (measureToolButton.classList.contains('active')) {
+                            setTimeout(() => {
+                                button.style.display = 'block';
+                            }, 500);
+                        } else {
+                            button.style.display = 'none';
+                        }
+                    };
+
+                    // Initial visibility check
+                    toggleButtonVisibility();
+
+                    // Observe class changes for visibility toggling
+                    const classObserver = new MutationObserver(toggleButtonVisibility);
+                    classObserver.observe(measureToolButton, { attributes: true, attributeFilter: ['class'] });
+                }
+            });
+
+            // Start observing the measureToolbox shadow DOM for child list changes
+            observer.observe(measureToolbox.shadowRoot, { childList: true, subtree: true });
+        }
+    }
+
+    setupRecordScreenButton() {
+        const button = document.createElement("button");
+        button.className = "cesium-button record-screen";
+        button.innerHTML = `<img src="${recordIcon}" alt="Record Screen" style="width: 30px; height: 30px;"/>`;
+        button.style.position = "absolute";
+
+        button.addEventListener("click", async () => {
+            this.flags.isScreenRecording = !this.flags.isScreenRecording;
+            button.classList.toggle("active", this.flags.isScreenRecording);
+
+            // Update the icon based on the recording state
+            button.innerHTML = `<img src="${this.flags.isScreenRecording ? stopIcon : recordIcon}" alt="${this.flags.isScreenRecording ? 'Stop' : 'Record'}" style="width: 30px; height: 30px;"/>`;
+
+            if (this.flags.isScreenRecording) {   // Start screen recording
+                if (this.activeButton?.current === button) {
+                    this.activeButton = { current: button };
+                }
+                await this.recordScreen(button);
+            } else {    // Stop screen recording
+                this.stopScreenRecording();
+            }
+        });
+
+        this.appendButtonToToolbar(button, 13, -80);
+
+        return button;
+    }
+
+    async recordScreen(button) {
+        try {
+            // Request screen capture
+            const displayMediaOptions = {
+                video: {
+                    displaySurface: "browser",
+                    frameRate: { ideal: 60, max: 60 }, // Request higher frame rate
+                    height: { ideal: 1080 }, // Set ideal height for 1080p resolution
+                    width: { ideal: 1920 } // Set ideal width for 1080p resolution
+                },
+                audio: false,
+                preferCurrentTab: true,
+            }
+            this.stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+
+            // Create a new MediaRecorder instance with WebM format
+            const options = { mimeType: 'video/webm; codecs=vp8' };
+            this.mediaRecorder = new MediaRecorder(this.stream, options);
+
+            this.chunks = [];
+
+            // Create a video element to display the live recording
+            this.liveVideo = document.createElement('video');
+            this.liveVideo.srcObject = this.stream;
+            this.liveVideo.style.position = 'absolute';
+            this.liveVideo.style.bottom = '10px';
+            this.liveVideo.style.right = '10px';
+            this.liveVideo.style.width = '300px';
+            this.liveVideo.style.height = '200px';
+            this.liveVideo.autoplay = true;
+            this.liveVideo.controls = true;
+            document.body.appendChild(this.liveVideo);
+
+            // Listen for data events to collect video chunks
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.chunks.push(event.data);
+                }
+            };
+
+            // When recording stops, create a downloadable WebM file
+            this.mediaRecorder.onstop = () => {
+                // Combine all recorded chunks into a single Blob
+                const blob = new Blob(this.chunks, { type: 'video/webm' });
+                this.chunks = [];
+
+                // Create a download link
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'screen-recording.webm';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            };
+
+            // Start recording
+            this.mediaRecorder.start();
+            console.log('Recording started');
+
+            // Add a listener to stop the recording if the user stops sharing the screen
+            this.stream.getVideoTracks()[0].addEventListener('ended', () => {
+                this.flags.isScreenRecording = false;
+                this.stopScreenRecording();
+            });
+        } catch (err) {
+            console.error('Error accessing screen capture:', err);
+            // reset state and button
+            this.flags.isScreenRecording = false;
+            button.classList.toggle("active", this.flags.isScreenRecording);
+            button.innerHTML = `<img src="${recordIcon}" alt="Record Screen" style="width: 30px; height: 30px;"/>`;
+        }
+    }
+
+    stopScreenRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            this.mediaRecorder.stop();
+            console.log('Recording stopped');
+        }
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+        }
+        if (this.liveVideo) {
+            if (this.stream && this.stream.active === false) {
+                document.body.removeChild(this.liveVideo);
+                this.liveVideo = null;
+            }
+        }
+    }
+
 }
 
 customElements.define("cesium-measure", MeasureToolbox);

@@ -28,10 +28,10 @@ class ProfileDistances {
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
+    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
-        this.pointerOverlay = pointerOverlay;
+        this.stateManager = stateManager;
 
         this.logRecordsCallback = logRecordsCallback;
 
@@ -506,7 +506,8 @@ class ProfileDistances {
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
 
         // update pointerOverlay: the moving dot with mouse
-        pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
+        const pointer = this.stateManager.getOverlayState("pointer");
+        pickedObjects && updatePointerOverlay(this.viewer, pointer, cartesian, pickedObjects)
 
         // Handle different scenarios based on the state of the tool
         const isMeasuring = this.coords.cache.length > 0 && !this.flags.isMeasurementComplete;
@@ -783,7 +784,8 @@ class ProfileDistances {
             if (this.interactivePrimitives.chartHoveredPoint) this.pointCollection.remove(this.interactivePrimitives.chartHoveredPoint);
             this.interactivePrimitives.chartHoveredPoint = null;
 
-            this.pointerOverlay.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
+            const pointer = this.stateManager.getOverlayState("pointer");
+            pointer.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
             if (!Cesium.defined(cartesian)) return;
@@ -1190,7 +1192,8 @@ class ProfileDistances {
 
         this.coordinate = null;
 
-        this.pointerOverlay.style.display = 'none';
+        const pointer = this.stateManager.getOverlayState('pointer')
+        pointer && (pointer.style.display = 'none');
 
         // reset flags
         this.flags.isMeasurementComplete = false;

@@ -27,10 +27,10 @@ class Points {
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {
+    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
-        this.pointerOverlay = pointerOverlay;
+        this.stateManager = stateManager;
         this.coordinateInfoOverlay = this.createCoordinateInfoOverlay();
 
         this.logRecordsCallback = logRecordsCallback;
@@ -171,10 +171,10 @@ class Points {
 
         this.coordinate = cartesian;
 
-        // update pointerOverlay: the moving dot with mouse
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
-
-        updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
+        // update pointerOverlay: the moving dot with mouse
+        const pointer = this.stateManager.getOverlayState("pointer");
+        updatePointerOverlay(this.viewer, pointer, cartesian, pickedObjects);
 
         this.handleHoverHighlighting(pickedObjects[0]);
 
@@ -271,7 +271,8 @@ class Points {
             if (existedLabel) existedLabel.show = false;
 
             // set point overlay no show
-            this.pointerOverlay.style.display = 'none';
+            const pointer = this.stateManager.getOverlayState("pointer");
+            pointer.style.display = 'none';
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
             if (!Cesium.defined(cartesian)) return;
@@ -439,7 +440,8 @@ class Points {
     resetValue() {
         this.coordinate = null;
 
-        this.pointerOverlay.style.display = 'none';
+        const pointer = this.stateManager.getOverlayState('pointer')
+        pointer && (pointer.style.display = 'none');
         this.coordinateInfoOverlay.style.display = 'none';
 
         // reset flags
