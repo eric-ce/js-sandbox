@@ -15,6 +15,8 @@ class Picker {
         this.handler = handler;
         this.stateManager = stateManager;
 
+        this._button = null;
+
         // Callback functions
         this.logRecordsCallback = logRecordsCallback;
         this.activateModeCallback = activateModeCallback;
@@ -40,6 +42,14 @@ class Picker {
 
     set measureModes(value) {
         this._measureModes = value;
+    }
+
+    get button() {
+        return this._button;
+    }
+
+    set button(value) {
+        this._button = value;
     }
 
     /**

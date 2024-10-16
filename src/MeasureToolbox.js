@@ -54,19 +54,6 @@ export class MeasureToolbox extends HTMLElement {
         this.pointCollection = null;
         this.labelCollection = null;
 
-        // Overlay variables
-        // this.overlay = {
-        //     pointer: null,
-        //     button: null,
-        // };
-
-        // UI element variables
-        // this.element = {
-        //     helpBox: null,
-        //     logBox: null,
-        // toolsContainer: null,
-        // };
-
         // log variables
         this._records = [];
 
@@ -399,12 +386,6 @@ export class MeasureToolbox extends HTMLElement {
         // set measure modes 
         this.stateManager.setButtonState("measureModes", modes.map((mode) => mode.instance));
 
-        // picker modes 
-        // const pickerInstance = modes.find((mode) => mode.name === "Picker").instance;
-        // pickerInstance.measureModes = this.button.measureModes;
-        // pickerInstance.measureModes = this.stateManager.getButtonState("measureModes");
-        // pickerInstance.activateModeCallback = this.activateModeByName.bind(this);
-
         // create measure mode buttons
         modes.forEach((mode) => {
             this.createMeasureModeButton(mode.instance, mode.name, mode.icon);
@@ -609,7 +590,8 @@ export class MeasureToolbox extends HTMLElement {
         });
 
         // append button to the toolsContainer
-        this.stateManager.getElementState("toolsContainer").appendChild(button);
+        const toolsContainer = this.stateManager.getElementState("toolsContainer");
+        toolsContainer.appendChild(button);
         toolInstance.button = button;   // Use the setter to store the button in the measure mode instance
     }
 
@@ -1051,7 +1033,8 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     activateModeByName(modeName) {
-        const modeInstance = this.stateManager.getButtonState("measureModes").find((mode) =>
+        const measureModes = this.stateManager.getButtonState("measureModes");
+        const modeInstance = measureModes.find((mode) =>
             mode.button.classList.contains(modeName)
         );
         // const button = this.element.toolsContainer.querySelector(`.${modeName}`);
