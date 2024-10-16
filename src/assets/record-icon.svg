@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+  <g id="flyThrough">
+    <g>
+      <circle cx="25" cy="25" r="9.877" fill="#fff" stroke="#fff" stroke-linecap="round" stroke-miterlimit="10"/>
+      <circle cx="25" cy="25" r="16.219" fill="none" stroke="#fff" stroke-linecap="round" stroke-miterlimit="10" stroke-width="1.5"/>
+    </g>
+  </g>
+</svg>

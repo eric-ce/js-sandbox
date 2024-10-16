@@ -1,0 +1,11 @@
+<svg id="distance" xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+  <g id="图层_3" data-name="图层 3">
+    <circle cx="9.5" cy="40.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+  </g>
+  <g id="图层_2" data-name="图层 2">
+    <circle cx="40.5" cy="9.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+  </g>
+  <g id="图层_5" data-name="图层 5">
+    <path d="M37.5,12.5,12,38" stroke="#fff" stroke-miterlimit="10"/>
+  </g>
+</svg>

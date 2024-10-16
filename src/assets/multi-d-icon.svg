@@ -1,0 +1,11 @@
+<svg id="multi-D" xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+  <g id="图层_10" data-name="图层 10">
+    <circle cx="15.5" cy="40.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <circle cx="35.5" cy="35.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <circle cx="40.5" cy="9.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <path d="M13.5,9.5a4.157,4.157,0,0,1-2.554,3.731A3.551,3.551,0,0,1,9.5,13.5a4.21,4.21,0,0,1-4-4,4,4,0,0,1,8,0Z" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <path d="M10.5,13.5l4,23" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <path d="M19.5,40.5l12-4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <path d="M36.5,31.5l3-18" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+  </g>
+</svg>
