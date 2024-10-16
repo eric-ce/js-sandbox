@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import Chart from "chart.js/auto";
 import {
     removeInputActions,
     editableLabel,
@@ -14,7 +15,6 @@ import {
     getPrimitiveByPointPosition,
     calculateClampedDistance,
 } from "../helper/helper.js";
-import Chart from "chart.js/auto";
 
 class Profile {
     /**

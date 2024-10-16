@@ -1,3 +1,4 @@
+import * as Cesium from "cesium";
 import {
     convertToCartesian3,
     removeInputActions,
@@ -11,7 +12,6 @@ import {
     getPickedObjectType,
     getPrimitiveByPointPosition,
 } from "../helper/helper.js";
-import * as Cesium from "cesium";
 
 class Height {
     /**

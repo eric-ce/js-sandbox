@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import Chart from "chart.js/auto";
 import {
     formatDistance,
     removeInputActions,
@@ -17,7 +18,6 @@ import {
     changeLineColor,
     resetLineColor,
 } from "../helper/helper.js";
-import Chart from "chart.js/auto";
 
 class ProfileDistances {
     /**
