@@ -55,17 +55,17 @@ export class MeasureToolbox extends HTMLElement {
         this.labelCollection = null;
 
         // Overlay variables
-        this.overlay = {
-            pointer: null,
-            button: null,
-        };
+        // this.overlay = {
+        //     pointer: null,
+        //     button: null,
+        // };
 
         // UI element variables
-        this.element = {
-            helpBox: null,
-            logBox: null,
-            // toolsContainer: null,
-        };
+        // this.element = {
+        //     helpBox: null,
+        //     logBox: null,
+        // toolsContainer: null,
+        // };
 
         // log variables
         this._records = [];
@@ -225,9 +225,9 @@ export class MeasureToolbox extends HTMLElement {
         this.handler = null;
         this.pointCollection = null;
         this.labelCollection = null;
-        this.overlay = null;
-        this.element = null;
-        this.button = null;
+        // this.overlay = null;
+        // this.element = null;
+        // this.button = null;
     }
 
 
@@ -559,45 +559,53 @@ export class MeasureToolbox extends HTMLElement {
 
         // setup button actions
         button.addEventListener("click", () => {
-            if (!this.element.logBox) this.setupLogBox();
-            if (!this.element.helpBox) this.setupHelpBox();
+            const activeButton = this.stateManager.getButtonState("activeButton");
+            const isActiveButton = activeButton === button;
 
-            this.stateManager.getOverlayState("pointer").style.display = "none";
+            // Deactivate existed active button if it is not the same button
+            if (activeButton && !isActiveButton) {
+                const activeTool = this.stateManager.getButtonState("activeTool");
+                this.deactivateButton(activeButton, activeTool);
+            }
 
-            // if the click button the same as active button then deactivate it
-            if (this.stateManager.getButtonState("activeButton") === button) {
+            // Toggle button activation
+            if (isActiveButton) {
                 this.deactivateButton(button, toolInstance);
-                // set state for the button
                 this.stateManager.setButtonState("activeButton", null);
                 this.stateManager.setButtonState("activeTool", null);
 
-                // remove and reset helpBox and logBox 
-                if (this.element.helpBox) {
-                    this.element.helpBox.remove();
-                    this.element.helpBox = null;
+                // Hide helpBox and remove logBox
+                const helpBox = this.stateManager.getElementState("helpBox");
+                const logBox = this.stateManager.getElementState("logBox");
+                if (helpBox) {
+                    helpBox.style.display = "none";
                 }
-                if (this.element.logBox) {
-                    this.element.logBox.remove();
-                    this.element.logBox = null;
+                if (logBox) {
+                    logBox.remove();
+                    this.stateManager.setElementState("logBox", null);
                 }
             } else {
-                // if the click button is not the active button - switch to the other button
-                if (this.stateManager.getButtonState("activeButton")) {
-                    const activeTool = this.stateManager.getButtonState("activeTool");
-                    const activeButton = this.stateManager.getButtonState("activeButton");
-                    this.deactivateButton(activeButton, activeTool)
-                }
-                // activate button
+                // Activate the button
                 this.activateButton(button, toolInstance);
-                // set state for the button and instance
                 this.stateManager.setButtonState("activeButton", button);
-                this.stateManager.setButtonState("activeTool", toolInstance)
-
-                // recreate helpBox for update
-                this.setupHelpBox();
-
-                // this.setupLogBox();
+                this.stateManager.setButtonState("activeTool", toolInstance);
             }
+
+            // remove logBox to recreate it
+            const helpBox = this.stateManager.getElementState("helpBox");
+            const logBox = this.stateManager.getElementState("logBox");
+            if (!logBox) this.setupLogBox();
+
+            // set helpBox to hide or show without remove it to avoid recreation - to save resources
+            if (helpBox) {
+                helpBox.style.display = "block";
+            } else {
+                this.setupHelpBox();
+            }
+            this.updateHelpBox();
+
+            // set the pointerOverlay to hide
+            this.stateManager.getOverlayState("pointer").style.display = "none";
         });
 
         // append button to the toolsContainer
@@ -728,10 +736,14 @@ export class MeasureToolbox extends HTMLElement {
             this.stateManager.getOverlayState("pointer").style.display = "none";
 
             // clear helpBox
-            this.element.helpBox && this.element.helpBox.remove();
+            const helpBox = this.stateManager.getElementState("helpBox");
+            helpBox && helpBox.style.display === "none";
             // clear logbox
-            this.element.logBox && this.element.logBox.remove();
-
+            const logBox = this.stateManager.getElementState("logBox");
+            if (logBox) {
+                logBox.remove();
+                this.stateManager.setElementState("logBox", null);
+            }
             // call reset value method in all measure modes
             this.stateManager.getButtonState("measureModes").forEach((mode) => {
                 mode.resetValue && mode.resetValue();
@@ -750,29 +762,32 @@ export class MeasureToolbox extends HTMLElement {
      * Sets up the button overlay to display the description of the button when mouse hover.
      */
     setupButtonOverlay() {
-        this.overlay.button = document.createElement("div");
-        this.overlay.button.className = "button-overlay";
-        this.overlay.button.style.cssText =
+        const buttonOverlay = document.createElement("div");
+        buttonOverlay.className = "button-overlay";
+        buttonOverlay.style.cssText =
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out;";
-        this.viewer.container.appendChild(this.overlay.button);
+        this.viewer.container.appendChild(buttonOverlay);
+        this.stateManager.setOverlayState("button", buttonOverlay);
 
         this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
             button.addEventListener("mouseover", (e) => {
                 // cesium container rectangle
                 const cesiumRect = this.viewer.container.getBoundingClientRect();
+                const buttonOverlay = this.stateManager.getOverlayState("button");
                 // set overlay to display
-                this.overlay.button.style.display = "block";
+                buttonOverlay.style.display = "block";
                 // get description of the button
                 const description = button.querySelector("img")?.alt;
-                this.overlay.button.innerHTML = `${description} mode`;
+                buttonOverlay.innerHTML = `${description} mode`;
                 // set position of the overlay
-                this.overlay.button.style.left = e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
-                this.overlay.button.style.top = e.pageY - cesiumRect.y - 40 + "px";
+                buttonOverlay.style.left = e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
+                buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
             });
 
             button.addEventListener("mouseout", () => {
                 // set overlay to not display
-                this.overlay.button.style.display = "none";
+                const buttonOverlay = this.stateManager.getOverlayState("button");
+                buttonOverlay.style.display = "none";
             });
         });
     }
@@ -794,20 +809,30 @@ export class MeasureToolbox extends HTMLElement {
      */
     setupHelpBox() {
         // Remove the existing helpBox if it exists to avoid duplicates
-        if (this.element.helpBox) {
-            this.element.helpBox.remove()
+        const helpBox = this.stateManager.getElementState("helpBox");
+        if (helpBox) {
+            helpBox.remove()
+            helpBox = null;
         }
 
         // Create a new helpBox div element
-        this.element.helpBox = document.createElement("div");
-        this.element.helpBox.className = "cesium-infoBox cesium-infoBox-visible infoBox-expanded";
-        this.element.helpBox.style.top = this.position.helpBox.top || "70px"; // Set initial position
-        this.element.helpBox.style.right = this.position.helpBox.right || "0px";
+        const newHelpBox = document.createElement("div");
+        newHelpBox.className = "cesium-infoBox cesium-infoBox-visible infoBox-expanded";
+        newHelpBox.style.top = this.position.helpBox.top || "70px"; // Set initial position
+        newHelpBox.style.right = this.position.helpBox.right || "0px";
 
         // Create a table element to hold the instructions
         const table = document.createElement("table");
         table.style.display = "table";
 
+        // Append table to the helpBox
+        newHelpBox.appendChild(table);
+        // Append the helpBox to the shadow DOM
+        this.shadowRoot.appendChild(newHelpBox);
+        this.stateManager.setElementState("helpBox", newHelpBox);
+    }
+
+    updateHelpBox() {
         // Define the messages to show based on the active mode
         const messages = {
             title: "How to use:",
@@ -856,38 +881,40 @@ export class MeasureToolbox extends HTMLElement {
 
         // Build the instructions table
         const messageSet = getMessageSet();
+        const helpBox = this.stateManager.getElementState("helpBox");
+        const table = helpBox.querySelector("table");
+        // remove the existing rows
+        table.innerHTML = "";
+        // create a row for each message
         table.appendChild(this.createRow(messages.title));
         messageSet.forEach((message) => table.appendChild(this.createRow(message)));
-
-        // Append table to the helpBox
-        this.element.helpBox.appendChild(table);
-        // Append the helpBox to the shadow DOM
-        this.shadowRoot.appendChild(this.element.helpBox);
 
         // Function to update the position of the helpBox
         const updateHelpBoxPosition = (newTop, newLeft, containerRect) => {
             this.position.helpBox.top = `${newTop}px`;
-            this.position.helpBox.right = `${containerRect.width - newLeft - this.element.helpBox.offsetWidth}px`;
+            this.position.helpBox.right = `${containerRect.width - newLeft - helpBox.offsetWidth}px`;
         };
 
         // Setup the toggle button for the helpBox
-        const toggleButton = this.setupMessageBoxToggleButton(this.element.helpBox, helpBoxIcon, updateHelpBoxPosition, "helpBox");
-        this.element.helpBox.appendChild(toggleButton);
+        const toggleButton = this.setupMessageBoxToggleButton(helpBox, helpBoxIcon, updateHelpBoxPosition, "helpBox");
+        helpBox.appendChild(toggleButton);
 
         // Make the helpBox draggable within the viewer container
-        makeDraggable(this.element.helpBox, this.viewer.container, updateHelpBoxPosition);
+        makeDraggable(helpBox, this.viewer.container, updateHelpBoxPosition);
     }
 
     /**
      * Setup the messageBox of logBox to show the records of the measure modes
      */
     setupLogBox() {
-        if (this.element.logBox) this.element.logBox.remove();
+        if (this.stateManager.getElementState("logBox")) {
+            logBox.remove()
+        };
 
-        this.element.logBox = document.createElement("div");
-        this.element.logBox.className = "cesium-infoBox cesium-infoBox-visible log-box log-box-expanded";
-        this.element.logBox.style.top = this.position.logBox.top || "190px";
-        this.element.logBox.style.right = this.position.logBox.right || "0px";
+        const newLogBox = document.createElement("div");
+        newLogBox.className = "cesium-infoBox cesium-infoBox-visible log-box log-box-expanded";
+        newLogBox.style.top = this.position.logBox.top || "190px";
+        newLogBox.style.right = this.position.logBox.right || "0px";
 
         const table = document.createElement("table");
         table.style.display = "table";
@@ -896,29 +923,32 @@ export class MeasureToolbox extends HTMLElement {
         table.appendChild(title);
 
         // Append table to the logBox
-        this.element.logBox.appendChild(table);
+        newLogBox.appendChild(table);
         // Append the logBox to the shadow DOM
-        this.shadowRoot.appendChild(this.element.logBox);
+        this.shadowRoot.appendChild(newLogBox);
+        this.stateManager.setElementState("logBox", newLogBox);
 
+        const logBox = this.stateManager.getElementState("logBox");
         // Function to update the position of the logBox
         const updateLogBoxPosition = (newTop, newLeft, containerRect) => {
             this.position.logBox.top = `${newTop}px`;
-            this.position.logBox.right = `${containerRect.width - newLeft - this.element.logBox.offsetWidth}px`;
+            this.position.logBox.right = `${containerRect.width - newLeft - newLogBox.offsetWidth}px`;
         };
 
         // Setup the toggle button for the logBox
-        const toggleButton = this.setupMessageBoxToggleButton(this.element.logBox, logBoxIcon, updateLogBoxPosition, "logBox");
-        this.element.logBox.appendChild(toggleButton);
+        const toggleButton = this.setupMessageBoxToggleButton(logBox, logBoxIcon, updateLogBoxPosition, "logBox");
+        logBox.appendChild(toggleButton);
 
         // Make logBox draggable
-        makeDraggable(this.element.logBox, this.viewer.container, updateLogBoxPosition);
+        makeDraggable(logBox, this.viewer.container, updateLogBoxPosition);
     }
 
     /**
      * Update the logBox with the records of the measure modes
      */
     updateLogBox() {
-        const table = this.element.logBox.querySelector("table");
+        const logBox = this.stateManager.getElementState("logBox");
+        const table = logBox.querySelector("table");
         table.innerHTML = ""; // Clear the table
 
         const fragment = document.createDocumentFragment();
