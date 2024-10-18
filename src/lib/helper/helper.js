@@ -129,7 +129,7 @@ export function generateId(cartesian, mode) {
  * @param {Cesium.Cartesian3} cartesian 
  * @returns {string} id - the id for the cartesian coordinate
  */
-export function cartesianToId(cartesian) {
+export function cartesianToId(cartesian, isString = true) {
     // Convert the cartesian position to a string
     const positionString = cartesian.toString();
 
@@ -141,9 +141,8 @@ export function cartesianToId(cartesian) {
         hash = hash & hash; // Convert to a 32-bit integer
     }
     // create id using hash
-    return `${Math.abs(hash).toString(36)}`;
+    return isString ? `${Math.abs(hash).toString(36)}` : Math.abs(hash);
 }
-
 
 
 
