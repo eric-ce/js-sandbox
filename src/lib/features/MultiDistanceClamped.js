@@ -52,6 +52,7 @@ class MultiDistanceClamped {
             _distanceRecords: [],
             dragStart: null,    // Stores the initial position before a drag begins
             dragStartToCanvas: null, // Store the drag start position to canvas in Cartesian2
+            selectedGroup: [],  // Stores the selected group of coordinates
         };
 
         // Label properties
@@ -77,7 +78,7 @@ class MultiDistanceClamped {
             hoveredLabel: null,     // Hovered label primitive
         };
 
-        this.toggleLabelShow();
+        this.setUpButtons();
     }
 
     /**
@@ -843,26 +844,22 @@ class MultiDistanceClamped {
     /******************
      * OTHER FEATURES *
      ******************/
-    /**
-     * The method to setup button UI and toggle the label collection show or hide
-     * @returns {HTMLButtonElement} - the button element to toggle label show
-     */
-    toggleLabelShow() {
-        const button = document.createElement("button");
-        button.textContent = this.labelCollection.show ? "Hide" : "Show";
-        button.classList.add("cesium-button", "toggle-label-button");
-        button.addEventListener("click", () => {
-            // this.labelCollection.show = !this.labelCollection.show; // toggle labe collection to show or hide
-            this.labelCollection._labels.filter(label =>
-                label.id &&
-                label.id.includes("multidistance_clamped_label") &&
-                !label.id.includes("moving") &&
-                !label.id.includes("pending")
-            ).forEach(label => label.show = !label.show);
+    /******************
+     * OTHER FEATURES *
+     ******************/
+    setUpButtons() {
+        const createButton = (text, className, onClick) => {
+            const button = document.createElement("button");
+            button.textContent = text;
+            button.classList.add("cesium-button", className);
+            button.addEventListener("click", onClick);
+            button.style.position = "absolute";
+            return button;
+        };
 
-            button.textContent = this.labelCollection.show ? "Hide" : "Show";
-        });
-        button.style.position = "absolute";
+        const toggleLabelButton = createButton("Show", "toggle-label-button", this.handleLabelToggle.bind(this));
+
+        const submitButton = createButton("Submit", "submit-button", this.handleSubmit.bind(this));
 
         const mapCesium = document.querySelector("map-cesium");
         const measureToolbox = mapCesium && mapCesium.shadowRoot.querySelector("cesium-measure");
@@ -875,20 +872,26 @@ class MultiDistanceClamped {
                 const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
 
                 if (multiDClamped && toolbar && measureToolButton) {
-                    const BUTTON_INDEX = 7; // 7th button
+                    // Position buttons
                     const BUTTON_WIDTH = 45; // Width of each button in pixels
-                    button.style.left = `${BUTTON_WIDTH * BUTTON_INDEX}px`; // 7th button, each button width is 45px
-                    button.style.top = "-40px";
-                    toolbar.appendChild(button);
+                    toggleLabelButton.style.left = `${BUTTON_WIDTH * 7}px`;
+                    toggleLabelButton.style.top = "-40px";
+                    submitButton.style.left = `${BUTTON_WIDTH * 7}px`;
+                    submitButton.style.top = "-80px";
 
-                    obs.disconnect(); // Stop observing once the button is appended
+                    // Append buttons to the toolbar
+                    toolbar.appendChild(toggleLabelButton);
+                    toolbar.appendChild(submitButton);
+
+                    obs.disconnect(); // Stop observing once the buttons are appended
 
                     // Add event listener to toggle button visibility based on multi-distances-clamped button state
                     const toggleButtonVisibility = () => {
                         const shouldDisplay =
                             multiDClamped.classList.contains('active') &&
                             measureToolButton.classList.contains('active');
-                        button.style.display = shouldDisplay ? 'block' : 'none';
+                        toggleLabelButton.style.display = shouldDisplay ? 'block' : 'none';
+                        submitButton.style.display = shouldDisplay ? 'block' : 'none';
                     };
 
                     // Initial visibility check
@@ -903,7 +906,55 @@ class MultiDistanceClamped {
             // Start observing the measureToolbox shadow DOM for child list changes
             observer.observe(measureToolbox.shadowRoot, { childList: true, subtree: true });
         }
-        return button;
+    }
+
+    handleLabelToggle() {
+        this.labelCollection._labels.filter(label =>
+            label.id &&
+            label.id.includes("multidistance_clamped_label") &&
+            !label.id.includes("moving") &&
+            !label.id.includes("pending")
+        ).forEach(label => label.show = !label.show);
+
+        const toggleLabelButton = document.querySelector('.toggle-label-button');
+        if (toggleLabelButton) {
+            toggleLabelButton.textContent = this.labelCollection.show ? "Hide" : "Show";
+        }
+    }
+
+    handleSubmit() {
+        if (this.coords.selectedGroup && this.coords.selectedGroup.length > 1) {
+            const cartograhpicDegressPos = this.coords.selectedGroup.map(cart => {
+                const cartographic = Cesium.Cartographic.fromCartesian(cart);
+                return {
+                    longitude: Cesium.Math.toDegrees(cartographic.longitude),
+                    latitude: Cesium.Math.toDegrees(cartographic.latitude),
+                    height: cartographic.height
+                };
+            });
+
+            const { totalDistance } = calculateClampedDistanceFromArray(this.coords.selectedGroup, this.viewer.scene, 4);
+            console.log("🚀  totalDistance:", totalDistance);
+
+
+            const payload = {
+                trackId: cartesianToId(this.coords.selectedGroup[0], false),
+                content: [...cartograhpicDegressPos],
+                com_length: totalDistance
+            }
+            console.log("🚀  payload:", payload);
+
+            console.log(this.coords.selectedGroup); // this will interact with the server for updated positions
+
+            // // Calling actionLogger and handling response
+            // this.actionLogger("annotateTracks_V2", payload)
+            //     .then(response => {
+            //         console.log("✅ Action successfully logged:", response);
+            //     })
+            //     .catch(error => {
+            //         console.error("❌ Error logging action:", error);
+            //     });
+        }
     }
 
 
@@ -952,7 +1003,7 @@ class MultiDistanceClamped {
      * @param {Number} totalDistance - the total distance
      * @returns {Object} - the distance record object 
      */
-    updateMultiDistancesLogRecords(distances, totalDistance, positions) {
+    updateMultiDistancesLogRecords(distances, totalDistance) {
         const distanceRecord = {
             distances: distances.map(d => d.toFixed(2)),
             totalDistance: totalDistance.toFixed(2)
@@ -960,9 +1011,6 @@ class MultiDistanceClamped {
         this.coords._distanceRecords.push(distanceRecord);
         this.logRecordsCallback(distanceRecord);
 
-        if (positions) {
-            console.table(positions); // this will interact with the server for updated positions
-        }
         return distanceRecord;
     }
 
