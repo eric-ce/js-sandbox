@@ -11,6 +11,7 @@ import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { Picker } from "./lib/features/Picker.js";
 import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
 import { FlyThrough } from "./lib/features/FlyThrough.js";
+import { FireTrail } from "./lib/features/FireTrail.js";
 import { StateManager } from "./lib/features/StateManager.js";
 import toolIcon from "./assets/tool-icon.svg";
 import pickerIcon from "./assets/picker-icon.svg";
@@ -381,6 +382,18 @@ export class MeasureToolbox extends HTMLElement {
                 name: "Profile-Distances",
                 icon: profileDistancesIcon,
             },
+            {
+                instance: new FireTrail(
+                    this.viewer,
+                    this.handler,
+                    this.stateManager,
+                    this.actionLogger,
+                    this.updateRecords.bind(this, "fire-trail"),
+                    this.cesiumPkg
+                ),
+                name: "Fire-Trail",
+                icon: multiDClampedIcon,
+            }
         ];
 
         // set measure modes 
@@ -747,7 +760,7 @@ export class MeasureToolbox extends HTMLElement {
         const buttonOverlay = document.createElement("div");
         buttonOverlay.className = "button-overlay";
         buttonOverlay.style.cssText =
-            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out;";
+            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out; z-index: 1000;";
         this.viewer.container.appendChild(buttonOverlay);
         this.stateManager.setOverlayState("button", buttonOverlay);
 
@@ -759,7 +772,7 @@ export class MeasureToolbox extends HTMLElement {
                 // set overlay to display
                 buttonOverlay.style.display = "block";
                 // get description of the button
-                const description = button.querySelector("img")?.alt;
+                const description = button.querySelector("img")?.alt.split("-").join(" ");
                 buttonOverlay.innerHTML = `${description} mode`;
                 // set position of the overlay
                 buttonOverlay.style.left = e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
@@ -950,7 +963,8 @@ export class MeasureToolbox extends HTMLElement {
             } else if (
                 key === "m-distance" ||
                 key === "profile-distances" ||
-                key === "m-distance-clamped"
+                key === "m-distance-clamped" ||
+                key === "fire-trail"
             ) {
                 const { distances, totalDistance } = recordData;
                 fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
