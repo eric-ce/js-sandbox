@@ -627,8 +627,8 @@ export class MeasureToolbox extends HTMLElement {
      */
     deactivateButton(button, toolInstance) {
         button.classList.remove("active");
-        toolInstance.removeInputAction && toolInstance.removeInputAction();
-        toolInstance.resetValue && toolInstance.resetValue();
+        removeInputActions(this.handler);
+        toolInstance?.resetValue();
 
         // remove moving or pending primitives
         this.viewer.scene.primitives._primitives.filter(p =>

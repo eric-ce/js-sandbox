@@ -84,13 +84,6 @@ class ThreePointsCurve {
         }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
-    /**
-     * Removes input actions for three points curve mode.
-     */
-    removeInputAction() {
-        removeInputActions(this.handler);
-    }
-
 
     /***********************
      * LEFT CLICK FEATURES *

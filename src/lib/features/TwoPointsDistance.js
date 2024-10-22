@@ -87,13 +87,6 @@ class TwoPointsDistance {
         }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
-    /**
-     * Removes input actions for two points distance mode.
-     */
-    removeInputAction() {
-        removeInputActions(this.handler);
-    }
-
 
     /***********************
      * LEFT CLICK FEATURES *

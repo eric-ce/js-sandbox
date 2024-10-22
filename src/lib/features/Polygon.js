@@ -93,13 +93,6 @@ class Polygon {
         }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
-    /**
-     * Removes input actions for polygon mode.
-     */
-    removeInputAction() {
-        removeInputActions(this.handler);
-    }
-
 
     /***********************
      * LEFT CLICK FEATURES *

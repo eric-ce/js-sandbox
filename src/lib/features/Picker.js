@@ -67,13 +67,6 @@ class Picker {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
-    /**
-     * Removes input actions for picker mode.
-     */
-    removeInputAction() {
-        removeInputActions(this.handler);
-    }
-
 
     /***********************
      * LEFT CLICK FEATURES *

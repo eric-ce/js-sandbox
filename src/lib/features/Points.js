@@ -46,7 +46,7 @@ class Points {
 
         // Coordinate management and related properties
         this.coords = {
-            cache: [],      // Stores temporary coordinates during operations
+            groups: [],      // Stores temporary coordinates during operations
             dragStart: null // Stores the initial position before a drag begins
         }
 
@@ -86,13 +86,6 @@ class Points {
         }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
-    /**
-     * Removes input actions for points mode.
-     */
-    removeInputAction() {
-        removeInputActions(this.handler);
-    }
-
 
     /***********************
      * LEFT CLICK FEATURES *
@@ -123,8 +116,8 @@ class Points {
                     if (labelToRemove) this.labelCollection.remove(labelToRemove);
 
                     // remove the point position from cache
-                    const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, primtiveToRemove.position))
-                    if (positionIndex !== -1) this.coords.cache.splice(positionIndex, 1);
+                    const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, primtiveToRemove.position))
+                    if (positionIndex !== -1) this.coords.groups.splice(positionIndex, 1);
 
                     // log the points records
                     this._updateBookmarkLogRecords(primtiveToRemove.position, "remove");
@@ -141,10 +134,10 @@ class Points {
                 this.pointCollection.add(point);
 
                 // update the coords cache
-                this.coords.cache.push(cartesian);
+                this.coords.groups.push(cartesian);
 
                 // create label primitive
-                const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, cartesian));
+                const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, cartesian));
                 const labelString = `Point ${positionIndex + 1}`;
                 const label = createLabelPrimitive(cartesian, cartesian, labelString)
                 label.id = generateId(cartesian, "bookmark_label");
@@ -293,7 +286,7 @@ class Points {
             }
 
             // create or update dragging label primitive
-            const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
+            const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
 
             if (this.interactivePrimitives.dragLabel) {    // if dragging label existed, update the label
                 this.interactivePrimitives.dragLabel.id = generateId(cartesian, "bookmark_label_moving");
@@ -351,9 +344,9 @@ class Points {
             }
 
             // update the cache position
-            const positionIndex = this.coords.cache.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
+            const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
             if (positionIndex > -1) {
-                this.coords.cache[positionIndex] = this.coordinate;
+                this.coords.groups[positionIndex] = this.coordinate;
             }
 
             // log the points records

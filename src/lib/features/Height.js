@@ -88,13 +88,6 @@ class Height {
         }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
-    /**
-     * Removes input actions for height mode.
-     */
-    removeInputAction() {
-        removeInputActions(this.handler);
-    }
-
 
     /***********************
      * LEFT CLICK FEATURES *

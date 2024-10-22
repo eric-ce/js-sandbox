@@ -108,12 +108,6 @@ class MultiDistanceClamped {
         }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
-    /**
-     * Removes input actions for handler.
-     */
-    removeInputAction() {
-        removeInputActions(this.handler);
-    }
 
     /***********************
      * LEFT CLICK FEATURES *

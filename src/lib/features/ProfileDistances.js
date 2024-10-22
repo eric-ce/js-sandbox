@@ -115,12 +115,6 @@ class ProfileDistances {
         }, Cesium.ScreenSpaceEventType.LEFT_UP);
     }
 
-    /**
-     * Removes input actions for profile distances mode.
-     */
-    removeInputAction() {
-        removeInputActions(this.handler);
-    }
 
     /***********************
      * LEFT CLICK FEATURES *
