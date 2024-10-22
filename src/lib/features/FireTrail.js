@@ -892,6 +892,10 @@ class FireTrail {
 
                     obs.disconnect(); // Stop observing once the buttons are appended
 
+                    // Update button overlay text
+                    this.updateButtonOverlay(toggleLabelButton, "toggle label on or off");
+                    this.updateButtonOverlay(submitButton, "submit the current annotation");
+
                     // Add event listener to toggle button visibility based on multi-distances-clamped button state
                     const toggleButtonVisibility = () => {
                         const shouldDisplay =
@@ -1034,6 +1038,22 @@ class FireTrail {
         return { currentLetter, labelNumberIndex }
     }
 
+    updateButtonOverlay(button, overlayText) {
+        const buttonOverlay = this.stateManager.getOverlayState("button");
+
+        button.addEventListener("mouseover", (e) => {
+            const cesiumRect = this.viewer.container.getBoundingClientRect();
+            buttonOverlay.style.display = "block";
+            buttonOverlay.innerHTML = `${overlayText}`;
+            buttonOverlay.style.left = e.pageX - cesiumRect.x + "px";
+            buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
+        });
+
+        button.addEventListener("mouseout", () => {
+            buttonOverlay.style.display = "none";
+        });
+    }
+
     /**
      * update the log records with the distances and the total distance
      * @param {Number[]} distances - the distances between each point
@@ -1054,7 +1074,8 @@ class FireTrail {
     resetValue() {
         this.coordinate = null;
 
-        this.pointerOverlay.style.display = 'none';
+        const pointer = this.stateManager.getOverlayState('pointer')
+        pointer && (pointer.style.display = 'none');
 
         // this.label._labelNumberIndex = 0;
         // this.label._labelIndex = 0;

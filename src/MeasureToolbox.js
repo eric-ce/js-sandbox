@@ -741,7 +741,10 @@ export class MeasureToolbox extends HTMLElement {
             }
             // call reset value method in all measure modes
             this.stateManager.getButtonState("measureModes").forEach((mode) => {
-                mode.resetValue && mode.resetValue();
+                mode?.resetValue();
+                if (mode?.coords?.groups) {
+                    mode.coords.groups = [];
+                }
             });
 
             // reset active button

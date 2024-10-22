@@ -881,16 +881,13 @@ class MultiDistanceClamped {
                     obs.disconnect(); // Stop observing once the buttons are appended
 
                     this.updateButtonOverlay(toggleLabelButton, "toggle label on or off");
+
                     // Add event listener to toggle button visibility based on multi-distances-clamped button state
                     const toggleButtonVisibility = () => {
-                        if (
+                        const shouldDisplay =
                             multiDClamped.classList.contains('active') &&
-                            measureToolButton.classList.contains('active')
-                        ) {
-                            toggleLabelButton.style.display = 'block';
-                        } else {
-                            toggleLabelButton.style.display = 'none';
-                        }
+                            measureToolButton.classList.contains('active');
+                        toggleLabelButton.style.display = shouldDisplay ? 'block' : 'none';
                     };
 
                     // Initial visibility check
@@ -920,70 +917,6 @@ class MultiDistanceClamped {
             toggleLabelButton.textContent = this.labelCollection.show ? "Hide" : "Show";
         }
     }
-
-    // setUpChildButtonOverlay() {
-    //     const buttonOverlay = this.stateManager.getOverlayState("button"); // Reuse the overlay from parent class
-
-    //     // Select child class-specific buttons
-    //     this.shadowRoot.querySelectorAll(".mesaure-mode-button").forEach((button) => {
-    //         button.addEventListener("mouseover", (e) => {
-    //             // cesium container rectangle
-    //             const cesiumRect = this.viewer.container.getBoundingClientRect();
-
-    //             // Display the overlay
-    //             buttonOverlay.style.display = "block";
-
-    //             // Set custom text for the child class button
-    //             const customText = "button.getAttribute('data-description') || "Custom description";"
-    //             buttonOverlay.innerHTML = `${customText}`;
-
-    //             // Set the position of the overlay
-    //             buttonOverlay.style.left = e.pageX - cesiumRect.x + "px";
-    //             buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
-    //         });
-
-    //         button.addEventListener("mouseout", () => {
-    //             // Hide the overlay when mouse is out
-    //             buttonOverlay.style.display = "none";
-    //         });
-    //     });
-    // }
-
-    // handleSubmit() {
-    //     if (this.coords.selectedGroup && this.coords.selectedGroup.length > 1) {
-    //         const cartograhpicDegressPos = this.coords.selectedGroup.map(cart => {
-    //             const cartographic = Cesium.Cartographic.fromCartesian(cart);
-    //             return {
-    //                 longitude: Cesium.Math.toDegrees(cartographic.longitude),
-    //                 latitude: Cesium.Math.toDegrees(cartographic.latitude),
-    //                 height: cartographic.height
-    //             };
-    //         });
-
-    //         const { totalDistance } = calculateClampedDistanceFromArray(this.coords.selectedGroup, this.viewer.scene, 4);
-    //         console.log("🚀  totalDistance:", totalDistance);
-
-
-    //         const payload = {
-    //             trackId: cartesianToId(this.coords.selectedGroup[0], false),
-    //             content: [...cartograhpicDegressPos],
-    //             com_length: totalDistance
-    //         }
-    //         console.log("🚀  payload:", payload);
-
-    //         console.log(this.coords.selectedGroup); // this will interact with the server for updated positions
-
-    //         // // Calling actionLogger and handling response
-    //         this.actionLogger("annotateTracks_V2", payload)
-    //             .then(response => {
-    //                 console.log("✅ Action successfully logged:", response);
-    //             })
-    //             .catch(error => {
-    //                 console.error("❌ Error logging action:", error);
-    //             });
-    //     }
-    // }
-
 
     /********************
      * HELPER FUNCTIONS *

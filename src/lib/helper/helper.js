@@ -374,11 +374,12 @@ export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive
  */
 export function changeLineColor(linePrimitive, color = Cesium.Color.YELLOW) {
     // Store the original color if not already stored
-    if (!linePrimitive.originalColor) {
+    if (linePrimitive) {
         // line primitives don't have the originalColor property by default so we need to create it
         linePrimitive.originalColor = linePrimitive.appearance.material.uniforms.color.clone();
+
         if (linePrimitive.depthFailAppearance) {
-            linePrimitive.originalCOlor = linePrimitive.depthFailAppearance.material.uniforms.color.clone();
+            linePrimitive.originalColor = linePrimitive.depthFailAppearance.material.uniforms.color.clone();
         }
     }
     // Change the color
@@ -403,7 +404,7 @@ export function resetLineColor(linePrimitive) {
         if (linePrimitive.depthFailAppearance) {
             linePrimitive.depthFailAppearance.material.uniforms.color = linePrimitive.originalColor.clone();
         }
-        linePrimitive.originalColor = null;
+        // linePrimitive.originalColor = null;
     }
     return linePrimitive;
 }
