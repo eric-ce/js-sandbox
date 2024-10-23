@@ -951,6 +951,12 @@ class MultiDistanceClamped {
         return { currentLetter, labelNumberIndex }
     }
 
+    /**
+     * update the button overlay with the overlay text
+     * @param { HTMLElement } button - the button element
+     * @param {String} overlayText - the overlay text
+     * @returns {HTMLElement} - the button overlay element
+     */
     updateButtonOverlay(button, overlayText) {
         const buttonOverlay = this.stateManager.getOverlayState("button");
 

@@ -205,7 +205,6 @@ class ProfileDistances {
             // get the repicked positions by windows positions from its ground positions
             // const pickedCartesianArray = this._computeDetailedPickPositions(prevPointCartesian, currPointCartesian);
 
-
             // create line primitive
             const lineGeometryInstance = createClampedLineGeometryInstance([prevPointCartesian, currPointCartesian], "profile_distances_line_pending");
             const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
@@ -232,7 +231,7 @@ class ProfileDistances {
             this.updateChart(diffHeight, labelDistance);
 
             // update picked positions
-            this.coords.pickedCartesianCache = [...pickedCartesianGroup];
+            this.coords.pickedCartesianCache.push(...pickedCartesianGroup);
 
             // log distance result
             this.coords._distanceCollection.push(distance);
@@ -493,6 +492,8 @@ class ProfileDistances {
      * MOUSE MOVE FEATURES *
      ***********************/
     handleProfileDistancesMouseMove(movement) {
+        console.log("pkG", this.coords.pickedCartesianGroups);
+        console.log("group", this.coords.groups);
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
         // update coordinate
