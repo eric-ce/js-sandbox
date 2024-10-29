@@ -144,6 +144,15 @@ export function cartesianToId(cartesian, isString = true) {
     return isString ? `${Math.abs(hash).toString(36)}` : Math.abs(hash);
 }
 
+// Function to generate a unique key for a position by rounding coordinates
+export function positionKey(pos) {
+    return `${pos.x.toFixed(6)},${pos.y.toFixed(6)},${pos.z.toFixed(6)}`;
+}
+
+// use timestamp to generate id, the id is unique and in integer format
+export function generateIdByTimestamp() {
+    return new Date().getTime();
+}
 
 
 /*****************************************
