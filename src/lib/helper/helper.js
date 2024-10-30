@@ -154,7 +154,6 @@ export function generateIdByTimestamp() {
     return new Date().getTime();
 }
 
-
 /*****************************************
  * HELPER FUNCTIONS FOR CESIUM PRIMITIVE *
  *****************************************/
@@ -376,43 +375,44 @@ export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive
 }
 
 /**
- * change a line primitive color and clone the original color if not already stored
+ * Change a line primitive color and clone the original color if not already stored
  * @param {Cesium.Primitive} linePrimitive - the line geometry primitive
  * @param {Cesium.Color} color - the color to change
  * @returns {Cesium.Primitive} - the line primitive with the new color
  */
 export function changeLineColor(linePrimitive, color = Cesium.Color.YELLOW) {
-    // Store the original color if not already stored
-    if (linePrimitive) {
-        // line primitives don't have the originalColor property by default so we need to create it
-        linePrimitive.originalColor = linePrimitive.appearance.material.uniforms.color.clone();
-
-        if (linePrimitive.depthFailAppearance) {
+    if (linePrimitive && !linePrimitive.originalColor) {
+        // Store the original color only once
+        if (linePrimitive.appearance && linePrimitive.appearance.material.uniforms.color) {
+            linePrimitive.originalColor = linePrimitive.appearance.material.uniforms.color.clone();
+        } else if (linePrimitive.depthFailAppearance && linePrimitive.depthFailAppearance.material.uniforms.color) {
             linePrimitive.originalColor = linePrimitive.depthFailAppearance.material.uniforms.color.clone();
         }
     }
     // Change the color
-    linePrimitive.appearance.material.uniforms.color = color;
-    // if linePrimitive has depthFailAppearance, change the color as well
-    if (linePrimitive.depthFailAppearance) {
+    if (linePrimitive.appearance && linePrimitive.appearance.material.uniforms.color) {
+        linePrimitive.appearance.material.uniforms.color = color;
+    }
+    if (linePrimitive.depthFailAppearance && linePrimitive.depthFailAppearance.material.uniforms.color) {
         linePrimitive.depthFailAppearance.material.uniforms.color = color;
     }
     return linePrimitive;
 }
 
 /**
- * reset the line primitive color by its original color
+ * Reset the line primitive color to its original color
  * @param {Cesium.Primitive} linePrimitive - the line geometry primitive
- * @returns {Cesium.Primitive} - the line primitive with the new color
+ * @returns {Cesium.Primitive} - the line primitive with the restored color
  */
 export function resetLineColor(linePrimitive) {
-    if (linePrimitive.originalColor) {
-        // Reset to the original color
-        linePrimitive.appearance.material.uniforms.color = linePrimitive.originalColor.clone();
-        // if linePrimitive has depthFailAppearance, reset the color as well
-        if (linePrimitive.depthFailAppearance) {
+    if (linePrimitive && linePrimitive.originalColor) {
+        if (linePrimitive.appearance && linePrimitive.appearance.material.uniforms.color) {
+            linePrimitive.appearance.material.uniforms.color = linePrimitive.originalColor.clone();
+        }
+        if (linePrimitive.depthFailAppearance && linePrimitive.depthFailAppearance.material.uniforms.color) {
             linePrimitive.depthFailAppearance.material.uniforms.color = linePrimitive.originalColor.clone();
         }
+        // Optionally, remove the originalColor to free memory
         // linePrimitive.originalColor = null;
     }
     return linePrimitive;
@@ -979,5 +979,48 @@ export function makeDraggable(element, container, updatePositionCallback, onDrag
     return cleanup;
 }
 
+export function showCustomNotification(message, viewerContainer) {
+    // Create notification container
+    const notification = document.createElement('div');
+    notification.classList.add('custom-notification');
+    notification.textContent = message;
+
+    // Style the notification
+    Object.assign(notification.style, {
+        position: 'absolute',
+        top: '0px',
+        left: '50%',
+        padding: '10px 20px',
+        backgroundColor: '#4caf50',
+        color: '#fff',
+        borderRadius: '5px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+        zIndex: '1000',
+        opacity: '0',
+        transition: 'opacity 0.5s',
+        width: 'fit-content',
+        transform: 'translateX(-50%)'
+    });
+
+    // Add to the document
+    viewerContainer.appendChild(notification);
+
+    // Fade in
+    setTimeout(() => {
+        notification.style.opacity = '1';
+    }, 100);
+
+    // Fade out and remove after 5 seconds
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.parentElement.removeChild(notification);
+            }
+        }, 500);
+    }, 3000);
+
+    return notification;
+}
 
 

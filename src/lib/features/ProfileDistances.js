@@ -492,8 +492,6 @@ class ProfileDistances {
      * MOUSE MOVE FEATURES *
      ***********************/
     handleProfileDistancesMouseMove(movement) {
-        console.log("pkG", this.coords.pickedCartesianGroups);
-        console.log("group", this.coords.groups);
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
         // update coordinate
