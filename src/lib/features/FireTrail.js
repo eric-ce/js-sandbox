@@ -12,12 +12,10 @@ import {
     calculateClampedDistance,
     calculateClampedDistanceFromArray,
     getPickedObjectType,
-    resetLineColor,
-    changeLineColor,
     getPrimitiveByPointPosition,
     generateIdByTimestamp,
     positionKey,
-    showCustomNotification
+    showCustomNotification,
 } from "../helper/helper.js";
 
 class FireTrail {
@@ -64,12 +62,6 @@ class FireTrail {
             selectedGroup: [],  // Stores the selected group of coordinates
         };
 
-        // Label properties
-        // this.label = {
-        //     _labelIndex: 0,
-        //     _labelNumberIndex: 0
-        // }
-
         // lookup and set Cesium primitives collections
         this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
         this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
@@ -83,12 +75,21 @@ class FireTrail {
             dragLabels: [],         // Array of dragging labels
             hoveredLine: null,      // Hovered line primitive
             selectedLine: null,     // Selected line primitive
+            selectedLines: [],      // Array of selected line primitives
             hoveredPoint: null,     // Hovered point primitive
             hoveredLabel: null,     // Hovered label primitive
         };
 
         this.sentPositionKeys = new Set();
         this.setUpButtons();
+
+        this.stateColors = {
+            hover: Cesium.Color.BLUE,
+            select: Cesium.Color.BLUE,
+            default: Cesium.Color.YELLOWGREEN,
+            submitted: Cesium.Color.DARKGREEN,
+            add: Cesium.Color.YELLOW,
+        }
     }
 
     /**
@@ -186,6 +187,15 @@ class FireTrail {
             this.coords.groupCounter++;
         }
 
+        // reset select to highlight to default color
+        if (this.coords.selectedGroup && this.coords.selectedGroup?.coordinates) {
+            const lines = this.lookupLinesFromArray(this.coords.selectedGroup.coordinates);
+            lines.forEach(line => {
+                // Reset line color
+                this.changeLinePrimitiveColor(line, 'default');
+            });
+        }
+
         // Create point primitive
         const isNearPoint = this.coords.groups
             .flatMap(group => group.coordinates)
@@ -254,6 +264,7 @@ class FireTrail {
                 distance
             );
             label.show = this.flags.isShowLabels;
+            label.showBackground = this.flags.isShowLabels;
             label.id = generateId(midPoint, "fire_trail_label_pending");
             label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
             this.labelCollection.add(label);
@@ -343,6 +354,7 @@ class FireTrail {
                     );
                     const label = createLabelPrimitive(pos, neighbourPositions[i + 1], distance);
                     label.show = this.flags.isShowLabels;
+                    label.showBackground = this.flags.isShowLabels;
                     label.id = generateId(newMidPoint, "fire_trail_label");
 
                     // Use the updated _getLabelProperties method
@@ -406,27 +418,19 @@ class FireTrail {
             );
             if (groupIndex === -1) return;
 
-            // If selecting the same group, do nothing
-            if (this.coords.selectedGroup === this.coords.groups[groupIndex]) {
-                return;
-            }
-
             // Reset previous selection
             if (this.coords.selectedGroup) {
                 const prevLines = this.lookupLinesFromArray(this.coords.selectedGroup.coordinates);
                 prevLines.forEach(line => {
-                    resetLineColor(line);
+                    // Reset line color
+                    this.changeLinePrimitiveColor(line, 'default');
                 });
             }
-
-            // Notify user about the selected line info
-            const notificationMsg = `Selected line: ${this.coords.groups[groupIndex].trailId}`;
-            showCustomNotification(notificationMsg, this.viewer.container);
 
             // Highlight the selected lines
             const lines = this.lookupLinesFromArray(this.coords.groups[groupIndex].coordinates);
             lines.forEach(line => {
-                changeLineColor(line, Cesium.Color.BLUE);
+                this.changeLinePrimitiveColor(line, 'select');
             });
 
             // Update selectedGroup to current group's coordinates
@@ -488,6 +492,7 @@ class FireTrail {
         const midPoint = Cesium.Cartesian3.midpoint(lastPointCartesian, cartesian, new Cesium.Cartesian3());
         const label = createLabelPrimitive(lastPointCartesian, cartesian, distance);
         label.showBackground = false;
+        label.show = this.flags.isShowLabels;
         label.id = generateId(midPoint, "fire_trail_label_moving");
         const movingLabel = this.labelCollection.add(label);
         this.interactivePrimitives.movingLabels.push(movingLabel);
@@ -502,17 +507,21 @@ class FireTrail {
 
         // reset highlighting
         const resetHighlighting = () => {
-            if (this.interactivePrimitives.hoveredLine &&
+            // Reset hovered line
+            if (
+                this.interactivePrimitives.hoveredLine &&
                 this.interactivePrimitives.hoveredLine !== this.interactivePrimitives.selectedLine
             ) {
-                resetLineColor(this.interactivePrimitives.hoveredLine);
+                this.changeLinePrimitiveColor(this.interactivePrimitives.hoveredLine, 'default');
                 this.interactivePrimitives.hoveredLine = null;
             }
+            // Reset hover point
             if (this.interactivePrimitives.hoveredPoint) {
                 this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
                 this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
                 this.interactivePrimitives.hoveredPoint = null;
             }
+            // Reset hover label
             if (this.interactivePrimitives.hoveredLabel) {
                 this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
                 this.interactivePrimitives.hoveredLabel = null;
@@ -526,7 +535,7 @@ class FireTrail {
 
                 if (linePrimitive && linePrimitive !== this.interactivePrimitives.selectedLine) {
                     // Highlight the line
-                    changeLineColor(linePrimitive, Cesium.Color.BLUE);
+                    this.changeLinePrimitiveColor(linePrimitive, 'hover');
                     this.interactivePrimitives.hoveredLine = linePrimitive;
                 }
                 break;
@@ -661,6 +670,7 @@ class FireTrail {
                     this.coords.cache
                 );
                 label.show = this.flags.isShowLabels;
+                label.showBackground = this.flags.isShowLabels;
                 label.id = generateId(midPoint, "fire_trail_label");
                 label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
                 this.labelCollection.add(label);
@@ -678,6 +688,7 @@ class FireTrail {
                 totalDistance
             );
             totalLabel.show = this.flags.isShowLabels;
+            totalLabel.showBackground = this.flags.isShowLabels;
             totalLabel.id = generateId(this.coordinate, "fire_trail_label_total");
             totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
             totalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
@@ -819,10 +830,12 @@ class FireTrail {
                     labelPrimitive.position = midPoint;
                     labelPrimitive.text = `${formatDistance(distance)}`;
                     labelPrimitive.showBackground = false;
+                    labelPrimitive.show = this.flags.isShowLabels;
                 } else {
                     const newLabelPrimitive = createLabelPrimitive(pos, cartesian, distance);
                     newLabelPrimitive.id = generateId(midPoint, "fire_trail_label_moving");
                     newLabelPrimitive.showBackground = false;
+                    newLabelPrimitive.show = this.flags.isShowLabels;
                     const addedLabelPrimitive = this.labelCollection.add(newLabelPrimitive);
                     this.interactivePrimitives.dragLabels.push(addedLabelPrimitive);
                 }
@@ -920,6 +933,7 @@ class FireTrail {
                     labelPrimitive.id = generateId(newMidPoint, "fire_trail_label");
                     labelPrimitive.position = newMidPoint;
                     labelPrimitive.show = this.flags.isShowLabels;
+                    labelPrimitive.showBackground = this.flags.isShowLabels;
                 }
             });
 
@@ -947,7 +961,7 @@ class FireTrail {
             );
             if (totalLabel) {
                 totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
-                totalLabel.position = lastPosition;
+                totalLabel.position = group.coordinates[group.coordinates.length - 1];
                 totalLabel.id = generateId(lastPosition, "fire_trail_label_total");
             }
 
@@ -1160,6 +1174,7 @@ class FireTrail {
                 distance
             );
             label.show = this.flags.isShowLabels;
+            label.showBackground = this.flags.isShowLabels;
             label.id = generateId(
                 midPoint,
                 isPending ? "fire_trail_label_pending" : "fire_trail_label"
@@ -1212,6 +1227,7 @@ class FireTrail {
             this.interactivePrimitives.hoveredLine !== linePrimitive
         ) {
             resetLineColor(this.interactivePrimitives.hoveredLine);
+            this.changeLinePrimitiveColor(this.interactivePrimitives.hoveredLine, 'default');
             this.interactivePrimitives.hoveredLine = null;
         }
 
@@ -1220,11 +1236,12 @@ class FireTrail {
             this.interactivePrimitives.selectedLine &&
             this.interactivePrimitives.selectedLine !== linePrimitive
         ) {
-            resetLineColor(this.interactivePrimitives.selectedLine);
+            // resetLineColor(this.interactivePrimitives.selectedLine);
+            this.changeLinePrimitiveColor(this.interactivePrimitives.selectedLine, 'default');
         }
 
         // Change line color to indicate selection
-        changeLineColor(linePrimitive, Cesium.Color.YELLOW);
+        this.changeLinePrimitiveColor(linePrimitive, 'add');
         this.interactivePrimitives.selectedLine = linePrimitive;
 
         // Set flag to indicate add mode
@@ -1306,17 +1323,23 @@ class FireTrail {
         // Toggle the flag
         this.flags.isShowLabels = !this.flags.isShowLabels;
 
-        this.labelCollection._labels.filter(label =>
+        const labels = this.labelCollection._labels.filter(label =>
             label.id &&
             label.id.includes("fire_trail_label") &&
             !label.id.includes("moving") &&
             !label.id.includes("pending")
-        ).forEach(label => { label.show = this.flags.isShowLabels });
+        )
+
+        labels.forEach((label) => {
+            label.show = this.flags.isShowLabels
+            label.showBackground = this.flags.isShowLabels;
+        });
 
         const toggleLabelButton = document.querySelector('.toggle-label-button');
         if (toggleLabelButton) {
             toggleLabelButton.textContent = this.labelCollection.show ? "Hide" : "Show";
         }
+        return labels;
     }
 
     handleSubmit() {
@@ -1358,7 +1381,7 @@ class FireTrail {
                 const payload = {
                     trackId: this.coords.selectedGroup.trailId, // Set trackId to trailId
                     content: JSON.stringify(cartographicDegreesPos),
-                    _addendum: [{ com_length: totalDistance }],
+                    comp_length: totalDistance,
                 };
                 console.log("🚀  payload:", payload);
 
@@ -1371,12 +1394,12 @@ class FireTrail {
                     lines.forEach((line) => (line.isSubmitted = true));
 
                     // Calling actionLogger and handling response
-                    this.actionLogger("annotateTracks_V2", payload)
+                    this.actionLogger("annotateTracks_V5", payload)
                         .then((response) => {
                             console.log("✅ Action successfully logged:", response);
                             // Apply color to the submitted lines
                             lines.forEach((linePrimitive) => {
-                                changeLineColor(linePrimitive, Cesium.Color.DARKGREEN);
+                                this.changeLinePrimitiveColor(linePrimitive, 'submitted');
                             });
                             // Add the group key to the sentGroupKeys set
                             this.sentGroupKeys.add(groupKey);
@@ -1552,6 +1575,36 @@ class FireTrail {
         return distanceRecord;
     }
 
+    changeLinePrimitiveColor(linePrimitive, colorType) {
+        let colorToSet;
+        switch (colorType) {
+            case 'hover':
+                colorToSet = this.stateColors.hover;
+                break;
+            case 'select':
+                colorToSet = this.stateColors.select;
+                break;
+            case 'submitted':
+                colorToSet = this.stateColors.submitted;
+                break;
+            case 'add':
+                colorToSet = this.stateColors.add;
+                break;
+            default:
+                colorToSet = this.stateColors.default;
+                break;
+        }
+
+        // Change the color
+        linePrimitive.appearance.material.uniforms.color = colorToSet;
+        // if linePrimitive has depthFailAppearance, change the color as well
+        if (linePrimitive.depthFailAppearance) {
+            linePrimitive.depthFailAppearance.material.uniforms.color = colorToSet;
+        }
+
+        return linePrimitive;
+    }
+
     resetValue() {
         this.coordinate = null;
 
@@ -1570,6 +1623,7 @@ class FireTrail {
         this.coords.dragStart = null;
         this.coords.dragStartToCanvas = null;
         this.coords._distanceRecords = [];
+        this.coords.selectedGroup = null;
 
         // reset interactive primitives
         this.interactivePrimitives.movingPolylines = [];

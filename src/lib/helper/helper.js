@@ -375,44 +375,43 @@ export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive
 }
 
 /**
- * Change a line primitive color and clone the original color if not already stored
+ * change a line primitive color and clone the original color if not already stored
  * @param {Cesium.Primitive} linePrimitive - the line geometry primitive
  * @param {Cesium.Color} color - the color to change
  * @returns {Cesium.Primitive} - the line primitive with the new color
  */
 export function changeLineColor(linePrimitive, color = Cesium.Color.YELLOW) {
-    if (linePrimitive && !linePrimitive.originalColor) {
-        // Store the original color only once
-        if (linePrimitive.appearance && linePrimitive.appearance.material.uniforms.color) {
-            linePrimitive.originalColor = linePrimitive.appearance.material.uniforms.color.clone();
-        } else if (linePrimitive.depthFailAppearance && linePrimitive.depthFailAppearance.material.uniforms.color) {
+    // Store the original color if not already stored
+    if (linePrimitive) {
+        // line primitives don't have the originalColor property by default so we need to create it
+        linePrimitive.originalColor = linePrimitive.appearance.material.uniforms.color.clone();
+
+        if (linePrimitive.depthFailAppearance) {
             linePrimitive.originalColor = linePrimitive.depthFailAppearance.material.uniforms.color.clone();
         }
     }
     // Change the color
-    if (linePrimitive.appearance && linePrimitive.appearance.material.uniforms.color) {
-        linePrimitive.appearance.material.uniforms.color = color;
-    }
-    if (linePrimitive.depthFailAppearance && linePrimitive.depthFailAppearance.material.uniforms.color) {
+    linePrimitive.appearance.material.uniforms.color = color;
+    // if linePrimitive has depthFailAppearance, change the color as well
+    if (linePrimitive.depthFailAppearance) {
         linePrimitive.depthFailAppearance.material.uniforms.color = color;
     }
     return linePrimitive;
 }
 
 /**
- * Reset the line primitive color to its original color
+ * reset the line primitive color by its original color
  * @param {Cesium.Primitive} linePrimitive - the line geometry primitive
- * @returns {Cesium.Primitive} - the line primitive with the restored color
+ * @returns {Cesium.Primitive} - the line primitive with the new color
  */
 export function resetLineColor(linePrimitive) {
-    if (linePrimitive && linePrimitive.originalColor) {
-        if (linePrimitive.appearance && linePrimitive.appearance.material.uniforms.color) {
-            linePrimitive.appearance.material.uniforms.color = linePrimitive.originalColor.clone();
-        }
-        if (linePrimitive.depthFailAppearance && linePrimitive.depthFailAppearance.material.uniforms.color) {
+    if (linePrimitive.originalColor) {
+        // Reset to the original color
+        linePrimitive.appearance.material.uniforms.color = linePrimitive.originalColor.clone();
+        // if linePrimitive has depthFailAppearance, reset the color as well
+        if (linePrimitive.depthFailAppearance) {
             linePrimitive.depthFailAppearance.material.uniforms.color = linePrimitive.originalColor.clone();
         }
-        // Optionally, remove the originalColor to free memory
         // linePrimitive.originalColor = null;
     }
     return linePrimitive;
