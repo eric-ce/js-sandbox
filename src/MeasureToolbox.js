@@ -966,13 +966,22 @@ export class MeasureToolbox extends HTMLElement {
             } else if (
                 key === "m-distance" ||
                 key === "profile-distances" ||
-                key === "m-distance-clamped" ||
-                key === "fire-trail"
+                key === "m-distance-clamped"
             ) {
                 const { distances, totalDistance } = recordData;
                 fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
                 fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));
-            } else {
+            } else if (key === "fire-trail") {
+                const { distances, totalDistance, submitStatus } = recordData;
+                if (distances && totalDistance) {
+                    fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
+                    fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));
+                }
+                if (submitStatus) {
+                    fragment.appendChild(this.createRow(`${key}:${submitStatus}`));
+                }
+            }
+            else {
                 fragment.appendChild(this.createRow(`${key}: ${recordData}`));
             }
         });

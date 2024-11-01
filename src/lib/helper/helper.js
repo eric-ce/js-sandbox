@@ -987,18 +987,21 @@ export function showCustomNotification(message, viewerContainer) {
     // Style the notification
     Object.assign(notification.style, {
         position: 'absolute',
-        top: '0px',
+        top: '0px', // Position at the bottom
         left: '50%',
-        padding: '10px 20px',
-        backgroundColor: '#4caf50',
-        color: '#fff',
-        borderRadius: '5px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+        padding: '14px 24px',
+        backgroundColor: '#323232', // Material Design dark background
+        color: '#FFFFFF', // White text color
+        borderRadius: '4px', // Slightly rounded corners
+        boxShadow: '0px 3px 5px rgba(0, 0, 0, 0.2)', // Soft shadow for elevation
         zIndex: '1000',
         opacity: '0',
-        transition: 'opacity 0.5s',
+        transition: 'opacity 0.3s, transform 0.3s',
         width: 'fit-content',
-        transform: 'translateX(-50%)'
+        transform: 'translateX(-50%)', // Start slightly below
+        fontFamily: 'Roboto, Arial, sans-serif',
+        fontSize: '14px',
+        lineHeight: '20px',
     });
 
     // Add to the document

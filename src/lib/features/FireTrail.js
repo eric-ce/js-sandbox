@@ -84,7 +84,7 @@ class FireTrail {
         this.setUpButtons();
 
         this.stateColors = {
-            hover: Cesium.Color.BLUE,
+            hover: Cesium.Color.ALICEBLUE,
             select: Cesium.Color.BLUE,
             default: Cesium.Color.YELLOWGREEN,
             submitted: Cesium.Color.DARKGREEN,
@@ -191,8 +191,10 @@ class FireTrail {
         if (this.coords.selectedGroup && this.coords.selectedGroup?.coordinates) {
             const lines = this.lookupLinesFromArray(this.coords.selectedGroup.coordinates);
             lines.forEach(line => {
-                // Reset line color
-                this.changeLinePrimitiveColor(line, 'default');
+                if (!line.isSubmitted) {
+                    // Reset line color
+                    this.changeLinePrimitiveColor(line, 'default');
+                }
             });
         }
 
@@ -206,7 +208,6 @@ class FireTrail {
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "fire_trail_point_pending");
             this.pointCollection.add(point);
-
             // Update coordinate data cache
             this.coords.cache.push(this.coordinate);
         }
@@ -395,6 +396,9 @@ class FireTrail {
             totalLabel.position = group.coordinates[group.coordinates.length - 1];
         }
 
+        // update selected line color
+        this.updateSelectedLineColor(group);
+
         // Update log records
         this.updateMultiDistancesLogRecords(distances, totalDistance);
         this.coords.selectedGroup = group;
@@ -417,24 +421,46 @@ class FireTrail {
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePosition[0]))
             );
             if (groupIndex === -1) return;
+            const group = this.coords.groups[groupIndex];
+
+            // show notification
+            showCustomNotification(`selected line: ${group.trailId}`, this.viewer.container)
 
             // Reset previous selection
-            if (this.coords.selectedGroup) {
-                const prevLines = this.lookupLinesFromArray(this.coords.selectedGroup.coordinates);
+            if (this.interactivePrimitives.selectedLines.length > 0) {
+                // use selectedLines that is before update to look up previous selected lines
+                // lookup the previous selected group
+                const pos = this.interactivePrimitives.selectedLines[0].geometryInstances.geometry._positions;
+                const prevGroup = this.coords.groups.find(group =>
+                    group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pos[0]))
+                );
+                // lookup the previous selected lines
+                const prevLines = this.lookupLinesFromArray(prevGroup.coordinates);
+                // reset the previous selected lines
                 prevLines.forEach(line => {
-                    // Reset line color
-                    this.changeLinePrimitiveColor(line, 'default');
+                    // don't change submitted line color
+                    if (!line.isSubmitted) {
+                        // reset line color
+                        this.changeLinePrimitiveColor(line, 'default');
+                    }
                 });
             }
 
-            // Highlight the selected lines
-            const lines = this.lookupLinesFromArray(this.coords.groups[groupIndex].coordinates);
+            // Highlight the current selected lines
+            const lines = this.lookupLinesFromArray(group.coordinates);
             lines.forEach(line => {
-                this.changeLinePrimitiveColor(line, 'select');
+                // don't change submitted line color
+                if (!line.isSubmitted) {
+                    // reset line color
+                    this.changeLinePrimitiveColor(line, 'select');
+                }
             });
 
             // Update selectedGroup to current group's coordinates
             this.coords.selectedGroup = this.coords.groups[groupIndex];
+
+            this.interactivePrimitives.selectedLines = lines;
+
         }
     }
 
@@ -515,6 +541,14 @@ class FireTrail {
                 this.changeLinePrimitiveColor(this.interactivePrimitives.hoveredLine, 'default');
                 this.interactivePrimitives.hoveredLine = null;
             }
+
+            if (this.interactivePrimitives.selectedLines.length > 0) {
+                this.interactivePrimitives.selectedLines.forEach(line => {
+                    if (line == this.interactivePrimitives.selectedLine) return;    // skip the selected line
+                    this.changeLinePrimitiveColor(line, 'select');
+                });
+            }
+
             // Reset hover point
             if (this.interactivePrimitives.hoveredPoint) {
                 this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
@@ -533,7 +567,10 @@ class FireTrail {
             case "line": // highlight the line when hovering
                 const linePrimitive = pickedObject.primitive;
 
-                if (linePrimitive && linePrimitive !== this.interactivePrimitives.selectedLine) {
+                if (linePrimitive &&
+                    linePrimitive !== this.interactivePrimitives.selectedLine &&
+                    !linePrimitive.isSubmitted
+                ) {
                     // Highlight the line
                     this.changeLinePrimitiveColor(linePrimitive, 'hover');
                     this.interactivePrimitives.hoveredLine = linePrimitive;
@@ -701,6 +738,15 @@ class FireTrail {
             // Set selectedGroup to current group's coordinates
             const currentGroup = this.coords.groups[this.coords.groups.length - 1];
             this.coords.selectedGroup = currentGroup
+
+            // update selected line
+            const lines = this.lookupLinesFromArray(currentGroup.coordinates);
+            this.interactivePrimitives.selectedLines = lines;
+            lines.forEach(line => {
+                if (!line.isSubmitted) {
+                    this.changeLinePrimitiveColor(line, 'select');
+                }
+            });
 
             this.flags.isMeasurementComplete = true;
             // Clear cache
@@ -969,6 +1015,9 @@ class FireTrail {
             this.updateMultiDistancesLogRecords(distances, totalDistance);
             this.coords.selectedGroup = group;
 
+            // Update selected line color
+            this.updateSelectedLineColor(group);
+
             // Reset flag
             this.flags.isDragMode = false;
         }
@@ -1110,6 +1159,9 @@ class FireTrail {
                 targetTotalLabel.position = newLastPoint;
             }
 
+            // Update selected line color
+            this.updateSelectedLineColor(group);
+
             // Log distance result
             this.updateMultiDistancesLogRecords(distances, totalDistance);
             this.coords.selectedGroup = group;
@@ -1135,6 +1187,9 @@ class FireTrail {
                 // Log distance result (empty distances and totalDistance)
                 this.updateMultiDistancesLogRecords([], 0);
                 this.coords.selectedGroup = null;
+
+                // reset selected lines
+                this.interactivePrimitives.selectedLines = [];
             }
         } else {
             return;
@@ -1404,13 +1459,16 @@ class FireTrail {
                             // Add the group key to the sentGroupKeys set
                             this.sentGroupKeys.add(groupKey);
                             // Notify user of successful submission
-                            alert("Measure submitted successfully!");
+                            // alert("Measure submitted successfully!");
+                            showCustomNotification(`Measure ${this.coords.selectedGroup.trailId} submitted successfully!`, this.viewer.container);
+                            this.logRecordsCallback({ submitStatus: `${this.coords.selectedGroup.trailId} submit sucessful` })
                             // Reset submission flag
                             this.flags.isSubmitting = false;
                         })
                         .catch((error) => {
                             console.error("❌ Error logging action:", error);
                             alert("Message submission failed. Please try again.");
+                            this.logRecordsCallback({ submitStatus: `${this.coords.selectedGroup.trailId} submit failed` })
                             // Reset submission flag
                             this.flags.isSubmitting = false;
                         });
@@ -1603,6 +1661,34 @@ class FireTrail {
         }
 
         return linePrimitive;
+    }
+
+    // look for the line primitive by the position, compare the selected lines if it has it the change line set to select color
+    updateSelectedLineColor(group) {
+        // const groupIndex = this.coords.groups.findIndex(group =>
+        //     group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, position))
+        // );
+        // if (groupIndex === -1) return;
+        // const group = this.coords.groups[groupIndex];
+        const lines = this.lookupLinesFromArray(group.coordinates);
+
+        // check if there is lines in the this.interactivePrimitives.selectedLines
+        let isLineSetSelected = false;
+        if (this.interactivePrimitives.selectedLines.length > 0) {
+            this.interactivePrimitives.selectedLines.forEach(line => {
+                if (lines.includes(line)) {
+                    isLineSetSelected = true;
+                }
+            });
+        }
+        if (isLineSetSelected) {
+            lines.forEach(line => {
+                if (!line.isSubmitted) {
+                    this.changeLinePrimitiveColor(line, 'select');
+                }
+            });
+            this.interactivePrimitives.selectedLines = lines;
+        }
     }
 
     resetValue() {
