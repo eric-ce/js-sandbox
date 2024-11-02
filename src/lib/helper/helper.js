@@ -432,6 +432,7 @@ export function removeInputActions(handler) {
     handler.removeInputAction(Cesium.ScreenSpaceEventType.RIGHT_CLICK);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOWN);
     handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_UP);
+    handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
     // handler.removeInputAction(Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
     return handler;
 }
