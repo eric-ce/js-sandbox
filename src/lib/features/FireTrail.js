@@ -191,7 +191,7 @@ class FireTrail {
         if (this.coords.selectedGroup && this.coords.selectedGroup?.coordinates) {
             const lines = this.lookupLinesFromArray(this.coords.selectedGroup.coordinates);
             lines.forEach(line => {
-                if (!line.isSubmitted) {
+                if (!line.isSubmitted) {    // don't change submitted line color
                     // Reset line color
                     this.changeLinePrimitiveColor(line, 'default');
                 }
@@ -439,7 +439,7 @@ class FireTrail {
                 // reset the previous selected lines
                 prevLines.forEach(line => {
                     // don't change submitted line color
-                    if (!line.isSubmitted) {
+                    if (!line.isSubmitted) {    // don't change submitted line color
                         // reset line color
                         this.changeLinePrimitiveColor(line, 'default');
                     }
@@ -450,7 +450,7 @@ class FireTrail {
             const lines = this.lookupLinesFromArray(group.coordinates);
             lines.forEach(line => {
                 // don't change submitted line color
-                if (!line.isSubmitted) {
+                if (!line.isSubmitted) {    // don't change submitted line color
                     // reset line color
                     this.changeLinePrimitiveColor(line, 'select');
                 }
@@ -545,7 +545,9 @@ class FireTrail {
             if (this.interactivePrimitives.selectedLines.length > 0) {
                 this.interactivePrimitives.selectedLines.forEach(line => {
                     if (line == this.interactivePrimitives.selectedLine) return;    // skip the selected line
-                    this.changeLinePrimitiveColor(line, 'select');
+                    if (!line.isSubmitted) {    // don't change submitted line color
+                        this.changeLinePrimitiveColor(line, 'select');
+                    }
                 });
             }
 
@@ -743,7 +745,7 @@ class FireTrail {
             const lines = this.lookupLinesFromArray(currentGroup.coordinates);
             this.interactivePrimitives.selectedLines = lines;
             lines.forEach(line => {
-                if (!line.isSubmitted) {
+                if (!line.isSubmitted) {    // don't change submitted line color
                     this.changeLinePrimitiveColor(line, 'select');
                 }
             });
@@ -1445,30 +1447,32 @@ class FireTrail {
                     const lines = this.lookupLinesFromArray(
                         this.coords.selectedGroup.coordinates
                     );
+
                     // Set line primitives to isSubmitted true
-                    lines.forEach((line) => (line.isSubmitted = true));
+                    // lines.forEach((line) => (line.isSubmitted = true));
 
                     // Calling actionLogger and handling response
                     this.actionLogger("annotateTracks_V5", payload)
                         .then((response) => {
                             console.log("✅ Action successfully logged:", response);
-                            // Apply color to the submitted lines
+                            // set submitted lines
                             lines.forEach((linePrimitive) => {
-                                this.changeLinePrimitiveColor(linePrimitive, 'submitted');
+                                this.changeLinePrimitiveColor(linePrimitive, 'submitted');  // change submitted line color
+                                linePrimitive.isSubmitted = true;   // set isSubmitted to true
                             });
                             // Add the group key to the sentGroupKeys set
                             this.sentGroupKeys.add(groupKey);
                             // Notify user of successful submission
                             // alert("Measure submitted successfully!");
-                            showCustomNotification(`Measure ${this.coords.selectedGroup.trailId} submitted successfully!`, this.viewer.container);
-                            this.logRecordsCallback({ submitStatus: `${this.coords.selectedGroup.trailId} submit sucessful` })
+                            showCustomNotification(`Fire Trail ${this.coords.selectedGroup.trailId} Submitted Successfully!`, this.viewer.container);
+                            this.logRecordsCallback({ submitStatus: `${this.coords.selectedGroup.trailId} Submit Sucessful` })
                             // Reset submission flag
                             this.flags.isSubmitting = false;
                         })
                         .catch((error) => {
                             console.error("❌ Error logging action:", error);
-                            alert("Message submission failed. Please try again.");
-                            this.logRecordsCallback({ submitStatus: `${this.coords.selectedGroup.trailId} submit failed` })
+                            alert(`Fire Trail ${this.coords.selectedGroup.trailId} submission failed. Please try again`);
+                            this.logRecordsCallback({ submitStatus: `${this.coords.selectedGroup.trailId} Submit Failed` })
                             // Reset submission flag
                             this.flags.isSubmitting = false;
                         });
@@ -1477,7 +1481,7 @@ class FireTrail {
                     this.flags.isSubmitting = false;
                 }
             } else {
-                alert("No new changes to submit for this group.");
+                alert(`No new changes to submit for this fire trail ${this.coords.selectedGroup.trailId}`);
                 // Reset submission flag
                 this.flags.isSubmitting = false;
             }
@@ -1633,6 +1637,12 @@ class FireTrail {
         return distanceRecord;
     }
 
+    /**
+     * change the color of the line primitive based on the color type
+     * @param {Cesium.Primitive} linePrimitive 
+     * @param {String} colorType 
+     * @returns {Cesium.Primitive} - the line primitive with the updated color
+     */
     changeLinePrimitiveColor(linePrimitive, colorType) {
         let colorToSet;
         switch (colorType) {
@@ -1663,7 +1673,11 @@ class FireTrail {
         return linePrimitive;
     }
 
-    // look for the line primitive by the position, compare the selected lines if it has it the change line set to select color
+    /**
+     * look for line primitives by group positions, and update the selected line color
+     * @param {Cesium.Carteisan3[]} group 
+     * @returns {Cesium.Primitive[]} - the line primitives that match the group positions
+     */
     updateSelectedLineColor(group) {
         // const groupIndex = this.coords.groups.findIndex(group =>
         //     group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, position))
@@ -1683,12 +1697,13 @@ class FireTrail {
         }
         if (isLineSetSelected) {
             lines.forEach(line => {
-                if (!line.isSubmitted) {
+                if (!line.isSubmitted) {    // don't change submitted line color
                     this.changeLinePrimitiveColor(line, 'select');
                 }
             });
             this.interactivePrimitives.selectedLines = lines;
         }
+        return lines;
     }
 
     resetValue() {
