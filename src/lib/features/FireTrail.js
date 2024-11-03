@@ -80,11 +80,17 @@ class FireTrail {
             hoveredLabel: null,     // Hovered label primitive
         };
 
+        this.buttons = {
+            labelButton: null,
+            submitButton: null,
+        }
+
         this.sentPositionKeys = new Set();
         this.setUpButtons();
 
+
         this.stateColors = {
-            hover: Cesium.Color.ALICEBLUE,
+            hover: Cesium.Color.KHAKI,
             select: Cesium.Color.BLUE,
             default: Cesium.Color.YELLOWGREEN,
             submitted: Cesium.Color.DARKGREEN,
@@ -133,38 +139,77 @@ class FireTrail {
      * @returns 
      */
     handleFireTrailLeftClick(movement) {
-        // use move position for the position
-        const cartesian = this.coordinate
-        if (!Cesium.defined(cartesian)) return;
+        // const cartesian = this.viewer.scene.pickPosition(movement.position);
+        // if (!Cesium.defined(cartesian)) return;
+        // this.coordinate = cartesian;
 
         const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
         const pickedObjectType = getPickedObjectType(pickedObject, "fire_trail");
 
-        // Handle different scenarios based on the clicked primitive type and the state of the tool
+        this.determineClickAction(pickedObjectType, pickedObject);
+    }
+
+    /**
+     * Determines the action based on the type of clicked primitive.
+     * @param {string} pickedObjectType - The type of the clicked primitive.
+     * @param {Object} pickedObject - The clicked primitive object.
+     */
+    determineClickAction(pickedObjectType, pickedObject) {
         switch (pickedObjectType) {
             case "label":
-                if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {
-                    editableLabel(this.viewer.container, pickedObject.primitive);
-                }
+                this.handleLabelClick(pickedObject);
                 break;
             case "point":
-                const pointPrimitive = pickedObject.primitive;
-                this.selectFireTrail(pointPrimitive);
+                this.handlePointClick(pickedObject);
                 break;
             case "line":
-                const linePrimitive = pickedObject.primitive;
-                this.selectFireTrail(linePrimitive);
+                this.handleLineClick(pickedObject);
                 break;
             case "other":
                 break;
             default:
-                if (!this.flags.isDragMode && !this.flags.isAddMode) {
-                    this.startMeasure();
-                }
-                if (this.flags.isAddMode) {
-                    this.addAction(this.interactivePrimitives.selectedLine);
-                }
+                this.handleDefaultClick();
                 break;
+        }
+    }
+
+    /**
+     * Handles label click actions.
+     * @param {Object} pickedObject - The clicked primitive object.
+     */
+    handleLabelClick(pickedObject) {
+        if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {
+            editableLabel(this.viewer.container, pickedObject.primitive);
+        }
+    }
+
+    /**
+     * Handles point click actions.
+     * @param {Object} pickedObject - The clicked primitive object.
+     */
+    handlePointClick(pickedObject) {
+        const pointPrimitive = pickedObject.primitive;
+        this.selectFireTrail(pointPrimitive);
+    }
+
+    /**
+     * Handles line click actions.
+     * @param {Object} pickedObject - The clicked primitive object.
+     */
+    handleLineClick(pickedObject) {
+        const linePrimitive = pickedObject.primitive;
+        this.selectFireTrail(linePrimitive);
+    }
+
+    /**
+     * Handles default click actions when no specific primitive type is identified.
+     */
+    handleDefaultClick() {
+        if (!this.flags.isDragMode && !this.flags.isAddMode) {
+            this.startMeasure();
+        }
+        if (this.flags.isAddMode) {
+            this.addAction(this.interactivePrimitives.selectedLine);
         }
     }
 
@@ -467,30 +512,37 @@ class FireTrail {
     /***********************
      * MOUSE MOVE FEATURES *
      ***********************/
+    /**
+     * Main method to handle mouse move events in the FireTrail tool.
+     * @param {{endPosition: Cesium.Cartesian2}} movement - The mouse movement data.
+     */
     handleFireTrailMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
-        // update coordinate
+
+        // Update the current coordinate and pick objects
         this.coordinate = cartesian;
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
 
-        // update pointerOverlay: the moving dot with mouse
-        pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects)
+        // Update the pointer overlay based on the picked objects
+        pickedObjects && updatePointerOverlay(this.viewer, this.pointerOverlay, cartesian, pickedObjects);
 
-        // Handle different scenarios based on the state of the tool
+        // Determine the appropriate action based on tool state
+        this.determineMoveAction(pickedObjects, cartesian);
+    }
+
+    /**
+     * Determines the action based on the current state of the tool.
+     * @param {Array} pickedObjects - Array of objects picked at the current mouse position.
+     * @param {Cesium.Cartesian3} cartesian - The current Cartesian position of the mouse.
+     */
+    determineMoveAction(pickedObjects, cartesian) {
         const isMeasuring = this.coords.cache.length > 0 && !this.flags.isMeasurementComplete;
-        // const isMeasurementComplete = this.coords.groups.length > 0 && this.flags.isMeasurementComplete;
 
-        switch (true) {
-            case isMeasuring:
-                this.handleActiveMeasure(cartesian);
-                break;
-            // case isMeasurementComplete:
-            //     this.handleHoverHighlighting(pickedObjects);
-            //     break;
-            default:
-                this.handleHoverHighlighting(pickedObjects[0]);  // highlight the line when hovering
-                break;
+        if (isMeasuring) {
+            this.handleActiveMeasure(cartesian);
+        } else {
+            this.handleHoverHighlighting(pickedObjects[0]);
         }
     }
 
@@ -533,64 +585,54 @@ class FireTrail {
 
         // reset highlighting
         const resetHighlighting = () => {
-            // Reset hovered line
+            const { hoveredLine, selectedLine, selectedLines, hoveredPoint, hoveredLabel } = this.interactivePrimitives;
+            // when mouse move out of the line, reset the line color
+            // Reset hovered line if it's not the selected line
             if (
-                this.interactivePrimitives.hoveredLine &&
-                this.interactivePrimitives.hoveredLine !== this.interactivePrimitives.selectedLine
+                hoveredLine &&
+                hoveredLine !== selectedLine &&   // don't change selected line color
+                !hoveredLine.isSubmitted     // don't change submitted line color
             ) {
-                this.changeLinePrimitiveColor(this.interactivePrimitives.hoveredLine, 'default');
+                const colorToSet = selectedLines.includes(hoveredLine) ? 'select' : 'default';
+                this.changeLinePrimitiveColor(hoveredLine, colorToSet);
                 this.interactivePrimitives.hoveredLine = null;
             }
 
-            if (this.interactivePrimitives.selectedLines.length > 0) {
-                this.interactivePrimitives.selectedLines.forEach(line => {
-                    if (line == this.interactivePrimitives.selectedLine) return;    // skip the selected line
-                    if (!line.isSubmitted) {    // don't change submitted line color
-                        this.changeLinePrimitiveColor(line, 'select');
-                    }
-                });
-            }
-
             // Reset hover point
-            if (this.interactivePrimitives.hoveredPoint) {
-                this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
-                this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
+            if (hoveredPoint) {
+                hoveredPoint.outlineColor = Cesium.Color.RED;
+                hoveredPoint.outlineWidth = 0;
                 this.interactivePrimitives.hoveredPoint = null;
             }
             // Reset hover label
-            if (this.interactivePrimitives.hoveredLabel) {
-                this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
+            if (hoveredLabel) {
+                hoveredLabel.fillColor = Cesium.Color.WHITE;
                 this.interactivePrimitives.hoveredLabel = null;
             }
         };
-        resetHighlighting();
+        resetHighlighting();   // reset highlighting, need to reset before highlighting
 
         switch (pickedObjectType) {
-            case "line": // highlight the line when hovering
-                const linePrimitive = pickedObject.primitive;
-
-                if (linePrimitive &&
-                    linePrimitive !== this.interactivePrimitives.selectedLine &&
-                    !linePrimitive.isSubmitted
-                ) {
-                    // Highlight the line
-                    this.changeLinePrimitiveColor(linePrimitive, 'hover');
-                    this.interactivePrimitives.hoveredLine = linePrimitive;
+            case "line":
+                const line = pickedObject.primitive;
+                if (line && line !== this.interactivePrimitives.selectedLine && !line.isSubmitted) {
+                    this.changeLinePrimitiveColor(line, 'hover');
+                    this.interactivePrimitives.hoveredLine = line;
                 }
                 break;
-            case "point":  // highlight the point when hovering
-                const pointPrimitive = pickedObject.primitive;
-                if (pointPrimitive) {
-                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
-                    pointPrimitive.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = pointPrimitive;
+            case "point":
+                const point = pickedObject.primitive;
+                if (point) {
+                    point.outlineColor = this.stateColors.hover;
+                    point.outlineWidth = 2;
+                    this.interactivePrimitives.hoveredPoint = point;
                 }
                 break;
-            case "label":   // highlight the label when hovering
-                const labelPrimitive = pickedObject.primitive;
-                if (labelPrimitive) {
-                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
-                    this.interactivePrimitives.hoveredLabel = labelPrimitive;
+            case "label":
+                const label = pickedObject.primitive;
+                if (label) {
+                    label.fillColor = this.stateColors.hover;
+                    this.interactivePrimitives.hoveredLabel = label;
                 }
                 break;
             default:
@@ -1087,6 +1129,7 @@ class FireTrail {
         this.interactivePrimitives.movingLabels.length = 0;
 
         if (this.coords.cache.length > 0 && !this.flags.isMeasurementComplete) {
+            //TODO: make this feature available during startMeasure();
             // When it is during the measure
 
             // Create reconnect primitives
@@ -1322,8 +1365,10 @@ class FireTrail {
         };
 
         const toggleLabelButton = createButton("Show", "toggle-label-button", this.handleLabelToggle.bind(this));
+        this.buttons.labelButton = toggleLabelButton;
 
         const submitButton = createButton("Submit", "submit-button", this.handleSubmit.bind(this));
+        this.buttons.submitButton = submitButton;
 
         const mapCesium = document.querySelector("map-cesium");
         const measureToolbox = mapCesium && mapCesium.shadowRoot.querySelector("cesium-measure");
@@ -1382,19 +1427,14 @@ class FireTrail {
 
         const labels = this.labelCollection._labels.filter(label =>
             label.id &&
-            label.id.includes("fire_trail_label") &&
-            !label.id.includes("moving") &&
-            !label.id.includes("pending")
-        )
-
-        labels.forEach((label) => {
+            label.id.includes("fire_trail_label")
+        ).forEach((label) => {
             label.show = this.flags.isShowLabels
             label.showBackground = this.flags.isShowLabels;
         });
 
-        const toggleLabelButton = document.querySelector('.toggle-label-button');
-        if (toggleLabelButton) {
-            toggleLabelButton.textContent = this.labelCollection.show ? "Hide" : "Show";
+        if (this.buttons.labelButton) {
+            this.buttons.labelButton.textContent = this.flags.isShowLabels ? "Hide" : "Show";
         }
         return labels;
     }
@@ -1724,7 +1764,7 @@ class FireTrail {
         this.coords.dragStart = null;
         this.coords.dragStartToCanvas = null;
         this.coords._distanceRecords = [];
-        this.coords.selectedGroup = null;
+        // this.coords.selectedGroup = null;
 
         // reset interactive primitives
         this.interactivePrimitives.movingPolylines = [];
@@ -1733,6 +1773,7 @@ class FireTrail {
         this.interactivePrimitives.dragPolylines = [];
         this.interactivePrimitives.dragLabels = [];
         this.interactivePrimitives.hoveredLine = null;
+        // this.interactivePrimitives.selectedLines = [];
         this.interactivePrimitives.selectedLine = null;
         this.interactivePrimitives.hoveredPoint = null;
         this.interactivePrimitives.hoveredLabel = null;
