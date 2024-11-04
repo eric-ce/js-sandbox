@@ -48,7 +48,7 @@ class FireTrail {
             isDragMode: false,
             isAddMode: false,
             isSubmitting: false,
-            isShowLabels: true,
+            isShowLabels: false,
         };
 
         // Coordinate management and related properties
@@ -189,7 +189,16 @@ class FireTrail {
      */
     handlePointClick(pickedObject) {
         const pointPrimitive = pickedObject.primitive;
-        this.selectFireTrail(pointPrimitive);
+
+        if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {    // When the measure is complete and not in add mode
+            this.selectFireTrail(pointPrimitive);
+        }
+
+        if (this.coords.cache.length > 0 && !this.flags.isMeasurementComplete) {    // it is during measuring
+            this.removeActionByPointMeasuring(pointPrimitive);
+        }
+
+        //TODO:  feat: picked up first or last point and continue that group coordinate measure
     }
 
     /**
@@ -198,7 +207,10 @@ class FireTrail {
      */
     handleLineClick(pickedObject) {
         const linePrimitive = pickedObject.primitive;
-        this.selectFireTrail(linePrimitive);
+
+        if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {
+            this.selectFireTrail(linePrimitive);
+        }
     }
 
     /**
@@ -210,6 +222,61 @@ class FireTrail {
         }
         if (this.flags.isAddMode) {
             this.addAction(this.interactivePrimitives.selectedLine);
+        }
+    }
+
+    // remove point during measuring
+    removeActionByPointMeasuring(pointPrimitive) {
+        // the drawing one should be the latest one
+        const group = this.coords.groups[this.coords.groups.length - 1];
+        const pointPosition = pointPrimitive.position.clone();
+
+        // compare if the pickpoint is from the latest one in group that is still drawing
+        const isFromMeasuring = group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pointPosition));
+        if (isFromMeasuring) {
+            // find line and label primitives by the point position
+            const { linePrimitives, labelPrimitives } = getPrimitiveByPointPosition(
+                pointPosition,
+                "annotate_fire_trail",
+                this.viewer.scene,
+                this.pointCollection,
+                this.labelCollection
+            );
+
+            // Remove relevant point, line, and label primitives
+            this.pointCollection.remove(pointPrimitive);
+            linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
+            labelPrimitives.forEach(l => this.labelCollection.remove(l));
+
+            // Remove moving line and label primitives
+            this.removeMovingPrimitives();
+
+
+            // Create reconnect primitives
+            const neighbourPositions = this.findNeighbourPosition(pointPosition, {
+                coordinates: this.coords.cache,
+            });
+
+            this._createReconnectPrimitives(neighbourPositions, { coordinates: this.coords.cache }, true);
+
+            // Update coords cache
+            const pointIndex = this.coords.cache.findIndex(cart =>
+                Cesium.Cartesian3.equals(cart, pointPosition)
+            );
+            if (pointIndex !== -1) this.coords.cache.splice(pointIndex, 1);
+
+            // Update following label primitives
+            const followingPositions = this.coords.cache.slice(pointIndex);
+            const followingIndex = pointIndex;
+            this._updateFollowingLabelPrimitives(
+                followingPositions,
+                followingIndex,
+                { coordinates: this.coords.cache }
+            );
+
+            if (this.coords.cache.length === 0) {
+                this.flags.isMeasurementComplete = true; // When removing the only point, consider the measure ended
+            }
         }
     }
 
@@ -248,73 +315,81 @@ class FireTrail {
             .flatMap(group => group.coordinates)
             .some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.3);
 
+        let firstPointPosition;
         if (!isNearPoint) {
             // Create a new point primitive
             const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
             point.id = generateId(this.coordinate, "fire_trail_point_pending");
-            this.pointCollection.add(point);
+            const pointPrimitive = this.pointCollection.add(point);
+            firstPointPosition = pointPrimitive.position.clone();
             // Update coordinate data cache
             this.coords.cache.push(this.coordinate);
         }
 
         if (this.coords.cache.length > 1) {
-            // Remove the moving line and label primitives
-            this.interactivePrimitives.movingPolylines.forEach(primitive =>
-                this.viewer.scene.primitives.remove(primitive)
-            );
-            this.interactivePrimitives.movingPolylines.length = 0;
-            this.interactivePrimitives.movingLabels.forEach(label =>
-                this.labelCollection.remove(label)
-            );
-            this.interactivePrimitives.movingLabels.length = 0;
-
-            const prevIndex = this.coords.cache.length - 2;
-            const currIndex = this.coords.cache.length - 1;
-            const prevPointCartesian = this.coords.cache[prevIndex];
-            const currPointCartesian = this.coords.cache[currIndex];
-
-            // Create line primitive
-            const lineGeometryInstance = createClampedLineGeometryInstance(
-                [prevPointCartesian, currPointCartesian],
-                "fire_trail_line_pending"
-            );
-            const linePrimitive = createClampedLinePrimitive(
-                lineGeometryInstance,
-                Cesium.Color.YELLOWGREEN,
-                this.cesiumPkg.GroundPolylinePrimitive
-            );
-            linePrimitive.isSubmitted = false;
-            this.viewer.scene.primitives.add(linePrimitive);
-
-            // Create label primitive
-            const { distance } = calculateClampedDistance(
-                prevPointCartesian,
-                currPointCartesian,
-                this.viewer.scene,
-                4
-            );
-            const midPoint = Cesium.Cartesian3.midpoint(
-                prevPointCartesian,
-                currPointCartesian,
-                new Cesium.Cartesian3()
-            );
-
-            const { currentLetter, labelNumberIndex } = this._getLabelProperties(
-                this.coordinate,
-                this.coords.cache,
-            );
-
-            const label = createLabelPrimitive(
-                prevPointCartesian,
-                currPointCartesian,
-                distance
-            );
-            label.show = this.flags.isShowLabels;
-            label.showBackground = this.flags.isShowLabels;
-            label.id = generateId(midPoint, "fire_trail_label_pending");
-            label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
-            this.labelCollection.add(label);
+            this.continueMeasure(firstPointPosition);
         }
+    }
+
+    continueMeasure(position) {
+        // Remove the moving line and label primitives
+        this.removeMovingPrimitives();
+
+        //TODO: the conitnue measure logic should handle the case either it is the first point or the last point
+
+        const groupIndex = this.coords.groups.findIndex(group => group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, position)));
+        if (groupIndex === -1) return;
+
+        const group = this.coords.groups[groupIndex];
+
+        const prevIndex = group.coordinates.length - 2;
+        const currIndex = group.coordinates.length - 1;
+        const prevPointCartesian = group.coordinates[prevIndex];
+        const currPointCartesian = group.coordinates[currIndex];
+
+        // Create line primitive
+        const lineGeometryInstance = createClampedLineGeometryInstance(
+            [prevPointCartesian, currPointCartesian],
+            "fire_trail_line_pending"
+        );
+        const linePrimitive = createClampedLinePrimitive(
+            lineGeometryInstance,
+            Cesium.Color.YELLOWGREEN,
+            this.cesiumPkg.GroundPolylinePrimitive
+        );
+        linePrimitive.isSubmitted = false;
+        this.viewer.scene.primitives.add(linePrimitive);
+
+        // Create label primitive
+        const { distance } = calculateClampedDistance(
+            prevPointCartesian,
+            currPointCartesian,
+            this.viewer.scene,
+            4
+        );
+        const midPoint = Cesium.Cartesian3.midpoint(
+            prevPointCartesian,
+            currPointCartesian,
+            new Cesium.Cartesian3()
+        );
+
+        // FIXME: getLabelProperties is less reusbale, 
+        // consider lookup outside the function and pass necessary parameter to genereate that label properties
+        const { currentLetter, labelNumberIndex } = this._getLabelProperties(
+            this.coordinate,
+            this.coords.cache,
+        );
+
+        const label = createLabelPrimitive(
+            prevPointCartesian,
+            currPointCartesian,
+            distance
+        );
+        label.show = this.flags.isShowLabels;
+        label.showBackground = this.flags.isShowLabels;
+        label.id = generateId(midPoint, "fire_trail_label_pending");
+        label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
+        this.labelCollection.add(label);
     }
 
     addAction(linePrimitive) {
@@ -554,18 +629,15 @@ class FireTrail {
         // Calculate the distance between the last selected point and the current cartesian position
         const lastPointCartesian = this.coords.cache[this.coords.cache.length - 1]
 
+        // remove moving line and label primitives
+        this.removeMovingPrimitives();
         // create line primitive
-        this.interactivePrimitives.movingPolylines.forEach(primitive => this.viewer.scene.primitives.remove(primitive));
-        this.interactivePrimitives.movingPolylines.length = 0;
-
         const movingLineGeometryInstance = createClampedLineGeometryInstance([lastPointCartesian, cartesian], "fire_trail_line_moving");
         const movingLinePrimitive = createClampedLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
         const movingLine = this.viewer.scene.primitives.add(movingLinePrimitive);
         this.interactivePrimitives.movingPolylines.push(movingLine);
 
         // create label primitive
-        this.interactivePrimitives.movingLabels.forEach(label => this.labelCollection.remove(label));
-        this.interactivePrimitives.movingLabels.length = 0;
         const { distance } = calculateClampedDistance(lastPointCartesian, cartesian, this.viewer.scene, 4);
         const midPoint = Cesium.Cartesian3.midpoint(lastPointCartesian, cartesian, new Cesium.Cartesian3());
         const label = createLabelPrimitive(lastPointCartesian, cartesian, distance);
@@ -590,10 +662,17 @@ class FireTrail {
             // Reset hovered line if it's not the selected line
             if (
                 hoveredLine &&
-                hoveredLine !== selectedLine &&   // don't change selected line color
-                !hoveredLine.isSubmitted     // don't change submitted line color
+                hoveredLine !== selectedLine   // don't change selected line color
+                // !hoveredLine.isSubmitted     // don't change submitted line color
             ) {
-                const colorToSet = selectedLines.includes(hoveredLine) ? 'select' : 'default';
+                let colorToSet;
+                if (hoveredLine.isSubmitted) {
+                    colorToSet = 'submitted';
+                } else if (selectedLines.includes(hoveredLine)) {
+                    colorToSet = 'select';
+                } else {
+                    colorToSet = 'default';
+                }
                 this.changeLinePrimitiveColor(hoveredLine, colorToSet);
                 this.interactivePrimitives.hoveredLine = null;
             }
@@ -615,7 +694,7 @@ class FireTrail {
         switch (pickedObjectType) {
             case "line":
                 const line = pickedObject.primitive;
-                if (line && line !== this.interactivePrimitives.selectedLine && !line.isSubmitted) {
+                if (line && line !== this.interactivePrimitives.selectedLine) {
                     this.changeLinePrimitiveColor(line, 'hover');
                     this.interactivePrimitives.hoveredLine = line;
                 }
@@ -691,14 +770,7 @@ class FireTrail {
             });
 
             // Remove moving line and label primitives
-            this.interactivePrimitives.movingPolylines.forEach(p =>
-                this.viewer.scene.primitives.remove(p)
-            );
-            this.interactivePrimitives.movingPolylines.length = 0;
-            this.interactivePrimitives.movingLabels.forEach(label =>
-                this.labelCollection.remove(label)
-            );
-            this.interactivePrimitives.movingLabels.length = 0;
+            this.removeMovingPrimitives();
 
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
             const isPoint = pickedObjects.find(p => {
@@ -1099,8 +1171,7 @@ class FireTrail {
         // Prompt the user for confirmation before removing the point
         const confirmRemoval = confirm("Do you want to remove this point?");
         if (!confirmRemoval) {
-            // User canceled the removal; do nothing
-            return;
+            return; // User canceled the removal; do nothing
         }
 
         const pointPosition = pointPrimitive.position.clone();
@@ -1119,45 +1190,9 @@ class FireTrail {
         labelPrimitives.forEach(l => this.labelCollection.remove(l));
 
         // Remove moving line and label primitives
-        this.interactivePrimitives.movingPolylines.forEach(primitive =>
-            this.viewer.scene.primitives.remove(primitive)
-        );
-        this.interactivePrimitives.movingPolylines.length = 0;
-        this.interactivePrimitives.movingLabels.forEach(label =>
-            this.labelCollection.remove(label)
-        );
-        this.interactivePrimitives.movingLabels.length = 0;
+        this.removeMovingPrimitives();
 
-        if (this.coords.cache.length > 0 && !this.flags.isMeasurementComplete) {
-            //TODO: make this feature available during startMeasure();
-            // When it is during the measure
-
-            // Create reconnect primitives
-            const neighbourPositions = this.findNeighbourPosition(pointPosition, {
-                coordinates: this.coords.cache,
-            });
-
-            this._createReconnectPrimitives(neighbourPositions, { coordinates: this.coords.cache }, true);
-
-            // Update coords cache
-            const pointIndex = this.coords.cache.findIndex(cart =>
-                Cesium.Cartesian3.equals(cart, pointPosition)
-            );
-            if (pointIndex !== -1) this.coords.cache.splice(pointIndex, 1);
-
-            // Update following label primitives
-            const followingPositions = this.coords.cache.slice(pointIndex);
-            const followingIndex = pointIndex;
-            this._updateFollowingLabelPrimitives(
-                followingPositions,
-                followingIndex,
-                { coordinates: this.coords.cache }
-            );
-
-            if (this.coords.cache.length === 0) {
-                this.flags.isMeasurementComplete = true; // When removing the only point, consider the measure ended
-            }
-        } else if (this.coords.groups.length > 0) {
+        if (this.coords.groups.length > 0 && this.flags.isMeasurementComplete) {
             // When the measure is ended
             const groupIndex = this.coords.groups.findIndex(group =>
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pointPosition))
@@ -1236,8 +1271,6 @@ class FireTrail {
                 // reset selected lines
                 this.interactivePrimitives.selectedLines = [];
             }
-        } else {
-            return;
         }
     }
 
@@ -1744,6 +1777,20 @@ class FireTrail {
             this.interactivePrimitives.selectedLines = lines;
         }
         return lines;
+    }
+
+    /**
+     * remove moving primitives: lines and labels
+     */
+    removeMovingPrimitives() {
+        this.interactivePrimitives.movingPolylines.forEach(primitive =>
+            this.viewer.scene.primitives.remove(primitive)
+        );
+        this.interactivePrimitives.movingPolylines.length = 0;
+        this.interactivePrimitives.movingLabels.forEach(label =>
+            this.labelCollection.remove(label)
+        );
+        this.interactivePrimitives.movingLabels.length = 0;
     }
 
     resetValue() {
