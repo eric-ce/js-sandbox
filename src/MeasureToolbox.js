@@ -11,7 +11,7 @@ import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { Picker } from "./lib/features/Picker.js";
 import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
 import { FlyThrough } from "./lib/features/FlyThrough.js";
-import { FireTrail } from "./lib/features/FireTrail.js";
+import { FireTrail } from "./lib/features/fireTrail/FireTrail.js";
 import { StateManager } from "./lib/features/StateManager.js";
 import toolIcon from "./assets/tool-icon.svg";
 import pickerIcon from "./assets/picker-icon.svg";
@@ -60,7 +60,7 @@ export class MeasureToolbox extends HTMLElement {
 
         // Element style position variables
         this.position = {
-            logBox: { top: "280px", right: "0px" },
+            logBox: { top: "350px", right: "0px" },
             helpBox: { top: "70px", right: "0px" },
         };
 
@@ -831,25 +831,64 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     updateHelpBox() {
+        // Define common messages
+        const commonMessages = {
+            startMeasure: "Left Click to start measure",
+            finishMeasure: "Right Click to finish measure",
+            dragPoint: "Hold Left Click to drag point",
+            editLabel: "Left Click on label to edit",
+            addLineLeftClick: "Left Click on line to add line",
+            addLineDoubleClick: "Double Left Click on line to add line",
+            removeLineLeftClick: "Left Click on point to remove line",
+            removeLineDoubleClick: "Double Left Click on point to remove line",
+            removeLineSetMiddleClick: "Middle Click on line or point to remove line set",
+            pickAnnotation: "Left Click to pick annotation to switch modes",
+            chartHoverPoint: "Hover on chart to show point on the map",
+            hoverPointChart: "Hover on point to show on chart",
+        };
+
         // Define the messages to show based on the active mode
         const messages = {
             title: "How to use:",
-            default: [
-                "Left Click: start measure",
-                "Hold Left Click: drag point to move annotation"
-            ],
+            default: [commonMessages.startMeasure, commonMessages.dragPoint, commonMessages.editLabel],
             multiDistances: [
-                "Left Click: start measure",
-                "Right Click: finish measure",
-                "Hold Left Click: drag point to move annotation",
-                "Add line: select line and click to add line",
-                "Remove point: click point to remove"
+                commonMessages.startMeasure,
+                commonMessages.finishMeasure,
+                commonMessages.dragPoint,
+                commonMessages.editLabel,
+                commonMessages.addLineLeftClick,
+                commonMessages.removeLineLeftClick
             ],
-            picker: ["Left Click: pick an annotation"],
+            picker: [commonMessages.pickAnnotation],
             polygon: [
-                "Left Click: start measure",
-                "Right Click: finish measure",
-                "Hold Left Click: drag point to move annotation"
+                commonMessages.startMeasure,
+                commonMessages.finishMeasure,
+                commonMessages.dragPoint,
+                commonMessages.editLabel,
+            ],
+            fireTrail: [
+                commonMessages.startMeasure,
+                commonMessages.finishMeasure,
+                commonMessages.dragPoint,
+                commonMessages.editLabel,
+                commonMessages.addLineDoubleClick,
+                commonMessages.removeLineDoubleClick,
+                commonMessages.removeLineSetMiddleClick
+            ],
+            profile: [
+                commonMessages.startMeasure,
+                commonMessages.dragPoint,
+                commonMessages.editLabel,
+                commonMessages.chartHoverPoint,
+                commonMessages.hoverPointChart
+            ],
+            profileDistances: [
+                commonMessages.startMeasure,
+                commonMessages.finishMeasure,
+                commonMessages.dragPoint,
+                commonMessages.editLabel,
+                commonMessages.chartHoverPoint,
+                commonMessages.hoverPointChart
             ]
         };
 
@@ -857,9 +896,11 @@ export class MeasureToolbox extends HTMLElement {
         const modeClassToMessageSet = {
             'multi-distances': messages.multiDistances,
             'multi-distances-clamped': messages.multiDistances,
-            'profile-distances': messages.multiDistances,
+            'profile-distances': messages.profileDistances,
+            'profile': messages.profile,
             'picker': messages.picker,
             'polygon': messages.polygon,
+            'fire-trail': messages.fireTrail
         };
 
         // Function to determine the message set based on the active button
