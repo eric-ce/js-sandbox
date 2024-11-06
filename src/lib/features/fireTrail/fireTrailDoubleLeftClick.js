@@ -12,9 +12,8 @@ import {
  * DOUBLE CLICK ACTION *
  ***********************/
 export function handleFireTrailDoubleClick(movement) {
-    // use move position for the position
-    const cartesian = this.coordinate
-    if (!Cesium.defined(cartesian)) return;
+    // don't allow middle click when during other actions
+    if (!this.flags.isMeasurementComplete || this.flags.isAddMode || this.flags.isDragMode) return;
 
     const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
     const pickedObjectType = getPickedObjectType(pickedObject, "fire_trail");
@@ -121,7 +120,7 @@ function removeActionByPoint(pointPrimitive) {
 
         // Log distance result
         this.updateMultiDistancesLogRecords(distances, totalDistance);
-        this.coords.selectedGroup = group;
+        this.coords.groupToSubmit = group;
 
         // Remove point and total label when there is only one point left in the group
         if (group.coordinates.length === 1) {
@@ -143,7 +142,7 @@ function removeActionByPoint(pointPrimitive) {
 
             // Log distance result (empty distances and totalDistance)
             this.updateMultiDistancesLogRecords([], 0);
-            this.coords.selectedGroup = null;
+            this.coords.groupToSubmit = null;
 
             // reset selected lines
             this.interactivePrimitives.selectedLines = [];

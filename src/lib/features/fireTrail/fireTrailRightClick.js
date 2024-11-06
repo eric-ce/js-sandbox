@@ -144,7 +144,7 @@ export function handleFireTrailRightClick(movement) {
 
         // Set selectedGroup to current group's coordinates
         const currentGroup = this.coords.groups[this.coords.groups.length - 1];
-        this.coords.selectedGroup = currentGroup
+        this.coords.groupToSubmit = currentGroup
 
         // update selected line
         const lines = this.lookupLinesByPositions(currentGroup.coordinates);

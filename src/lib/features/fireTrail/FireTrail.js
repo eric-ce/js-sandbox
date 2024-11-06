@@ -63,7 +63,7 @@ class FireTrail {
             _distanceRecords: [],
             dragStart: null,    // Stores the initial position before a drag begins
             dragStartToCanvas: null, // Store the drag start position to canvas in Cartesian2
-            selectedGroup: [],  // Stores the selected group of coordinates
+            groupToSubmit: null,  // Stores the group to submit
         };
 
         // lookup and set Cesium primitives collections
@@ -142,8 +142,6 @@ class FireTrail {
     }
 
 
-
-
     /*****************
      * DRAG FEATURES *
      *****************/
@@ -194,6 +192,12 @@ class FireTrail {
                         this.changeLinePrimitiveColor(line, 'select');
                     }
                 });
+            }
+
+            // set flags to prevent other actions
+            if (this.flags.isAddMode) {
+                this.flags.isAddMode = false;
+                showCustomNotification("you have exited add line mode", this.viewer.container);
             }
 
             // Set move event for dragging
@@ -422,7 +426,7 @@ class FireTrail {
 
             // Update log records
             this.updateMultiDistancesLogRecords(distances, totalDistance);
-            this.coords.selectedGroup = group;
+            this.coords.groupToSubmit = group;
 
             // Update selected line color
             this.updateSelectedLineColor(group);
@@ -437,6 +441,9 @@ class FireTrail {
     }
 
     handleFireTrailMiddleClick(movement) {
+        // don't allow middle click when during other actions
+        if (!this.flags.isMeasurementComplete || this.flags.isAddMode || this.flags.isDragMode) return;
+
         const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
         const pickedObjectType = getPickedObjectType(pickedObject, "fire_trail");
 
@@ -472,6 +479,21 @@ class FireTrail {
         if (group) {
             // lookup point, line, label primitives regarding the group
             const { pointPrimitives, linePrimitives, labelPrimitives } = this.lookupPrimitivesByPositions(group.coordinates);
+
+            // update selected line color
+            // reset selected line color
+            const resetLinesColor = (lines) => {
+                lines.forEach(line => {
+                    if (!line.isSubmitted) {    // don't change submitted line color
+                        this.changeLinePrimitiveColor(line, 'default');
+                    }
+                });
+            }
+            resetLinesColor(this.interactivePrimitives.selectedLines);
+
+            this.interactivePrimitives.selectedLines = linePrimitives;
+            this.updateSelectedLineColor(group);
+
             // remove point, line, label primitives
             pointPrimitives.forEach(p => this.pointCollection.remove(p));
             linePrimitives.forEach(l => this.viewer.scene.primitives.remove(l));
@@ -480,7 +502,16 @@ class FireTrail {
             // remove the group from the this.coords.groups
             this.coords.groups.splice(groupIndex, 1);
 
+            // reset flags to prevent other action
+            if (this.flags.isAddMode) {
+                this.flags.isAddMode = false;
+                showCustomNotification("you have exited add line mode", this.viewer.container);
+            }
+
             // FIXME: consider if needed to remove related variables: selectedGroup, selectedLines, selectedLine...
+            this.coords.groupToSubmit = [];
+            this.interactivePrimitives.selectedLines = [];
+
         }
     }
 
@@ -651,17 +682,17 @@ class FireTrail {
         return labels;
     }
 
-    handleSubmit() {
+    async handleSubmit() {
         // Prevent multiple submissions
         if (this.flags.isSubmitting) return;
 
         // Check if there is a selected group and it has more than one coordinate
-        if (this.coords.selectedGroup && this.coords.selectedGroup.coordinates.length > 1) {
+        if (Object.keys(this.coords.groupToSubmit).length > 0 && this.coords.groupToSubmit.coordinates.length > 1) {
             // Start submission
             this.flags.isSubmitting = true;
 
             // Generate a unique key for the group
-            const groupKey = this.coords.selectedGroup.coordinates
+            const groupKey = this.coords.groupToSubmit.coordinates
                 .map(pos => positionKey(pos))
                 .join('|');
 
@@ -672,7 +703,7 @@ class FireTrail {
 
             // Check if the group has already been submitted
             if (!this.sentGroupKeys.has(groupKey)) {
-                const cartographicDegreesPos = this.coords.selectedGroup.coordinates.map((cart) => {
+                const cartographicDegreesPos = this.coords.groupToSubmit.coordinates.map((cart) => {
                     const cartographic = Cesium.Cartographic.fromCartesian(cart);
                     return {
                         longitude: Cesium.Math.toDegrees(cartographic.longitude),
@@ -682,13 +713,13 @@ class FireTrail {
                 });
 
                 const { totalDistance } = calculateClampedDistanceFromArray(
-                    this.coords.selectedGroup.coordinates,
+                    this.coords.groupToSubmit.coordinates,
                     this.viewer.scene,
                     4
                 );
 
                 const payload = {
-                    trackId: this.coords.selectedGroup.trailId, // Set trackId to trailId
+                    trackId: this.coords.groupToSubmit.trailId, // Set trackId to trailId
                     content: JSON.stringify(cartographicDegreesPos),
                     comp_length: totalDistance,
                 };
@@ -697,7 +728,7 @@ class FireTrail {
                 if (confirm("Do you want to submit this fire trail?")) {
                     // Lookup line primitives by the current positions
                     const lines = this.lookupLinesByPositions(
-                        this.coords.selectedGroup.coordinates
+                        this.coords.groupToSubmit.coordinates
                     );
 
                     // Set line primitives to isSubmitted true
@@ -716,15 +747,15 @@ class FireTrail {
                             this.sentGroupKeys.add(groupKey);
                             // Notify user of successful submission
                             // alert("Measure submitted successfully!");
-                            showCustomNotification(`Fire Trail ${this.coords.selectedGroup.trailId} Submitted Successfully!`, this.viewer.container);
-                            this.logRecordsCallback({ submitStatus: `${this.coords.selectedGroup.trailId} Submit Sucessful` })
+                            showCustomNotification(`Fire Trail ${this.coords.groupToSubmit.trailId} Submitted Successfully!`, this.viewer.container);
+                            this.logRecordsCallback({ submitStatus: `${this.coords.groupToSubmit.trailId} Submit Sucessful` })
                             // Reset submission flag
                             this.flags.isSubmitting = false;
                         })
                         .catch((error) => {
                             console.error("❌ Error logging action:", error);
-                            alert(`Fire Trail ${this.coords.selectedGroup.trailId} submission failed. Please try again`);
-                            this.logRecordsCallback({ submitStatus: `${this.coords.selectedGroup.trailId} Submit Failed` })
+                            alert(`Fire Trail ${this.coords.groupToSubmit.trailId} submission failed. Please try again`);
+                            this.logRecordsCallback({ submitStatus: `${this.coords.groupToSubmit.trailId} Submit Failed` })
                             // Reset submission flag
                             this.flags.isSubmitting = false;
                         });
@@ -733,12 +764,14 @@ class FireTrail {
                     this.flags.isSubmitting = false;
                 }
             } else {
-                alert(`No new changes to submit for this fire trail ${this.coords.selectedGroup.trailId}`);
+                alert(`No new changes to submit for this fire trail ${this.coords.groupToSubmit.trailId}`);
                 // Reset submission flag
                 this.flags.isSubmitting = false;
             }
         } else {
-            // No valid selection, reset submission flag
+            // No valid selection
+            showCustomNotification("Please select a valid fire trail to submit", this.viewer.container);
+            // reset submission flag
             this.flags.isSubmitting = false;
         }
     }
@@ -979,7 +1012,7 @@ class FireTrail {
         // const group = this.coords.groups[groupIndex];
         const lines = this.lookupLinesByPositions(group.coordinates);
 
-        // check if there is lines in the this.interactivePrimitives.selectedLines
+        // check if there is one line in the this.interactivePrimitives.selectedLines
         let isLineSetSelected = false;
         if (this.interactivePrimitives.selectedLines.length > 0) {
             this.interactivePrimitives.selectedLines.forEach(line => {
@@ -1031,7 +1064,7 @@ class FireTrail {
         this.coords.dragStart = null;
         this.coords.dragStartToCanvas = null;
         this.coords._distanceRecords = [];
-        // this.coords.selectedGroup = null;
+        // this.coords.groupToSubmit = null;
 
         // reset interactive primitives
         this.interactivePrimitives.movingPolylines = [];

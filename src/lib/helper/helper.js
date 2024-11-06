@@ -438,28 +438,35 @@ export function removeInputActions(handler) {
 }
 
 /**
- * get the type of the Cesium picked object
- * @param {*} pickedObject - viewer.scene.pick
- * @param {string} modeString - the mode string to filter the picked object. e.g. "multi_distance"
- * @returns {string} - the type of the picked object
+ * Get the type of the Cesium picked object.
+ * @param {*} pickedObject - The result from viewer.scene.pick
+ * @param {string} modeString - The mode string to filter the picked object, e.g., "multi_distance"
+ * @returns {string|null} - The type of the picked object ("point", "line", "label", "other") or null if it doesn't match
  */
 export function getPickedObjectType(pickedObject, modeString) {
-    const searchString = "annotate_" + modeString;
-    if (Cesium.defined(pickedObject) &&
-        pickedObject.id &&
-        pickedObject.id.startsWith(searchString) &&
-        !pickedObject.id.includes("moving")) {
-        if (pickedObject.id.startsWith(`${searchString}_point`)) {
-            return "point"
-        } else if (pickedObject.id.startsWith(`${searchString}_line`)) {
-            return "line"
-        } else if (pickedObject.id.startsWith(`${searchString}_label`)) {
-            return "label"
-        } else {
-            return "other"
-        }
+    // Check if pickedObject is defined and has a string 'id' property
+    if (!Cesium.defined(pickedObject) || typeof pickedObject.id !== 'string') {
+        return null;
     }
-    return null;
+
+    const { id } = pickedObject;
+    const searchString = `annotate_${modeString}`;
+
+    // Return null if 'id' doesn't start with the search string or contains 'moving'
+    if (!id.startsWith(searchString) || id.includes('moving')) {
+        return null;
+    }
+
+    // Determine the type based on the suffix of the 'id'
+    if (id.startsWith(`${searchString}_point`)) {
+        return 'point';
+    } else if (id.startsWith(`${searchString}_line`)) {
+        return 'line';
+    } else if (id.startsWith(`${searchString}_label`)) {
+        return 'label';
+    } else {
+        return 'other';
+    }
 }
 
 /**

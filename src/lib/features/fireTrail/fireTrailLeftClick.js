@@ -187,8 +187,8 @@ function startMeasure() {
     }
 
     // reset select to highlight to default color
-    if (this.coords.selectedGroup && this.coords.selectedGroup?.coordinates) {
-        const lines = this.lookupLinesByPositions(this.coords.selectedGroup.coordinates);
+    if (this.coords.groupToSubmit && this.coords.groupToSubmit?.coordinates) {
+        const lines = this.lookupLinesByPositions(this.coords.groupToSubmit.coordinates);
         lines.forEach(line => {
             if (!line.isSubmitted) {    // don't change submitted line color
                 // Reset line color
@@ -405,7 +405,7 @@ function addAction(linePrimitive) {
 
     // Update log records
     this.updateMultiDistancesLogRecords(distances, totalDistance);
-    this.coords.selectedGroup = group;
+    this.coords.groupToSubmit = group;
 
     // Reset flags
     this.flags.isAddMode = false;
@@ -459,9 +459,8 @@ function selectFireTrail(primitive) {
         });
 
         // Update selectedGroup to current group's coordinates
-        this.coords.selectedGroup = group;
+        this.coords.groupToSubmit = group;
         // Update selected lines
         this.interactivePrimitives.selectedLines = lines;
-
     }
 }
