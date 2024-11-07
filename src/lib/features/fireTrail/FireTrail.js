@@ -66,6 +66,8 @@ class FireTrail {
             groupToSubmit: null,  // Stores the group to submit
         };
 
+        this.sentGroupKeys = new Set();
+
         // lookup and set Cesium primitives collections
         this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
         this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
@@ -88,8 +90,6 @@ class FireTrail {
             labelButton: null,
             submitButton: null,
         }
-
-        this.sentPositionKeys = new Set();
         this.setUpButtons();
 
         this.stateColors = {
@@ -429,6 +429,8 @@ class FireTrail {
             this.coords.groupToSubmit = group;
 
             // Update selected line color
+            const lines = this.lookupLinesByPositions(group.coordinates);
+            this.interactivePrimitives.selectedLines = lines;
             this.updateSelectedLineColor(group);
 
             // Reset flag
@@ -476,7 +478,14 @@ class FireTrail {
         if (groupIndex === -1) return; // Error handling: no group found
         const group = this.coords.groups[groupIndex];
 
-        if (group) {
+        // remove confimation dialog
+        const removeConfirm = confirm(`Do you want to remove the fire trail ${group.trailId}?`);
+
+        // remove the line set by group if confirmed
+        if (
+            removeConfirm &&
+            group
+        ) {
             // lookup point, line, label primitives regarding the group
             const { pointPrimitives, linePrimitives, labelPrimitives } = this.lookupPrimitivesByPositions(group.coordinates);
 
@@ -512,6 +521,30 @@ class FireTrail {
             this.coords.groupToSubmit = [];
             this.interactivePrimitives.selectedLines = [];
 
+            // TODO: check submitted line if submitted, send [] to the actionLogger()
+            // Generate a unique key for the group
+            const groupKey = group.coordinates
+                .map(pos => positionKey(pos))
+                .join('|');     // [cart,cart,cart|cart,cart,cart|cart,cart,cart]
+            const isLineSetSubmitted = this.sentGroupKeys.has(groupKey);
+
+            if (isLineSetSubmitted) {
+                let payload = {
+                    trackId: group.trailId, // Set trackId to trailId
+                    content: "",
+                    comp_length: 0,
+                }
+                // Calling actionLogger and handling response
+                this.actionLogger("annotateTracks_V5", payload)
+                    .then((response) => {
+                        console.log("✅ Remove action submitted:", response);
+                        this.logRecordsCallback({ submitStatus: `${this.coords.groupToSubmit.trailId} Remove Success` })
+                    }).catch((error) => {
+                        console.error("❌ Error logging action:", error);
+                        alert(`Fire Trail ${this.coords.groupToSubmit.trailId} submission failed. Please try again`);
+                        this.logRecordsCallback({ submitStatus: `${this.coords.groupToSubmit.trailId} Remove Failed` })
+                    });
+            }
         }
     }
 
@@ -696,10 +729,10 @@ class FireTrail {
                 .map(pos => positionKey(pos))
                 .join('|');
 
-            // Initialize sentGroupKeys if it doesn't exist
-            if (!this.sentGroupKeys) {
-                this.sentGroupKeys = new Set();
-            }
+            // // Initialize sentGroupKeys if it doesn't exist
+            // if (!this.sentGroupKeys) {
+            //     this.sentGroupKeys = new Set();
+            // }
 
             // Check if the group has already been submitted
             if (!this.sentGroupKeys.has(groupKey)) {
@@ -874,7 +907,6 @@ class FireTrail {
             Cesium.Cartesian3.midpoint(pos, positions[i + 1], new Cesium.Cartesian3())
         );
         const labelPrimitives = this.labelCollection._labels
-
             .filter(l =>
                 l.id &&
                 l.id.startsWith("annotate_fire_trail_label") &&
@@ -888,7 +920,6 @@ class FireTrail {
         if (totalLabelPrimitive) {
             labelPrimitives.push(totalLabelPrimitive);
         }
-        console.log("🚀  labelPrimitives:", labelPrimitives);
 
         return { pointPrimitives, linePrimitives, labelPrimitives };
     }

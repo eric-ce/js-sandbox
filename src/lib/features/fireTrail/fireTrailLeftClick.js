@@ -115,8 +115,8 @@ function handleDefaultClick() {
 // remove point during measuring
 function removeActionByPointMeasuring(pointPrimitive) {
     // the drawing one should be the latest one
-    const group = this.coords.groups[this.coords.groups.length - 1];
     const pointPosition = pointPrimitive.position.clone();
+    const group = this.coords.groups.find(group => group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pointPosition)));
 
     // compare if the pickpoint is from the latest one in group that is still drawing
     const isFromMeasuring = group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pointPosition));
@@ -137,7 +137,6 @@ function removeActionByPointMeasuring(pointPrimitive) {
 
         // Remove moving line and label primitives
         this.removeMovingPrimitives();
-
 
         // Create reconnect primitives
         const neighbourPositions = this.findNeighbourPosition(pointPosition, {
