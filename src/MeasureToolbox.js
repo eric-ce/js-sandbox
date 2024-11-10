@@ -983,50 +983,86 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     /**
-     * Update the logBox with the records of the measure modes
+     * Updates the logBox with the records of the measure modes.
+     * Clears existing log entries and appends new ones based on the current records.
      */
     updateLogBox() {
+        // Retrieve the logBox element from the state manager
         const logBox = this.stateManager.getElementState("logBox");
         const table = logBox.querySelector("table");
-        table.innerHTML = ""; // Clear the table
 
+        // Clear the existing table content
+        table.innerHTML = "";
+
+        // Create a document fragment to improve performance by minimizing reflows
         const fragment = document.createDocumentFragment();
+
+        // Add the header row for actions
         fragment.appendChild(this.createRow("Actions"));
 
-        this._records.forEach((record) => {
-            const key = Object.keys(record)[0];
-            const recordData = record[key];
+        // If there are no records, exit the function
+        if (this._records.length === 0) return;
 
-            if (key === "points") {
-                // recordData = {points: {add: {key: value}}}, and callback pass {add: {key: value}}
-                const action = Object.keys(recordData)[0];
-                const [coordinateKey, coordinateValue] = Object.entries(recordData[action])[0];
-                fragment.appendChild(
-                    this.createRow(`${key}: ${action}: (${coordinateKey}): ${coordinateValue}`)
-                );
-            } else if (
-                key === "m-distance" ||
-                key === "profile-distances" ||
-                key === "m-distance-clamped"
-            ) {
-                const { distances, totalDistance } = recordData;
-                fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
-                fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));
-            } else if (key === "fire-trail") {
-                const { distances, totalDistance, submitStatus } = recordData;
-                if (distances && totalDistance) {
-                    fragment.appendChild(this.createRow(`${key}: distances: ${distances}`));
-                    fragment.appendChild(this.createRow(`${key}: totalDistance: ${totalDistance}`));
-                }
-                if (submitStatus) {
-                    fragment.appendChild(this.createRow(`${key}:${submitStatus}`));
-                }
+        // Iterate over each record to process and display
+        this._records.forEach((record) => {
+            // Destructure the key and its corresponding data from the record
+            const [key, recordData] = Object.entries(record)[0];
+            let rows = [];
+
+            // Determine the type of record and process accordingly
+            switch (key) {
+                case "points":
+                    // Extract the action and its coordinate details
+                    const action = Object.keys(recordData)[0];
+                    const [coordinateKey, coordinateValue] = Object.entries(recordData[action])[0];
+                    // Format the row content and add to rows array
+                    rows.push(`${key}: ${action}: (${coordinateKey}): ${coordinateValue}`);
+                    break;
+
+                case "m-distance":
+                case "profile-distances":
+                case "m-distance-clamped":
+                    // Check and add distances if available
+                    if (recordData.distances) {
+                        rows.push(`${key}: distances: ${recordData.distances}`);
+                    }
+                    // Check and add total distance if available
+                    if (recordData.totalDistance) {
+                        rows.push(`${key}: totalDistance: ${recordData.totalDistance}`);
+                    }
+                    break;
+
+                case "fire-trail":
+                    // Determine if recordData is an object or a string
+                    if (typeof recordData === "object" && recordData !== null) {
+                        // Add distances if available
+                        if (recordData.distances) {
+                            rows.push(`${key}: distances: ${recordData.distances}`);
+                        }
+                        // Add total distance if available
+                        if (recordData.totalDistance) {
+                            rows.push(`${key}: totalDistance: ${recordData.totalDistance}`);
+                        }
+                        // Add submit status if available
+                        if (recordData.submitStatus) {
+                            rows.push(`${key}: ${recordData.submitStatus}`);
+                        }
+                    } else if (typeof recordData === "string") {
+                        // If recordData is a string, add it directly
+                        rows.push(`${key}: ${recordData}`);
+                    }
+                    break;
+
+                default:
+                    // For any other key, add the key-value pair directly
+                    rows.push(`${key}: ${recordData}`);
             }
-            else {
-                fragment.appendChild(this.createRow(`${key}: ${recordData}`));
-            }
+
+            // Append each formatted row to the document fragment
+            rows.forEach(row => fragment.appendChild(this.createRow(row)));
         });
 
+        // Append the populated fragment to the table in the DOM
         table.appendChild(fragment);
     }
 

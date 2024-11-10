@@ -464,88 +464,83 @@ class FireTrail {
      * @param {Cesium.Primitive} primitive - The primitive to lookup group coordinates
      * 
      */
-    removeLineSetByPrimitive(primitive, primitiveType) {
+    async removeLineSetByPrimitive(primitive, primitiveType) {
         let primitivePosition;
         if (primitiveType === "point") {
             primitivePosition = primitive.position;
         } else if (primitiveType === "line") {
             primitivePosition = primitive.geometryInstances.geometry._positions[0];
         }
-        // lookup the group by the primitive position
+
+        // Find the index of the group that contains the primitive position
         const groupIndex = this.coords.groups.findIndex(group =>
             group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePosition))
         );
         if (groupIndex === -1) return; // Error handling: no group found
+
         const group = this.coords.groups[groupIndex];
 
-        // remove confimation dialog
-        const removeConfirm = confirm(`Do you want to remove the fire trail ${group.trailId}?`);
+        // Confirm removal with the user
+        if (!confirm(`Do you want to remove the fire trail ${group.trailId}?`)) return;
 
-        // remove the line set by group if confirmed
-        if (
-            removeConfirm &&
-            group
-        ) {
-            // lookup point, line, label primitives regarding the group
-            const { pointPrimitives, linePrimitives, labelPrimitives } = this.lookupPrimitivesByPositions(group.coordinates);
+        // Retrieve associated primitives for the group
+        const { pointPrimitives, linePrimitives, labelPrimitives } = this.lookupPrimitivesByPositions(group.coordinates);
 
-            // update selected line color
-            // reset selected line color
-            const resetLinesColor = (lines) => {
-                lines.forEach(line => {
-                    if (!line.isSubmitted) {    // don't change submitted line color
-                        this.changeLinePrimitiveColor(line, 'default');
-                    }
-                });
+        // Reset color of previously selected lines if they are not submitted
+        this.interactivePrimitives.selectedLines.forEach(line => {
+            if (!line.isSubmitted) {
+                this.changeLinePrimitiveColor(line, 'default');
             }
-            resetLinesColor(this.interactivePrimitives.selectedLines);
+        });
 
-            this.interactivePrimitives.selectedLines = linePrimitives;
-            this.updateSelectedLineColor(group);
+        // Update selected lines to the current group's line primitives and update their colors
+        this.interactivePrimitives.selectedLines = linePrimitives;
+        this.updateSelectedLineColor(group);
 
-            // remove point, line, label primitives
-            pointPrimitives.forEach(p => this.pointCollection.remove(p));
-            linePrimitives.forEach(l => this.viewer.scene.primitives.remove(l));
-            labelPrimitives.forEach(l => this.labelCollection.remove(l));
+        // Remove point, line, and label primitives
+        pointPrimitives.forEach(p => this.pointCollection.remove(p));
+        linePrimitives.forEach(l => this.viewer.scene.primitives.remove(l));
+        labelPrimitives.forEach(l => this.labelCollection.remove(l));
 
-            // remove the group from the this.coords.groups
-            this.coords.groups.splice(groupIndex, 1);
+        // If in add mode, exit add mode and notify the user
+        if (this.flags.isAddMode) {
+            this.flags.isAddMode = false;
+            showCustomNotification("You have exited add line mode", this.viewer.container);
+        }
 
-            // reset flags to prevent other action
-            if (this.flags.isAddMode) {
-                this.flags.isAddMode = false;
-                showCustomNotification("you have exited add line mode", this.viewer.container);
-            }
+        // Generate a unique key for the group to check submission status
+        const groupKey = group.coordinates.map(pos => positionKey(pos)).join('|');
+        const isLineSetSubmitted = this.sentGroupKeys.has(groupKey);
 
-            // FIXME: consider if needed to remove related variables: selectedGroup, selectedLines, selectedLine...
-            this.coords.groupToSubmit = [];
-            this.interactivePrimitives.selectedLines = [];
+        // If the line set was submitted, log the removal action
+        if (isLineSetSubmitted) {
+            const payload = {
+                trackId: group.trailId, // Associate with the correct trail ID
+                content: "",
+                comp_length: 0.0,
+            };
 
-            // TODO: check submitted line if submitted, send [] to the actionLogger()
-            // Generate a unique key for the group
-            const groupKey = group.coordinates
-                .map(pos => positionKey(pos))
-                .join('|');     // [cart,cart,cart|cart,cart,cart|cart,cart,cart]
-            const isLineSetSubmitted = this.sentGroupKeys.has(groupKey);
-
-            if (isLineSetSubmitted) {
-                let payload = {
-                    trackId: group.trailId, // Set trackId to trailId
-                    content: "",
-                    comp_length: 0,
-                }
-                // Calling actionLogger and handling response
-                this.actionLogger("annotateTracks_V5", payload)
-                    .then((response) => {
-                        console.log("✅ Remove action submitted:", response);
-                        this.logRecordsCallback({ submitStatus: `${this.coords.groupToSubmit.trailId} Remove Success` })
-                    }).catch((error) => {
-                        console.error("❌ Error logging action:", error);
-                        alert(`Fire Trail ${this.coords.groupToSubmit.trailId} submission failed. Please try again`);
-                        this.logRecordsCallback({ submitStatus: `${this.coords.groupToSubmit.trailId} Remove Failed` })
-                    });
+            try {
+                // Await the actionLogger promise and handle the response
+                const response = await this.actionLogger("annotateTracks_V5", payload);
+                console.log("✅ Remove action submitted:", response);
+                this.logRecordsCallback({ submitStatus: `${group.trailId} Removed From Server Successfully` });
+            } catch (error) {
+                console.error("❌ Error logging action:", error);
+                alert(`Fire Trail ${group.trailId} Submission Failed`);
+                this.logRecordsCallback({ submitStatus: `${group.trailId} Removal From Server Failed` });
             }
         }
+
+        // Remove the group coordinates from the coords.groups array
+        group.coordinates = [];
+
+        // Reset submission-related properties to their default states
+        this.coords.groupToSubmit = null;
+        this.interactivePrimitives.selectedLines = [];
+
+        // Log the removal of the trail
+        this.logRecordsCallback(`${group.trailId} Removed`);
     }
 
     _createReconnectPrimitives(neighbourPositions, group, isPending = false) {
@@ -715,96 +710,98 @@ class FireTrail {
         return labels;
     }
 
+    /**
+     * Handles the submission of the selected fire trail.
+     * Prevents multiple submissions, checks submission status, and logs actions.
+     */
     async handleSubmit() {
-        // Prevent multiple submissions
+        // Prevent multiple submissions by checking if a submission is already in progress
         if (this.flags.isSubmitting) return;
 
-        // Check if there is a selected group and it has more than one coordinate
-        if (Object.keys(this.coords.groupToSubmit).length > 0 && this.coords.groupToSubmit.coordinates.length > 1) {
-            // Start submission
-            this.flags.isSubmitting = true;
+        const groupToSubmit = this.coords.groupToSubmit;
 
-            // Generate a unique key for the group
-            const groupKey = this.coords.groupToSubmit.coordinates
-                .map(pos => positionKey(pos))
-                .join('|');
-
-            // // Initialize sentGroupKeys if it doesn't exist
-            // if (!this.sentGroupKeys) {
-            //     this.sentGroupKeys = new Set();
-            // }
-
-            // Check if the group has already been submitted
-            if (!this.sentGroupKeys.has(groupKey)) {
-                const cartographicDegreesPos = this.coords.groupToSubmit.coordinates.map((cart) => {
-                    const cartographic = Cesium.Cartographic.fromCartesian(cart);
-                    return {
-                        longitude: Cesium.Math.toDegrees(cartographic.longitude),
-                        latitude: Cesium.Math.toDegrees(cartographic.latitude),
-                        height: cartographic.height,
-                    };
-                });
-
-                const { totalDistance } = calculateClampedDistanceFromArray(
-                    this.coords.groupToSubmit.coordinates,
-                    this.viewer.scene,
-                    4
-                );
-
-                const payload = {
-                    trackId: this.coords.groupToSubmit.trailId, // Set trackId to trailId
-                    content: JSON.stringify(cartographicDegreesPos),
-                    comp_length: totalDistance,
-                };
-                console.log("🚀  payload:", payload);
-
-                if (confirm("Do you want to submit this fire trail?")) {
-                    // Lookup line primitives by the current positions
-                    const lines = this.lookupLinesByPositions(
-                        this.coords.groupToSubmit.coordinates
-                    );
-
-                    // Set line primitives to isSubmitted true
-                    // lines.forEach((line) => (line.isSubmitted = true));
-
-                    // Calling actionLogger and handling response
-                    this.actionLogger("annotateTracks_V5", payload)
-                        .then((response) => {
-                            console.log("✅ Action successfully logged:", response);
-                            // set submitted lines
-                            lines.forEach((linePrimitive) => {
-                                this.changeLinePrimitiveColor(linePrimitive, 'submitted');  // change submitted line color
-                                linePrimitive.isSubmitted = true;   // set isSubmitted to true
-                            });
-                            // Add the group key to the sentGroupKeys set
-                            this.sentGroupKeys.add(groupKey);
-                            // Notify user of successful submission
-                            // alert("Measure submitted successfully!");
-                            showCustomNotification(`Fire Trail ${this.coords.groupToSubmit.trailId} Submitted Successfully!`, this.viewer.container);
-                            this.logRecordsCallback({ submitStatus: `${this.coords.groupToSubmit.trailId} Submit Sucessful` })
-                            // Reset submission flag
-                            this.flags.isSubmitting = false;
-                        })
-                        .catch((error) => {
-                            console.error("❌ Error logging action:", error);
-                            alert(`Fire Trail ${this.coords.groupToSubmit.trailId} submission failed. Please try again`);
-                            this.logRecordsCallback({ submitStatus: `${this.coords.groupToSubmit.trailId} Submit Failed` })
-                            // Reset submission flag
-                            this.flags.isSubmitting = false;
-                        });
-                } else {
-                    // User canceled submission
-                    this.flags.isSubmitting = false;
-                }
-            } else {
-                alert(`No new changes to submit for this fire trail ${this.coords.groupToSubmit.trailId}`);
-                // Reset submission flag
-                this.flags.isSubmitting = false;
-            }
-        } else {
-            // No valid selection
+        // Validate the selected group to ensure it exists and has more than one coordinate
+        if (!groupToSubmit || groupToSubmit.coordinates.length <= 1) {
             showCustomNotification("Please select a valid fire trail to submit", this.viewer.container);
-            // reset submission flag
+            this.flags.isSubmitting = false;
+            return;
+        }
+
+        // Generate a unique key for the group by concatenating position keys with a separator
+        const groupKey = groupToSubmit.coordinates.map(pos => positionKey(pos)).join('|');
+
+        // Check if the group has already been submitted to prevent redundant submissions
+        if (this.sentGroupKeys.has(groupKey)) {
+            alert(`No new changes to submit for this fire trail ${groupToSubmit.trailId}`);
+            this.flags.isSubmitting = false;
+            return;
+        }
+
+        // Set the submitting flag to true to indicate that a submission is in progress
+        this.flags.isSubmitting = true;
+
+        // Transform Cartesian coordinates to cartographic degrees
+        const cartographicDegreesPos = groupToSubmit.coordinates.map(cart => {
+            const cartographic = Cesium.Cartographic.fromCartesian(cart);
+            return {
+                longitude: Cesium.Math.toDegrees(cartographic.longitude),
+                latitude: Cesium.Math.toDegrees(cartographic.latitude),
+                height: cartographic.height,
+            };
+        });
+
+        // Calculate the total distance of the fire trail using a helper function
+        const { totalDistance } = calculateClampedDistanceFromArray(
+            groupToSubmit.coordinates,
+            this.viewer.scene,
+            4
+        );
+
+        // Prepare the payload to be sent to the server
+        const payload = {
+            trackId: groupToSubmit.trailId,
+            content: JSON.stringify(cartographicDegreesPos),
+            comp_length: totalDistance,
+        };
+        console.log("🚀  payload:", payload);
+
+        // Prompt the user for confirmation before proceeding with the submission
+        if (!confirm("Do you want to submit this fire trail?")) {
+            this.flags.isSubmitting = false;
+            return;
+        }
+
+        try {
+            // Retrieve all line primitives associated with the group's coordinates
+            const lines = this.lookupLinesByPositions(groupToSubmit.coordinates);
+
+            // Log the submission action by sending the payload to the server
+            const response = await this.actionLogger("annotateTracks_V5", payload);
+            console.log("✅ Action successfully logged:", response);
+
+            // Update the color and submission status of each line primitive to indicate successful submission
+            lines.forEach(linePrimitive => {
+                this.changeLinePrimitiveColor(linePrimitive, 'submitted');
+                linePrimitive.isSubmitted = true;
+            });
+
+            // Add the group's unique key to the set of submitted groups to track submissions
+            this.sentGroupKeys.add(groupKey);
+
+            // Display a notification to the user indicating successful submission
+            showCustomNotification(`Fire Trail ${groupToSubmit.trailId} Submitted Successfully!`, this.viewer.container);
+
+            // Log the successful submission status
+            this.logRecordsCallback({ submitStatus: `${groupToSubmit.trailId} Submit Successful` });
+        } catch (error) {
+            // Handle any errors that occur during the submission process
+            console.error("❌ Error logging action:", error);
+            alert(`Fire Trail ${groupToSubmit.trailId} submission failed. Please try again`);
+
+            // Log the failed submission status
+            this.logRecordsCallback({ submitStatus: `${groupToSubmit.trailId} Submit Failed` });
+        } finally {
+            // Reset the submitting flag regardless of success or failure to allow future submissions
             this.flags.isSubmitting = false;
         }
     }
