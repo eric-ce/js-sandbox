@@ -1,14 +1,11 @@
 
 import * as Cesium from "cesium";
 import {
-    formatDistance,
     editableLabel,
     createClampedLineGeometryInstance,
     createClampedLinePrimitive,
-    createLabelPrimitive,
     createPointPrimitive,
     generateId,
-    calculateClampedDistance,
     calculateClampedDistanceFromArray,
     getPickedObjectType,
     getPrimitiveByPointPosition,
@@ -31,6 +28,7 @@ export function handleFireTrailLeftClick(movement) {
     // this.coordinate = cartesian;
 
     const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
+    console.log("🚀  pickedObject:", pickedObject);
     const pickedObjectType = getPickedObjectType(pickedObject, "fire_trail");
 
     determineClickAction.call(this, pickedObjectType, pickedObject);
@@ -71,21 +69,63 @@ function handleLabelClick(pickedObject) {
 }
 
 /**
- * Handles point click actions.
+ * Handles actions when a point is clicked.
+ * Depending on the measurement state and mode, it selects, removes, or continues measurements.
  * @param {Object} pickedObject - The clicked primitive object.
  */
 function handlePointClick(pickedObject) {
     const pointPrimitive = pickedObject.primitive;
 
-    if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {    // When the measure is complete and not in add mode
+    // If the measurement is complete and not in add mode, select the fire trail
+    if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {
         selectFireTrail.call(this, pointPrimitive);
     }
 
-    if (this.coords.cache.length > 0 && !this.flags.isMeasurementComplete) {    // it is during measuring
+    // If currently measuring (measurement not complete) and cache has points, remove action
+    if (this.coords.cache.length > 0 && !this.flags.isMeasurementComplete) {
         removeActionByPointMeasuring.call(this, pointPrimitive);
     }
 
-    //TODO:  feat: picked up first or last point and continue that group coordinate measure
+    // If the measurement is complete, check if clicked point is first or last in the group to allow continue measurement
+    if (this.flags.isMeasurementComplete) {
+        // Find the group that contains the clicked point
+        const group = this.coords.groups.find(group =>
+            group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pointPrimitive.position))
+        );
+
+        // If no group is found, exit the function
+        if (!group) {
+            console.warn("Clicked point does not belong to any group.");
+            return;
+        }
+
+        // Find the index of the clicked point within the group
+        const pointIndex = group.coordinates.findIndex(cart =>
+            Cesium.Cartesian3.equals(cart, pointPrimitive.position)
+        );
+
+        // Determine if the clicked point is the first or last point in the group
+        const isFirstPoint = pointIndex === 0;
+        const isLastPoint = pointIndex === group.coordinates.length - 1;
+
+        if (isFirstPoint || isLastPoint) {
+            // Remove the total distance label associated with the group
+            const totalLabel = this.labelCollection._labels.find(label =>
+                label.id &&
+                label.id.includes("fire_trail_label_total") &&
+                Cesium.Cartesian3.equals(label.position, group.coordinates[group.coordinates.length - 1])
+            );
+
+            if (totalLabel) {
+                this.labelCollection.remove(totalLabel);
+            }
+
+            // Reset measurement state to allow continuation
+            this.flags.isMeasurementComplete = false;
+            this.coords.cache = group.coordinates;
+            this.flags.isReverse = isFirstPoint; // Reverse if the first point was clicked
+        }
+    }
 }
 
 /**
@@ -150,128 +190,120 @@ function removeActionByPointMeasuring(pointPrimitive) {
         );
         if (pointIndex !== -1) this.coords.cache.splice(pointIndex, 1);
 
-        // Update following label primitives
-        const followingPositions = this.coords.cache.slice(pointIndex);
-        const followingIndex = pointIndex;
-        this._updateFollowingLabelPrimitives(
-            followingPositions,
-            followingIndex,
-            { coordinates: this.coords.cache }
-        );
+        // Update or create labels for the group
+        this.updateOrCreateLabels(group);
 
         if (group.coordinates.length === 0) {
             this.flags.isMeasurementComplete = true; // When removing the only point, consider the measure ended
+            this.interactivePrimitives.selectedLines = [];
+            this.coords.groupToSubmit = null;
         }
     }
 }
 
+/**
+ * Starts a new measurement by initializing necessary parameters and creating point primitives.
+ */
 function startMeasure() {
+    // Reset the measurement completion flag if the measurement was previously complete
     if (this.flags.isMeasurementComplete) {
         this.flags.isMeasurementComplete = false;
     }
 
-    // Initiate cache if it is empty, start a new group and assign cache to it
+    // Initialize a new group if the coordinate cache is empty
     if (this.coords.cache.length === 0) {
-        // Create a new group with trailId and coordinates
         const newGroup = {
             trailId: generateIdByTimestamp(),
             coordinates: [],
-            labelNumberIndex: this.coords.groupCounter, // Assign unique labelNumberIndex to the group
+            labelNumberIndex: this.coords.groupCounter, // Unique index for labeling
         };
         this.coords.groups.push(newGroup);
-        // Link cache to the coordinates array of the new group
-        this.coords.cache = newGroup.coordinates;
+        this.coords.cache = newGroup.coordinates; // Link cache to the new group's coordinates
         this.coords.groupCounter++;
     }
 
-    // reset select to highlight to default color
-    if (this.coords.groupToSubmit && this.coords.groupToSubmit?.coordinates) {
-        const lines = this.lookupLinesByPositions(this.coords.groupToSubmit.coordinates);
+    // Reset the selection highlight to the default color for lines to submit
+    if (this.coords.groupToSubmit?.coordinates) {
+        const lines = this.findLinesByPositions(this.coords.groupToSubmit.coordinates);
         lines.forEach(line => {
-            if (!line.isSubmitted) {    // don't change submitted line color
-                // Reset line color
+            if (!line.isSubmitted) { // Do not change color of submitted lines
                 this.changeLinePrimitiveColor(line, 'default');
             }
         });
     }
 
-    // Create point primitive
+    // Check if the current coordinate is near any existing point (distance < 0.3)
     const isNearPoint = this.coords.groups
         .flatMap(group => group.coordinates)
         .some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.3);
 
     let firstPointPosition;
     if (!isNearPoint) {
-        // Create a new point primitive
+        // Create a new point primitive at the current coordinate with red color
         const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
         point.id = generateId(this.coordinate, "fire_trail_point_pending");
         const pointPrimitive = this.pointCollection.add(point);
         firstPointPosition = pointPrimitive.position.clone();
-        // Update coordinate data cache
-        this.coords.cache.push(this.coordinate);
+
+        // Update the coordinate cache based on the measurement direction
+        if (this.flags.isReverse) {
+            this.coords.cache.unshift(this.coordinate);
+        } else {
+            this.coords.cache.push(this.coordinate);
+        }
     }
 
+    // Continue measurement if there are enough points in the cache
     if (this.coords.cache.length > 1) {
         continueMeasure.call(this, firstPointPosition);
     }
 }
 
+/**
+ * Continues the measurement by adding a new line primitive and updating labels.
+ * @param {Cesium.Cartesian3} position - The position to continue measuring from.
+ */
 function continueMeasure(position) {
-    // Remove the moving line and label primitives
+    // Remove the moving line and label primitives to prepare for the new measurement
     this.removeMovingPrimitives();
 
-    //TODO: the conitnue measure logic should handle the case either it is the first point or the last point
+    // Find the group that contains the given position
+    const group = this.coords.groups.find(group =>
+        group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, position))
+    );
 
-    const group = this.coords.groups.find(group => group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, position)));
+    if (!group) {
+        console.warn("Group not found for the given position.");
+        return;
+    }
 
-    const prevIndex = group.coordinates.length - 2;
-    const currIndex = group.coordinates.length - 1;
+    // Determine the indices of the previous and current points based on the measurement direction
+    const [prevIndex, currIndex] = this.flags.isReverse
+        ? [0, 1] // If reversing, use the first two points
+        : [group.coordinates.length - 2, group.coordinates.length - 1]; // Otherwise, use the last two points
+
     const prevPointCartesian = group.coordinates[prevIndex];
     const currPointCartesian = group.coordinates[currIndex];
 
-    // Create line primitive
+    // Create the geometry instance for the new line primitive
     const lineGeometryInstance = createClampedLineGeometryInstance(
         [prevPointCartesian, currPointCartesian],
         "fire_trail_line_pending"
     );
+
+    // Create the line primitive with the specified geometry and color
     const linePrimitive = createClampedLinePrimitive(
         lineGeometryInstance,
         Cesium.Color.YELLOWGREEN,
         this.cesiumPkg.GroundPolylinePrimitive
     );
+
+    // Mark the line as not submitted and add it to the scene
     linePrimitive.isSubmitted = false;
     this.viewer.scene.primitives.add(linePrimitive);
 
-    // Create label primitive
-    const { distance } = calculateClampedDistance(
-        prevPointCartesian,
-        currPointCartesian,
-        this.viewer.scene,
-        4
-    );
-    const midPoint = Cesium.Cartesian3.midpoint(
-        prevPointCartesian,
-        currPointCartesian,
-        new Cesium.Cartesian3()
-    );
-
-    // FIXME: getLabelProperties is less reusbale, 
-    // consider lookup outside the function and pass necessary parameter to genereate that label properties
-    const { currentLetter, labelNumberIndex } = this._getLabelProperties(
-        this.coordinate,
-        this.coords.cache,
-    );
-
-    const label = createLabelPrimitive(
-        prevPointCartesian,
-        currPointCartesian,
-        distance
-    );
-    label.show = this.flags.isShowLabels;
-    label.showBackground = this.flags.isShowLabels;
-    label.id = generateId(midPoint, "fire_trail_label_pending");
-    label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
-    this.labelCollection.add(label);
+    // Update or create the associated labels for the group
+    this.updateOrCreateLabels(group);
 }
 
 function addAction(linePrimitive) {
@@ -327,6 +359,7 @@ function addAction(linePrimitive) {
     );
     if (existedLabel) this.labelCollection.remove(existedLabel);
 
+    // Create reconnect primitives
     if (neighbourPositions.length === 3) {
         neighbourPositions.forEach((pos, i) => {
             // Create line primitives
@@ -342,39 +375,12 @@ function addAction(linePrimitive) {
                 );
                 newLinePrimitive.isSubmitted = false;
                 this.viewer.scene.primitives.add(newLinePrimitive);
-
-                // Create label primitives
-                const { distance } = calculateClampedDistance(
-                    pos,
-                    neighbourPositions[i + 1],
-                    this.viewer.scene,
-                    4
-                );
-                const newMidPoint = Cesium.Cartesian3.midpoint(
-                    pos,
-                    neighbourPositions[i + 1],
-                    new Cesium.Cartesian3()
-                );
-                const label = createLabelPrimitive(pos, neighbourPositions[i + 1], distance);
-                label.show = this.flags.isShowLabels;
-                label.showBackground = this.flags.isShowLabels;
-                label.id = generateId(newMidPoint, "fire_trail_label");
-
-                // Use the updated _getLabelProperties method
-                const { currentLetter, labelNumberIndex } = this._getLabelProperties(
-                    neighbourPositions[i + 1],
-                    group.coordinates
-                );
-                label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
-                this.labelCollection.add(label);
             }
         });
     }
 
-    // Update following label primitives
-    const followingIndex = positionIndex + 1;
-    const followingPositions = group.coordinates.slice(positionIndex + 1);
-    this._updateFollowingLabelPrimitives(followingPositions, followingIndex, group);
+    // Update or create labels for the group
+    this.updateOrCreateLabels(group);
 
     // Recalculate distances and total distance
     const { distances, totalDistance } = calculateClampedDistanceFromArray(
@@ -383,20 +389,8 @@ function addAction(linePrimitive) {
         4
     );
 
-    // Update total distance label
-    const totalLabel = this.labelCollection._labels.find(
-        label =>
-            label.id &&
-            label.id.includes("fire_trail_label_total") &&
-            Cesium.Cartesian3.equals(
-                label.position,
-                group.coordinates[group.coordinates.length - 1]
-            )
-    );
-    if (totalLabel) {
-        totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
-        totalLabel.position = group.coordinates[group.coordinates.length - 1];
-    }
+    // Update or create total distance label
+    this.updateOrCreateTotalLabel(group, totalDistance);
 
     // update selected line color
     this.updateSelectedLineColor(group);
@@ -435,7 +429,7 @@ function selectFireTrail(primitive) {
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pos[0]))
             );
             // lookup the previous selected lines
-            const prevLines = this.lookupLinesByPositions(prevGroup.coordinates);
+            const prevLines = this.findLinesByPositions(prevGroup.coordinates);
             // reset the previous selected lines
             prevLines.forEach(line => {
                 // don't change submitted line color
@@ -447,7 +441,7 @@ function selectFireTrail(primitive) {
         }
 
         // Highlight the current selected lines
-        const lines = this.lookupLinesByPositions(group.coordinates);
+        const lines = this.findLinesByPositions(group.coordinates);
         lines.forEach(line => {
             // don't change submitted line color
             if (!line.isSubmitted) {    // don't change submitted line color

@@ -80,9 +80,17 @@ export function handleFireTrailRightClick(movement) {
             this.pointCollection.add(lastPoint);
 
             // Create last line
-            const firstPoint = this.coords.cache[this.coords.cache.length - 1];
+            let referencePointCartesian = null;
+            if (this.flags.isReverse) {
+                referencePointCartesian = this.coords.cache[0];
+                this.coords.cache.unshift(this.coordinate);
+            } else {
+                referencePointCartesian = this.coords.cache[this.coords.cache.length - 1];
+                // Update coordinate data cache
+                this.coords.cache.push(this.coordinate);
+            }
             const lineGeometryInstance = createClampedLineGeometryInstance(
-                [firstPoint, this.coordinate],
+                [referencePointCartesian, this.coordinate],
                 "fire_trail_line"
             );
             const linePrimitive = createClampedLinePrimitive(
@@ -93,61 +101,30 @@ export function handleFireTrailRightClick(movement) {
             linePrimitive.isSubmitted = false;
             this.viewer.scene.primitives.add(linePrimitive);
 
-            // Update coordinate data cache
-            this.coords.cache.push(this.coordinate);
-
             // Create last label
-            const { distance } = calculateClampedDistance(
-                firstPoint,
-                this.coordinate,
+            const group = this.coords.groups.find(g => g.coordinates.some(cart => Cesium.Cartesian3.equals(this.coordinate, cart)));
+
+            this.updateOrCreateLabels(group);
+
+            // Total distance label
+            const { distances, totalDistance } = calculateClampedDistanceFromArray(
+                this.coords.cache,
                 this.viewer.scene,
                 4
             );
-            const midPoint = Cesium.Cartesian3.midpoint(
-                firstPoint,
-                this.coordinate,
-                new Cesium.Cartesian3()
-            );
-            const label = createLabelPrimitive(firstPoint, this.coordinate, distance);
-            const { currentLetter, labelNumberIndex } = this._getLabelProperties(
-                this.coordinate,
-                this.coords.cache
-            );
-            label.show = this.flags.isShowLabels;
-            label.showBackground = this.flags.isShowLabels;
-            label.id = generateId(midPoint, "fire_trail_label");
-            label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
-            this.labelCollection.add(label);
+            // Create or update total label
+            this.updateOrCreateTotalLabel(group, totalDistance);
+
+            // Log distance result
+            this.updateMultiDistancesLogRecords(distances, totalDistance);
         }
-
-        // Total distance label
-        const { distances, totalDistance } = calculateClampedDistanceFromArray(
-            this.coords.cache,
-            this.viewer.scene,
-            4
-        );
-        const totalLabel = createLabelPrimitive(
-            this.coordinate,
-            this.coordinate,
-            totalDistance
-        );
-        totalLabel.show = this.flags.isShowLabels;
-        totalLabel.showBackground = this.flags.isShowLabels;
-        totalLabel.id = generateId(this.coordinate, "fire_trail_label_total");
-        totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
-        totalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
-        totalLabel.position = this.coords.cache[this.coords.cache.length - 1];
-        this.labelCollection.add(totalLabel);
-
-        // Log distance result
-        this.updateMultiDistancesLogRecords(distances, totalDistance);
 
         // Set selectedGroup to current group's coordinates
         const currentGroup = this.coords.groups[this.coords.groups.length - 1];
         this.coords.groupToSubmit = currentGroup
 
         // update selected line
-        const lines = this.lookupLinesByPositions(currentGroup.coordinates);
+        const lines = this.findLinesByPositions(currentGroup.coordinates);
         this.interactivePrimitives.selectedLines = lines;
         lines.forEach(line => {
             if (!line.isSubmitted) {    // don't change submitted line color
@@ -155,8 +132,41 @@ export function handleFireTrailRightClick(movement) {
             }
         });
 
-        this.flags.isMeasurementComplete = true;
+        // set flags
+        this.flags.isMeasurementComplete = true; // set to true to prevent further measurement
+        this.flags.isReverse = false; // reset reverse flag
+
         // Clear cache
         this.coords.cache = [];
     }
 }
+
+// function createOrUpdateTotalLabel(group, totalDistance) {
+//     const currentPosition = group.coordinates[group.coordinates.length - 1];
+
+//     let totalLabel = this.labelCollection._labels.find(
+//         label =>
+//             label.id &&
+//             label.id.includes("fire_trail_label_total") &&
+//             group.coordinates.some(pos => Cesium.Cartesian3.equals(label.position, pos))
+//     );
+
+//     if (!totalLabel) {
+//         const label = createLabelPrimitive(
+//             currentPosition,
+//             currentPosition,
+//             totalDistance
+//         );
+//         totalLabel = this.labelCollection.add(label);
+//     }
+
+//     // Update label properties for both new and existing labels
+//     totalLabel.id = generateId(currentPosition, "fire_trail_label_total");
+//     totalLabel.show = this.flags.isShowLabels;
+//     totalLabel.showBackground = this.flags.isShowLabels;
+//     totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
+//     totalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
+//     totalLabel.position = currentPosition;
+
+//     return totalLabel;
+// }

@@ -1,11 +1,8 @@
 import * as Cesium from "cesium";
 import {
-    formatDistance,
-    generateId,
     calculateClampedDistanceFromArray,
     getPickedObjectType,
     getPrimitiveByPointPosition,
-    showCustomNotification,
     positionKey,
 } from "../../helper/helper.js";
 
@@ -41,7 +38,7 @@ function handlePointDoubleClick(pickedObject) {
 
 function handleLineDoubleClick(pickedObject) {
     const linePrimitive = pickedObject.primitive;
-    setAddModeByLine.call(this, linePrimitive);
+    this.removeLineSetByPrimitive(linePrimitive, "line");
 }
 
 /**
@@ -87,17 +84,6 @@ async function removeActionByPoint(pointPrimitive) {
 
         const group = this.coords.groups[groupIndex];
 
-        // Identify the last point in the group to update the total label later
-        const lastPoint = group.coordinates[group.coordinates.length - 1];
-
-        // Find the total label associated with the last point
-        const targetTotalLabel = this.labelCollection._labels.find(
-            label =>
-                label.id &&
-                label.id.includes("fire_trail_label_total") &&
-                Cesium.Cartesian3.equals(label.position, lastPoint)
-        );
-
         // Identify neighboring positions to reconnect the remaining points, lines, and labels
         const neighbourPositions = this.findNeighbourPosition(pointPosition, group);
         this._createReconnectPrimitives(neighbourPositions, group);
@@ -108,10 +94,8 @@ async function removeActionByPoint(pointPrimitive) {
         );
         if (pointIndex !== -1) group.coordinates.splice(pointIndex, 1);
 
-        // Update labels for the remaining points after removal
-        const followingPositions = group.coordinates.slice(pointIndex);
-        const followingIndex = pointIndex;
-        this._updateFollowingLabelPrimitives(followingPositions, followingIndex, group);
+        // update or create labels for the group
+        this.updateOrCreateLabels(group);
 
         // Calculate the updated distances and total distance after removal
         const { distances, totalDistance } = calculateClampedDistanceFromArray(
@@ -120,17 +104,11 @@ async function removeActionByPoint(pointPrimitive) {
             4
         );
 
-        // Update the total label
-        if (targetTotalLabel) {
-            const newLastPoint = group.coordinates[group.coordinates.length - 1];
-            targetTotalLabel.id = generateId(newLastPoint, "fire_trail_label_total");
-            targetTotalLabel.text = `Total: ${formatDistance(totalDistance)}`;
-            targetTotalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
-            targetTotalLabel.position = newLastPoint;
-        }
+        // Update or create the total label for the group
+        this.updateOrCreateTotalLabel(group, totalDistance);
 
         // Reset the submission status of all associated lines
-        const lines = this.lookupLinesByPositions(group.coordinates)
+        const lines = this.findLinesByPositions(group.coordinates)
         lines.forEach(line => line.isSubmitted = false);
 
         // Update the color of selected lines to indicate selection change
@@ -200,37 +178,5 @@ async function removeActionByPoint(pointPrimitive) {
             // Log the removal of the trail
             this.logRecordsCallback(`${group.trailId} Removed`);
         }
-    }
-}
-
-
-function setAddModeByLine(linePrimitive) {
-    // Reset previous hovered line if any
-    if (
-        this.interactivePrimitives.hoveredLine &&
-        this.interactivePrimitives.hoveredLine !== linePrimitive
-    ) {
-        resetLineColor(this.interactivePrimitives.hoveredLine);
-        this.changeLinePrimitiveColor(this.interactivePrimitives.hoveredLine, 'default');
-        this.interactivePrimitives.hoveredLine = null;
-    }
-
-    // Reset previous selected line if different
-    if (
-        this.interactivePrimitives.selectedLine &&
-        this.interactivePrimitives.selectedLine !== linePrimitive
-    ) {
-        // resetLineColor(this.interactivePrimitives.selectedLine);
-        this.changeLinePrimitiveColor(this.interactivePrimitives.selectedLine, 'default');
-    }
-
-    // Change line color to indicate selection
-    this.changeLinePrimitiveColor(linePrimitive, 'add');
-    this.interactivePrimitives.selectedLine = linePrimitive;
-
-    // Set flag to indicate add mode
-    if (this.interactivePrimitives.selectedLine) {
-        this.flags.isAddMode = true;
-        showCustomNotification('you have entered add line mode', this.viewer.container);
     }
 }

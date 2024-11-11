@@ -52,26 +52,52 @@ function determineMoveAction(pickedObjects, cartesian) {
  * @param {Cesium.Cartesian3} cartesian 
  */
 function handleActiveMeasure(cartesian) {
-    // Calculate the distance between the last selected point and the current cartesian position
-    const lastPointCartesian = this.coords.cache[this.coords.cache.length - 1]
+    // Determine the reference point based on measurement direction
+    let referencePointCartesian = null;
+    if (this.flags.isReverse) {
+        referencePointCartesian = this.coords.cache[0];
+    } else {
+        referencePointCartesian = this.coords.cache[this.coords.cache.length - 1];
+    }
 
-    // remove moving line and label primitives
+    // Remove existing moving primitives
     this.removeMovingPrimitives();
-    // create line primitive
-    const movingLineGeometryInstance = createClampedLineGeometryInstance([lastPointCartesian, cartesian], "fire_trail_line_moving");
-    const movingLinePrimitive = createClampedLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
-    const movingLine = this.viewer.scene.primitives.add(movingLinePrimitive);
-    this.interactivePrimitives.movingPolylines.push(movingLine);
 
-    // create label primitive
-    const { distance } = calculateClampedDistance(lastPointCartesian, cartesian, this.viewer.scene, 4);
-    const midPoint = Cesium.Cartesian3.midpoint(lastPointCartesian, cartesian, new Cesium.Cartesian3());
-    const label = createLabelPrimitive(lastPointCartesian, cartesian, distance);
-    label.showBackground = false;
-    label.show = this.flags.isShowLabels;
-    label.id = generateId(midPoint, "fire_trail_label_moving");
-    const movingLabel = this.labelCollection.add(label);
-    this.interactivePrimitives.movingLabels.push(movingLabel);
+    // Create current line geometry instance
+    const currentLineGeometry = createClampedLineGeometryInstance(
+        [referencePointCartesian, cartesian],
+        "fire_trail_line_moving"
+    );
+    const currentLinePrimitive = createClampedLinePrimitive(
+        currentLineGeometry,
+        Cesium.Color.YELLOW,
+        this.cesiumPkg.GroundPolylinePrimitive
+    );
+    const addedLinePrimitive = this.viewer.scene.primitives.add(currentLinePrimitive);
+    this.interactivePrimitives.movingPolylines.push(addedLinePrimitive);
+
+    // Calculate distance and create label
+    const { distance: calculatedDistance } = calculateClampedDistance(
+        referencePointCartesian,
+        cartesian,
+        this.viewer.scene,
+        4
+    );
+    const labelPosition = Cesium.Cartesian3.midpoint(
+        referencePointCartesian,
+        cartesian,
+        new Cesium.Cartesian3()
+    );
+    const distanceLabel = createLabelPrimitive(
+        referencePointCartesian,
+        cartesian,
+        calculatedDistance
+    );
+    distanceLabel.showBackground = false;
+    distanceLabel.show = this.flags.isShowLabels;
+    distanceLabel.id = generateId(labelPosition, "fire_trail_label_moving");
+    const addedLabelPrimitive = this.labelCollection.add(distanceLabel);
+    this.interactivePrimitives.movingLabels.push(addedLabelPrimitive);
 }
 
 /**

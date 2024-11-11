@@ -2,8 +2,6 @@ import * as Cesium from "cesium";
 import {
     formatDistance,
     removeInputActions,
-    editableLabel,
-    updatePointerOverlay,
     createClampedLineGeometryInstance,
     createClampedLinePrimitive,
     createLabelPrimitive,
@@ -13,7 +11,6 @@ import {
     calculateClampedDistanceFromArray,
     getPickedObjectType,
     getPrimitiveByPointPosition,
-    generateIdByTimestamp,
     positionKey,
     showCustomNotification,
 } from "../../helper/helper.js";
@@ -53,6 +50,7 @@ class FireTrail {
             isAddMode: false,
             isSubmitting: false,
             isShowLabels: false,
+            isReverse: false,
         };
 
         // Coordinate management and related properties
@@ -185,7 +183,7 @@ class FireTrail {
                 resetLinesColor(this.interactivePrimitives.selectedLines);
 
                 // highlight the drag lines as selected lines
-                const lines = this.lookupLinesByPositions(group.coordinates);
+                const lines = this.findLinesByPositions(group.coordinates);
                 this.interactivePrimitives.selectedLines = lines;
                 lines.forEach(line => {
                     if (!line.isSubmitted) {    // don't change submitted line color
@@ -429,7 +427,7 @@ class FireTrail {
             this.coords.groupToSubmit = group;
 
             // Update selected line color
-            const lines = this.lookupLinesByPositions(group.coordinates);
+            const lines = this.findLinesByPositions(group.coordinates);
             this.interactivePrimitives.selectedLines = lines;
             this.updateSelectedLineColor(group);
 
@@ -450,12 +448,40 @@ class FireTrail {
         const pickedObjectType = getPickedObjectType(pickedObject, "fire_trail");
 
         switch (pickedObjectType) {
-            case "point":
-                this.removeLineSetByPrimitive(pickedObject.primitive, "point");
-                break;
             case "line":
-                this.removeLineSetByPrimitive(pickedObject.primitive, "line");
+                this.setAddModeByLine(pickedObject.primitive);
                 break
+        }
+    }
+
+    setAddModeByLine(linePrimitive) {
+        // Reset previous hovered line if any
+        if (
+            this.interactivePrimitives.hoveredLine &&
+            this.interactivePrimitives.hoveredLine !== linePrimitive
+        ) {
+            resetLineColor(this.interactivePrimitives.hoveredLine);
+            this.changeLinePrimitiveColor(this.interactivePrimitives.hoveredLine, 'default');
+            this.interactivePrimitives.hoveredLine = null;
+        }
+
+        // Reset previous selected line if different
+        if (
+            this.interactivePrimitives.selectedLine &&
+            this.interactivePrimitives.selectedLine !== linePrimitive
+        ) {
+            // resetLineColor(this.interactivePrimitives.selectedLine);
+            this.changeLinePrimitiveColor(this.interactivePrimitives.selectedLine, 'default');
+        }
+
+        // Change line color to indicate selection
+        this.changeLinePrimitiveColor(linePrimitive, 'add');
+        this.interactivePrimitives.selectedLine = linePrimitive;
+
+        // Set flag to indicate add mode
+        if (this.interactivePrimitives.selectedLine) {
+            this.flags.isAddMode = true;
+            showCustomNotification('you have entered add line mode', this.viewer.container);
         }
     }
 
@@ -484,7 +510,7 @@ class FireTrail {
         if (!confirm(`Do you want to remove the fire trail ${group.trailId}?`)) return;
 
         // Retrieve associated primitives for the group
-        const { pointPrimitives, linePrimitives, labelPrimitives } = this.lookupPrimitivesByPositions(group.coordinates);
+        const { pointPrimitives, linePrimitives, labelPrimitives } = this.findPrimitivesByPositions(group.coordinates);
 
         // Reset color of previously selected lines if they are not submitted
         this.interactivePrimitives.selectedLines.forEach(line => {
@@ -583,43 +609,11 @@ class FireTrail {
             );
             const { currentLetter, labelNumberIndex } = this._getLabelProperties(
                 neighbourPositions[1],
-                group.coordinates
+                group
             );
             label.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
             this.labelCollection.add(label);
         }
-    }
-
-    _updateFollowingLabelPrimitives(followingPositions, followingIndex, group) {
-        // Get mid points from following positions
-        const midPoints = followingPositions.slice(0, -1).map((pos, i) =>
-            Cesium.Cartesian3.midpoint(pos, followingPositions[i + 1], new Cesium.Cartesian3())
-        );
-
-        // Find the relative label primitives by midpoint
-        const labelPrimitives = this.labelCollection._labels.filter(
-            label => label.id && label.id.includes("fire_trail_label")
-        );
-        // Update label text
-        midPoints.forEach((midPoint, index) => {
-            const relativeLabelPrimitives = labelPrimitives.filter(l =>
-                Cesium.Cartesian3.equals(l.position, midPoint)
-            );
-            const currentLetter = String.fromCharCode(97 + (followingIndex + index) % 26);
-            const { labelNumberIndex } = this._getLabelProperties(
-                followingPositions[index],
-                group.coordinates
-            );
-            const { distance } = calculateClampedDistance(
-                followingPositions[index],
-                followingPositions[index + 1],
-                this.viewer.scene,
-                4
-            );
-            relativeLabelPrimitives.forEach(l => {
-                l.text = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
-            });
-        });
     }
 
     /******************
@@ -773,7 +767,7 @@ class FireTrail {
 
         try {
             // Retrieve all line primitives associated with the group's coordinates
-            const lines = this.lookupLinesByPositions(groupToSubmit.coordinates);
+            const lines = this.findLinesByPositions(groupToSubmit.coordinates);
 
             // Log the submission action by sending the payload to the server
             const response = await this.actionLogger("annotateTracks_V5", payload);
@@ -833,14 +827,13 @@ class FireTrail {
     /**
      * Get the label text properties based on the position and the positions array.
      * @param {Cesium.Cartesian3} position - The current position.
-     * @param {Cesium.Cartesian3[]} positionArray - The array of positions in the current group (this.coords.cache).
+     * @param {}
      * @returns {{ currentLetter: String, labelNumberIndex: Number }} - The label text properties.
      */
-    _getLabelProperties(position, positionArray) {
-        // Find the index of the position in the positionArray
-        const positionIndexInCache = positionArray.findIndex(cart =>
-            cart && Cesium.Cartesian3.equals(cart, position)
-        );
+    _getLabelProperties(position, group) {
+        // Find the index of the position in group
+        const positionIndexInCache = group.coordinates.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
+        if (positionIndexInCache === -1) return { currentLetter: "", labelNumberIndex: 0 };
 
         // Calculate label index
         const labelIndex = positionIndexInCache - 1;
@@ -848,11 +841,6 @@ class FireTrail {
 
         // Map index to alphabet letters starting from 'a'
         const currentLetter = String.fromCharCode(97 + (adjustedLabelIndex % 26));
-
-        // Find the group that contains the position
-        const group = this.coords.groups.find(group =>
-            group.coordinates.some(cart => cart && Cesium.Cartesian3.equals(cart, position))
-        );
 
         // Use labelNumberIndex from the group
         const labelNumberIndex = group.labelNumberIndex
@@ -887,7 +875,7 @@ class FireTrail {
      * @param {Cesium.Cartesian3[]} positions - The array of Cartesian3 positions to lookup the lines.
      * @returns {Object} - The array of line primitives that match the positions.
      */
-    lookupPrimitivesByPositions(positions) {
+    findPrimitivesByPositions(positions) {
         // lookup points primitives
         const pointPrimitives = this.pointCollection._pointPrimitives
             .filter(p =>
@@ -897,7 +885,7 @@ class FireTrail {
                 positions.some(pos => Cesium.Cartesian3.equals(p.position, pos))
             )
         // lookup line primitives
-        const linePrimitives = this.lookupLinesByPositions(positions);
+        const linePrimitives = this.findLinesByPositions(positions);
 
         // lookup label primitives
         const midPoints = positions.slice(0, -1).map((pos, i) =>
@@ -926,7 +914,7 @@ class FireTrail {
      * @param {Cesium.Cartesian3[]} positions - The array of Cartesian3 positions to lookup the lines.
      * @returns {Cesium.Primitive[]} - The array of line primitives that match the positions.
      */
-    lookupLinesByPositions(positions) {
+    findLinesByPositions(positions) {
         // Create a set of position keys from the input positions for quick lookup
         const positionKeys = new Set(positions.map(pos => positionKey(pos)));
 
@@ -957,6 +945,87 @@ class FireTrail {
 
         // Convert the set of line primitives to an array and return it
         return Array.from(linePrimitives);
+    }
+
+    updateOrCreateLabels(group) {
+        const midPoints = group.coordinates.slice(0, -1).map((pos, i) =>
+            Cesium.Cartesian3.midpoint(pos, group.coordinates[i + 1], new Cesium.Cartesian3())
+        );
+        const labelPrimitives = this.labelCollection._labels.filter(
+            l => l.id && l.id.includes("fire_trail_label")
+        );
+
+        midPoints.forEach((midPoint, index) => {
+            let relativeLabelPrimitives = labelPrimitives.filter(l =>
+                Cesium.Cartesian3.equals(l.position, midPoint)
+            );
+
+            const currentLetter = String.fromCharCode(97 + index);
+            const { labelNumberIndex } = this._getLabelProperties(
+                group.coordinates[index],
+                group
+            );
+            const { distance } = calculateClampedDistance(
+                group.coordinates[index],
+                group.coordinates[index + 1],
+                this.viewer.scene,
+                4
+            );
+            const labelText = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
+
+            if (relativeLabelPrimitives.length > 0) {
+                // Update existing labels
+                relativeLabelPrimitives.forEach(label => {
+                    label.text = labelText;
+                    label.show = this.flags.isShowLabels;
+                    label.showBackground = this.flags.isShowLabels;
+                });
+            } else {
+                // Create new label
+                const newLabel = createLabelPrimitive(
+                    group.coordinates[index],
+                    group.coordinates[index + 1],
+                    distance
+                );
+                newLabel.text = labelText;
+                newLabel.show = this.flags.isShowLabels;
+                newLabel.showBackground = this.flags.isShowLabels;
+                newLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
+                newLabel.position = midPoint;
+                newLabel.id = generateId(midPoint, "fire_trail_label");
+                this.labelCollection.add(newLabel);
+            }
+        });
+    }
+
+    updateOrCreateTotalLabel(group, totalDistance) {
+        const currentPosition = group.coordinates[group.coordinates.length - 1];
+
+        let totalLabel = this.labelCollection._labels.find(
+            label =>
+                label.id &&
+                label.id.includes("fire_trail_label_total") &&
+                group.coordinates.some(pos => Cesium.Cartesian3.equals(label.position, pos))
+        );
+
+        if (!totalLabel) {
+            const label = createLabelPrimitive(
+                currentPosition,
+                currentPosition,
+                totalDistance
+            );
+            totalLabel = this.labelCollection.add(label);
+        }
+
+        // Update label properties for both new and existing labels
+        totalLabel.id = generateId(currentPosition, "fire_trail_label_total");
+        totalLabel.show = this.flags.isShowLabels;
+        totalLabel.showBackground = this.flags.isShowLabels;
+        totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
+        totalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
+        totalLabel.position = currentPosition;
+
+        return totalLabel;
     }
 
     /**
@@ -1038,7 +1107,7 @@ class FireTrail {
         // );
         // if (groupIndex === -1) return;
         // const group = this.coords.groups[groupIndex];
-        const lines = this.lookupLinesByPositions(group.coordinates);
+        const lines = this.findLinesByPositions(group.coordinates);
 
         // check if there is one line in the this.interactivePrimitives.selectedLines
         let isLineSetSelected = false;
