@@ -420,6 +420,9 @@ function selectFireTrail(primitive) {
         // show notification
         showCustomNotification(`selected line: ${group.trailId}`, this.viewer.container)
 
+        // update log records callback for the current selected line
+        this.logRecordsCallback(`${group.trailId} selected`);
+
         // Reset previous selection
         if (this.interactivePrimitives.selectedLines.length > 0) {
             // use selectedLines that is before update to look up previous selected lines

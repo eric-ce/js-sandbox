@@ -18,6 +18,7 @@ import { handleFireTrailLeftClick } from "./fireTrailLeftClick.js";
 import { handleFireTrailMouseMove } from "./fireTrailMouseMove.js";
 import { handleFireTrailDoubleClick } from "./fireTrailDoubleLeftClick.js";
 import { handleFireTrailRightClick } from "./fireTrailRightClick.js";
+import { handleFireTrailMiddleClick } from "./fireTrailMiddleClick.js";
 
 class FireTrail {
     /**
@@ -102,6 +103,7 @@ class FireTrail {
         this.handleFireTrailMouseMove = handleFireTrailMouseMove.bind(this);
         this.handleFireTrailDoubleClick = handleFireTrailDoubleClick.bind(this);
         this.handleFireTrailRightClick = handleFireTrailRightClick.bind(this);
+        this.handleFireTrailMiddleClick = handleFireTrailMiddleClick.bind(this);
     }
 
     /**
@@ -440,134 +442,6 @@ class FireTrail {
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
-    handleFireTrailMiddleClick(movement) {
-        // don't allow middle click when during other actions
-        if (!this.flags.isMeasurementComplete || this.flags.isAddMode || this.flags.isDragMode) return;
-
-        const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
-        const pickedObjectType = getPickedObjectType(pickedObject, "fire_trail");
-
-        switch (pickedObjectType) {
-            case "line":
-                this.setAddModeByLine(pickedObject.primitive);
-                break
-        }
-    }
-
-    setAddModeByLine(linePrimitive) {
-        // Reset previous hovered line if any
-        if (
-            this.interactivePrimitives.hoveredLine &&
-            this.interactivePrimitives.hoveredLine !== linePrimitive
-        ) {
-            resetLineColor(this.interactivePrimitives.hoveredLine);
-            this.changeLinePrimitiveColor(this.interactivePrimitives.hoveredLine, 'default');
-            this.interactivePrimitives.hoveredLine = null;
-        }
-
-        // Reset previous selected line if different
-        if (
-            this.interactivePrimitives.selectedLine &&
-            this.interactivePrimitives.selectedLine !== linePrimitive
-        ) {
-            // resetLineColor(this.interactivePrimitives.selectedLine);
-            this.changeLinePrimitiveColor(this.interactivePrimitives.selectedLine, 'default');
-        }
-
-        // Change line color to indicate selection
-        this.changeLinePrimitiveColor(linePrimitive, 'add');
-        this.interactivePrimitives.selectedLine = linePrimitive;
-
-        // Set flag to indicate add mode
-        if (this.interactivePrimitives.selectedLine) {
-            this.flags.isAddMode = true;
-            showCustomNotification('you have entered add line mode', this.viewer.container);
-        }
-    }
-
-    /**
-     * Remove the line set by the point or line primitive
-     * @param {Cesium.Primitive} primitive - The primitive to lookup group coordinates
-     * 
-     */
-    async removeLineSetByPrimitive(primitive, primitiveType) {
-        let primitivePosition;
-        if (primitiveType === "point") {
-            primitivePosition = primitive.position;
-        } else if (primitiveType === "line") {
-            primitivePosition = primitive.geometryInstances.geometry._positions[0];
-        }
-
-        // Find the index of the group that contains the primitive position
-        const groupIndex = this.coords.groups.findIndex(group =>
-            group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePosition))
-        );
-        if (groupIndex === -1) return; // Error handling: no group found
-
-        const group = this.coords.groups[groupIndex];
-
-        // Confirm removal with the user
-        if (!confirm(`Do you want to remove the fire trail ${group.trailId}?`)) return;
-
-        // Retrieve associated primitives for the group
-        const { pointPrimitives, linePrimitives, labelPrimitives } = this.findPrimitivesByPositions(group.coordinates);
-
-        // Reset color of previously selected lines if they are not submitted
-        this.interactivePrimitives.selectedLines.forEach(line => {
-            if (!line.isSubmitted) {
-                this.changeLinePrimitiveColor(line, 'default');
-            }
-        });
-
-        // Update selected lines to the current group's line primitives and update their colors
-        this.interactivePrimitives.selectedLines = linePrimitives;
-        this.updateSelectedLineColor(group);
-
-        // Remove point, line, and label primitives
-        pointPrimitives.forEach(p => this.pointCollection.remove(p));
-        linePrimitives.forEach(l => this.viewer.scene.primitives.remove(l));
-        labelPrimitives.forEach(l => this.labelCollection.remove(l));
-
-        // If in add mode, exit add mode and notify the user
-        if (this.flags.isAddMode) {
-            this.flags.isAddMode = false;
-            showCustomNotification("You have exited add line mode", this.viewer.container);
-        }
-
-        // Generate a unique key for the group to check submission status
-        const groupKey = group.coordinates.map(pos => positionKey(pos)).join('|');
-        const isLineSetSubmitted = this.sentGroupKeys.has(groupKey);
-
-        // If the line set was submitted, log the removal action
-        if (isLineSetSubmitted) {
-            const payload = {
-                trackId: group.trailId, // Associate with the correct trail ID
-                content: "",
-                comp_length: 0.0,
-            };
-
-            try {
-                // Await the actionLogger promise and handle the response
-                const response = await this.actionLogger("annotateTracks_V5", payload);
-                console.log("✅ Remove action submitted:", response);
-                this.logRecordsCallback({ submitStatus: `${group.trailId} Removed From Server Successfully` });
-            } catch (error) {
-                console.error("❌ Error logging action:", error);
-                alert(`Fire Trail ${group.trailId} Submission Failed`);
-                this.logRecordsCallback({ submitStatus: `${group.trailId} Removal From Server Failed` });
-            }
-        }
-
-        // Remove the group coordinates from the coords.groups array
-        group.coordinates = [];
-
-        // Reset submission-related properties to their default states
-        this.coords.groupToSubmit = null;
-        this.interactivePrimitives.selectedLines = [];
-
-        // Log the removal of the trail
-        this.logRecordsCallback(`${group.trailId} Removed`);
-    }
 
     _createReconnectPrimitives(neighbourPositions, group, isPending = false) {
         if (neighbourPositions.length === 3) {

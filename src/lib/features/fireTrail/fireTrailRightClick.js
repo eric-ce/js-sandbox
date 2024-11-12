@@ -1,13 +1,10 @@
 
 import * as Cesium from "cesium";
 import {
-    formatDistance,
     createClampedLineGeometryInstance,
     createClampedLinePrimitive,
-    createLabelPrimitive,
     createPointPrimitive,
     generateId,
-    calculateClampedDistance,
     calculateClampedDistanceFromArray,
 } from "../../helper/helper.js";
 
@@ -140,33 +137,3 @@ export function handleFireTrailRightClick(movement) {
         this.coords.cache = [];
     }
 }
-
-// function createOrUpdateTotalLabel(group, totalDistance) {
-//     const currentPosition = group.coordinates[group.coordinates.length - 1];
-
-//     let totalLabel = this.labelCollection._labels.find(
-//         label =>
-//             label.id &&
-//             label.id.includes("fire_trail_label_total") &&
-//             group.coordinates.some(pos => Cesium.Cartesian3.equals(label.position, pos))
-//     );
-
-//     if (!totalLabel) {
-//         const label = createLabelPrimitive(
-//             currentPosition,
-//             currentPosition,
-//             totalDistance
-//         );
-//         totalLabel = this.labelCollection.add(label);
-//     }
-
-//     // Update label properties for both new and existing labels
-//     totalLabel.id = generateId(currentPosition, "fire_trail_label_total");
-//     totalLabel.show = this.flags.isShowLabels;
-//     totalLabel.showBackground = this.flags.isShowLabels;
-//     totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
-//     totalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
-//     totalLabel.position = currentPosition;
-
-//     return totalLabel;
-// }

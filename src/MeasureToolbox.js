@@ -60,7 +60,7 @@ export class MeasureToolbox extends HTMLElement {
 
         // Element style position variables
         this.position = {
-            logBox: { top: "350px", right: "0px" },
+            logBox: { top: "380px", right: "0px" },
             helpBox: { top: "70px", right: "0px" },
         };
 
@@ -840,11 +840,12 @@ export class MeasureToolbox extends HTMLElement {
             addLineLeftClick: "Left Click on line to add line",
             addLineDoubleClick: "Double Left Click on line to add line",
             removeLineLeftClick: "Left Click on point to remove line",
-            removeLineDoubleClick: "Double Left Click on point to remove line",
-            removeLineSetMiddleClick: "Middle Click on line or point to remove line set",
+            removeLineMiddleClick: "Middle Click on point to remove line segment",
+            removeLineSetMiddleClick: "Middle Click on line to remove line set",
             pickAnnotation: "Left Click to pick annotation to switch modes",
             chartHoverPoint: "Hover on chart to show point on the map",
             hoverPointChart: "Hover on point to show on chart",
+            continueMeasure: "Left Click on first or last point to continue measure"
         };
 
         // Define the messages to show based on the active mode
@@ -872,8 +873,9 @@ export class MeasureToolbox extends HTMLElement {
                 commonMessages.dragPoint,
                 commonMessages.editLabel,
                 commonMessages.addLineDoubleClick,
-                commonMessages.removeLineDoubleClick,
-                commonMessages.removeLineSetMiddleClick
+                commonMessages.removeLineMiddleClick,
+                commonMessages.removeLineSetMiddleClick,
+                commonMessages.continueMeasure
             ],
             profile: [
                 commonMessages.startMeasure,
@@ -1064,6 +1066,9 @@ export class MeasureToolbox extends HTMLElement {
 
         // Append the populated fragment to the table in the DOM
         table.appendChild(fragment);
+
+        // Auto-scroll to the bottom of the logBox with smooth behavior
+        logBox.scrollTo({ top: logBox.scrollHeight, behavior: 'smooth' });
     }
 
     /**
