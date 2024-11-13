@@ -76,13 +76,11 @@ async function removeActionByPoint(pointPrimitive) {
     // Proceed only if there are existing groups and the measurement is complete
     if (this.coords.groups.length > 0 && this.flags.isMeasurementComplete) {    // when the measure is complete
         // Find the group that contains the point being removed
-        const groupIndex = this.coords.groups.findIndex(group =>
+        const group = this.coords.groups.find(group =>
             group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pointPosition))
         );
         // Exit if no matching group is found
-        if (groupIndex === -1) return;
-
-        const group = this.coords.groups[groupIndex];
+        if (!group) return;
 
         // Identify neighboring positions to reconnect the remaining points, lines, and labels
         const neighbourPositions = this.findNeighbourPosition(pointPosition, group);
@@ -92,7 +90,24 @@ async function removeActionByPoint(pointPrimitive) {
         const pointIndex = group.coordinates.findIndex(cart =>
             Cesium.Cartesian3.equals(cart, pointPosition)
         );
-        if (pointIndex !== -1) group.coordinates.splice(pointIndex, 1);
+        if (pointIndex === -1) return;
+
+        const isRemoveLastPoint = group.coordinates.length - 1 === pointIndex;
+        if (isRemoveLastPoint) {
+            // clone the position
+            const lastPoint = group.coordinates[pointIndex].clone();
+            // find the total label and remove it
+            const targetTotalLabel = this.labelCollection._labels.find(
+                label =>
+                    label.id &&
+                    label.id.includes("fire_trail_label_total") &&
+                    Cesium.Cartesian3.equals(label.position, lastPoint)
+            );
+            if (targetTotalLabel) this.labelCollection.remove(targetTotalLabel);
+        }
+
+        // Remove the point from the group's coordinates
+        group.coordinates.splice(pointIndex, 1);
 
         // update or create labels for the group
         this.updateOrCreateLabels(group);

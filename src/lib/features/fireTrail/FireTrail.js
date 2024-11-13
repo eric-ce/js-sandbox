@@ -706,18 +706,17 @@ class FireTrail {
      */
     _getLabelProperties(position, group) {
         // Find the index of the position in group
-        const positionIndexInCache = group.coordinates.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
-        if (positionIndexInCache === -1) return { currentLetter: "", labelNumberIndex: 0 };
+        const positionIndex = group.coordinates.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
+        if (positionIndex === -1 || positionIndex === 0) return { currentLetter: "", labelNumberIndex: 0 }; // label exist when there is at least 2 position.
 
         // Calculate label index
-        const labelIndex = positionIndexInCache - 1;
-        const adjustedLabelIndex = labelIndex >= 0 ? labelIndex : 0;
+        const labelIndex = positionIndex - 1;
 
         // Map index to alphabet letters starting from 'a'
-        const currentLetter = String.fromCharCode(97 + (adjustedLabelIndex % 26));
+        const currentLetter = String.fromCharCode(97 + (labelIndex % 26));
 
         // Use labelNumberIndex from the group
-        const labelNumberIndex = group.labelNumberIndex
+        const labelNumberIndex = group.labelNumberIndex;
 
         return { currentLetter, labelNumberIndex };
     }
@@ -834,7 +833,10 @@ class FireTrail {
                 Cesium.Cartesian3.equals(l.position, midPoint)
             );
 
-            const currentLetter = String.fromCharCode(97 + index);
+            // Wrap the letter back to 'a' after 'z'
+            const currentLetter = String.fromCharCode(97 + index % 26); // 'a' to 'z' to 'a' to 'z'...
+
+            // Don't use getLabelProperties currentLetter in here as midPoint index is not the group coordinate index
             const { labelNumberIndex } = this._getLabelProperties(
                 group.coordinates[index],
                 group
