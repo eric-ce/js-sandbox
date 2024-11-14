@@ -2,12 +2,11 @@
 import * as Cesium from "cesium";
 import {
     updatePointerOverlay,
-    createClampedLineGeometryInstance,
-    createClampedLinePrimitive,
     createLabelPrimitive,
     generateId,
     calculateClampedDistance,
     getPickedObjectType,
+    createGroundPolylinePrimitive,
 } from "../../helper/helper.js";
 
 /***********************
@@ -63,16 +62,13 @@ function handleActiveMeasure(cartesian) {
     // Remove existing moving primitives
     this.removeMovingPrimitives();
 
-    // Create current line geometry instance
-    const currentLineGeometry = createClampedLineGeometryInstance(
+    // Create current line primitive
+    const currentLinePrimitive = createGroundPolylinePrimitive(
         [referencePointCartesian, cartesian],
-        "fire_trail_line_moving"
-    );
-    const currentLinePrimitive = createClampedLinePrimitive(
-        currentLineGeometry,
+        "fire_trail_line_moving",
         Cesium.Color.YELLOW,
         this.cesiumPkg.GroundPolylinePrimitive
-    );
+    )
     const addedLinePrimitive = this.viewer.scene.primitives.add(currentLinePrimitive);
     this.interactivePrimitives.movingPolylines.push(addedLinePrimitive);
 
@@ -109,12 +105,12 @@ function handleHoverHighlighting(pickedObject) {
 
     // reset highlighting
     const resetHighlighting = () => {
-        const { hoveredLine, selectedLine, selectedLines, hoveredPoint, hoveredLabel } = this.interactivePrimitives;
+        const { hoveredLine, addModeLine, selectedLines, hoveredPoint, hoveredLabel } = this.interactivePrimitives;
         // when mouse move out of the line, reset the line color
         // Reset hovered line if it's not the selected line
         if (
             hoveredLine &&
-            hoveredLine !== selectedLine   // don't change selected line color
+            hoveredLine !== addModeLine   // don't change selected line color
             // !hoveredLine.isSubmitted     // don't change submitted line color
         ) {
             let colorToSet;
@@ -146,7 +142,7 @@ function handleHoverHighlighting(pickedObject) {
     switch (pickedObjectType) {
         case "line":
             const line = pickedObject.primitive;
-            if (line && line !== this.interactivePrimitives.selectedLine) {
+            if (line && line !== this.interactivePrimitives.addModeLine) {
                 this.changeLinePrimitiveColor(line, 'hover');
                 this.interactivePrimitives.hoveredLine = line;
             }

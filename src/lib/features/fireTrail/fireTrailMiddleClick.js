@@ -2,7 +2,6 @@ import * as Cesium from "cesium";
 import {
     calculateClampedDistanceFromArray,
     getPickedObjectType,
-    getPrimitiveByPointPosition,
     positionKey,
 } from "../../helper/helper.js";
 
@@ -57,7 +56,7 @@ async function removeActionByPoint(pointPrimitive) {
     const pointPosition = pointPrimitive.position.clone();
 
     // Retrieve associated line and label primitives based on the point's position
-    const { linePrimitives, labelPrimitives } = getPrimitiveByPointPosition(
+    const { linePrimitives, labelPrimitives } = this.findPrimitiveByPosition(
         pointPosition,
         "annotate_fire_trail",
         this.viewer.scene,
@@ -207,7 +206,7 @@ async function removeLineSetByPrimitive(primitive, primitiveType) {
     if (primitiveType === "point") {
         primitivePosition = primitive.position;
     } else if (primitiveType === "line") {
-        primitivePosition = primitive.geometryInstances.geometry._positions[0];
+        primitivePosition = primitive.positions[0];
     }
 
     // Find the index of the group that contains the primitive position

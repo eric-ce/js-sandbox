@@ -259,6 +259,43 @@ export function createClampedLinePrimitive(geometryInstance, color = Cesium.Colo
     });
 }
 
+export function createGroundPolylinePrimitive(coordinateArray, modeString, color = Cesium.Color.YELLOWGREEN, GroundPolylinePrimitive) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
+        console.error("Invalid array, needs to pass more than 2 position"); // Exit early if coordinateArray is not defined
+    }
+
+    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
+    if (convertedCoordinates.length < 2) {
+        console.error("Conversion failed, pass correct data type"); // Exit early if coordinateArray is not defined
+    }
+
+    const geometryInstance = new Cesium.GeometryInstance({
+        geometry: new Cesium.GroundPolylineGeometry({
+            positions: convertedCoordinates,
+            width: 3
+        }),
+        id: generateId(convertedCoordinates, modeString),
+    });
+
+    const material = new Cesium.Material.fromType('Color', { color: color });
+    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
+
+    const polylinePrimitive = new GroundPolylinePrimitive({
+        geometryInstances: geometryInstance,
+        appearance: appearance,
+        asynchronous: true,
+        releaseGeometryInstances: true,
+    });
+    polylinePrimitive.isSubmitted = false;
+    // FIXME: consider using other property to store the id as the layer primitive also has id property
+    // polylinePrimitive.annotateId = generateId(convertedCoordinates, modeString);
+    polylinePrimitive.id = generateId(convertedCoordinates, modeString);
+    polylinePrimitive.positions = convertedCoordinates;
+
+
+    return polylinePrimitive;
+}
+
 // label primitive
 /**
  * Create a label primitive.

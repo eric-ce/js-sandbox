@@ -30,22 +30,22 @@ export function handleFireTrailDoubleClick(movement) {
 function setAddModeByLine(linePrimitive) {
     // Reset the previously selected line if it exists and is different from the current selection
     if (
-        this.interactivePrimitives.selectedLine &&
-        this.interactivePrimitives.selectedLine !== linePrimitive
+        this.interactivePrimitives.addModeLine &&
+        this.interactivePrimitives.addModeLine !== linePrimitive
     ) {
-        const previousSelectedLine = this.interactivePrimitives.selectedLine;
+        const previousSelectedLine = this.interactivePrimitives.addModeLine;
 
         let colorToSet;
-        if (this.interactivePrimitives.selectedLine.isSubmitted) {
+        if (this.interactivePrimitives.addModeLine.isSubmitted) {
             colorToSet = 'submitted';
-        } else if (this.interactivePrimitives.selectedLines.includes(this.interactivePrimitives.selectedLine)) {
+        } else if (this.interactivePrimitives.selectedLines.includes(this.interactivePrimitives.addModeLine)) {
             colorToSet = 'select';
         } else {
             colorToSet = 'default';
         }
 
         this.changeLinePrimitiveColor(previousSelectedLine, colorToSet);
-        this.interactivePrimitives.selectedLine = null;
+        this.interactivePrimitives.addModeLine = null;
     }
 
     // reset previous selected lines if any
@@ -58,7 +58,7 @@ function setAddModeByLine(linePrimitive) {
 
     // update the selected lines to the selected line and update its highlight color
     const group = this.coords.groups.find(group =>
-        group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, linePrimitive.geometryInstances.geometry._positions[0]))
+        group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, linePrimitive.positions[0]))
     );
     const lines = this.findLinesByPositions(group.coordinates)
     this.interactivePrimitives.selectedLines = lines;
@@ -67,10 +67,10 @@ function setAddModeByLine(linePrimitive) {
     // Change the color of the newly selected line to indicate it is being added
     this.changeLinePrimitiveColor(linePrimitive, 'add');
     // Update the reference to the currently selected line
-    this.interactivePrimitives.selectedLine = linePrimitive;
+    this.interactivePrimitives.addModeLine = linePrimitive;
 
     // Enable add mode if a line is selected
-    if (this.interactivePrimitives.selectedLine) {
+    if (this.interactivePrimitives.addModeLine) {
         this.flags.isAddMode = true;
         // Display a custom notification to inform the user
         showCustomNotification(`Trail id ${group.trailId} have entered add line mode`, this.viewer.container);

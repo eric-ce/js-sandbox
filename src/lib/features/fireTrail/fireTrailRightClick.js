@@ -1,17 +1,16 @@
 
 import * as Cesium from "cesium";
 import {
-    createClampedLineGeometryInstance,
-    createClampedLinePrimitive,
     createPointPrimitive,
     generateId,
     calculateClampedDistanceFromArray,
+    createGroundPolylinePrimitive,
 } from "../../helper/helper.js";
 
 /************************
  * RIGHT CLICK FEATURES *
  ************************/
-export function handleFireTrailRightClick(movement) {
+export function handleFireTrailRightClick() {
     // Place last point and place last line
     if (!this.flags.isMeasurementComplete && this.coords.cache.length > 0) {
         // Use mouse move position to control only one pickPosition is used
@@ -29,24 +28,16 @@ export function handleFireTrailRightClick(movement) {
         // Update pending lines id
         const pendingLines = this.viewer.scene.primitives._primitives.filter(
             p =>
-                p.geometryInstances &&
-                p.geometryInstances.id &&
-                p.geometryInstances.id.includes("pending")
+                p.id &&
+                p.id.startsWith("annotate") &&
+                p.id.includes("pending") &&
+                p.id.includes("line")
         );
+
         pendingLines.forEach(p => {
-            const position = p.geometryInstances.geometry._positions;
-            this.viewer.scene.primitives.remove(p);
-            const lineGeometryInstance = createClampedLineGeometryInstance(
-                position,
-                "fire_trail_line"
-            );
-            const linePrimitive = createClampedLinePrimitive(
-                lineGeometryInstance,
-                Cesium.Color.YELLOWGREEN,
-                this.cesiumPkg.GroundPolylinePrimitive
-            );
-            linePrimitive.isSubmitted = false;
-            this.viewer.scene.primitives.add(linePrimitive);
+            p.id = p.id.replace("_pending", "");
+            this.changeLinePrimitiveColor(p, 'default');
+            p.isSubmitted = false;
         });
 
         // Update pending labels id
@@ -60,68 +51,61 @@ export function handleFireTrailRightClick(movement) {
         // Remove moving line and label primitives
         this.removeMovingPrimitives();
 
-        const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
-        const isPoint = pickedObjects.find(p => {
-            const primitiveId = p.primitive.id;
-            return (
-                typeof primitiveId === "string" &&
-                primitiveId.startsWith("annotate_fire_trail_point") &&
-                !primitiveId.includes("moving")
-            );
-        });
+        // Check if the last point is near any existing point
+        const isNearPoint = this.coords.groups
+            .flatMap(group => group.coordinates)
+            .some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.3);
 
-        if (!isPoint) {
-            // Create last point
-            const lastPoint = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            lastPoint.id = generateId(this.coordinate, "fire_trail_point");
-            this.pointCollection.add(lastPoint);
+        if (isNearPoint) return;
 
-            // Create last line
-            let referencePointCartesian = null;
-            if (this.flags.isReverse) {
-                referencePointCartesian = this.coords.cache[0];
-                this.coords.cache.unshift(this.coordinate);
-            } else {
-                referencePointCartesian = this.coords.cache[this.coords.cache.length - 1];
-                // Update coordinate data cache
-                this.coords.cache.push(this.coordinate);
-            }
-            const lineGeometryInstance = createClampedLineGeometryInstance(
-                [referencePointCartesian, this.coordinate],
-                "fire_trail_line"
-            );
-            const linePrimitive = createClampedLinePrimitive(
-                lineGeometryInstance,
-                Cesium.Color.YELLOWGREEN,
-                this.cesiumPkg.GroundPolylinePrimitive
-            );
-            linePrimitive.isSubmitted = false;
-            this.viewer.scene.primitives.add(linePrimitive);
+        // Create last point
+        const lastPoint = createPointPrimitive(this.coordinate, Cesium.Color.RED);
+        lastPoint.id = generateId(this.coordinate, "fire_trail_point");
+        this.pointCollection.add(lastPoint);
 
-            // Create last label
-            const group = this.coords.groups.find(g => g.coordinates.some(cart => Cesium.Cartesian3.equals(this.coordinate, cart)));
-
-            this.updateOrCreateLabels(group);
-
-            // Total distance label
-            const { distances, totalDistance } = calculateClampedDistanceFromArray(
-                this.coords.cache,
-                this.viewer.scene,
-                4
-            );
-            // Create or update total label
-            this.updateOrCreateTotalLabel(group, totalDistance);
-
-            // Log distance result
-            this.updateMultiDistancesLogRecords(distances, totalDistance);
+        // Create last line
+        let referencePointCartesian = null;
+        if (this.flags.isReverse) {
+            referencePointCartesian = this.coords.cache[0];
+            this.coords.cache.unshift(this.coordinate);
+        } else {
+            referencePointCartesian = this.coords.cache[this.coords.cache.length - 1];
+            // Update coordinate data cache
+            this.coords.cache.push(this.coordinate);
         }
 
+        const linePrimitive = createGroundPolylinePrimitive(
+            [referencePointCartesian, this.coordinate],
+            "fire_trail_line",
+            Cesium.Color.YELLOWGREEN,
+            this.cesiumPkg.GroundPolylinePrimitive
+        )
+        linePrimitive.isSubmitted = false;
+        this.viewer.scene.primitives.add(linePrimitive);
+
+        // Create last label
+        const group = this.coords.groups.find(g => g.coordinates.some(cart => Cesium.Cartesian3.equals(this.coordinate, cart)));
+
+        this.updateOrCreateLabels(group);
+
+        // Total distance label
+        const { distances, totalDistance } = calculateClampedDistanceFromArray(
+            this.coords.cache,
+            this.viewer.scene,
+            4
+        );
+        // Create or update total label
+        this.updateOrCreateTotalLabel(group, totalDistance);
+
+        // Log distance result
+        this.updateMultiDistancesLogRecords(distances, totalDistance);
+
         // Set selectedGroup to current group's coordinates
-        const currentGroup = this.coords.groups[this.coords.groups.length - 1];
-        this.coords.groupToSubmit = currentGroup
+        // const currentGroup = this.coords.groups[this.coords.groups.length - 1];
+        this.coords.groupToSubmit = group
 
         // update selected line
-        const lines = this.findLinesByPositions(currentGroup.coordinates);
+        const lines = this.findLinesByPositions(group.coordinates);
         this.interactivePrimitives.selectedLines = lines;
         lines.forEach(line => {
             if (!line.isSubmitted) {    // don't change submitted line color

@@ -10,9 +10,9 @@ import {
     calculateClampedDistance,
     calculateClampedDistanceFromArray,
     getPickedObjectType,
-    getPrimitiveByPointPosition,
     positionKey,
     showCustomNotification,
+    createGroundPolylinePrimitive,
 } from "../../helper/helper.js";
 import { handleFireTrailLeftClick } from "./fireTrailLeftClick.js";
 import { handleFireTrailMouseMove } from "./fireTrailMouseMove.js";
@@ -79,7 +79,7 @@ class FireTrail {
             dragPolylines: [],      // Array of dragging polylines
             dragLabels: [],         // Array of dragging labels
             hoveredLine: null,      // Hovered line primitive
-            selectedLine: null,     // Selected line primitive
+            addModeLine: null,     // Selected line primitive
             selectedLines: [],      // Array of selected line primitives
             hoveredPoint: null,     // Hovered point primitive
             hoveredLabel: null,     // Hovered label primitive
@@ -217,7 +217,7 @@ class FireTrail {
 
         if (this.flags.isDragMode) {
             // Set existing point and label primitives to not show, remove line primitive
-            const { linePrimitives, labelPrimitives } = getPrimitiveByPointPosition(
+            const { linePrimitives, labelPrimitives } = this.findPrimitiveByPosition(
                 this.coords.dragStart,
                 "annotate_fire_trail",
                 this.viewer.scene,
@@ -269,15 +269,12 @@ class FireTrail {
 
             otherPositions.forEach((pos, idx) => {
                 // Create line primitive
-                const lineGeometryInstance = createClampedLineGeometryInstance(
+                const linePrimitive = createGroundPolylinePrimitive(
                     [pos, cartesian],
-                    "fire_trail_line_moving"
-                );
-                const linePrimitive = createClampedLinePrimitive(
-                    lineGeometryInstance,
+                    "fire_trail_line_moving",
                     Cesium.Color.YELLOW,
                     this.cesiumPkg.GroundPolylinePrimitive
-                );
+                )
                 const addedLinePrimitive = this.viewer.scene.primitives.add(linePrimitive);
                 addedLinePrimitive.isSubmitted = false;
                 this.interactivePrimitives.dragPolylines.push(addedLinePrimitive);
@@ -354,15 +351,12 @@ class FireTrail {
             );
             otherPositions.forEach(pos => {
                 // Create new line primitive
-                const lineGeometryInstance = createClampedLineGeometryInstance(
+                const linePrimitive = createGroundPolylinePrimitive(
                     [this.coordinate, pos],
-                    "fire_trail_line"
-                );
-                const linePrimitive = createClampedLinePrimitive(
-                    lineGeometryInstance,
+                    "fire_trail_line",
                     Cesium.Color.YELLOWGREEN,
                     this.cesiumPkg.GroundPolylinePrimitive
-                );
+                )
                 linePrimitive.isSubmitted = false;
                 this.viewer.scene.primitives.add(linePrimitive);
 
@@ -446,12 +440,9 @@ class FireTrail {
     _createReconnectPrimitives(neighbourPositions, group, isPending = false) {
         if (neighbourPositions.length === 3) {
             // Create reconnect line primitive
-            const lineGeometryInstance = createClampedLineGeometryInstance(
+            const linePrimitive = createGroundPolylinePrimitive(
                 [neighbourPositions[0], neighbourPositions[2]],
-                isPending ? "fire_trail_line_pending" : "fire_trail_line"
-            );
-            const linePrimitive = createClampedLinePrimitive(
-                lineGeometryInstance,
+                isPending ? "fire_trail_line_pending" : "fire_trail_line",
                 Cesium.Color.YELLOWGREEN,
                 this.cesiumPkg.GroundPolylinePrimitive
             );
@@ -782,6 +773,38 @@ class FireTrail {
         return { pointPrimitives, linePrimitives, labelPrimitives };
     }
 
+    findPrimitiveByPosition(position, startsWithMeasureMode, scene, pointCollection, labelCollection) {
+        // get point primitive by position
+        const pointPrimitive = pointCollection._pointPrimitives.find(p => p.id && p.id.startsWith(startsWithMeasureMode) &&
+            !p.id.includes("moving") &&
+            Cesium.Cartesian3.equals(p.position, position)
+        );
+
+        // get line primitives by position
+        const linePrimitives = scene.primitives._primitives.filter(p =>
+            p.id &&
+            p.id.includes(startsWithMeasureMode) &&
+            !p.id.includes("moving") &&
+            p.positions.some(cart => Cesium.Cartesian3.equals(cart, position))
+        );
+
+        // get label primitives by lines positions
+        // it can only be 1 lines or 2 lines, each line has 2 positions [[1,2],[3,4]] | [[1,2]]
+        const linePositions = linePrimitives.map(p => p.positions);
+        const midPoints = linePositions.map((positions) => Cesium.Cartesian3.midpoint(positions[0], positions[1], new Cesium.Cartesian3()));
+        const labelPrimitives = midPoints.map(midPoint =>
+            labelCollection._labels.find(l => l.id && l.id.startsWith(startsWithMeasureMode) &&
+                !l.id.includes("moving") &&
+                Cesium.Cartesian3.equals(l.position, midPoint)
+            )
+        ).filter(label => label !== undefined);
+
+        // Sort labelPrimitives by their text
+        labelPrimitives.sort((a, b) => a.text.toUpperCase().localeCompare(b.text.toUpperCase()));
+
+        return { pointPrimitive, linePrimitives, labelPrimitives };
+    }
+
     /**
      * Lookup the line primitives array by the positions array
      * @param {Cesium.Cartesian3[]} positions - The array of Cartesian3 positions to lookup the lines.
@@ -795,17 +818,16 @@ class FireTrail {
         const linePrimitives = new Set();
 
         // Filter the primitives to find lines that match certain criteria
-        const lines = this.viewer.scene.primitives._primitives.filter(p =>
-            p.geometryInstances && // Ensure the primitive has geometry instances
-            p.geometryInstances.id && // Ensure the geometry instance has an ID
-            p.geometryInstances.id.startsWith("annotate_fire_trail_line") && // ID starts with specific string
-            !p.geometryInstances.id.includes("moving") // Exclude moving lines
+        const linesPrimitives = this.viewer.scene.primitives._primitives.filter(p =>
+            p.id &&
+            p.id.startsWith("annotate_fire_trail_line") &&
+            !p.id.includes("moving") // Exclude moving lines
         );
 
         // Iterate over the filtered lines
-        lines.forEach(line => {
+        linesPrimitives.forEach(line => {
             // Get the positions of the line (array of Cartesian3)
-            const linePositions = line.geometryInstances.geometry._positions; // [Cartesian3, Cartesian3]
+            const linePositions = line.positions; // [Cartesian3, Cartesian3]
 
             // Check if any position of the line matches the input positions
             linePositions.forEach(linePos => {
@@ -910,9 +932,8 @@ class FireTrail {
      */
     checkUnsubmittedLines() {
         const unsubmittedLines = this.viewer.scene.primitives._primitives.filter(p =>
-            p.geometryInstances &&
-            p.geometryInstances.id &&
-            p.geometryInstances.id.includes("fire_trail_line") &&
+            p.id &&
+            p.id.includes("fire_trail_line") &&
             !p.isSubmitted
         );
 
@@ -1047,7 +1068,7 @@ class FireTrail {
         this.interactivePrimitives.dragLabels = [];
         this.interactivePrimitives.hoveredLine = null;
         // this.interactivePrimitives.selectedLines = [];
-        this.interactivePrimitives.selectedLine = null;
+        this.interactivePrimitives.addModeLine = null;
         this.interactivePrimitives.hoveredPoint = null;
         this.interactivePrimitives.hoveredLabel = null;
     }
