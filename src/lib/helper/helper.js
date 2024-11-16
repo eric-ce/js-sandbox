@@ -11,7 +11,6 @@ import * as Cesium from "cesium";
  */
 export function calculateDistance(startPoint, endPoint) {
     return Cesium.Cartesian3.distance(startPoint, endPoint);
-
 }
 
 /**
@@ -153,6 +152,50 @@ export function positionKey(pos) {
 export function generateIdByTimestamp() {
     return new Date().getTime();
 }
+
+/**
+ * Converts an array of Cartesian coordinates to clamped Cartesian coordinates.
+ * Each coordinate is clamped to the terrain height using the Cesium viewer's scene.
+ * Coordinates with undefined terrain heights are skipped.
+ *
+ * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian3 coordinates to be clamped.
+ * @param {Cesium.Scene} scene - The Cesium scene instance used to obtain terrain height.
+ * @returns {Cesium.Cartesian3[]} An array of clamped Cartesian3 coordinates.
+ * @throws {Error} Throws an error if the input parameters are invalid.
+ */
+export function convertCartesianArrayToClamped(cartesianArray, scene) {
+    // Validate input parameters
+    if (!Array.isArray(cartesianArray) || !scene) {
+        throw new Error('Invalid input parameters.');
+    }
+
+    const clampedCartesianArray = [];
+
+    // Iterate through each Cartesian coordinate
+    for (let i = 0; i < cartesianArray.length; i++) {
+        const cartesian = cartesianArray[i];
+        // Convert Cartesian to Cartographic (longitude, latitude, height)
+        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+
+        // Sample terrain height at the Cartographic position
+        const height = scene.sampleHeight(cartographic);
+
+        // If a valid height is returned, clamp the coordinate
+        if (height !== undefined && height !== null) {
+            const clampedCartesian = Cesium.Cartesian3.fromRadians(
+                cartographic.longitude,
+                cartographic.latitude,
+                height
+            );
+            clampedCartesianArray.push(clampedCartesian);
+        }
+        // If height is undefined, skip this coordinate
+    }
+
+    return clampedCartesianArray;
+}
+
+
 
 /*****************************************
  * HELPER FUNCTIONS FOR CESIUM PRIMITIVE *
@@ -486,11 +529,11 @@ export function getPickedObjectType(pickedObject, modeString) {
         return null;
     }
 
-    const { id } = pickedObject;
+    const { id, primitive } = pickedObject;
     const searchString = `annotate_${modeString}`;
 
     // Return null if 'id' doesn't start with the search string or contains 'moving'
-    if (!id.startsWith(searchString) || id.includes('moving')) {
+    if (id.includes('moving')) {
         return null;
     }
 
@@ -499,6 +542,8 @@ export function getPickedObjectType(pickedObject, modeString) {
         return 'point';
     } else if (id.startsWith(`${searchString}_line`)) {
         return 'line';
+    } else if (id.includes("tileId") && primitive?.feature?.type === "fireTrail") {
+        return 'line'
     } else if (id.startsWith(`${searchString}_label`)) {
         return 'label';
     } else {

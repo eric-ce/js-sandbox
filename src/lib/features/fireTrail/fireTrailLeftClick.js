@@ -6,10 +6,10 @@ import {
     generateId,
     calculateClampedDistanceFromArray,
     getPickedObjectType,
-
     generateIdByTimestamp,
     showCustomNotification,
     createGroundPolylinePrimitive,
+    convertCartesianArrayToClamped,
 } from "../../helper/helper.js";
 
 /***********************
@@ -82,11 +82,12 @@ function handlePointClick(pickedObject) {
     }
 
     // If the measurement is complete, check if clicked point is first or last in the group to allow continue measurement
-    if (this.flags.isMeasurementComplete) {
+    if (this.coords.cache.length === 0 || this.flags.isMeasurementComplete) {
         // Find the group that contains the clicked point
         const group = this.coords.groups.find(group =>
-            group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pointPrimitive.position))
-        );
+            group.coordinates.some(cart =>
+                Cesium.Cartesian3.equals(cart, pointPrimitive.position))
+        )
 
         // If no group is found, exit the function
         if (!group) {
@@ -128,10 +129,14 @@ function handlePointClick(pickedObject) {
  * @param {Object} pickedObject - The clicked primitive object.
  */
 function handleLineClick(pickedObject) {
-    const linePrimitive = pickedObject.primitive;
+    const { primitive } = pickedObject; // line primitive
 
-    if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {
-        selectFireTrail.call(this, linePrimitive);
+    if (
+        !this.flags.isAddMode &&  // not in add mode
+        (this.coords.cache.length === 0 && !this.flags.isMeasurementComplete) ||  // measurement not started
+        this.flags.isMeasurementComplete // not during measurement
+    ) {
+        selectFireTrail.call(this, primitive);
     }
 }
 
@@ -396,35 +401,97 @@ function addAction(linePrimitive) {
 }
 
 function selectFireTrail(primitive) {
-    let primitivePosition = [];
+    let primitivePositions = [];
 
-    if (primitive && primitive.id && primitive.id.includes("line")) { // if it is line primitive
-        primitivePosition = primitive.positions;
-    } else {  // it is point primitive
-        primitivePosition = [primitive.position];
+    const isLayerLine = primitive?.feature?.type === "fireTrail"
+    const isAnnotateLine = primitive.id && primitive.id.includes("fire_trail_line");
+
+    // Determine the type of primitive and extract positions accordingly
+    if (isAnnotateLine) { // Line primitive from annotations
+        primitivePositions = primitive.positions;
+    } else if (isLayerLine) { // Line primitive from layer
+        primitivePositions = primitive.geometryInstances[0].geometry._positions;
+    } else {  // Point primitive
+        primitivePositions = [primitive.position];
     }
 
-    if (primitivePosition && primitivePosition.length > 0) {
-        const group = this.coords.groups.find(group =>
-            group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePosition[0]))
-        );
+    if (primitivePositions && primitivePositions.length > 0) {
+        let group;
 
-        // show notification
+        if (isAnnotateLine) {
+            // Find existing group containing the first position
+            group = this.coords.groups.find(group =>
+                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePositions[0]))
+            );
+        }
+
+        if (isLayerLine) {
+            // Clamp positions to terrain height
+            const clampedPosArray = convertCartesianArrayToClamped(primitivePositions, this.viewer.scene)
+
+            // Find existing group with the clamped first position
+            group = this.coords.groups.find(group =>
+                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, clampedPosArray[0]))
+            );
+
+            if (!group) {
+                // Create a new group if none exists
+                const newGroup = {
+                    trailId: generateIdByTimestamp(),
+                    coordinates: [],
+                    labelNumberIndex: this.coords.groupCounter, // Unique index for labeling
+                };
+                this.coords.groups.push(newGroup);
+                this.coords.cache = newGroup.coordinates; // Link cache to the new group's coordinates
+                this.coords.groupCounter++;
+
+                newGroup.coordinates = clampedPosArray;
+
+                group = this.coords.groups.find(group =>
+                    group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, clampedPosArray[0]))
+                );
+
+                // Create point primitives for each clamped position
+                clampedPosArray.forEach(cart => {
+                    const pointPrimitive = createPointPrimitive(cart, Cesium.Color.RED);
+                    pointPrimitive.id = generateId(cart, "fire_trail_point");
+                    this.pointCollection.add(pointPrimitive);
+                });
+
+                // Create line primitives connecting consecutive clamped positions
+                for (let i = 0; i < clampedPosArray.length - 1; i++) {
+                    const newLinePrimitive = createGroundPolylinePrimitive(
+                        [clampedPosArray[i], clampedPosArray[i + 1]],
+                        "fire_trail_line",
+                        Cesium.Color.YELLOWGREEN,
+                        this.cesiumPkg.GroundPolylinePrimitive
+                    )
+                    newLinePrimitive.isSubmitted = false;
+                    this.viewer.scene.primitives.add(newLinePrimitive);
+                }
+            }
+        }
+
+        if (!group) return;
+
+        // Display notification for the selected group
         showCustomNotification(`selected line: ${group.trailId}`, this.viewer.container)
 
-        // update log records callback for the current selected line
+        // Update log records callback for the current selected line
         this.logRecordsCallback(`${group.trailId} selected`);
 
-        // Reset previous selection
+        // Reset the previous selection if any
         if (this.interactivePrimitives.selectedLines.length > 0) {
-            // use selectedLines that is before update to look up previous selected lines
-            // lookup the previous selected group
+            // Use this.interactivePrimitive.selectedLines before assigning the current one to look up previous selected lines
+            // Find the previous selected group
             const pos = this.interactivePrimitives.selectedLines[0].positions;
             const prevGroup = this.coords.groups.find(group =>
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pos[0]))
             );
-            // lookup the previous selected lines
+
+            // Find the previous selected lines
             const prevLines = this.findLinesByPositions(prevGroup.coordinates);
+
             // reset the previous selected lines
             prevLines.forEach(line => {
                 // don't change submitted line color
@@ -435,19 +502,19 @@ function selectFireTrail(primitive) {
             });
         }
 
-        // Highlight the current selected lines
-        const lines = this.findLinesByPositions(group.coordinates);
-        lines.forEach(line => {
-            // don't change submitted line color
+        // Find the current selected lines
+        const currentLines = this.findLinesByPositions(group.coordinates);
+
+        // Highlight the currently selected lines
+        currentLines.forEach(line => {
             if (!line.isSubmitted) {    // don't change submitted line color
-                // reset line color
-                this.changeLinePrimitiveColor(line, 'select');
+                this.changeLinePrimitiveColor(line, 'select'); // reset line color
             }
         });
 
-        // Update selectedGroup to current group's coordinates
+        // Update the selected group and lines
         this.coords.groupToSubmit = group;
-        // Update selected lines
-        this.interactivePrimitives.selectedLines = lines;
+        this.interactivePrimitives.selectedLines = currentLines;
     }
 }
+

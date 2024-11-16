@@ -1,4 +1,3 @@
-
 import * as Cesium from "cesium";
 import {
     getPickedObjectType,

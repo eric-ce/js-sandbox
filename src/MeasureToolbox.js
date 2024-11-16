@@ -678,14 +678,20 @@ export class MeasureToolbox extends HTMLElement {
 
         this.stateManager.getButtonState("clearButton").addEventListener("click", () => {
             // remove line primitives
-            const linePrimitives = this.viewer.scene.primitives._primitives.filter(
+            const linePrimitives = [];
+            const lines1 = this.viewer.scene.primitives._primitives.filter(
                 (p) =>
                     p.geometryInstances &&
                     p.geometryInstances.id &&
                     p.geometryInstances.id.startsWith("annotate") &&
                     p.geometryInstances.id.includes("line")
-            );
+            ).forEach((p) => this.viewer.scene.primitives.remove(p));
+            const lines2 = this.viewer.scene.primitives._primitives.filter(
+                (p) => p.id && p.id.startsWith("annotate") && p.id.includes("line")
+            ).forEach((p) => this.viewer.scene.primitives.remove(p));
+            linePrimitives.push(lines1, lines2);
             linePrimitives.forEach((p) => this.viewer.scene.primitives.remove(p));
+
             // remove polygon primitives
             const polygonPrimitives = this.viewer.scene.primitives._primitives.filter(
                 (p) =>
@@ -695,6 +701,7 @@ export class MeasureToolbox extends HTMLElement {
                     p.geometryInstances.id.includes("polygon")
             );
             polygonPrimitives.forEach((p) => this.viewer.scene.primitives.remove(p));
+
             // remove point primitives from point collections
             const pointCollections = this.viewer.scene.primitives._primitives.filter(
                 (p) =>
@@ -708,6 +715,7 @@ export class MeasureToolbox extends HTMLElement {
             );
             pointCollections &&
                 pointCollections.forEach((pointCollection) => pointCollection.removeAll());
+
             // remove label primitives from label collections
             const labelCollections = this.viewer.scene.primitives._primitives.filter(
                 (p) =>

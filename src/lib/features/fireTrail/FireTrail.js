@@ -690,7 +690,7 @@ class FireTrail {
     }
 
     /**
-     * Get the label text properties based on the position and the positions array.
+     * Get the label text properties based on the position and group.
      * @param {Cesium.Cartesian3} position - The current position.
      * @param {}
      * @returns {{ currentLetter: String, labelNumberIndex: Number }} - The label text properties.
