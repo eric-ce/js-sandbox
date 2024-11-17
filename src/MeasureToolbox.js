@@ -506,7 +506,7 @@ export class MeasureToolbox extends HTMLElement {
                 position: absolute;
                 height: 250px;
                 overflow-y: auto;
-                z-index: 1000;
+                z-index: 2;
                 cursor: grab; /* Indicates it can be moved */
                 scrollbar-width: thin;
                 scrollbar-color: #888 rgba(38, 38, 38, 0.95);

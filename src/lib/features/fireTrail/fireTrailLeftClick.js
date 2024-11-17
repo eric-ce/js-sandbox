@@ -10,7 +10,8 @@ import {
     showCustomNotification,
     createGroundPolylinePrimitive,
     convertCartesianArrayToClamped,
-} from "../../helper/helper.js";
+    positionKey,
+} from "../../helper/helper.mjs";
 
 /***********************
  * LEFT CLICK FEATURES *
@@ -426,6 +427,11 @@ function selectFireTrail(primitive) {
         }
 
         if (isLayerLine) {
+            // show notification for the layer line
+            showCustomNotification(`selected line: ${primitive?.feature?.id}`, this.viewer.container)
+            // update the log info for the layer line
+            this.logRecordsCallback(`${primitive?.feature?.id} id from layer`);
+
             // Clamp positions to terrain height
             const clampedPosArray = convertCartesianArrayToClamped(primitivePositions, this.viewer.scene)
 
@@ -445,8 +451,10 @@ function selectFireTrail(primitive) {
                 this.coords.cache = newGroup.coordinates; // Link cache to the new group's coordinates
                 this.coords.groupCounter++;
 
+                // update the newly added group with clamped positions
                 newGroup.coordinates = clampedPosArray;
 
+                // find the new group in this.coords.groups to make sure it is added to the group
                 group = this.coords.groups.find(group =>
                     group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, clampedPosArray[0]))
                 );
@@ -463,12 +471,16 @@ function selectFireTrail(primitive) {
                     const newLinePrimitive = createGroundPolylinePrimitive(
                         [clampedPosArray[i], clampedPosArray[i + 1]],
                         "fire_trail_line",
-                        Cesium.Color.YELLOWGREEN,
+                        this.stateColors.submitted,
                         this.cesiumPkg.GroundPolylinePrimitive
                     )
                     newLinePrimitive.isSubmitted = false;
+                    newLinePrimitive.positions = [clampedPosArray[i], clampedPosArray[i + 1]];
                     this.viewer.scene.primitives.add(newLinePrimitive);
                 }
+
+                // treat it as a drawn line with the tool so that it won't affect other editing feature from the start
+                this.flags.isMeasurementComplete = true; // Set measurement complete after creating the line
             }
         }
 
