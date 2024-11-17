@@ -11,7 +11,7 @@ import {
     createGroundPolylinePrimitive,
     convertCartesianArrayToClamped,
     positionKey,
-} from "../../helper/helper.mjs";
+} from "../../helper/helper.js";
 
 /***********************
  * LEFT CLICK FEATURES *
@@ -471,7 +471,7 @@ function selectFireTrail(primitive) {
                     const newLinePrimitive = createGroundPolylinePrimitive(
                         [clampedPosArray[i], clampedPosArray[i + 1]],
                         "fire_trail_line",
-                        this.stateColors.submitted,
+                        this.stateColors.select,
                         this.cesiumPkg.GroundPolylinePrimitive
                     )
                     newLinePrimitive.isSubmitted = false;
@@ -500,6 +500,7 @@ function selectFireTrail(primitive) {
             const prevGroup = this.coords.groups.find(group =>
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pos[0]))
             );
+            if (!prevGroup) return; // Exit if no previous group is found
 
             // Find the previous selected lines
             const prevLines = this.findLinesByPositions(prevGroup.coordinates);

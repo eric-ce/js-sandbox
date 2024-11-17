@@ -118,6 +118,8 @@ function handleHoverHighlighting(pickedObject) {
                 colorToSet = 'submitted';
             } else if (selectedLines.includes(hoveredLine)) {
                 colorToSet = 'select';
+            } else if (hoveredLine?.layerColor) {   // it is line from layer
+                colorToSet = hoveredLine.layerColor; // restore the color for the layer line
             } else {
                 colorToSet = 'default';
             }
@@ -143,6 +145,9 @@ function handleHoverHighlighting(pickedObject) {
         case "line":
             const line = pickedObject.primitive;
             if (line && line !== this.interactivePrimitives.addModeLine) {
+                if (line?.feature) {    // it is line from layer
+                    line.layerColor = line.appearance.material.uniforms.color;  // save the color for the layer line into Primitive
+                }
                 this.changeLinePrimitiveColor(line, 'hover');
                 this.interactivePrimitives.hoveredLine = line;
             }

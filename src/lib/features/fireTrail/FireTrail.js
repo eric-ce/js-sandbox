@@ -253,6 +253,8 @@ class FireTrail {
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart))
             );
 
+            if (!group) return; // Error handling: no group found
+
             // Updated call to findNeighbourPosition
             const neighbourPositions = this.findNeighbourPosition(this.coords.dragStart, group);
             if (!neighbourPositions || neighbourPositions.length === 0) return; // Error handling: no neighbour positions found
@@ -978,8 +980,11 @@ class FireTrail {
             case 'add':
                 colorToSet = this.stateColors.add;
                 break;
-            default:
+            case 'default':
                 colorToSet = this.stateColors.default;
+                break;
+            default:
+                if (colorType instanceof Cesium.Color) colorToSet = colorType;
                 break;
         }
 
@@ -992,6 +997,7 @@ class FireTrail {
 
         return linePrimitive;
     }
+
 
     /**
      * look for line primitives by group positions, and update the selected line color
