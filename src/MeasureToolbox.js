@@ -68,92 +68,92 @@ export class MeasureToolbox extends HTMLElement {
         this.stateManager = new StateManager();
 
         // fly through variables
-        this.coords = {
-            _flyRecords: [],
-            _mockFlyRecords: [
-                {
-                    "position": {
-                        "x": 1216112.9570234974,
-                        "y": -4736576.765693975,
-                        "z": 4081200.1481931447
-                    },
-                    "hpr": {
-                        "heading": 0.13000450388900298,
-                        "pitch": -0.3625899685123126,
-                        "roll": 0.000004638299138548518
-                    }
-                },
-                {
-                    "position": {
-                        "x": 1216149.8221629532,
-                        "y": -4736602.9220574815,
-                        "z": 4081452.05891825
-                    },
-                    "hpr": {
-                        "heading": 0.05783204009360077,
-                        "pitch": -1.3214516649608017,
-                        "roll": 0.000017948732042860627
-                    }
-                },
-                {
-                    "position": {
-                        "x": 1216231.817715611,
-                        "y": -4737091.234564315,
-                        "z": 4081695.533198552
-                    },
-                    "hpr": {
-                        "heading": 0.057832040093592774,
-                        "pitch": -1.3214516649608137,
-                        "roll": 0.000017948732044636984
-                    }
-                },
-                {
-                    "position": {
-                        "x": 1216214.812668742,
-                        "y": -4736968.679816875,
-                        "z": 4081895.7453294657
-                    },
-                    "hpr": {
-                        "heading": 6.226051845613029,
-                        "pitch": -1.5347377349911553,
-                        "roll": 0
-                    }
-                },
-                {
-                    "position": {
-                        "x": 1216404.8079792114,
-                        "y": -4737868.763048155,
-                        "z": 4082919.5627028756
-                    },
-                    "hpr": {
-                        "heading": 6.2260518456130285,
-                        "pitch": -1.5347377349911953,
-                        "roll": 0
-                    }
-                },
-                {
-                    "position": {
-                        "x": 1216701.9791077161,
-                        "y": -4738017.830972404,
-                        "z": 4080125.5256115044
-                    },
-                    "hpr": {
-                        "heading": 6.169643854213871,
-                        "pitch": -0.15128947599652376,
-                        "roll": 0.000010379170224616985
-                    }
-                }
-            ]
-        }
-        this.flags = {
-            isRecording: false,
-            isScreenRecording: false,
-        }
+        // this.coords = {
+        //     _flyRecords: [],
+        //     _mockFlyRecords: [
+        //         {
+        //             "position": {
+        //                 "x": 1216112.9570234974,
+        //                 "y": -4736576.765693975,
+        //                 "z": 4081200.1481931447
+        //             },
+        //             "hpr": {
+        //                 "heading": 0.13000450388900298,
+        //                 "pitch": -0.3625899685123126,
+        //                 "roll": 0.000004638299138548518
+        //             }
+        //         },
+        //         {
+        //             "position": {
+        //                 "x": 1216149.8221629532,
+        //                 "y": -4736602.9220574815,
+        //                 "z": 4081452.05891825
+        //             },
+        //             "hpr": {
+        //                 "heading": 0.05783204009360077,
+        //                 "pitch": -1.3214516649608017,
+        //                 "roll": 0.000017948732042860627
+        //             }
+        //         },
+        //         {
+        //             "position": {
+        //                 "x": 1216231.817715611,
+        //                 "y": -4737091.234564315,
+        //                 "z": 4081695.533198552
+        //             },
+        //             "hpr": {
+        //                 "heading": 0.057832040093592774,
+        //                 "pitch": -1.3214516649608137,
+        //                 "roll": 0.000017948732044636984
+        //             }
+        //         },
+        //         {
+        //             "position": {
+        //                 "x": 1216214.812668742,
+        //                 "y": -4736968.679816875,
+        //                 "z": 4081895.7453294657
+        //             },
+        //             "hpr": {
+        //                 "heading": 6.226051845613029,
+        //                 "pitch": -1.5347377349911553,
+        //                 "roll": 0
+        //             }
+        //         },
+        //         {
+        //             "position": {
+        //                 "x": 1216404.8079792114,
+        //                 "y": -4737868.763048155,
+        //                 "z": 4082919.5627028756
+        //             },
+        //             "hpr": {
+        //                 "heading": 6.2260518456130285,
+        //                 "pitch": -1.5347377349911953,
+        //                 "roll": 0
+        //             }
+        //         },
+        //         {
+        //             "position": {
+        //                 "x": 1216701.9791077161,
+        //                 "y": -4738017.830972404,
+        //                 "z": 4080125.5256115044
+        //             },
+        //             "hpr": {
+        //                 "heading": 6.169643854213871,
+        //                 "pitch": -0.15128947599652376,
+        //                 "roll": 0.000010379170224616985
+        //             }
+        //         }
+        //     ]
+        // }
+        // this.flags = {
+        //     isRecording: false,
+        //     isScreenRecording: false,
+        // }
 
-        // Screen recording variables
-        this.stream = null;
-        this.mediaRecorder = null;
-        this.chunks = [];
+        // // Screen recording variables
+        // this.stream = null;
+        // this.mediaRecorder = null;
+        // this.chunks = [];
     }
 
 
@@ -254,7 +254,7 @@ export class MeasureToolbox extends HTMLElement {
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();
 
-        this.flyThrough();
+        // this.flyThrough();
     }
 
     /**
@@ -393,6 +393,17 @@ export class MeasureToolbox extends HTMLElement {
                 ),
                 name: "Fire-Trail",
                 icon: multiDClampedIcon,
+            },
+            {
+                instance: new FlyThrough(
+                    this.viewer,
+                    this.handler,
+                    this.stateManager,
+                    this.updateRecords.bind(this, "fly-through"),
+                    this.cesiumPkg
+                ),
+                name: "Fly-Through",
+                icon: recordIcon,
             }
         ];
 
@@ -1168,268 +1179,268 @@ export class MeasureToolbox extends HTMLElement {
     /************************
      * FLY THROUGH FEATURES *
      ************************/
-    flyThrough() {
-        this.setupRecordButton();
-        this.setupReplayButton();
-        this.setupRecordScreenButton();
-    }
+    // flyThrough() {
+    //     this.setupRecordButton();
+    //     this.setupReplayButton();
+    //     this.setupRecordScreenButton();
+    // }
 
-    setupRecordButton() {
-        const button = document.createElement("button");
-        button.className = "cesium-button fly-through";
-        button.innerHTML = `<img src="${recordIcon}" alt="Record" style="width: 30px; height: 30px;"/>`;
-        button.style.position = "absolute";
+    // setupRecordButton() {
+    //     const button = document.createElement("button");
+    //     button.className = "cesium-button fly-through";
+    //     button.innerHTML = `<img src="${recordIcon}" alt="Record" style="width: 30px; height: 30px;"/>`;
+    //     button.style.position = "absolute";
 
-        let moveEndListener;
+    //     let moveEndListener;
 
-        button.addEventListener("click", () => {
-            this.flags.isRecording = !this.flags.isRecording;
-            button.classList.toggle("active", this.flags.isRecording);
+    //     button.addEventListener("click", () => {
+    //         this.flags.isRecording = !this.flags.isRecording;
+    //         button.classList.toggle("active", this.flags.isRecording);
 
-            // Update the icon based on the recording state
-            button.innerHTML = `<img src="${this.flags.isRecording ? stopIcon : recordIcon}" alt="${this.flags.isRecording ? 'Stop' : 'Record'}" style="width: 30px; height: 30px;"/>`;
+    //         // Update the icon based on the recording state
+    //         button.innerHTML = `<img src="${this.flags.isRecording ? stopIcon : recordIcon}" alt="${this.flags.isRecording ? 'Stop' : 'Record'}" style="width: 30px; height: 30px;"/>`;
 
-            if (this.flags.isRecording) {
-                if (this.activeButton?.current === button) {
-                    this.activeButton = { current: button };
-                }
-                moveEndListener = this.cameraMoveRecord();
-            } else {
-                if (moveEndListener) {
-                    this.viewer.camera.moveEnd.removeEventListener(moveEndListener);
-                    moveEndListener = null;
-                }
-            }
-        });
+    //         if (this.flags.isRecording) {
+    //             if (this.activeButton?.current === button) {
+    //                 this.activeButton = { current: button };
+    //             }
+    //             moveEndListener = this.cameraMoveRecord();
+    //         } else {
+    //             if (moveEndListener) {
+    //                 this.viewer.camera.moveEnd.removeEventListener(moveEndListener);
+    //                 moveEndListener = null;
+    //             }
+    //         }
+    //     });
 
-        this.appendButtonToToolbar(button, 13, 0);
+    //     this.appendButtonToToolbar(button, 13, 0);
 
-        return button;
-    }
+    //     return button;
+    // }
 
-    cameraMoveRecord() {
-        const listener = () => {
-            console.log(this.viewer.camera);
-            const position = this.viewer.camera.positionWC;
-            const heading = this.viewer.camera.heading;
-            const pitch = this.viewer.camera.pitch;
-            const roll = this.viewer.camera.roll;
-            this.coords._flyRecords.push({ position: { ...position }, hpr: { heading, pitch, roll } });
-            console.log(this.coords._flyRecords);
-        };
+    // cameraMoveRecord() {
+    //     const listener = () => {
+    //         console.log(this.viewer.camera);
+    //         const position = this.viewer.camera.positionWC;
+    //         const heading = this.viewer.camera.heading;
+    //         const pitch = this.viewer.camera.pitch;
+    //         const roll = this.viewer.camera.roll;
+    //         this.coords._flyRecords.push({ position: { ...position }, hpr: { heading, pitch, roll } });
+    //         console.log(this.coords._flyRecords);
+    //     };
 
-        this.viewer.camera.moveEnd.addEventListener(listener);
-        return listener;
-    }
+    //     this.viewer.camera.moveEnd.addEventListener(listener);
+    //     return listener;
+    // }
 
-    setupReplayButton() {
-        const button = document.createElement("button");
-        button.className = "cesium-button replay-button";
-        button.innerHTML = `<img src="${playIcon}" alt="Play" style="width: 30px; height: 30px;"/>`;
-        button.style.position = "absolute";
+    // setupReplayButton() {
+    //     const button = document.createElement("button");
+    //     button.className = "cesium-button replay-button";
+    //     button.innerHTML = `<img src="${playIcon}" alt="Play" style="width: 30px; height: 30px;"/>`;
+    //     button.style.position = "absolute";
 
-        button.addEventListener("click", () => {
-            if (!this.flags.isRecording) {
-                this.flyTo(0, this.coords._flyRecords, 3);
-            } else {
-                alert("Please stop recording before replaying.");
-            }
-        });
+    //     button.addEventListener("click", () => {
+    //         if (!this.flags.isRecording) {
+    //             this.flyTo(0, this.coords._flyRecords, 3);
+    //         } else {
+    //             alert("Please stop recording before replaying.");
+    //         }
+    //     });
 
-        this.appendButtonToToolbar(button, 13, -40);
+    //     this.appendButtonToToolbar(button, 13, -40);
 
-        return button;
-    }
+    //     return button;
+    // }
 
-    flyTo(index, data, duration = 3) {
-        if (index >= data.length) {
-            console.log("flyComplete");
-            return;
-        }
+    // flyTo(index, data, duration = 3) {
+    //     if (index >= data.length) {
+    //         console.log("flyComplete");
+    //         return;
+    //     }
 
-        const position = data[index].position;
-        const nextIndex = index + 1;
+    //     const position = data[index].position;
+    //     const nextIndex = index + 1;
 
-        // flyToBoundingSphere approach 
-        const pointBoundingSphere = new Cesium.BoundingSphere(position, 100);
-        this.viewer.camera.flyToBoundingSphere(pointBoundingSphere, {
-            offset: new Cesium.HeadingPitchRange(data[index].hpr.heading,
-                data[index].hpr.pitch, 100),
-            duration: duration,
-            easingEffects: Cesium.EasingFunction.QUADRATIC_IN_OUT,
-            flyOverLongitude: Cesium.Cartographic.fromCartesian(position).longitude,
-            flyOverLongitudeWeight: 0.5,
-            complete: () => {
-                // this.viewer.camera.moveBackward(70);
-                setTimeout(() => {
-                    this.flyTo(nextIndex, this.coords._flyRecords, 3); // Recursively fly to the next point
-                }, 1000);
-            },
-            cancel: () => {
-                console.log('Fly-through was canceled.');
-            },
-        })
-    }
+    //     // flyToBoundingSphere approach 
+    //     const pointBoundingSphere = new Cesium.BoundingSphere(position, 100);
+    //     this.viewer.camera.flyToBoundingSphere(pointBoundingSphere, {
+    //         offset: new Cesium.HeadingPitchRange(data[index].hpr.heading,
+    //             data[index].hpr.pitch, 100),
+    //         duration: duration,
+    //         easingEffects: Cesium.EasingFunction.QUADRATIC_IN_OUT,
+    //         flyOverLongitude: Cesium.Cartographic.fromCartesian(position).longitude,
+    //         flyOverLongitudeWeight: 0.5,
+    //         complete: () => {
+    //             // this.viewer.camera.moveBackward(70);
+    //             setTimeout(() => {
+    //                 this.flyTo(nextIndex, this.coords._flyRecords, 3); // Recursively fly to the next point
+    //             }, 1000);
+    //         },
+    //         cancel: () => {
+    //             console.log('Fly-through was canceled.');
+    //         },
+    //     })
+    // }
 
-    appendButtonToToolbar(button, buttonIndex, buttonTopOffset) {
-        const mapCesium = document.querySelector("map-cesium");
-        const measureToolbox = mapCesium?.shadowRoot?.querySelector("cesium-measure");
+    // appendButtonToToolbar(button, buttonIndex, buttonTopOffset) {
+    //     const mapCesium = document.querySelector("map-cesium");
+    //     const measureToolbox = mapCesium?.shadowRoot?.querySelector("cesium-measure");
 
-        if (measureToolbox) {
-            const observer = new MutationObserver((_, obs) => {
-                const toolbar = measureToolbox.shadowRoot.querySelector(".toolbar");
-                const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
+    //     if (measureToolbox) {
+    //         const observer = new MutationObserver((_, obs) => {
+    //             const toolbar = measureToolbox.shadowRoot.querySelector(".toolbar");
+    //             const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
 
-                if (toolbar && measureToolButton) {
-                    const BUTTON_WIDTH = 45; // Width of each button in pixels
-                    button.style.left = `${BUTTON_WIDTH * buttonIndex}px`;
-                    button.style.top = `${buttonTopOffset}px`;
-                    toolbar.appendChild(button);
+    //             if (toolbar && measureToolButton) {
+    //                 const BUTTON_WIDTH = 45; // Width of each button in pixels
+    //                 button.style.left = `${BUTTON_WIDTH * buttonIndex}px`;
+    //                 button.style.top = `${buttonTopOffset}px`;
+    //                 toolbar.appendChild(button);
 
-                    obs.disconnect(); // Stop observing once the button is appended
+    //                 obs.disconnect(); // Stop observing once the button is appended
 
-                    const toggleButtonVisibility = () => {
-                        if (measureToolButton.classList.contains('active')) {
-                            setTimeout(() => {
-                                button.style.display = 'block';
-                            }, 500);
-                        } else {
-                            button.style.display = 'none';
-                        }
-                    };
+    //                 const toggleButtonVisibility = () => {
+    //                     if (measureToolButton.classList.contains('active')) {
+    //                         setTimeout(() => {
+    //                             button.style.display = 'block';
+    //                         }, 500);
+    //                     } else {
+    //                         button.style.display = 'none';
+    //                     }
+    //                 };
 
-                    // Initial visibility check
-                    toggleButtonVisibility();
+    //                 // Initial visibility check
+    //                 toggleButtonVisibility();
 
-                    // Observe class changes for visibility toggling
-                    const classObserver = new MutationObserver(toggleButtonVisibility);
-                    classObserver.observe(measureToolButton, { attributes: true, attributeFilter: ['class'] });
-                }
-            });
+    //                 // Observe class changes for visibility toggling
+    //                 const classObserver = new MutationObserver(toggleButtonVisibility);
+    //                 classObserver.observe(measureToolButton, { attributes: true, attributeFilter: ['class'] });
+    //             }
+    //         });
 
-            // Start observing the measureToolbox shadow DOM for child list changes
-            observer.observe(measureToolbox.shadowRoot, { childList: true, subtree: true });
-        }
-    }
+    //         // Start observing the measureToolbox shadow DOM for child list changes
+    //         observer.observe(measureToolbox.shadowRoot, { childList: true, subtree: true });
+    //     }
+    // }
 
-    setupRecordScreenButton() {
-        const button = document.createElement("button");
-        button.className = "cesium-button record-screen";
-        button.innerHTML = `<img src="${recordIcon}" alt="Record Screen" style="width: 30px; height: 30px;"/>`;
-        button.style.position = "absolute";
+    // setupRecordScreenButton() {
+    //     const button = document.createElement("button");
+    //     button.className = "cesium-button record-screen";
+    //     button.innerHTML = `<img src="${recordIcon}" alt="Record Screen" style="width: 30px; height: 30px;"/>`;
+    //     button.style.position = "absolute";
 
-        button.addEventListener("click", async () => {
-            this.flags.isScreenRecording = !this.flags.isScreenRecording;
-            button.classList.toggle("active", this.flags.isScreenRecording);
+    //     button.addEventListener("click", async () => {
+    //         this.flags.isScreenRecording = !this.flags.isScreenRecording;
+    //         button.classList.toggle("active", this.flags.isScreenRecording);
 
-            // Update the icon based on the recording state
-            button.innerHTML = `<img src="${this.flags.isScreenRecording ? stopIcon : recordIcon}" alt="${this.flags.isScreenRecording ? 'Stop' : 'Record'}" style="width: 30px; height: 30px;"/>`;
+    //         // Update the icon based on the recording state
+    //         button.innerHTML = `<img src="${this.flags.isScreenRecording ? stopIcon : recordIcon}" alt="${this.flags.isScreenRecording ? 'Stop' : 'Record'}" style="width: 30px; height: 30px;"/>`;
 
-            if (this.flags.isScreenRecording) {   // Start screen recording
-                if (this.activeButton?.current === button) {
-                    this.activeButton = { current: button };
-                }
-                await this.recordScreen(button);
-            } else {    // Stop screen recording
-                this.stopScreenRecording();
-            }
-        });
+    //         if (this.flags.isScreenRecording) {   // Start screen recording
+    //             if (this.activeButton?.current === button) {
+    //                 this.activeButton = { current: button };
+    //             }
+    //             await this.recordScreen(button);
+    //         } else {    // Stop screen recording
+    //             this.stopScreenRecording();
+    //         }
+    //     });
 
-        this.appendButtonToToolbar(button, 13, -80);
+    //     this.appendButtonToToolbar(button, 13, -80);
 
-        return button;
-    }
+    //     return button;
+    // }
 
-    async recordScreen(button) {
-        try {
-            // Request screen capture
-            const displayMediaOptions = {
-                video: {
-                    displaySurface: "browser",
-                    frameRate: { ideal: 60, max: 60 }, // Request higher frame rate
-                    height: { ideal: 1080 }, // Set ideal height for 1080p resolution
-                    width: { ideal: 1920 } // Set ideal width for 1080p resolution
-                },
-                audio: false,
-                preferCurrentTab: true,
-            }
-            this.stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+    // async recordScreen(button) {
+    //     try {
+    //         // Request screen capture
+    //         const displayMediaOptions = {
+    //             video: {
+    //                 displaySurface: "browser",
+    //                 frameRate: { ideal: 60, max: 60 }, // Request higher frame rate
+    //                 height: { ideal: 1080 }, // Set ideal height for 1080p resolution
+    //                 width: { ideal: 1920 } // Set ideal width for 1080p resolution
+    //             },
+    //             audio: false,
+    //             preferCurrentTab: true,
+    //         }
+    //         this.stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
 
-            // Create a new MediaRecorder instance with WebM format
-            const options = { mimeType: 'video/webm; codecs=vp8' };
-            this.mediaRecorder = new MediaRecorder(this.stream, options);
+    //         // Create a new MediaRecorder instance with WebM format
+    //         const options = { mimeType: 'video/webm; codecs=vp8' };
+    //         this.mediaRecorder = new MediaRecorder(this.stream, options);
 
-            this.chunks = [];
+    //         this.chunks = [];
 
-            // Create a video element to display the live recording
-            this.liveVideo = document.createElement('video');
-            this.liveVideo.srcObject = this.stream;
-            this.liveVideo.style.position = 'absolute';
-            this.liveVideo.style.bottom = '10px';
-            this.liveVideo.style.right = '10px';
-            this.liveVideo.style.width = '300px';
-            this.liveVideo.style.height = '200px';
-            this.liveVideo.autoplay = true;
-            this.liveVideo.controls = true;
-            document.body.appendChild(this.liveVideo);
+    //         // Create a video element to display the live recording
+    //         this.liveVideo = document.createElement('video');
+    //         this.liveVideo.srcObject = this.stream;
+    //         this.liveVideo.style.position = 'absolute';
+    //         this.liveVideo.style.bottom = '10px';
+    //         this.liveVideo.style.right = '10px';
+    //         this.liveVideo.style.width = '300px';
+    //         this.liveVideo.style.height = '200px';
+    //         this.liveVideo.autoplay = true;
+    //         this.liveVideo.controls = true;
+    //         document.body.appendChild(this.liveVideo);
 
-            // Listen for data events to collect video chunks
-            this.mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    this.chunks.push(event.data);
-                }
-            };
+    //         // Listen for data events to collect video chunks
+    //         this.mediaRecorder.ondataavailable = (event) => {
+    //             if (event.data.size > 0) {
+    //                 this.chunks.push(event.data);
+    //             }
+    //         };
 
-            // When recording stops, create a downloadable WebM file
-            this.mediaRecorder.onstop = () => {
-                // Combine all recorded chunks into a single Blob
-                const blob = new Blob(this.chunks, { type: 'video/webm' });
-                this.chunks = [];
+    //         // When recording stops, create a downloadable WebM file
+    //         this.mediaRecorder.onstop = () => {
+    //             // Combine all recorded chunks into a single Blob
+    //             const blob = new Blob(this.chunks, { type: 'video/webm' });
+    //             this.chunks = [];
 
-                // Create a download link
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = 'screen-recording.webm';
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-            };
+    //             // Create a download link
+    //             const url = URL.createObjectURL(blob);
+    //             const a = document.createElement('a');
+    //             a.style.display = 'none';
+    //             a.href = url;
+    //             a.download = 'screen-recording.webm';
+    //             document.body.appendChild(a);
+    //             a.click();
+    //             window.URL.revokeObjectURL(url);
+    //         };
 
-            // Start recording
-            this.mediaRecorder.start();
-            console.log('Recording started');
+    //         // Start recording
+    //         this.mediaRecorder.start();
+    //         console.log('Recording started');
 
-            // Add a listener to stop the recording if the user stops sharing the screen
-            this.stream.getVideoTracks()[0].addEventListener('ended', () => {
-                this.flags.isScreenRecording = false;
-                this.stopScreenRecording();
-            });
-        } catch (err) {
-            console.error('Error accessing screen capture:', err);
-            // reset state and button
-            this.flags.isScreenRecording = false;
-            button.classList.toggle("active", this.flags.isScreenRecording);
-            button.innerHTML = `<img src="${recordIcon}" alt="Record Screen" style="width: 30px; height: 30px;"/>`;
-        }
-    }
+    //         // Add a listener to stop the recording if the user stops sharing the screen
+    //         this.stream.getVideoTracks()[0].addEventListener('ended', () => {
+    //             this.flags.isScreenRecording = false;
+    //             this.stopScreenRecording();
+    //         });
+    //     } catch (err) {
+    //         console.error('Error accessing screen capture:', err);
+    //         // reset state and button
+    //         this.flags.isScreenRecording = false;
+    //         button.classList.toggle("active", this.flags.isScreenRecording);
+    //         button.innerHTML = `<img src="${recordIcon}" alt="Record Screen" style="width: 30px; height: 30px;"/>`;
+    //     }
+    // }
 
-    stopScreenRecording() {
-        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-            this.mediaRecorder.stop();
-            console.log('Recording stopped');
-        }
-        if (this.stream) {
-            this.stream.getTracks().forEach(track => track.stop());
-        }
-        if (this.liveVideo) {
-            if (this.stream && this.stream.active === false) {
-                document.body.removeChild(this.liveVideo);
-                this.liveVideo = null;
-            }
-        }
-    }
+    // stopScreenRecording() {
+    //     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+    //         this.mediaRecorder.stop();
+    //         console.log('Recording stopped');
+    //     }
+    //     if (this.stream) {
+    //         this.stream.getTracks().forEach(track => track.stop());
+    //     }
+    //     if (this.liveVideo) {
+    //         if (this.stream && this.stream.active === false) {
+    //             document.body.removeChild(this.liveVideo);
+    //             this.liveVideo = null;
+    //         }
+    //     }
+    // }
 
 }
 
