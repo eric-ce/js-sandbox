@@ -401,11 +401,11 @@ function addAction(linePrimitive) {
     this.interactivePrimitives.addModeLine = null;
 }
 
-function selectFireTrail(primitive) {
+async function selectFireTrail(primitive) {
     let primitivePositions = [];
 
-    const isLayerLine = primitive?.feature?.type === "fireTrail"
-    const isAnnotateLine = primitive.id && primitive.id.includes("fire_trail_line");
+    const isLayerLine = (primitive?.feature?.type === "fireTrail") ?? false;
+    const isAnnotateLine = typeof primitive?.id === 'string' && primitive.id.includes("fire_trail_line");
 
     // Determine the type of primitive and extract positions accordingly
     if (isAnnotateLine) { // Line primitive from annotations
@@ -424,7 +424,7 @@ function selectFireTrail(primitive) {
             group = this.coords.groups.find(group =>
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePositions[0]))
             );
-        }
+        };
 
         if (isLayerLine) {
             // show notification for the layer line
@@ -432,12 +432,13 @@ function selectFireTrail(primitive) {
             // update the log info for the layer line
             this.logRecordsCallback(`${primitive?.feature?.id} id from layer`);
 
-            // Clamp positions to terrain height
-            const clampedPosArray = convertCartesianArrayToClamped(primitivePositions, this.viewer.scene)
+            // Clamp positions to terrain height using sampleTerrainMostDetailed(), because sampleHeight cannot convert all positions
+            const clampedPosArray = await convertCartesianArrayToClamped(primitivePositions, this.viewer.scene)
 
             // Find existing group with the clamped first position
             group = this.coords.groups.find(group =>
-                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, clampedPosArray[0]))
+                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, clampedPosArray[0])) &&
+                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, clampedPosArray[clampedPosArray.length - 1]))
             );
 
             if (!group) {
@@ -471,16 +472,21 @@ function selectFireTrail(primitive) {
                     const newLinePrimitive = createGroundPolylinePrimitive(
                         [clampedPosArray[i], clampedPosArray[i + 1]],
                         "fire_trail_line",
-                        this.stateColors.select,
+                        this.stateColors.submitted,
                         this.cesiumPkg.GroundPolylinePrimitive
                     )
-                    newLinePrimitive.isSubmitted = false;
+                    newLinePrimitive.isSubmitted = true;
                     newLinePrimitive.positions = [clampedPosArray[i], clampedPosArray[i + 1]];
                     this.viewer.scene.primitives.add(newLinePrimitive);
                 }
 
                 // treat it as a drawn line with the tool so that it won't affect other editing feature from the start
                 this.flags.isMeasurementComplete = true; // Set measurement complete after creating the line
+
+                // treat layer fireTrail as submitted fireTrail line
+                // update the send group key to include the new line created from layer
+                const groupKey = group.coordinates.map(pos => positionKey(pos)).join('|');
+                this.sentGroupKeys.add(groupKey);
             }
         }
 

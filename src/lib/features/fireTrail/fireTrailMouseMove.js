@@ -118,11 +118,17 @@ function handleHoverHighlighting(pickedObject) {
                 colorToSet = 'submitted';
             } else if (selectedLines.includes(hoveredLine)) {
                 colorToSet = 'select';
-            } else if (hoveredLine?.layerColor) {   // it is line from layer
-                colorToSet = hoveredLine.layerColor; // restore the color for the layer line
-            } else {
+            }
+            else if (hoveredLine.feature) {
+                const { red, green, blue, alpha } = hoveredLine.layerColor; // get the original color from the layer line
+                colorToSet = new Cesium.Color(red, green, blue, alpha);  // set the original color back
+            }
+            else {
                 colorToSet = 'default';
             }
+
+            if (!colorToSet) console.error('color is not defined');
+
             this.changeLinePrimitiveColor(hoveredLine, colorToSet);
             this.interactivePrimitives.hoveredLine = null;
         }
@@ -145,8 +151,13 @@ function handleHoverHighlighting(pickedObject) {
         case "line":
             const line = pickedObject.primitive;
             if (line && line !== this.interactivePrimitives.addModeLine) {
-                if (line?.feature) {    // it is line from layer
-                    line.layerColor = line.appearance.material.uniforms.color;  // save the color for the layer line into Primitive
+                if (line.feature) {    // it is line from layer
+                    if (!line.layerColor) {
+                        const layerColor = line.appearance.material.uniforms.color.clone();  // save the color for the layer line into Primitive
+                        if (layerColor) {
+                            line.layerColor = layerColor;
+                        }
+                    }
                 }
                 this.changeLinePrimitiveColor(line, 'hover');
                 this.interactivePrimitives.hoveredLine = line;

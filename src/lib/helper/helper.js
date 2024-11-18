@@ -154,43 +154,42 @@ export function generateIdByTimestamp() {
 }
 
 /**
- * Converts an array of Cartesian coordinates to clamped Cartesian coordinates.
- * Each coordinate is clamped to the terrain height using the Cesium viewer's scene.
+ * Converts an array of Cartesian coordinates to clamped Cartesian coordinates using batch processing.
+ * Each coordinate is clamped to the terrain height using the Cesium viewer's terrain provider sampleTerrainMostDetailed() method.
  * Coordinates with undefined terrain heights are skipped.
  *
  * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian3 coordinates to be clamped.
  * @param {Cesium.Scene} scene - The Cesium scene instance used to obtain terrain height.
- * @returns {Cesium.Cartesian3[]} An array of clamped Cartesian3 coordinates.
+ * @returns {Promise<Cesium.Cartesian3[]>} A promise that resolves to an array of clamped Cartesian3 coordinates.
  * @throws {Error} Throws an error if the input parameters are invalid.
  */
-export function convertCartesianArrayToClamped(cartesianArray, scene) {
+export async function convertCartesianArrayToClamped(cartesianArray, scene) {
     // Validate input parameters
-    if (!Array.isArray(cartesianArray) || !scene) {
+    if (!Array.isArray(cartesianArray) || !scene || !scene.terrainProvider) {
         throw new Error('Invalid input parameters.');
     }
 
+    // Convert Cartesian3 to Cartographic
+    const cartographicArray = cartesianArray.map(cartesian => Cesium.Cartographic.fromCartesian(cartesian));
+
+    // Sample terrain heights in batch
+    const sampledPositions = await Cesium.sampleTerrainMostDetailed(scene.terrainProvider, cartographicArray);
+
     const clampedCartesianArray = [];
 
-    // Iterate through each Cartesian coordinate
-    for (let i = 0; i < cartesianArray.length; i++) {
-        const cartesian = cartesianArray[i];
-        // Convert Cartesian to Cartographic (longitude, latitude, height)
-        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-
-        // Sample terrain height at the Cartographic position
-        const height = scene.sampleHeight(cartographic);
-
-        // If a valid height is returned, clamp the coordinate
-        if (height !== undefined && height !== null) {
+    // Iterate through sampled positions
+    sampledPositions.forEach((cartographic, index) => {
+        if (cartographic.height !== undefined && cartographic.height !== null) {
             const clampedCartesian = Cesium.Cartesian3.fromRadians(
                 cartographic.longitude,
                 cartographic.latitude,
-                height
+                cartographic.height
             );
             clampedCartesianArray.push(clampedCartesian);
+        } else {
+            console.warn(`Skipping coordinate at index ${index}: Terrain height undefined.`);
         }
-        // If height is undefined, skip this coordinate
-    }
+    });
 
     return clampedCartesianArray;
 }

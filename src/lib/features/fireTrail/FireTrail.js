@@ -984,7 +984,9 @@ class FireTrail {
                 colorToSet = this.stateColors.default;
                 break;
             default:
-                if (colorType instanceof Cesium.Color) colorToSet = colorType;
+                if (colorType instanceof Cesium.Color) {
+                    colorToSet = colorType
+                };
                 break;
         }
 
