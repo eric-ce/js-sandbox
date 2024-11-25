@@ -103,44 +103,42 @@ export function formatArea(area) {
 
 /**
  * Generate a unique id for annotation mode with its coordinates. 
- * @param {Cesium.Cartesian3 | Cesium.Cartesian3[]} cartesian - The Cartesian coordinates of the point.
+ * @param {Cesium.Cartesian3 | Cesium.Cartesian3[]} cartesian - The Cartesian coordinates of the point(s).
  * @param {string} mode - The mode name of the annotation tool.
  * @returns {string} id - The unique id for entity or primitive.
  */
 export function generateId(cartesian, mode) {
-    let coordsId = null;
-    // cartesian could be either array or cartesian3
+    let coordsId = '';
+
     if (Array.isArray(cartesian)) {
-        cartesian.forEach((cart) => {
-            const coordId = cartesianToId(cart);
-            coordsId = coordsId ? coordsId + "_" + coordId : coordId;
-        });
+        coordsId = cartesian.map(cartesianToId).join('_');
     } else {
         coordsId = cartesianToId(cartesian);
     }
 
-    // Create the id using the hash
-    return `annotate_${mode.toString().toLowerCase()}_${coordsId}`;
+    return `annotate_${mode.toLowerCase()}_${coordsId}`;
 }
 
 /**
- * generate id for cartesian coordinate
- * @param {Cesium.Cartesian3} cartesian 
- * @returns {string} id - the id for the cartesian coordinate
+ * Convert a Cartesian3 coordinate to a unique short string ID.
+ * @param {Cesium.Cartesian3} cartesian - The Cartesian coordinate.
+ * @returns {string} - The unique short string.
  */
-export function cartesianToId(cartesian, isString = true) {
-    // Convert the cartesian position to a string
-    const positionString = cartesian.toString();
+function cartesianToId(cartesian) {
+    // Increase precision to reduce collisions
+    const precision = 5; // Adjust as needed
+    const x = cartesian.x.toFixed(precision);
+    const y = cartesian.y.toFixed(precision);
+    const z = cartesian.z.toFixed(precision);
 
-    let hash = 0;
-    // Loop through the characters of the position string and calculate the hash
-    for (let i = 0; i < positionString.length; i++) {
-        const char = positionString.charCodeAt(i);
-        hash = (hash << 5) - hash + char;
-        hash = hash & hash; // Convert to a 32-bit integer
+    // Simple hash function (djb2)
+    let hash = 5381;
+    const str = `${x},${y},${z}`;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) + str.charCodeAt(i); // hash * 33 + c
     }
-    // create id using hash
-    return isString ? `${Math.abs(hash).toString(36)}` : Math.abs(hash);
+    // Convert hash to a positive number and then to base36 for brevity
+    return Math.abs(hash).toString(36);
 }
 
 // Function to generate a unique key for a position by rounding coordinates
@@ -230,7 +228,7 @@ export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
 export function createLineGeometryInstance(coordinateArray, mode) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return;
 
-    const convertedCoordinates = coordinateArray.map((item) => convertToCartesian3(item));
+    const convertedCoordinates = coordinateArray.map((pos) => convertToCartesian3(pos));
 
     return new Cesium.GeometryInstance({
         geometry: new Cesium.PolylineGeometry({
@@ -261,6 +259,83 @@ export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, 
         releaseGeometryInstances: false
     });
 }
+
+export function createPolylinePrimitive(coordinateArray, modeString, width = 3, color = Cesium.Color.YELLOWGREEN, Primitive) {
+    // Exit early if coordinateArray is not defined
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return;
+
+    // Convert the coordinates to Cartesian3
+    const convertedCoordinates = coordinateArray.map((pos) => convertToCartesian3(pos));
+
+    // Create the line geometry instance
+    const lineGeometry = new Cesium.GeometryInstance({
+        geometry: new Cesium.PolylineGeometry({
+            positions: convertedCoordinates,
+            width,
+            vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
+        }),
+        id: generateId(convertedCoordinates, modeString),
+    });
+
+    // Create the material and appearance
+    const material = new Cesium.Material.fromType('Color', { color: color });
+    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
+
+    // Create the line primitive
+    const linePrimitive = new Primitive({
+        geometryInstances: lineGeometry,
+        appearance: appearance,
+        depthFailAppearance: appearance,
+        asynchronous: false,
+        releaseGeometryInstances: false,
+    });
+    // add custom properties positions and id to line primitive
+    linePrimitive.positions = convertedCoordinates;
+    linePrimitive.id = generateId(convertedCoordinates, modeString);
+
+    return linePrimitive;
+}
+
+export function createLineArrowPrimitive(coordinateArray, modeString, width = 10, color = Cesium.Color.YELLOWGREEN, offsetDistance, Primitive) {
+    // Exit early if coordinateArray is not defined or has less than 2 positions
+    if (!Array.isArray(coordinateArray) || coordinateArray.length !== 2) return;
+
+    // Convert the coordinates to Cartesian3
+    const convertedCoordinates = coordinateArray.map((pos) => convertToCartesian3(pos));
+    const [startPos, endPos] = convertedCoordinates;
+
+    // Calculate the direction vector
+    const direction = Cesium.Cartesian3.subtract(endPos, startPos, new Cesium.Cartesian3());
+    const distance = Cesium.Cartesian3.magnitude(direction);
+
+    // Check for zero-length direction vector
+    if (distance === 0) {
+        console.warn('Start and end positions are the same. Cannot create a valid arrow primitive.');
+        return;
+    }
+
+    Cesium.Cartesian3.normalize(direction, direction);
+    const offset = Cesium.Cartesian3.multiplyByScalar(direction, offsetDistance, new Cesium.Cartesian3());
+
+    // Adjust the start and end positions by offset
+    const adjustedStart = Cesium.Cartesian3.add(startPos, offset, new Cesium.Cartesian3());
+    const adjustedEnd = Cesium.Cartesian3.subtract(endPos, offset, new Cesium.Cartesian3());
+
+    // Create the line primitive
+    const linePrimitive = createPolylinePrimitive([adjustedStart, adjustedEnd], modeString, width, color, Primitive);
+
+    // Change the material to PolylineArrow
+    const material = Cesium.Material.fromType('PolylineArrow', { color: color });
+    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
+    linePrimitive.appearance = appearance;
+
+    // Update the id and positions of the line primitive
+    linePrimitive.positions = convertedCoordinates;
+    linePrimitive.id = generateId(convertedCoordinates, modeString);
+
+    return linePrimitive;
+}
+
 
 /**
  * Create a clamped line geometry instance.

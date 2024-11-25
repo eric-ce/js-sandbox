@@ -119,9 +119,8 @@ function handleHoverHighlighting(pickedObject) {
             } else if (selectedLines.includes(hoveredLine)) {
                 colorToSet = 'select';
             }
-            else if (hoveredLine.feature) {
-                const { red, green, blue, alpha } = hoveredLine.layerColor; // get the original color from the layer line
-                colorToSet = new Cesium.Color(red, green, blue, alpha);  // set the original color back
+            else if (hoveredLine.feature) {   // it is line from layer
+                colorToSet = this.stateColors.layerColor  // set the original color back
             }
             else {
                 colorToSet = 'default';
@@ -131,6 +130,7 @@ function handleHoverHighlighting(pickedObject) {
 
             this.changeLinePrimitiveColor(hoveredLine, colorToSet);
             this.interactivePrimitives.hoveredLine = null;
+            this.stateColors.layerColor = null;
         }
 
         // Reset hover point
@@ -152,10 +152,11 @@ function handleHoverHighlighting(pickedObject) {
             const line = pickedObject.primitive;
             if (line && line !== this.interactivePrimitives.addModeLine) {
                 if (line.feature) {    // it is line from layer
-                    if (!line.layerColor) {
+                    if (!this.stateColors.layerColor) {
                         const layerColor = line.appearance.material.uniforms.color.clone();  // save the color for the layer line into Primitive
                         if (layerColor) {
-                            line.layerColor = layerColor;
+                            const { red, green, blue, alpha } = layerColor; // get the color values
+                            this.stateColors.layerColor = new Cesium.Color(red, green, blue, alpha);  // save the color, NEED TO CALLED CESIUM COLOR AGAIN TO AVOID invalid value
                         }
                     }
                 }

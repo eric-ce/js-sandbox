@@ -97,6 +97,7 @@ class FireTrail {
             default: Cesium.Color.YELLOWGREEN,
             submitted: Cesium.Color.DARKGREEN,
             add: Cesium.Color.YELLOW,
+            layerColor: null,
         }
 
         this.handleFireTrailLeftClick = handleFireTrailLeftClick.bind(this);
