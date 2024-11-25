@@ -1,3 +1,5 @@
+import * as Cesium from "cesium";
+
 export class StateManager {
     constructor() {
         // Initialize the state with your specified structure
@@ -17,7 +19,7 @@ export class StateManager {
             element: {
                 helpBox: null,
                 logBox: null,
-                toolsContainer: null,
+                toolbar: null,
             },
             position: {
                 logBox: { top: "280px", right: "0px" },
@@ -26,6 +28,16 @@ export class StateManager {
             overlay: {
                 pointer: null,
                 button: null,
+            },
+            color: {
+                hover: Cesium.Color.KHAKI,
+                select: Cesium.Color.BLUE,
+                default: Cesium.Color.YELLOWGREEN,
+                submitted: Cesium.Color.DARKGREEN,
+                add: Cesium.Color.YELLOW,
+                pointColor: Cesium.Color.RED,
+                layerColor: null,
+                lineCacheColor: null
             }
         };
 
@@ -155,6 +167,30 @@ export class StateManager {
             this._notifyListeners('overlay', key, value);
         } else {
             console.warn(`Property '${key}' does not exist in overlay state.`);
+        }
+    }
+
+    // Get a specific color state property or the entire color state
+    getColorState(key) {
+        if (key) {
+            if (key in this._state.color) {
+                return this._state.color[key];
+            } else {
+                console.warn(`Property '${key}' does not exist in color state.`);
+                return undefined;
+            }
+        } else {
+            return { ...this._state.color };
+        }
+    }
+
+    // Set a specific color state property
+    setColorState(key, value) {
+        if (key in this._state.color) {
+            this._state.color[key] = value;
+            this._notifyListeners('color', key, value);
+        } else {
+            console.warn(`Property '${key}' does not exist in color state.`);
         }
     }
 
