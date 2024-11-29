@@ -1,7 +1,7 @@
 import * as Cesium from "cesium";
-import { createLineArrowPrimitive, createPointPrimitive, generateId, removeInputActions } from "../../helper/helper.js";
+import { createLineArrowPrimitive, createPointPrimitive, generateId, removeInputActions, showCustomNotification } from "../../helper/helper.js";
 import { handleRecordScreen, resumeOrPauseRecording } from "./recordScreen.js";
-import { editFlyPath } from "./editFlyPath.js";
+import { createFlyPathPrimitives, editFlyPath, removePrimitives } from "./editFlyPath.js";
 
 class FlyThrough {
     constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
@@ -29,9 +29,12 @@ class FlyThrough {
 
         // flags to control the state of the tool
         this.flags = {
-            isRecording: false,
+            isRecordingFly: false,
             isScreenRecording: false,
             isDragMode: false,
+            isShowFlyPath: false,
+            isRotating: false,
+            isEditing: false,
         };
 
         this.buttons = {
@@ -149,6 +152,9 @@ class FlyThrough {
         // Initialize the moveEndListener as null
         this.moveEndListener = null;
 
+        // Initialize the camera rotation interval as null
+        this.cameraRotationInterval = null;
+
         this.setupButtons();
     }
 
@@ -159,6 +165,10 @@ class FlyThrough {
         removeInputActions(this.handler);
     }
 
+    /**
+     * Sets up and configures buttons for the interface.
+     * This function creates buttons based on predefined configurations, assigns event listeners, and adds them to the specified DOM elements.
+     */
     setupButtons() {
         // Define button configurations
         const buttonsConfig = [
@@ -174,9 +184,10 @@ class FlyThrough {
                 key: 'replay',
                 text: 'Replay',
                 className: 'replay',
-                onClick: this.handleReplay.bind(this),
+                onClick: this.handleReplayFly.bind(this),
                 left: 45 * 13, // 45px each button width * #13th buttons
                 top: -40 * 1, // -40px each button height * #1st buttons
+                disabled: true, // Initially disabled until fly data is available
             },
             {
                 key: 'editFlyPath',
@@ -185,22 +196,32 @@ class FlyThrough {
                 onClick: editFlyPath.bind(this), // Ensure this method exists
                 left: 45 * 13, // 45px each button * #13th buttons
                 top: -40 * 2, // -40px each button * #2nd buttons
+                disabled: true, // Initially disabled until fly data is available
+            },
+            {
+                key: 'showFlyPath',
+                text: 'Show',
+                className: 'show-fly-path',
+                onClick: this.handleShowFlyPath.bind(this), // Ensure this method exists
+                left: 45 * 13, // 45px each button * #13th buttons
+                top: -40 * 3, // -40px each button * #2nd buttons
+                disabled: true, // Initially disabled until fly data is available
             },
             {
                 key: 'importKml',
                 text: 'Import',
                 className: 'import-kml',
                 onClick: this.importKml.bind(this),
-                left: 45 * 13, // 45px each button * #13th buttons
-                top: -40 * 3, // -40px each button * #3rd buttons
+                left: 45 * 15, // 45px each button * #13th buttons
+                top: -40 * 0, // -40px each button * #3rd buttons
             },
             {
                 key: 'exportKml',
                 text: 'Export',
                 className: 'export-kml',
                 onClick: this.exportKml.bind(this),
-                left: 45 * 13, // 45px each button * #13th buttons
-                top: -40 * 4, // -40px each button * #4th buttons
+                left: 45 * 15, // 45px each button * #13th buttons
+                top: -40 * 1, // -40px each button * #4th buttons
             },
             {
                 key: 'recordScreen',
@@ -213,7 +234,7 @@ class FlyThrough {
             {
                 key: 'pauseResume',
                 text: 'Pause',
-                className: 'disabled-button', // Initially disabled until recording starts
+                className: 'pause-resume', // Initially disabled until recording starts
                 onClick: resumeOrPauseRecording.bind(this),
                 left: 45 * 14, // Adjust positioning as needed
                 top: -40, // Adjust positioning as needed
@@ -226,7 +247,7 @@ class FlyThrough {
             const button = document.createElement("button");
             button.textContent = config.text;
             if (config.disabled) {
-                button.classList.add(config.className);
+                button.classList.add("disabled-button", config.className);
             } else {
                 button.classList.add("cesium-button", config.className);
             }
@@ -236,6 +257,16 @@ class FlyThrough {
             button.style.top = `${config.top}px`;
             this.buttons[`${config.key}Button`] = button;
         });
+
+        // mouse move event listener for button overlay
+        this.updateButtonOverlay(this.buttons.replayButton, "Replay fly path");
+        this.updateButtonOverlay(this.buttons.flyButton, "Record fly path");
+        this.updateButtonOverlay(this.buttons.editFlyPathButton, "Edit fly path");
+        this.updateButtonOverlay(this.buttons.showFlyPathButton, "Show/Hide fly path");
+        this.updateButtonOverlay(this.buttons.importKmlButton, "Import KML file");
+        this.updateButtonOverlay(this.buttons.exportKmlButton, "Export KML file");
+        this.updateButtonOverlay(this.buttons.recordScreenButton, "Record screen");
+        this.updateButtonOverlay(this.buttons.pauseResumeButton, "Pause/Resume recording");
 
         // Find the measureToolbox element within the mapCesium shadow DOM
         const mapCesium = document.querySelector("map-cesium");
@@ -316,16 +347,16 @@ class FlyThrough {
      */
     handleFly() {
         // Toggle the recording state
-        this.flags.isRecording = !this.flags.isRecording;
+        this.flags.isRecordingFly = !this.flags.isRecordingFly;
         const button = this.buttons.flyButton;
 
         // Update the button's active state class
-        button.classList.toggle("active", this.flags.isRecording);
+        button.classList.toggle("active", this.flags.isRecordingFly);
 
         // Update the button text based on the recording state
-        button.innerHTML = this.flags.isRecording ? "Stop" : "Fly";
+        button.innerHTML = this.flags.isRecordingFly ? "Stop" : "Fly";
 
-        if (!this.flags.isRecording) {
+        if (!this.flags.isRecordingFly) {
             // If recording is being stopped, remove the event listener
             if (this.moveEndListener) {
                 this.viewer.camera.moveEnd.removeEventListener(this.moveEndListener);
@@ -347,38 +378,100 @@ class FlyThrough {
         }
     }
 
+    handleShowFlyPath() {
+        // Check if there are any fly path records
+        if (this.coords._flyRecords.length === 0) {
+            alert("No recorded fly path data available");
+            return;
+        }
+
+        // Toggle the visibility flag
+        this.flags.isShowFlyPath = !this.flags.isShowFlyPath;
+
+        // Shows the fly path by remove and create the primitives
+        // Because fly path does not have as much as primitives that measure mode has, fly path can use remove and create the primitives
+        if (this.flags.isShowFlyPath) {
+            this.buttons.showFlyPathButton.innerHTML = "Hide";  // Update the button text
+            createFlyPathPrimitives.call(this); // remove and create the fly path primitives
+        } else {
+            this.buttons.showFlyPathButton.innerHTML = "Show"; // Update the button text
+            removePrimitives.call(this);    // remove the fly path primitives
+        }
+    }
+
     /**
      * Records the camera's position and orientation whenever the camera movement ends.
      * @returns {Function} The event listener function for camera movement end.
      */
     cameraMoveRecord() {
         const listener = () => {
+            // Log the current camera state for debugging purposes
             console.log(this.viewer.camera);
+
+            // Get the current camera position and orientation
             const position = this.viewer.camera.positionWC;
             const heading = this.viewer.camera.heading;
             const pitch = this.viewer.camera.pitch;
             const roll = this.viewer.camera.roll;
+
+            // Record the current camera state in the fly records array
             this.coords._flyRecords.push({
                 position: { ...position },
                 hpr: { heading, pitch, roll },
             });
+
+            // Log the updated fly records for debugging purposes
             console.log(this.coords._flyRecords);
+
+            // Show a notification with the number of recorded waypoints
+            showCustomNotification(`Record waypoints ${this.coords._flyRecords.length}`, this.viewer.container);
+
+            // Update the state of the replay and edit buttons based on the number of recorded waypoints
+            const updateButtons = () => {
+                if (this.coords._flyRecords.length > 0) {
+                    this.buttons.replayButton.disabled = false;
+                    this.buttons.replayButton.classList.remove("disabled-button");
+                    this.buttons.replayButton.classList.add("cesium-button");
+
+                    this.buttons.editFlyPathButton.disabled = false;
+                    this.buttons.editFlyPathButton.classList.remove("disabled-button");
+                    this.buttons.editFlyPathButton.classList.add("cesium-button");
+
+                    this.buttons.showFlyPathButton.disabled = false;
+                    this.buttons.showFlyPathButton.classList.remove("disabled-button");
+                    this.buttons.showFlyPathButton.classList.add("cesium-button");
+                }
+            }
+            updateButtons();
+
+            // Return the current camera state
+            return { position: { ...position }, hpr: { heading, pitch, roll } };
         };
 
         // Add the event listener for camera movement end
         this.viewer.camera.moveEnd.addEventListener(listener);
+
+        // Return the event listener function for potential removal later
         return listener;
     }
 
     /**
-     * Handles the replay functionality.
-     * Initiates the fly-through sequence if not currently recording.
+     * Handles the replay of a recorded flight path.
+     * This function is called when the user attempts to replay a flight. It checks whether a flight is currently being recorded and acts accordingly.
      */
-    handleReplay() {
-        if (!this.flags.isRecording) {
+    handleReplayFly() {
+        // Check if a flight is currently being recorded
+        if (!this.flags.isRecordingFly) {
+            if (this.coords._flyRecords.length === 0) {
+                alert("No recorded fly path data available");
+                return;
+            }
+
+            // If not recording, call flyTo method to replay the recorded flight path
             this.flyTo(0, this.coords._flyRecords, 3);
         } else {
-            alert("Please stop recording before replaying.");
+            // If currently recording, show an alert to inform the user to stop recording first
+            alert("Please stop recording fly before replaying.");
         }
     }
 
@@ -390,7 +483,6 @@ class FlyThrough {
      */
     flyTo(index, data, duration = 3) {
         if (index >= data.length) {
-            console.log("flyComplete");
             return;
         }
 
@@ -429,6 +521,27 @@ class FlyThrough {
         console.log("exportKml");
     }
 
+    /**
+     * update the button overlay with the overlay text
+     * @param { HTMLElement } button - the button element
+     * @param {String} overlayText - the overlay text
+     * @returns {HTMLElement} - the button overlay element
+     */
+    updateButtonOverlay(button, overlayText) {
+        const buttonOverlay = this.stateManager.getOverlayState("button");
+
+        button.addEventListener("mouseover", (e) => {
+            const cesiumRect = this.viewer.container.getBoundingClientRect();
+            buttonOverlay.style.display = "block";
+            buttonOverlay.innerHTML = `${overlayText}`;
+            buttonOverlay.style.left = e.pageX - cesiumRect.x + "px";
+            buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
+        });
+
+        button.addEventListener("mouseout", () => {
+            buttonOverlay.style.display = "none";
+        });
+    }
 
     /******************
      * HELPER METHODS *

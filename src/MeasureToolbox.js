@@ -9,10 +9,10 @@ import { Polygon } from "./lib/features/Polygon.js";
 import { Profile } from "./lib/features/Profile.js";
 import { ProfileDistances } from "./lib/features/ProfileDistances.js";
 import { Picker } from "./lib/features/Picker.js";
-import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
-import { FlyThrough } from "./lib/features/flyThrough/FlyThrough.js";
 import { FireTrail } from "./lib/features/fireTrail/FireTrail.js";
+import { FlyThrough } from "./lib/features/flyThrough/FlyThrough.js";
 import { StateManager } from "./lib/features/StateManager.js";
+import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
 import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon, recordIcon, playIcon, stopIcon } from './assets/icons.js';
 
 /**
@@ -56,6 +56,15 @@ export class MeasureToolbox extends HTMLElement {
     /*********************
      * GETTER AND SETTER *
      *********************/
+    set app(app) {
+        this._app = app
+        this.log = app.log
+    }
+
+    get app() {
+        return this._app
+    }
+
     set viewer(viewer) {
         this._viewer = viewer;
     }
@@ -150,7 +159,7 @@ export class MeasureToolbox extends HTMLElement {
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();
 
-        // this.flyThrough();
+        // initialize fly through mode
         this.initializeFlyThrough();
     }
 
@@ -400,6 +409,9 @@ export class MeasureToolbox extends HTMLElement {
                 margin: 0;
                 padding: 0;
             }
+            .cesium-button:hover{
+                z-index: 2;
+            }
             .cesium-infoBox{
                 width: 250px;
                 padding: 5px;
@@ -480,16 +492,22 @@ export class MeasureToolbox extends HTMLElement {
         // setup button actions
         button.addEventListener("click", () => {
             const activeButton = this.stateManager.getButtonState("activeButton");
-            const isActiveButton = activeButton === button;
+            const isSameButton = activeButton === button;
+            const activeTool = this.stateManager.getButtonState("activeTool");
+
+            // Add this check to prevent switching/deactivation
+            if (activeButton && activeTool instanceof FireTrail && activeTool.checkUnsubmittedLines()) {
+                alert("Please submit all of FireTrail measurement before switching modes.");
+                return;
+            }
 
             // Deactivate existed active button if it is not the same button
-            if (activeButton && !isActiveButton) {
-                const activeTool = this.stateManager.getButtonState("activeTool");
+            if (activeButton && !isSameButton) {
                 this.deactivateButton(activeButton, activeTool);
             }
 
             // Toggle button activation
-            if (isActiveButton) {
+            if (isSameButton) {
                 this.deactivateButton(button, toolInstance);
                 this.stateManager.setButtonState("activeButton", null);
                 this.stateManager.setButtonState("activeTool", null);
@@ -512,16 +530,18 @@ export class MeasureToolbox extends HTMLElement {
             }
 
             // remove logBox to recreate it
-            const helpBox = this.stateManager.getElementState("helpBox");
             const logBox = this.stateManager.getElementState("logBox");
             if (!logBox) this.setupLogBox();
 
             // set helpBox to hide or show without remove it to avoid recreation - to save resources
+            const helpBox = this.stateManager.getElementState("helpBox");
             if (helpBox) {
                 helpBox.style.display = "block";
             } else {
                 this.setupHelpBox();
             }
+
+            // Update the helpBox content
             this.updateHelpBox();
 
             // set the pointerOverlay to hide
@@ -531,6 +551,7 @@ export class MeasureToolbox extends HTMLElement {
         // append button to the toolbar
         const toolbar = this.stateManager.getElementState("toolbar");
         toolbar.appendChild(button);
+
         toolInstance.button = button;   // Use the setter to store the button in the measure mode instance
     }
 

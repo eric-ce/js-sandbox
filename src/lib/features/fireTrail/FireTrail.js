@@ -510,44 +510,48 @@ class FireTrail {
             // Set up a MutationObserver to watch for the presence of required elements
             const observer = new MutationObserver((_, obs) => {
                 const fireTrail = measureToolbox.shadowRoot.querySelector(".fire-trail");
-                const toolbar = measureToolbox.shadowRoot.querySelector(".toolbar");
+                const toolbar = measureToolbox.shadowRoot.querySelector(".measure-toolbar");
                 const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
 
-                if (fireTrail && toolbar && measureToolButton) {
-                    // Position buttons
-                    const BUTTON_WIDTH = 45; // Width of each button in pixels
-                    toggleLabelButton.style.left = `${BUTTON_WIDTH * 11}px`;
-                    toggleLabelButton.style.top = "-40px";
-                    submitButton.style.left = `${BUTTON_WIDTH * 11}px`;
-                    submitButton.style.top = "-80px";
-
-                    // Append buttons to the toolbar
-                    toolbar.appendChild(toggleLabelButton);
-                    toolbar.appendChild(submitButton);
-
-                    obs.disconnect(); // Stop observing once the buttons are appended
-
-                    // Update button overlay text
-                    this.updateButtonOverlay(toggleLabelButton, "toggle label on or off");
-                    this.updateButtonOverlay(submitButton, "submit the current annotation");
-
-                    // Add event listener to toggle button visibility based on multi-distances-clamped button state
-                    const toggleButtonVisibility = () => {
-                        const shouldDisplay =
-                            fireTrail.classList.contains('active') &&
-                            measureToolButton.classList.contains('active');
-                        toggleLabelButton.style.display = shouldDisplay ? 'block' : 'none';
-                        submitButton.style.display = shouldDisplay ? 'block' : 'none';
-                    };
-
-                    // Initial visibility check
-                    toggleButtonVisibility();
-
-                    // Set up another MutationObserver to watch class changes for visibility toggling
-                    const classObserver = new MutationObserver(toggleButtonVisibility);
-                    classObserver.observe(fireTrail, { attributes: true, attributeFilter: ['class'] });
-                    classObserver.observe(measureToolButton, { attributes: true, attributeFilter: ['class'] });
+                if (!toolbar || !measureToolButton || !fireTrail) {
+                    console.warn("Toolbar or Measure Tool or FireTrail Button not found.");
+                    return;
                 }
+
+                // Position buttons
+                const BUTTON_WIDTH = 45; // Width of each button in pixels
+                toggleLabelButton.style.left = `${BUTTON_WIDTH * 11}px`;
+                toggleLabelButton.style.top = "-40px";
+                submitButton.style.left = `${BUTTON_WIDTH * 11}px`;
+                submitButton.style.top = "-80px";
+
+                // Append buttons to the toolbar
+                toolbar.appendChild(toggleLabelButton);
+                toolbar.appendChild(submitButton);
+
+                obs.disconnect(); // Stop observing once the buttons are appended
+
+                // Update button overlay text
+                this.updateButtonOverlay(toggleLabelButton, "toggle label on or off");
+                this.updateButtonOverlay(submitButton, "submit the current annotation");
+
+                // Add event listener to toggle button visibility based on multi-distances-clamped button state
+                const toggleButtonVisibility = () => {
+                    const shouldDisplay =
+                        fireTrail.classList.contains('active') &&
+                        measureToolButton.classList.contains('active');
+                    toggleLabelButton.style.display = shouldDisplay ? 'block' : 'none';
+                    submitButton.style.display = shouldDisplay ? 'block' : 'none';
+                };
+
+                // Initial visibility check
+                toggleButtonVisibility();
+
+                // Set up another MutationObserver to watch class changes for visibility toggling
+                const classObserver = new MutationObserver(toggleButtonVisibility);
+                classObserver.observe(fireTrail, { attributes: true, attributeFilter: ['class'] });
+                classObserver.observe(measureToolButton, { attributes: true, attributeFilter: ['class'] });
+
             });
             // Start observing the measureToolbox shadow DOM for child list changes
             observer.observe(measureToolbox.shadowRoot, { childList: true, subtree: true });

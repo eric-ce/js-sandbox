@@ -6,7 +6,9 @@ export function editFlyPath() {
         showCustomNotification("Please stop recording before editing the fly path.", this.viewer.container);
         return;
     }
+
     this.flags.isEditing = !this.flags.isEditing;
+
     if (this.coords._flyRecords.length === 0) {
         alert("No fly-through data recorded.");
         return;
@@ -28,32 +30,34 @@ export function editFlyPath() {
             ),
         });
 
-        removePrimitives.call(this);
+        // create fly-through path primitives
+        createFlyPathPrimitives.call(this);
+        // removePrimitives.call(this);
 
-        // place points
-        this.coords._flyRecords.forEach((record) => {
-            const pointColor = this.stateManager.getColorState("pointColor");
-            const point = createPointPrimitive(record.position, pointColor);
-            point.id = generateId(record.position, "fly_through_point");
-            this.pointCollection.add(point);
-        });
+        // // place points
+        // this.coords._flyRecords.forEach((record) => {
+        //     const pointColor = this.stateManager.getColorState("pointColor");
+        //     const point = createPointPrimitive(record.position, pointColor);
+        //     point.id = generateId(record.position, "fly_through_point");
+        //     this.pointCollection.add(point);
+        // });
 
-        // place lines
-        for (let index = 0; index < this.coords._flyRecords.length - 1; index++) {
-            const currentRecord = this.coords._flyRecords[index];
-            const nextRecord = this.coords._flyRecords[index + 1];
-            // create a line primitive
-            const lineColor = this.stateManager.getColorState("default");
-            const lineArrow = createLineArrowPrimitive(
-                [currentRecord.position, nextRecord.position],
-                "fly_through_line",
-                10,
-                lineColor,
-                1,
-                this.cesiumPkg.Primitive
-            );
-            this.viewer.scene.primitives.add(lineArrow);
-        }
+        // // place lines
+        // for (let index = 0; index < this.coords._flyRecords.length - 1; index++) {
+        //     const currentRecord = this.coords._flyRecords[index];
+        //     const nextRecord = this.coords._flyRecords[index + 1];
+        //     // create a line primitive
+        //     const lineColor = this.stateManager.getColorState("default");
+        //     const lineArrow = createLineArrowPrimitive(
+        //         [currentRecord.position, nextRecord.position],
+        //         "fly_through_line",
+        //         10,
+        //         lineColor,
+        //         1,
+        //         this.cesiumPkg.Primitive
+        //     );
+        //     this.viewer.scene.primitives.add(lineArrow);
+        // }
 
         // edit features for points and lines
         // mouse move hover to point or line will highlight the point or line
@@ -89,6 +93,44 @@ export function editFlyPath() {
             }
         });
     }
+}
+/**
+ * Create fly-through path primitives
+ */
+export function createFlyPathPrimitives() {
+    removePrimitives.call(this);
+
+    const points = [];
+    const lines = [];
+
+    // place points
+    this.coords._flyRecords.forEach((record) => {
+        const pointColor = this.stateManager.getColorState("pointColor");
+        const point = createPointPrimitive(record.position, pointColor);
+        point.id = generateId(record.position, "fly_through_point");
+        points.push(point)
+        this.pointCollection.add(point);
+    });
+
+    // place lines
+    for (let index = 0; index < this.coords._flyRecords.length - 1; index++) {
+        const currentRecord = this.coords._flyRecords[index];
+        const nextRecord = this.coords._flyRecords[index + 1];
+        // create a line primitive
+        const lineColor = this.stateManager.getColorState("default");
+        const lineArrow = createLineArrowPrimitive(
+            [currentRecord.position, nextRecord.position],
+            "fly_through_line",
+            10,
+            lineColor,
+            1,
+            this.cesiumPkg.Primitive
+        );
+        lines.push(lineArrow)
+        this.viewer.scene.primitives.add(lineArrow);
+    }
+
+    return { points, lines };
 }
 
 function hoverToHighlight(movement) {
@@ -146,7 +188,7 @@ function hoverToHighlight(movement) {
 }
 
 // remove primitives by the id of fly_through
-function removePrimitives() {
+export function removePrimitives() {
     // remove the fly through points
     this.pointCollection._pointPrimitives.forEach(point => {
         point.id && point.id.includes("fly_through_point") && this.pointCollection.remove(point);
@@ -154,11 +196,14 @@ function removePrimitives() {
     // remove the fly through lines
     const lines = this.viewer.scene.primitives._primitives.filter(p => p.id && p.id.includes("fly_through_line"));
     lines.forEach(line => this.viewer.scene.primitives.remove(line));
+    return { points: this.pointCollection._pointPrimitives, lines };
 }
 
-//TODO: editing features: select, drag, add, remove
-// when user click on a point, the point will be selected
-// when selected changed the color of the point shows relevant info in the logBox and show notification
+
+/**
+ * Handle the selection of a point
+ * @param {{position: Cesium.Cartesian2}} movement 
+ */
 function handleSelect(movement) {
     const pickedObject = this.viewer.scene.pick(movement.position);
     const pickedObjectType = getPickedObjectType(pickedObject, "fly_through");
@@ -244,6 +289,7 @@ function moveSelectedPoint(point) {
 
         // update the fly-through data
         const pointIndex = this.coords._flyRecords.findIndex(record => Cesium.Cartesian3.equals(record.position, cartesian));
+        if (pointIndex === -1) return;
         this.coords._flyRecords[pointIndex].position = newCartesian;
 
         // update the connecting lines
@@ -357,7 +403,8 @@ function handleDoubleClickAction(handler) {
         if (pickedObjectType === "line") {
             handleAddPoint.call(this, movement); // add a point to the line
         } else if (pickedObjectType === "point") {
-            rotateCameraByPoint.call(this, movement); // rotate the camera around the point
+            const point = pickedObject.primitive;
+            rotateCameraByPoint.call(this, point); // rotate the camera around the point
         }
     }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 }
@@ -368,9 +415,35 @@ function handleAddPoint(movement) {
 
 }
 
-function rotateCameraByPoint(movement) {
-    console.log("rotate")
-    // TODO: rotate the camera automatically in a circle horizontally
+/**
+ * Rotate the camera around the point
+ * @param {Cesium.PointPrimitive} point - The point to rotate the camera around
+ */
+function rotateCameraByPoint(point) {
+    this.viewer.camera.lookAt(point.position, new Cesium.HeadingPitchRange(0.13000450388900298, -0.3625899685123126, 10));
+
+    const rotationSpeed = Cesium.Math.toRadians(0.1); // 0.1 degree per frame
+    const axis = Cesium.Cartesian3.UNIT_Z;  // rotate around the z-axis
+
+    // Define the rotation handler
+    const cameraRotationHandler = () => {
+        this.viewer.camera.rotate(axis, rotationSpeed);
+    };
+
+    // Add the preRender event listener for rotation
+    this.viewer.scene.preRender.addEventListener(cameraRotationHandler);
+
+    // Define the keydown handler to stop rotation
+    const stopRotationHandler = (event) => {
+        if (event.key === "Escape") {
+            this.viewer.scene.preRender.removeEventListener(cameraRotationHandler);
+            this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+            window.removeEventListener('keydown', stopRotationHandler);
+        }
+    };
+
+    // Add the keydown event listener
+    window.addEventListener('keydown', stopRotationHandler);
 }
 
 function handleRemovePoint(movement) {
