@@ -9,6 +9,7 @@ import {
     createLabelPrimitive,
     editableLabel,
 } from "../helper/helper.js";
+import MeasureModeBase from "./MeasureModeBase.js";
 
 /**
  * Represents points bookmark tool in Cesium.
@@ -18,7 +19,7 @@ import {
  * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
  * @param {Function} logRecordsCallback - The callback function to log records.
  */
-class Points {
+class Points extends MeasureModeBase {
     /**
      * Creates a new Point instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
@@ -28,31 +29,20 @@ class Points {
      * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        this.viewer = viewer;
-        this.handler = handler;
-        this.stateManager = stateManager;
+        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+
         this.coordinateInfoOverlay = this.createCoordinateInfoOverlay();
-
-        this.logRecordsCallback = logRecordsCallback;
-
-        this.cesiumPkg = cesiumPkg;
-
-        this.coordinate = new Cesium.Cartesian3();
 
         // flags
         this.flags = {
             isDragMode: false
         };
 
-        // Coordinate management and related properties
+        // coordinates data
         this.coords = {
             groups: [],      // Stores temporary coordinates during operations
             dragStart: null // Stores the initial position before a drag begins
-        }
-
-        // lookup and set Cesium primitives collections
-        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
-        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
+        };
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -63,27 +53,8 @@ class Points {
         }
     }
 
-    /**
-     * Sets up input actions for points mode.
-     */
     setupInputActions() {
-        removeInputActions(this.handler);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePointsLeftClick(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePointsMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePointsDragStart(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-
-        this.handler.setInputAction(() => {
-            this.handlePointsDragEnd();
-        }, Cesium.ScreenSpaceEventType.LEFT_UP);
+        super.setupInputActions();
     }
 
 
@@ -94,7 +65,7 @@ class Points {
      * Handles left-click events to place points, if selected point existed remove the point
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
-    handlePointsLeftClick(movement) {
+    handleLeftClick(movement) {
         const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
         const pickedObjectType = getPickedObjectType(pickedObject, "bookmark");
 
@@ -105,22 +76,22 @@ class Points {
                 break;
             case "point":
                 const pointPrimitive = pickedObject.primitive;
-                const primtiveToRemove = this.pointCollection._pointPrimitives.find(primitive => primitive.id === pointPrimitive.id);
+                const primitiveToRemove = this.pointCollection._pointPrimitives.find(primitive => primitive.id === pointPrimitive.id);
 
-                if (primtiveToRemove) {
+                if (primitiveToRemove) {
                     // remove the point
-                    this.pointCollection.remove(primtiveToRemove);
+                    this.pointCollection.remove(primitiveToRemove);
 
                     // remove the label
-                    const labelToRemove = this.labelCollection._labels.find(label => Cesium.Cartesian3.equals(label.position, primtiveToRemove.position));
+                    const labelToRemove = this.labelCollection._labels.find(label => Cesium.Cartesian3.equals(label.position, primitiveToRemove.position));
                     if (labelToRemove) this.labelCollection.remove(labelToRemove);
 
                     // remove the point position from cache
-                    const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, primtiveToRemove.position))
+                    const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, primitiveToRemove.position))
                     if (positionIndex !== -1) this.coords.groups.splice(positionIndex, 1);
 
                     // log the points records
-                    this._updateBookmarkLogRecords(primtiveToRemove.position, "remove");
+                    this._updateBookmarkLogRecords(primitiveToRemove.position, "remove");
                 }
                 break;
             default:
@@ -157,7 +128,7 @@ class Points {
      * Handles mouse move events to display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
-    handlePointsMouseMove(movement) {
+    handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
@@ -191,11 +162,14 @@ class Points {
             }
         }
         resetHighlighting();
+
+        const hoverColor = this.stateManager.getColorState("hover");
+
         switch (pickedObjectType) {
             case "point":  // highlight the point when hovering
                 const pointPrimitive = pickedObject.primitive;
                 if (pointPrimitive) {
-                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineColor = hoverColor;
                     pointPrimitive.outlineWidth = 2;
                     this.interactivePrimitives.hoveredPoint = pointPrimitive;
                 }
@@ -203,7 +177,7 @@ class Points {
             case "label":   // highlight the label when hovering
                 const labelPrimitive = pickedObject.primitive;
                 if (labelPrimitive) {
-                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    labelPrimitive.fillColor = hoverColor;
                     this.interactivePrimitives.hoveredLabel = labelPrimitive;
                 }
                 break;
@@ -212,11 +186,10 @@ class Points {
         }
     }
 
-
     /*****************
      * DRAG FEATURES *
      *****************/
-    handlePointsDragStart(movement) {
+    handleDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
@@ -238,13 +211,13 @@ class Points {
 
             // set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handlePointsDrag(movement, isPoint);
+                this.handleDrag(movement, isPoint);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         }
 
     };
 
-    handlePointsDrag(movement, selectedPoint) {
+    handleDrag(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
         const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
@@ -305,7 +278,7 @@ class Points {
         }
     };
 
-    handlePointsDragEnd() {
+    handleDragEnd() {
         // update the drag primitive to the finish position;
         if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
             // reset dragging point style
@@ -357,7 +330,7 @@ class Points {
         }
         // set back to default multi distance mouse moving actions
         this.handler.setInputAction((movement) => {
-            this.handlePointsMouseMove(movement);
+            this.handleMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     };
 
@@ -375,8 +348,8 @@ class Points {
     }
 
     updateCoordinateInfoOverlay(cartesian) {
-        const cartographicDegress = cartesian3ToCartographicDegrees(cartesian);
-        const displayInfo = `Lat: ${cartographicDegress.latitude.toFixed(6)}<br>Lon: ${cartographicDegress.longitude.toFixed(6)} <br>Alt: ${cartographicDegress.height.toFixed(2)}`;
+        const cartographicDegrees = cartesian3ToCartographicDegrees(cartesian);
+        const displayInfo = `Lat: ${cartographicDegrees.latitude.toFixed(6)}<br>Lon: ${cartographicDegrees.longitude.toFixed(6)} <br>Alt: ${cartographicDegrees.height.toFixed(2)}`;
         this.coordinateInfoOverlay.innerHTML = displayInfo;
 
         let screenPosition;
@@ -431,20 +404,8 @@ class Points {
     // }
 
     resetValue() {
-        this.coordinate = null;
-
-        const pointer = this.stateManager.getOverlayState('pointer')
-        pointer && (pointer.style.display = 'none');
+        super.resetValue();
         this.coordinateInfoOverlay.style.display = 'none';
-
-        // reset flags
-        this.flags.isDragMode = false;
-
-        // reset and remove moving primitives
-        this.interactivePrimitives.dragPoint = null;
-        this.interactivePrimitives.dragLabel = null;
-        this.interactivePrimitives.hoveredPoint = null;
-        this.interactivePrimitives.hoveredLabel = null;
     }
 }
 

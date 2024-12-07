@@ -260,6 +260,15 @@ export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, 
     });
 }
 
+/**
+ * Create a line primitive with custom width and color.
+ * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {String} modeString - The measure mode string
+ * @param {Number} width - The width of the line
+ * @param {Cesium.Color} color - The color of the line
+ * @param {Cesium.Primitive} Primitive - The Cesium primitive
+ * @returns {Cesium.Primitive} - The line primitive
+ */
 export function createPolylinePrimitive(coordinateArray, modeString, width = 3, color = Cesium.Color.YELLOWGREEN, Primitive) {
     // Exit early if coordinateArray is not defined
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return;
@@ -503,7 +512,7 @@ export function createPolygonOutlineGeometryInstance(coordinateArray, mode, colo
             polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
             perPositionHeight: true
         }),
-        id: `${generateId(coordinateArray, mode)}-outline`,
+        id: `${generateId(coordinateArray, mode)}`,
         attributes: {
             color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
             depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(color)
@@ -535,22 +544,25 @@ export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive
  * @returns {Cesium.Primitive} - the line primitive with the new color
  */
 export function changeLineColor(linePrimitive, color = Cesium.Color.YELLOW) {
-    // Store the original color if not already stored
-    if (linePrimitive) {
-        // line primitives don't have the originalColor property by default so we need to create it
-        linePrimitive.originalColor = linePrimitive.appearance.material.uniforms.color.clone();
-
-        if (linePrimitive.depthFailAppearance) {
-            linePrimitive.originalColor = linePrimitive.depthFailAppearance.material.uniforms.color.clone();
-        }
+    if (!linePrimitive) {
+        throw new Error("Invalid linePrimitive provided.");
     }
+
+    // Get the original color before the change
+    const originalColor = linePrimitive.appearance.material.uniforms.color.clone();
+
     // Change the color
     linePrimitive.appearance.material.uniforms.color = color;
+
     // if linePrimitive has depthFailAppearance, change the color as well
-    if (linePrimitive.depthFailAppearance) {
+    if (linePrimitive.depthFailAppearance && linePrimitive.depthFailAppearance.material) {
         linePrimitive.depthFailAppearance.material.uniforms.color = color;
     }
-    return linePrimitive;
+    return {
+        linePrimitive,
+        originalColor,
+        color: color
+    };
 }
 
 /**

@@ -13,8 +13,9 @@ import {
     formatArea,
     getPickedObjectType
 } from "../helper/helper.js";
+import MeasureModeBase from "./MeasureModeBase.js";
 
-class Polygon {
+class Polygon extends MeasureModeBase {
     /**
      * Creates a new Polygon instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
@@ -24,15 +25,7 @@ class Polygon {
      * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        this.viewer = viewer;
-        this.handler = handler;
-        this.stateManager = stateManager;
-
-        this.logRecordsCallback = logRecordsCallback;
-
-        this.cesiumPkg = cesiumPkg;
-
-        this.coordinate = new Cesium.Cartesian3();
+        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
 
         // flags to control the state of the tool
         this.flags = {
@@ -45,12 +38,7 @@ class Polygon {
             cache: [],          // Stores temporary coordinates during operations
             groups: [],         // Tracks all coordinates involved in operations
             dragStart: null,    // Stores the initial position before a drag begins
-            _areaRecords: [],   // Stores the area records of the polygon
         };
-
-        // lookup and set Cesium primitives collections
-        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
-        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -70,34 +58,14 @@ class Polygon {
      * Sets up input actions for polygon mode.
      */
     setupInputActions() {
-        removeInputActions(this.handler);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePolygonLeftClick(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePolygonMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePolygonRightClick(movement);
-        }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePolygonDragStart(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePolygonDragEnd(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_UP);
+        super.setupInputActions();
     }
 
 
     /***********************
      * LEFT CLICK FEATURES *
      ***********************/
-    handlePolygonLeftClick(movement) {
+    handleLeftClick(movement) {
         // use move position for the position
         const cartesian = this.coordinate
         if (!Cesium.defined(cartesian)) return;
@@ -108,7 +76,8 @@ class Polygon {
         // Handle different scenarios based on the clicked primitive type and the state of the tool
         switch (pickedObjectType) {
             case "label":
-                if (this.flags.isMeasurementComplete) {
+                if (this.coords.cache.length === 0) { // only when it is not during measuring can edit the label. 
+                    // DO NOT use the flag isMeasurementComplete because reset will reset the flag
                     editableLabel(this.viewer.container, pickedObject.primitive);
                 }
                 break;
@@ -167,7 +136,7 @@ class Polygon {
     /***********************
      * MOUSE MOVE FEATURES *
      ***********************/
-    handlePolygonMouseMove(movement) {
+    handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
         // update coordinate
@@ -252,11 +221,13 @@ class Polygon {
         };
         resetHighlighting();
 
+        const hoverColor = this.stateManager.getColorState("hover");
+
         switch (pickedObjectType) {
             case "point":  // highlight the point when hovering
                 const pointPrimitive = pickedObject.primitive;
                 if (pointPrimitive) {
-                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineColor = hoverColor;
                     pointPrimitive.outlineWidth = 2;
                     this.interactivePrimitives.hoveredPoint = pointPrimitive;
                 }
@@ -264,7 +235,7 @@ class Polygon {
             case "label":   // highlight the label when hovering
                 const labelPrimitive = pickedObject.primitive;
                 if (labelPrimitive) {
-                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    labelPrimitive.fillColor = hoverColor;
                     this.interactivePrimitives.hoveredLabel = labelPrimitive;
                 }
                 break;
@@ -277,7 +248,7 @@ class Polygon {
     /************************
      * RIGHT CLICK FEATURES *
      ************************/
-    handlePolygonRightClick(movement) {
+    handleRightClick(movement) {
         if (!this.flags.isMeasurementComplete && this.coords.cache.length > 0) { // prevent user to right click on first action
             // use mouse move position to control only one pickPosition is used
             const cartesian = this.coordinate;
@@ -338,7 +309,6 @@ class Polygon {
 
 
                 // log area result
-                this.coords._areaRecords.push(polygonArea);
                 this.logRecordsCallback(polygonArea.toFixed(2));
             }
             this.flags.isMeasurementComplete = true;
@@ -351,7 +321,7 @@ class Polygon {
     /*****************
      * DRAG FEATURES *
      *****************/
-    handlePolygonDragStart(movement) {
+    handleDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
@@ -375,12 +345,12 @@ class Polygon {
 
             // Set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handlePolygonDrag(movement, isPoint);
+                this.handleDragMove(movement, isPoint);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         }
     }
 
-    handlePolygonDrag(movement, selectedPoint) {
+    handleDragMove(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
         const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
@@ -486,7 +456,7 @@ class Polygon {
         }
     }
 
-    handlePolygonDragEnd(movement) {
+    handleDragEnd(movement) {
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
@@ -550,7 +520,6 @@ class Polygon {
             this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // update log records
-            this.coords._areaRecords.push(polygonArea);
             this.logRecordsCallback(polygonArea.toFixed(2));
 
             // reset flag
@@ -558,7 +527,7 @@ class Polygon {
         }
         // set back to default polygon mouse moving actions
         this.handler.setInputAction((movement) => {
-            this.handlePolygonMouseMove(movement);
+            this.handleMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
@@ -592,30 +561,7 @@ class Polygon {
     }
 
     resetValue() {
-        this.coordinate = null;
-
-        const pointer = this.stateManager.getOverlayState('pointer')
-        pointer && (pointer.style.display = 'none');
-
-        // reset flags
-        this.flags.isMeasurementComplete = false;
-        this.flags.isDragMode = false;
-        // reset coords
-        this.coords.cache = [];
-        this.coords.dragStart = null;
-        this.coords.dragStartToCanvas = null;
-        this.coords._areaRecords = [];
-
-        // reset interactive primitives
-        this.interactivePrimitives.movingPoint = null;
-        this.interactivePrimitives.movingLabel = null;
-        this.interactivePrimitives.movingPolygon = null;
-        this.interactivePrimitives.movingPolygonOutline = null;
-        this.interactivePrimitives.dragPoint = null;
-        this.interactivePrimitives.dragPolygon = null;
-        this.interactivePrimitives.dragPolygonOutline = null;
-        this.interactivePrimitives.hoveredPoint = null;
-        this.interactivePrimitives.hoveredLabel = null;
+        super.resetValue();
     }
 }
 

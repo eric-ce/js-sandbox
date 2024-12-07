@@ -35,6 +35,7 @@ export class StateManager {
                 default: Cesium.Color.YELLOWGREEN,
                 submitted: Cesium.Color.DARKGREEN,
                 add: Cesium.Color.YELLOW,
+                move: Cesium.Color.YELLOW,
                 pointColor: Cesium.Color.RED,
                 layerColor: null,
                 lineCacheColor: null

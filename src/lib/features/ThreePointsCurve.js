@@ -11,8 +11,9 @@ import {
     formatDistance,
     getPickedObjectType,
 } from "../helper/helper.js";
+import MeasureModeBase from "./MeasureModeBase.js";
 
-class ThreePointsCurve {
+class ThreePointsCurve extends MeasureModeBase {
     /**
      * Creates a new Three Points Curve instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
@@ -22,15 +23,7 @@ class ThreePointsCurve {
      * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        this.viewer = viewer;
-        this.handler = handler;
-        this.stateManager = stateManager;
-
-        this.logRecordsCallback = logRecordsCallback;
-
-        this.cesiumPkg = cesiumPkg;
-
-        this.coordinate = new Cesium.Cartesian3();
+        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
 
         // flags to control the state of the tool
         this.flags = {
@@ -38,16 +31,12 @@ class ThreePointsCurve {
             isDragMode: false,
         }
 
-        // Coordinate management and related properties
+        // coordinates data
         this.coords = {
             cache: [],          // Stores temporary coordinates during operations
             groups: [],         // Tracks all coordinates involved in operations
             dragStart: null,    // Stores the initial position before a drag begins
         };
-
-        // lookup and set Cesium primitives collections
-        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
-        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -65,23 +54,7 @@ class ThreePointsCurve {
      * Sets up input actions for three points curve mode.
      */
     setupInputActions() {
-        removeInputActions(this.handler);
-
-        this.handler.setInputAction((movement) => {
-            this.handleCurveLeftClick(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-        this.handler.setInputAction((movement) => {
-            this.handleCurveMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        this.handler.setInputAction((movement) => {
-            this.handleCurveDragStart(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-
-        this.handler.setInputAction((movement) => {
-            this.handleCurveDragEnd(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_UP);
+        super.setupInputActions();
     }
 
 
@@ -92,7 +65,7 @@ class ThreePointsCurve {
      * Handles left-click events to place points, draw and calculate curves.
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
-    handleCurveLeftClick(movement) {
+    handleLeftClick(movement) {
         // use move position for the position
         const cartesian = this.coordinate
         if (!Cesium.defined(cartesian)) return;
@@ -103,7 +76,8 @@ class ThreePointsCurve {
         // Handle different scenarios based on the clicked primitive type and the state of the tool
         switch (pickedObjectType) {
             case "label":
-                if (this.flags.isMeasurementComplete) {
+                if (this.coords.cache.length === 0) { // only when it is not during measuring can edit the label. 
+                    // DO NOT use the flag isMeasurementComplete because reset will reset the flag
                     editableLabel(this.viewer.container, pickedObject.primitive);
                 }
                 break;
@@ -208,7 +182,7 @@ class ThreePointsCurve {
      * Handles mouse move events to display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
-    handleCurveMouseMove(movement) {
+    handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
 
@@ -285,11 +259,14 @@ class ThreePointsCurve {
             }
         }
         resetHighlighting();
+
+        const hoverColor = this.stateManager.getColorState("hover");
+
         switch (pickedObjectType) {
             case "point":  // highlight the point when hovering
                 const pointPrimitive = pickedObject.primitive;
                 if (pointPrimitive) {
-                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineColor = hoverColor;
                     pointPrimitive.outlineWidth = 2;
                     this.interactivePrimitives.hoveredPoint = pointPrimitive;
                 }
@@ -297,7 +274,7 @@ class ThreePointsCurve {
             case "label":   // highlight the label when hovering
                 const labelPrimitive = pickedObject.primitive;
                 if (labelPrimitive) {
-                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    labelPrimitive.fillColor = hoverColor;
                     this.interactivePrimitives.hoveredLabel = labelPrimitive;
                 }
                 break;
@@ -310,7 +287,7 @@ class ThreePointsCurve {
     /*****************
      * DRAG FEATURES *
      *****************/
-    handleCurveDragStart(movement) {
+    handleDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
@@ -336,7 +313,7 @@ class ThreePointsCurve {
 
             // set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handleCurveDrag(movement, isPoint);
+                this.handleDragMove(movement, isPoint);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         }
     }
@@ -349,7 +326,7 @@ class ThreePointsCurve {
      * @param {Number} groupIndexForDragPoint - The index of before drag position in the group from this.coords.groups
      * @returns 
      */
-    handleCurveDrag(movement, selectedPoint) {
+    handleDragMove(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
         const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
@@ -443,7 +420,7 @@ class ThreePointsCurve {
         }
     }
 
-    handleCurveDragEnd() {
+    handleDragEnd() {
         // set camera movement back to default
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
@@ -520,7 +497,7 @@ class ThreePointsCurve {
             this.flags.isDragMode = false;
         }
         this.handler.setInputAction((movement) => {
-            this.handleCurveMouseMove(movement);
+            this.handleMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
     }
@@ -578,25 +555,7 @@ class ThreePointsCurve {
     }
 
     resetValue() {
-        this.coordinate = null;
-
-        const pointer = this.stateManager.getOverlayState('pointer')
-        pointer && (pointer.style.display = 'none');
-
-        // reset flags
-        this.flags.isMeasurementComplete = false;
-        this.flags.isDragMode = false;
-        // reset coords
-        this.coords.cache = [];
-        this.coords.dragStart = null;
-        // reset primitives
-        this.interactivePrimitives.movingPolyline = null;
-        this.interactivePrimitives.movingLabel = null;
-        this.interactivePrimitives.dragPoint = null;
-        this.interactivePrimitives.dragPolyline = null;
-        this.interactivePrimitives.dragLabel = null;
-        this.interactivePrimitives.hoveredPoint = null;
-        this.interactivePrimitives.hoveredLabel = null;
+        super.resetValue();
     }
 }
 

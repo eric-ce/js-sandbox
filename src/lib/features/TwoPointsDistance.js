@@ -13,8 +13,9 @@ import {
     formatDistance,
     getPrimitiveByPointPosition,
 } from "../helper/helper.js";
+import MeasureModeBase from "./MeasureModeBase.js";
 
-class TwoPointsDistance {
+class TwoPointsDistance extends MeasureModeBase {
     /**
      * Creates a new Two Points Distance instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
@@ -24,15 +25,7 @@ class TwoPointsDistance {
      * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        this.viewer = viewer;
-        this.handler = handler;
-        this.stateManager = stateManager;
-
-        this.logRecordsCallback = logRecordsCallback;
-
-        this.cesiumPkg = cesiumPkg;
-
-        this.coordinate = new Cesium.Cartesian3();
+        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
 
         // flags to control the state of the tool
         this.flags = {
@@ -40,17 +33,13 @@ class TwoPointsDistance {
             isDragMode: false
         };
 
-        // Coordinate management and related properties
+        // coordinates data
         this.coords = {
             cache: [],              // Stores temporary coordinates during operations
             groups: [],             // Tracks all coordinates involved in operations
             dragStart: null,        // Stores the initial position before a drag begins
             dragStartToCanvas: null // Stores the initial position in canvas coordinates before a drag begins
         };
-
-        // lookup and set Cesium primitives collections
-        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
-        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -68,23 +57,7 @@ class TwoPointsDistance {
      * Sets up input actions for two points distance mode.
      */
     setupInputActions() {
-        removeInputActions(this.handler);
-
-        this.handler.setInputAction((movement) => {
-            this.handleDistanceLeftClick(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-        this.handler.setInputAction((movement) => {
-            this.handleDistanceMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        this.handler.setInputAction((movement) => {
-            this.handleDistanceDragStart(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-
-        this.handler.setInputAction((movement) => {
-            this.handleDistanceDragEnd(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_UP);
+        super.setupInputActions();
     }
 
 
@@ -95,7 +68,7 @@ class TwoPointsDistance {
      * Handles left-click events to place points, draw and calculate distance.
      * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
      */
-    handleDistanceLeftClick(movement) {
+    handleLeftClick(movement) {
         // use move position for the position
         const cartesian = this.coordinate
         if (!Cesium.defined(cartesian)) return;
@@ -106,7 +79,8 @@ class TwoPointsDistance {
         // Handle different scenarios based on the clicked primitive type and the state of the tool
         switch (pickedObjectType) {
             case "label":
-                if (this.flags.isMeasurementComplete) {
+                if (this.coords.cache.length === 0) { // only when it is not during measuring can edit the label. 
+                    // DO NOT use the flag isMeasurementComplete because reset will reset the flag
                     editableLabel(this.viewer.container, pickedObject.primitive);
                 }
                 break;
@@ -185,7 +159,7 @@ class TwoPointsDistance {
      * Handles mouse move events to drawing moving line, update label, and display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
-    handleDistanceMouseMove(movement) {
+    handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
         if (!Cesium.defined(cartesian)) return;
         // update coordinate
@@ -247,11 +221,14 @@ class TwoPointsDistance {
             }
         }
         resetHighlighting();
+
+        const hoverColor = this.stateManager.getColorState("hover");
+
         switch (pickedObjectType) {
             case "point":  // highlight the point when hovering
                 const pointPrimitive = pickedObject.primitive;
                 if (pointPrimitive) {
-                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineColor = hoverColor;
                     pointPrimitive.outlineWidth = 2;
                     this.interactivePrimitives.hoveredPoint = pointPrimitive;
                 }
@@ -259,7 +236,7 @@ class TwoPointsDistance {
             case "label":   // highlight the label when hovering
                 const labelPrimitive = pickedObject.primitive;
                 if (labelPrimitive) {
-                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    labelPrimitive.fillColor = hoverColor;
                     this.interactivePrimitives.hoveredLabel = labelPrimitive;
                 }
                 break;
@@ -272,7 +249,7 @@ class TwoPointsDistance {
     /*****************
      * DRAG FEATURES *
      *****************/
-    handleDistanceDragStart(movement) {
+    handleDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
@@ -298,12 +275,12 @@ class TwoPointsDistance {
 
             // set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handleDistanceDrag(movement, isPoint);
+                this.handleDragMove(movement, isPoint);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         }
     };
 
-    handleDistanceDrag(movement, selectedPoint) {
+    handleDragMove(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
         const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
@@ -368,7 +345,7 @@ class TwoPointsDistance {
         }
     }
 
-    handleDistanceDragEnd() {
+    handleDragEnd() {
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
@@ -427,32 +404,12 @@ class TwoPointsDistance {
         }
         // set back to default multi distance mouse moving actions
         this.handler.setInputAction((movement) => {
-            this.handleDistanceMouseMove(movement);
+            this.handleMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     };
 
     resetValue() {
-        this.coordinate = null;
-
-        const pointer = this.stateManager.getOverlayState('pointer')
-        pointer && (pointer.style.display = 'none');
-
-        // reset flags
-        this.flags.isMeasurementComplete = false;
-        this.flags.isDragMode = false;
-        // reset coords
-        this.coords.cache = [];
-        this.coords.dragStart = null;
-        this.coords.dragStartToCanvas = null;
-
-        // reset interactive primitives
-        this.interactivePrimitives.movingPolyline = null;
-        this.interactivePrimitives.movingLabel = null;
-        this.interactivePrimitives.dragPoint = null;
-        this.interactivePrimitives.dragPolyline = null;
-        this.interactivePrimitives.dragLabel = null;
-        this.interactivePrimitives.hoveredPoint = null;
-        this.interactivePrimitives.hoveredLabel = null;
+        super.resetValue();
     }
 }
 

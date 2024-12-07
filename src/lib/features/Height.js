@@ -12,8 +12,9 @@ import {
     getPickedObjectType,
     getPrimitiveByPointPosition,
 } from "../helper/helper.js";
+import MeasureModeBase from "./MeasureModeBase.js";
 
-class Height {
+class Height extends MeasureModeBase {
     /**
      * Creates a new Height instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
@@ -23,15 +24,7 @@ class Height {
      * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        this.viewer = viewer;
-        this.handler = handler;
-        this.stateManager = stateManager;
-
-        this.logRecordsCallback = logRecordsCallback;
-
-        this.cesiumPkg = cesiumPkg;
-
-        this.coordinate = new Cesium.Cartesian3();
+        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
 
         // flags
         this.flags = {
@@ -47,10 +40,6 @@ class Height {
             dragStartToCanvas: null,    // Store the drag start position to canvas in Cartesian2
             dragStart: null,    // Stores the initial position before a drag begins
         };
-
-        // lookup and set Cesium primitives collections
-        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
-        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -69,23 +58,7 @@ class Height {
      * Sets up input actions for height mode.
      */
     setupInputActions() {
-        removeInputActions(this.handler);
-
-        this.handler.setInputAction((movement) => {
-            this.handleHeightLeftClick(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-        this.handler.setInputAction((movement) => {
-            this.handleHeightMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        this.handler.setInputAction((movement) => {
-            this.handleHeightDragStart(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-
-        this.handler.setInputAction((movement) => {
-            this.handleHeightDragEnd(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_UP);
+        super.setupInputActions();
     }
 
 
@@ -95,7 +68,7 @@ class Height {
     /**
      * Handles left-click events to place top and ground points, draw line in between.
      */
-    handleHeightLeftClick(movement) {
+    handleLeftClick(movement) {
         // use move position for the position
         const cartesian = this.coordinate
         if (!Cesium.defined(cartesian)) return;
@@ -115,7 +88,7 @@ class Height {
                         // update this.coords.groups to store all click coordinates
                         this.coords.groups.push([...this.coords.cache]);
 
-                        // create top and bottom points primitiives
+                        // create top and bottom points primitives
                         const topPointPrimitive = createPointPrimitive(topCartesian, Cesium.Color.RED);
                         topPointPrimitive.id = generateId(topCartesian, "height_point_top");
                         this.pointCollection.add(topPointPrimitive);
@@ -154,7 +127,7 @@ class Height {
      * Handles mouse move events to remove and add moving line, moving points, label, and display moving dot with mouse.
      * @param {{endPosition: Cesium.Cartesian2}} movement
      */
-    handleHeightMouseMove(movement) {
+    handleMouseMove(movement) {
         const pickedObject = this.viewer.scene.pick(movement.endPosition, 1, 1);
 
         if (Cesium.defined(pickedObject) && !pickedObject?.id?.startsWith("annotate_height")) {
@@ -231,11 +204,13 @@ class Height {
         };
         resetHighlighting();
 
+        const hoverColor = this.stateManager.getColorState("hover");
+
         switch (pickedObjectType) {
             case "point":  // highlight the point when hovering
                 const pointPrimitive = pickedObject.primitive;
                 if (pointPrimitive) {
-                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineColor = hoverColor;
                     pointPrimitive.outlineWidth = 2;
                     this.interactivePrimitives.hoveredPoint = pointPrimitive;
                 }
@@ -243,7 +218,7 @@ class Height {
             case "label":   // highlight the label when hovering
                 const labelPrimitive = pickedObject.primitive;
                 if (labelPrimitive) {
-                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    labelPrimitive.fillColor = hoverColor;
                     this.interactivePrimitives.hoveredLabel = labelPrimitive;
                 }
                 break;
@@ -256,7 +231,7 @@ class Height {
     /*****************
      * DRAG FEATURES *
      *****************/
-    handleHeightDragStart(movement) {
+    handleDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
@@ -291,12 +266,12 @@ class Height {
 
             // set move event for dragging
             this.handler.setInputAction((movement) => {
-                this.handleHeightDrag(movement, selectedPoints);
+                this.handleDragMove(movement, selectedPoints);
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         }
     }
 
-    handleHeightDrag(movement, selectedPoints) {
+    handleDragMove(movement, selectedPoints) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
         const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
@@ -367,7 +342,7 @@ class Height {
         }
     }
 
-    handleHeightDragEnd() {
+    handleDragEnd() {
         // set camera movement back to default
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
@@ -437,7 +412,7 @@ class Height {
             this.flags.isDragMode = false;
         }
         this.handler.setInputAction((movement) => {
-            this.handleHeightMouseMove(movement);
+            this.handleMouseMove(movement);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
@@ -466,28 +441,11 @@ class Height {
     }
 
     resetValue() {
-        this.coordinate = null;
+        super.resetValue();
 
         // const pointer = this.stateManager.getOverlayState('pointer')
         // pointer && (pointer.style.display = 'none');
 
-        // reset flags
-        this.isDragMode = false;
-
-        // reset coords
-        this.coords.cache = [];
-        this.coords.dragStart = null;
-        this.coords.dragStartToCanvas = null;
-
-        // reset moving primitives
-        this.interactivePrimitives.movingPoints = [];
-        this.interactivePrimitives.movingPolyline = null;
-        this.interactivePrimitives.movingLabel = null;
-        this.interactivePrimitives.dragPoints = [];
-        this.interactivePrimitives.dragPolyline = null;
-        this.interactivePrimitives.dragLabel = null;
-        this.interactivePrimitives.hoveredPoint = null;
-        this.interactivePrimitives.hoveredLabel = null;
     }
 }
 
