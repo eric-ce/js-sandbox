@@ -13,34 +13,34 @@ import {
     positionKey,
     showCustomNotification,
     createGroundPolylinePrimitive,
+    makeDraggable,
 } from "../../helper/helper.js";
+import { sharedStyleSheet } from "../../../sharedStyle.js";
+import { multiDClampedIcon } from '../../../assets/icons.js';
 import { handleFireTrailLeftClick } from "./fireTrailLeftClick.js";
 import { handleFireTrailMouseMove } from "./fireTrailMouseMove.js";
 import { handleFireTrailDoubleClick } from "./fireTrailDoubleLeftClick.js";
 import { handleFireTrailRightClick } from "./fireTrailRightClick.js";
 import { handleFireTrailMiddleClick } from "./fireTrailMiddleClick.js";
 
-class FireTrail {
-    /**
-     * Creates a new MultiDistance Clamped instance.
-     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
-     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
-     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
-     * @param {Function} logRecordsCallback - The callback function to log records.
-     * @param {Object} cesiumPkg - The Cesium package object.
-     */
-    constructor(viewer, handler, stateManager, actionLogger, logRecordsCallback, cesiumPkg) {
-        this.viewer = viewer;
-        this.handler = handler;
-        this.stateManager = stateManager;
+export class FireTrail extends HTMLElement {
+    constructor() {
+        super();
+        this.attachShadow({ mode: "open" });
 
-        this.pointerOverlay = this.stateManager.getOverlayState("pointer");
+        // cesium variables
+        this._viewer = null;
+        this._handler = null;
+        this._cesiumPkg = null;
+        this._app = null;
 
-        this.actionLogger = actionLogger;
+        this._updateRecords = null;
 
-        this.logRecordsCallback = logRecordsCallback;
+        this._cesiumPkg = null;
 
-        this.cesiumPkg = cesiumPkg;
+        this._cesiumStyle = null;
+
+        this.pointerOverlay = null;
 
         this.coordinate = new Cesium.Cartesian3();
 
@@ -52,13 +52,14 @@ class FireTrail {
             isSubmitting: false,
             isShowLabels: false,
             isReverse: false,
+            isActive: false,
         };
 
         // Coordinate management and related properties
         this.coords = {
             cache: [],          // Stores temporary coordinates during operations
             groups: [],         // Tracks all coordinates involved in operations e.g [{trailId:111, coordinates: [{cart1}, {cart2}]}},{...}]
-            groupCounter: 0, // New counter for labelNumberIndex
+            groupCounter: 0,    // New counter for labelNumberIndex
             _distanceRecords: [],
             dragStart: null,    // Stores the initial position before a drag begins
             dragStartToCanvas: null, // Store the drag start position to canvas in Cartesian2
@@ -68,8 +69,8 @@ class FireTrail {
         this.sentGroupKeys = new Set();
 
         // lookup and set Cesium primitives collections
-        this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
-        this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
+        this.pointCollection = null;
+        this.labelCollection = null;
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -78,18 +79,19 @@ class FireTrail {
             dragPoint: null,        // Currently dragged point primitive
             dragPolylines: [],      // Array of dragging polylines
             dragLabels: [],         // Array of dragging labels
-            hoveredLine: null,      // Hovered line primitive
             addModeLine: null,     // Selected line primitive
             selectedLines: [],      // Array of selected line primitives
             hoveredPoint: null,     // Hovered point primitive
             hoveredLabel: null,     // Hovered label primitive
+            hoveredLine: null,      // Hovered line primitive
         };
 
         this.buttons = {
+            fireTrailContainer: null,
+            fireTrailButton: null,
             labelButton: null,
             submitButton: null,
         }
-        this.setUpButtons();
 
         this.stateColors = {
             hover: Cesium.Color.KHAKI,
@@ -105,14 +107,124 @@ class FireTrail {
         this.handleFireTrailDoubleClick = handleFireTrailDoubleClick.bind(this);
         this.handleFireTrailRightClick = handleFireTrailRightClick.bind(this);
         this.handleFireTrailMiddleClick = handleFireTrailMiddleClick.bind(this);
+
+        /**
+         * @typedef {function} ActionLoggerBound
+         * @param {*} payload - content to be sent
+         * @param {string} table - destination table
+         * @returns {*} The return value of the function
+         */
+        this.actionLogger = async (table, payload) => {
+            //todo move edits of firebase to the firebase package
+            let options = {
+                streamType: "core",
+                streamId: table
+            }
+            return await this.app.logAction("iot", payload, options)
+        }
+    }
+
+    connectedCallback() {
+        if (this.viewer) {
+            this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
+            this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
+
+            this.initialize();
+        }
+    }
+
+    /*********************
+     * GETTER AND SETTER *
+     *********************/
+    set app(app) {
+        this._app = app
+        this.log = app.log
+    }
+
+    get app() {
+        return this._app
+    }
+
+    set viewer(viewer) {
+        this._viewer = viewer;
+    }
+
+    get viewer() {
+        return this._viewer;
+    }
+
+    get stateManager() {
+        return this._stateManager;
+    }
+
+    set stateManager(stateManager) {
+        this._stateManager = stateManager;
+    }
+
+    get logRecordsCallback() {
+        return this._logRecordsCallback;
+    }
+
+    set logRecordsCallback(callback) {
+        this._logRecordsCallback = callback;
+    }
+
+    get cesiumPkg() {
+        return this._cesiumPkg;
+    }
+
+    set cesiumPkg(cesiumPkg) {
+        this._cesiumPkg = cesiumPkg;
+    }
+
+    get updateRecords() {
+        return this._updateRecords;
+    }
+
+    set updateRecords(callback) {
+        this._updateRecords = callback;
+    }
+
+    get cesiumStyle() {
+        return this._cesiumStyle;
+    }
+
+    set cesiumStyle(style) {
+        const clonedStyle = style.cloneNode(true);
+        this._cesiumStyle = clonedStyle;
+        if (clonedStyle) {
+            this.shadowRoot.appendChild(clonedStyle)
+        };
+    }
+
+    initialize() {
+        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+        // this.shadowRoot.appendChild(this.cesiumStyle);
+
+        // setup label button and submit buttons
+        this.setUpButtons();
+
+        // set the pointer overlay
+        this.pointerOverlay = this.stateManager.getOverlayState("pointer");
+
+        // if screenSpaceEventHandler existed use it, if not create a new one
+        if (this.viewer.screenSpaceEventHandler) {
+            this.handler = this.viewer.screenSpaceEventHandler;
+        } else {
+            this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+        }
+
+        this.setupInputActions();
     }
 
     /**
-     * Sets up input actions for multi-distance clamped mode.
+     * Sets up input actions for fire trail mode.
      */
     setupInputActions() {
+        // remove existing input actions
         removeInputActions(this.handler);
 
+        // Set up input actions for fire trail mode
         this.handler.setInputAction((movement) => {
             this.handleFireTrailLeftClick(movement);
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -490,77 +602,114 @@ class FireTrail {
     setUpButtons() {
         const createButton = (text, className, onClick) => {
             const button = document.createElement("button");
-            button.textContent = text;
-            button.classList.add("cesium-button", className);
+            button.innerHTML = text;
+            button.classList.add("cesium-button", "measure-mode-button", "show", className);
+            button.setAttribute("type", "button");
+            button.setAttribute("aria-label", `${className}`);
+            button.setAttribute("aria-pressed", "false"); // For toggle behavior
             button.addEventListener("click", onClick);
-            button.style.position = "absolute";
+            // button.style.position = "absolute";
             return button;
         };
 
-        const toggleLabelButton = createButton("Show", "toggle-label-button", this.handleLabelToggle.bind(this));
-        this.buttons.labelButton = toggleLabelButton;
+        // setup fire trail container
+        this.fireTrailContainer = document.createElement("div");
+        this.fireTrailContainer.classList.add("fire-trail-container");
+        this.shadowRoot.appendChild(this.fireTrailContainer);
+        makeDraggable(this.fireTrailContainer, this.viewer.container);
 
-        const submitButton = createButton("Submit", "submit-button", this.handleSubmit.bind(this));
-        this.buttons.submitButton = submitButton;
+        // setup fire trail button
+        const fireTrailImg = `<img src="${multiDClampedIcon}" alt="fire-trail" style="width: 30px; height: 30px;" aria-hidden="true">`
+        this.buttons.fireTrailButton = createButton(fireTrailImg, "fire-trail-button", this.handleFireTrailToggle.bind(this));
+        this.fireTrailContainer.appendChild(this.buttons.fireTrailButton);
 
-        const mapCesium = document.querySelector("map-cesium");
-        const measureToolbox = mapCesium && mapCesium.shadowRoot.querySelector("cesium-measure");
+        // setup label button
+        this.buttons.labelButton = createButton("Show", "toggle-label-button", this.handleLabelToggle.bind(this));
+        this.buttons.labelButton.style.display = "none"; // Initially hidden
+        this.fireTrailContainer.appendChild(this.buttons.labelButton);
 
-        if (measureToolbox) {
-            // Set up a MutationObserver to watch for the presence of required elements
-            const observer = new MutationObserver((_, obs) => {
-                const fireTrail = measureToolbox.shadowRoot.querySelector(".fire-trail");
-                const toolbar = measureToolbox.shadowRoot.querySelector(".measure-toolbar");
-                const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
+        // setup submit button
+        this.buttons.submitButton = createButton("Submit", "submit-button", this.handleSubmit.bind(this));
+        this.buttons.submitButton.style.display = "none";
+        this.fireTrailContainer.appendChild(this.buttons.submitButton);
 
-                if (!toolbar || !measureToolButton || !fireTrail) {
-                    console.warn("Toolbar or Measure Tool or FireTrail Button not found.");
-                    return;
-                }
+        // Update button overlay text
+        this.updateButtonOverlay(this.buttons.labelButton, "toggle label on or off");
+        this.updateButtonOverlay(this.buttons.submitButton, "submit the current annotation");
+        this.updateButtonOverlay(this.buttons.fireTrailButton, "toggle fire trail annotation mode");
+        // Function to toggle visibility of label and submit buttons
+        const toggleButtonVisibility = () => {
+            const isActive = this.buttons.fireTrailButton.classList.contains('active');
+            this.buttons.labelButton.style.display = isActive ? 'block' : 'none';
+            this.buttons.submitButton.style.display = isActive ? 'block' : 'none';
+        };
 
-                // Position buttons
-                const BUTTON_WIDTH = 45; // Width of each button in pixels
-                toggleLabelButton.style.left = `${BUTTON_WIDTH * 11}px`;
-                toggleLabelButton.style.top = "-40px";
-                submitButton.style.left = `${BUTTON_WIDTH * 11}px`;
-                submitButton.style.top = "-80px";
+        // Initial visibility check
+        toggleButtonVisibility();
+        // Set up MutationObserver for class changes on fireTrailButton
+        this._classObserver = new MutationObserver(toggleButtonVisibility);
+        this._classObserver.observe(this.buttons.fireTrailButton, { attributes: true, attributeFilter: ['class'] });
+    }
 
-                // Append buttons to the toolbar
-                toolbar.appendChild(toggleLabelButton);
-                toolbar.appendChild(submitButton);
+    handleFireTrailToggle() {
+        const activeButton = this.stateManager.getButtonState("activeButton")
+        if (activeButton && activeButton === this.buttons.fireTrailButton) { // Deactivate Fire Trail
+            this.flags.isActive = false
+        } else {
+            // Deactivate previously active button if it exists
+            if (activeButton) {
+                // remove active style
+                activeButton.classList.remove("active");
+                // set aria-pressed to false
+                activeButton.setAttribute("aria-pressed", "false");
+                // reset value of the active measure mode
+                const measureModes = this.stateManager.getButtonState("measureModes");
+                measureModes.forEach(mode => {
+                    if (activeButton === mode.button) {
+                        mode?.resetValue();
+                    }
+                })
+            }
+            // set fire trail button to active
+            this.flags.isActive = !this.flags.isActive;
+        }
 
-                obs.disconnect(); // Stop observing once the buttons are appended
+        if (this.flags.isActive) {
+            console.log("click")
+            this.setupInputActions();
 
-                // Update button overlay text
-                this.updateButtonOverlay(toggleLabelButton, "toggle label on or off");
-                this.updateButtonOverlay(submitButton, "submit the current annotation");
+            this.buttons.fireTrailButton.classList.add("active");
+            this.buttons.fireTrailButton.setAttribute("aria-pressed", "true");
 
-                // Add event listener to toggle button visibility based on multi-distances-clamped button state
-                const toggleButtonVisibility = () => {
-                    const shouldDisplay =
-                        fireTrail.classList.contains('active') &&
-                        measureToolButton.classList.contains('active');
-                    toggleLabelButton.style.display = shouldDisplay ? 'block' : 'none';
-                    submitButton.style.display = shouldDisplay ? 'block' : 'none';
-                };
+            this.stateManager.setButtonState("activeButton", this.buttons.fireTrailButton);
+            // remove logBox to recreate it
+            const logBox = this.stateManager.getElementState("logBox");
+            if (!logBox) this.setupLogBox();
+        } else {
+            // remove existing input actions
+            removeInputActions(this.handler);
+            this.resetValue();
+            this.stateManager.setButtonState("activeButton", null);
 
-                // Initial visibility check
-                toggleButtonVisibility();
-
-                // Set up another MutationObserver to watch class changes for visibility toggling
-                const classObserver = new MutationObserver(toggleButtonVisibility);
-                classObserver.observe(fireTrail, { attributes: true, attributeFilter: ['class'] });
-                classObserver.observe(measureToolButton, { attributes: true, attributeFilter: ['class'] });
-
-            });
-            // Start observing the measureToolbox shadow DOM for child list changes
-            observer.observe(measureToolbox.shadowRoot, { childList: true, subtree: true });
+            this.buttons.fireTrailButton.classList.remove("active");
+            this.buttons.fireTrailButton.setAttribute("aria-pressed", "false");
         }
     }
 
     handleLabelToggle() {
         // Toggle the flag
         this.flags.isShowLabels = !this.flags.isShowLabels;
+
+        if (!this.buttons.labelButton) return;
+
+        if (this.flags.isShowLabels) {
+            this.buttons.labelButton.textContent = "Hide"
+            this.buttons.labelButton.setAttribute("aria-pressed", "true");
+
+        } else {
+            this.buttons.labelButton.textContent = "Show";
+            this.buttons.labelButton.setAttribute("aria-pressed", "false");
+        }
 
         const labels = this.labelCollection._labels.filter(label =>
             label.id &&
@@ -570,9 +719,6 @@ class FireTrail {
             label.showBackground = this.flags.isShowLabels;
         });
 
-        if (this.buttons.labelButton) {
-            this.buttons.labelButton.textContent = this.flags.isShowLabels ? "Hide" : "Show";
-        }
         return labels;
     }
 
@@ -590,6 +736,9 @@ class FireTrail {
         if (!groupToSubmit || groupToSubmit.coordinates.length <= 1) {
             showCustomNotification("Please select a valid fire trail to submit", this.viewer.container);
             this.flags.isSubmitting = false;
+            if (!this.flags.isSubmitting) {
+                this.buttons.submitButton.setAttribute("aria-pressed", "false");
+            }
             return;
         }
 
@@ -600,11 +749,17 @@ class FireTrail {
         if (this.sentGroupKeys.has(groupKey)) {
             alert(`No new changes to submit for this fire trail ${groupToSubmit.trailId}`);
             this.flags.isSubmitting = false;
+            if (!this.flags.isSubmitting) {
+                this.buttons.submitButton.setAttribute("aria-pressed", "false");
+            }
             return;
         }
 
         // Set the submitting flag to true to indicate that a submission is in progress
         this.flags.isSubmitting = true;
+        if (this.flags.isSubmitting) {
+            this.buttons.submitButton.setAttribute("aria-pressed", "false");
+        }
 
         // Transform Cartesian coordinates to cartographic degrees
         const cartographicDegreesPos = groupToSubmit.coordinates.map(cart => {
@@ -632,8 +787,11 @@ class FireTrail {
         console.log("🚀  payload:", payload);
 
         // Prompt the user for confirmation before proceeding with the submission
-        if (!confirm("Do you want to submit this fire trail?")) {
+        if (!confirm(`Do you want to submit this fire trail ${groupToSubmit.trailId}?`)) {
             this.flags.isSubmitting = false;
+            if (!this.flags.isSubmitting) {
+                this.buttons.submitButton.setAttribute("aria-pressed", "false");
+            }
             return;
         }
 
@@ -669,6 +827,9 @@ class FireTrail {
         } finally {
             // Reset the submitting flag regardless of success or failure to allow future submissions
             this.flags.isSubmitting = false;
+            if (!this.flags.isSubmitting) {
+                this.buttons.submitButton.setAttribute("aria-pressed", "false");
+            }
         }
     }
 
@@ -857,7 +1018,9 @@ class FireTrail {
             l => l.id && l.id.includes("fire_trail_label")
         );
 
+        // Update or create label primitives
         midPoints.forEach((midPoint, index) => {
+            // find existed label primitives    
             let relativeLabelPrimitives = labelPrimitives.filter(l =>
                 Cesium.Cartesian3.equals(l.position, midPoint)
             );
@@ -867,7 +1030,7 @@ class FireTrail {
 
             // Don't use getLabelProperties currentLetter in here as midPoint index is not the group coordinate index
             const { labelNumberIndex } = this._getLabelProperties(
-                group.coordinates[index],
+                group.coordinates[index + 1],
                 group
             );
             const { distance } = calculateClampedDistance(
@@ -878,6 +1041,7 @@ class FireTrail {
             );
             const labelText = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
 
+            // update existed labels if any
             if (relativeLabelPrimitives.length > 0) {
                 // Update existing labels
                 relativeLabelPrimitives.forEach(label => {
@@ -885,8 +1049,7 @@ class FireTrail {
                     label.show = this.flags.isShowLabels;
                     label.showBackground = this.flags.isShowLabels;
                 });
-            } else {
-                // Create new label
+            } else {    // create new label if not existed
                 const newLabel = createLabelPrimitive(
                     group.coordinates[index],
                     group.coordinates[index + 1],
@@ -1086,4 +1249,6 @@ class FireTrail {
         this.interactivePrimitives.hoveredLabel = null;
     }
 }
-export { FireTrail }
+
+// Define the custom element
+customElements.define('fire-trail-mode', FireTrail);

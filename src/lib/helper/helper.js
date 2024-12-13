@@ -1049,7 +1049,7 @@ export function makeDraggable(element, container, updatePositionCallback, onDrag
 
         // Call the callback function with new position and updated container dimensions
         if (updatePositionCallback) {
-            updatePositionCallback(newTop, newLeft, containerRect);
+            updatePositionCallback(newTop, newLeft);
         }
     };
 
@@ -1131,7 +1131,7 @@ export function makeDraggable(element, container, updatePositionCallback, onDrag
 
             // Call the updatePositionCallback with new position
             if (updatePositionCallback) {
-                updatePositionCallback(adjustedTop, adjustedLeft, containerRect);
+                updatePositionCallback(adjustedTop, adjustedLeft);
             }
         }
     };

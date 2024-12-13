@@ -5,6 +5,7 @@ import {
     generateId,
     calculateClampedDistanceFromArray,
     createGroundPolylinePrimitive,
+    showCustomNotification,
 } from "../../helper/helper.js";
 
 /************************
@@ -97,8 +98,12 @@ export function handleFireTrailRightClick() {
         // Create or update total label
         this.updateOrCreateTotalLabel(group, totalDistance);
 
-        // Log distance result
+        // show notification the group id selected
+        showCustomNotification(`selected line: ${group.trailId}`, this.viewer.container);
+
+        // update log records for distance, total distance, and selected line
         this.updateMultiDistancesLogRecords(distances, totalDistance);
+        this.logRecordsCallback(`${group.trailId} selected`);
 
         // Set selectedGroup to current group's coordinates
         // const currentGroup = this.coords.groups[this.coords.groups.length - 1];

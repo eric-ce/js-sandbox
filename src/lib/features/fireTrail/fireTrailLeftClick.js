@@ -419,6 +419,7 @@ async function selectFireTrail(primitive) {
     if (primitivePositions && primitivePositions.length > 0) {
         let group;
 
+        // for the line from annotation
         if (isAnnotateLine) {
             // Find existing group containing the first position
             group = this.coords.groups.find(group =>
@@ -426,6 +427,7 @@ async function selectFireTrail(primitive) {
             );
         };
 
+        // for the line from layer
         if (isLayerLine) {
             // show notification for the layer line
             showCustomNotification(`selected line: ${primitive?.feature?.id}`, this.viewer.container)
@@ -489,6 +491,11 @@ async function selectFireTrail(primitive) {
                 this.sentGroupKeys.add(groupKey);
             }
         }
+
+        // find the group that the point primitive belongs to
+        group = this.coords.groups.find(group =>
+            group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePositions[0]))
+        );
 
         if (!group) return;
 

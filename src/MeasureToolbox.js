@@ -14,7 +14,7 @@ import { FlyThrough } from "./lib/features/flyThrough/FlyThrough.js";
 import { StateManager } from "./lib/features/StateManager.js";
 import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
 import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon, recordIcon, playIcon, stopIcon } from './assets/icons.js';
-
+import { sharedStyleSheet } from './sharedStyle.js';
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
  * The toolbox offers functionalities such as point measurements, distance calculations,
@@ -44,12 +44,15 @@ export class MeasureToolbox extends HTMLElement {
 
         // Element style position variables
         this.position = {
-            logBox: { top: "380px", right: "0px" },
-            helpBox: { top: "70px", right: "0px" },
+            logBox: { top: "380px", left: "0px" },
+            helpBox: { top: "70px", left: "0px" },
         };
 
         // state manager
         this.stateManager = new StateManager();
+
+        // cesium style
+        this.cesiumStyle = null;
     }
 
 
@@ -79,10 +82,10 @@ export class MeasureToolbox extends HTMLElement {
      **********************/
     async connectedCallback() {
         // link cesium package default style
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = `/Widgets/widgets.css`;
-        this.shadowRoot.appendChild(link);
+        this.cesiumStyle = document.createElement("link");
+        this.cesiumStyle.rel = "stylesheet";
+        this.cesiumStyle.href = `/Widgets/widgets.css`;
+        this.shadowRoot.appendChild(this.cesiumStyle);
 
         // add measure toolbox with measure modes
         if (this.viewer) {
@@ -91,15 +94,6 @@ export class MeasureToolbox extends HTMLElement {
     }
 
     disconnectedCallback() {    // clean up when the web component is removed from the DOM
-        // Clean up event listeners for buttons
-        const clearButton = this.stateManager.getButtonState("clearButton");
-        clearButton && clearButton.removeEventListener("click", this.clearButtonHandler);
-
-        // Clean up measure mode buttons
-        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
-            button.removeEventListener("click", this.modeButtonClickHandler);
-        });
-
         // Clean up Cesium handlers
         if (this.handler) {
             removeInputActions(this.handler);
@@ -108,16 +102,17 @@ export class MeasureToolbox extends HTMLElement {
         // Remove Cesium primitives
         if (this.pointCollection) {     // point collection is the annotate point collection, remove called if create it agian will throw destroy error 
             this.viewer.scene.primitives.remove(this.pointCollection);
+            this.pointCollection = null;
         }
         if (this.labelCollection) {     // label collection is the annotate label collection, remove called if create it agian will throw destroy error 
             this.viewer.scene.primitives.remove(this.labelCollection);
+            this.labelCollection = null;
         }
 
         // Clean up references to avoid memory leaks
         this._viewer = null;
         this.handler = null;
-        this.pointCollection = null;
-        this.labelCollection = null;
+
         // this.overlay = null;
         // this.element = null;
         // this.button = null;
@@ -138,7 +133,7 @@ export class MeasureToolbox extends HTMLElement {
             this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
 
-        // remove relevant input actions assgined to the handler
+        // remove relevant input actions assigned to the handler
         removeInputActions(this.handler);
 
         // Initialize Cesium primitives collections
@@ -159,8 +154,14 @@ export class MeasureToolbox extends HTMLElement {
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();
 
+        // initialize fire trail mode
+        const fireTrailUser = this.hasRole("fireTrail");
+        fireTrailUser && this.initializeFireTrail();
+
+
         // initialize fly through mode
-        this.initializeFlyThrough();
+        const flyThroughUser = this.hasRole("flyThrough");
+        flyThroughUser && this.initializeFlyThrough();
     }
 
     /**
@@ -174,7 +175,7 @@ export class MeasureToolbox extends HTMLElement {
         this.setupPointerOverlay();
 
         // apply style for the web component
-        this.applyStyle();
+        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
         // all measure modes
         const modes = [
@@ -184,7 +185,8 @@ export class MeasureToolbox extends HTMLElement {
                     this.handler,
                     this.stateManager,
                     this.updateRecords.bind(this, "picker"),
-                    this.activateModeByName.bind(this)
+                    this.activateModeByName.bind(this),
+                    this.cesiumPkg
                 ),
                 name: "Picker",
                 icon: pickerIcon,
@@ -288,36 +290,28 @@ export class MeasureToolbox extends HTMLElement {
                 name: "Profile-Distances",
                 icon: profileDistancesIcon,
             },
-            {
-                instance: new FireTrail(
-                    this.viewer,
-                    this.handler,
-                    this.stateManager,
-                    this.actionLogger,
-                    this.updateRecords.bind(this, "fire-trail"),
-                    this.cesiumPkg
-                ),
-                name: "Fire-Trail",
-                icon: multiDClampedIcon,
-            },
             // {
-            //     instance: new FlyThrough(
+            //     instance: new FireTrail(
             //         this.viewer,
             //         this.handler,
             //         this.stateManager,
-            //         this.updateRecords.bind(this, "fly-through"),
+            //         this.actionLogger,
+            //         this.updateRecords.bind(this, "fire-trail"),
             //         this.cesiumPkg
             //     ),
-            //     name: "Fly-Through",
-            //     icon: recordIcon,
+            //     name: "Fire-Trail",
+            //     icon: multiDClampedIcon,
             // }
         ];
+
+        // Determine allowed modes based on user roles
+        const allowedModes = this.getAllowedModes(modes);
 
         // set measure modes 
         this.stateManager.setButtonState("measureModes", modes.map((mode) => mode.instance));
 
         // create measure mode buttons
-        modes.forEach((mode) => {
+        allowedModes.forEach((mode) => {
             this.createMeasureModeButton(mode.instance, mode.name, mode.icon);
         });
 
@@ -326,6 +320,27 @@ export class MeasureToolbox extends HTMLElement {
 
         // setup button overlay
         this.setupButtonOverlay();
+    }
+
+    /**
+     * Determine allowed modes based on user roles checking
+     * @param {Array} modes - All available measure modes
+     * @returns {Array} - Filtered allowed modes
+     */
+    getAllowedModes(modes) {
+        try {
+            const roles = this.app?.currentUser?.sessions?.navigator?.roles;
+            // error handling if roles are not available
+            if (!Array.isArray(roles)) {
+                console.warn("Roles information is unavailable or not an array.");
+                return modes; // Default to all modes if roles are not properly defined
+            }
+
+            return modes;
+        } catch (error) {
+            console.error("Error accessing user roles:", error);
+            return modes; // Default to all modes in case of error
+        }
     }
 
     /**
@@ -356,123 +371,6 @@ export class MeasureToolbox extends HTMLElement {
         makeDraggable(toolbar, this.viewer.container);
     }
 
-    applyStyle() {
-        // add style to the shadowRoot for this web component
-        const style = document.createElement("style");
-        style.textContent = `
-            *{
-                font-family:Roboto, sans-serif;
-            }
-            .measure-toolbar{ 
-                position:absolute;
-                bottom: 6rem;
-                left: 10rem;
-                display: flex;
-            }
-            .measure-toolbar button{
-                height: 40px;
-                width: 45px;
-                border-radius: 5px;
-                cursor: pointer;
-                transition: background-color 0.3s, transform 0.2s; /* Existing transitions */
-                color: #e6f8f8;
-                opacity: 0.9;
-                position: relative; /* For tooltip positioning */
-            }
-            .measure-toolbar button.active {
-                color: #000;
-                fill: #000;
-                background: #adf;
-                border-color: #fff;
-                box-shadow: 0 0 8px #fff;
-            }
-            .measure-toolbar button:hover{
-                transform: scale(1.1);
-            }
-            .measure-tools{
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-            .measure-mode-button { 
-                display: none;
-                opacity: 0;
-                position: relative;
-            }
-            .measure-mode-button.show {
-                opacity: 0.9;
-                display: flex; 
-                justify-content: center; /* Center the icon */
-                align-items: center;     /* Center the icon */
-            }
-            .cesium-button{
-                margin: 0;
-                padding: 0;
-            }
-            .cesium-button:hover{
-                z-index: 2;
-            }
-            .cesium-infoBox{
-                width: 250px;
-                padding: 5px;
-                font-size: 0.8rem;
-                border-radius: 7px;
-                cursor: grab; /* Indicates it can be moved */  
-            }
-            .cesium-infoBox table{
-                width: 100%;
-            }
-            .cesium-infoBox td{
-                padding: 5px 0;
-                border: none;
-            }
-            .log-box {
-                position: absolute;
-                height: 250px;
-                overflow-y: auto;
-                z-index: 2;
-                cursor: grab; /* Indicates it can be moved */
-                scrollbar-width: thin;
-                scrollbar-color: #888 rgba(38, 38, 38, 0.95);
-            }
-            .toggle-log-box-button{
-                cursor : pointer;
-                transition : all 0.2s ease-in-out;
-                color :  #e6f8f8;
-                opacity : 0.9;
-                padding: 3px 7px;
-            }
-            .helpBox-expanded{
-                width: 250px;
-                background-color: rgba(38, 38, 38, 0.95);
-            }
-            .messageBox-collapsed{
-                width: fit-content;
-                height: fit-content;
-                background-color: transparent;
-                border: none;
-                box-shadow: none;
-            }
-            .logBox-expanded{
-                width: 250px;
-                height: 250px;
-                background-color: rgba(38, 38, 38, 0.95);
-            }
-            .disabled-button{
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                background-color: #46808c;
-                padding: 0px;
-                border: none;
-            }
-            .disabled-button:hover{
-                cursor: not-allowed;
-            }
-            `;
-        this.shadowRoot.appendChild(style);
-    }
-
     /**
      * Creates a measurement mode button, setting up event listeners and setup helpBox and logBox based on buttons interaction. 
      * @param {Object} toolInstance - The instance of the measurement mode class.
@@ -495,10 +393,14 @@ export class MeasureToolbox extends HTMLElement {
             const isSameButton = activeButton === button;
             const activeTool = this.stateManager.getButtonState("activeTool");
 
-            // Add this check to prevent switching/deactivation
-            if (activeButton && activeTool instanceof FireTrail && activeTool.checkUnsubmittedLines()) {
-                alert("Please submit all of FireTrail measurement before switching modes.");
-                return;
+            // check fireTrail mode to prevent switching/deactivation if there are unsubmitted lines
+            if (activeButton && activeButton.classList.contains("fire-trail-button")) {
+                const fireTrailMode = this.shadowRoot.querySelector("fire-trail-mode");
+                const checkUnsubmittedLines = fireTrailMode.checkUnsubmittedLines();
+                if (checkUnsubmittedLines) {
+                    alert("Please submit all of FireTrail measurement before switching modes.");
+                    return;
+                }
             }
 
             // Deactivate existed active button if it is not the same button
@@ -781,7 +683,8 @@ export class MeasureToolbox extends HTMLElement {
         const newHelpBox = document.createElement("div");
         newHelpBox.className = "cesium-infoBox cesium-infoBox-visible infoBox-expanded";
         newHelpBox.style.top = this.position.helpBox.top || "70px"; // Set initial position
-        newHelpBox.style.right = this.position.helpBox.right || "0px";
+        const containerRect = this.viewer.container.getBoundingClientRect();
+        newHelpBox.style.left = `${containerRect.width - 250}px`; // Set initial position
 
         // Create a table element to hold the instructions
         const table = document.createElement("table");
@@ -895,9 +798,9 @@ export class MeasureToolbox extends HTMLElement {
         messageSet.forEach((message) => table.appendChild(this.createRow(message)));
 
         // Function to update the position of the helpBox
-        const updateHelpBoxPosition = (newTop, newLeft, containerRect) => {
+        const updateHelpBoxPosition = (newTop, newLeft) => {
             this.position.helpBox.top = `${newTop}px`;
-            this.position.helpBox.right = `${containerRect.width - newLeft - helpBox.offsetWidth}px`;
+            this.position.helpBox.left = `${newLeft}px`;
         };
 
         // Setup the toggle button for the helpBox
@@ -912,18 +815,25 @@ export class MeasureToolbox extends HTMLElement {
      * Setup the messageBox of logBox to show the records of the measure modes
      */
     setupLogBox() {
+        // Remove the existing logBox if it exists to avoid duplicates
         if (this.stateManager.getElementState("logBox")) {
             logBox.remove()
         };
 
+        // Create a new logBox div element
         const newLogBox = document.createElement("div");
         newLogBox.className = "cesium-infoBox cesium-infoBox-visible log-box log-box-expanded";
-        newLogBox.style.top = this.position.logBox.top || "190px";
-        newLogBox.style.right = this.position.logBox.right || "0px";
 
+        // set log box initial position
+        newLogBox.style.top = this.position.logBox.top || "190px";
+        const containerRect = this.viewer.container.getBoundingClientRect();
+        newLogBox.style.left = `${containerRect.width - 250}px`;
+
+        // Create a table element to hold the records
         const table = document.createElement("table");
         table.style.display = "table";
 
+        // Create a row for the title
         const title = this.createRow("Actions");
         table.appendChild(title);
 
@@ -935,9 +845,9 @@ export class MeasureToolbox extends HTMLElement {
 
         const logBox = this.stateManager.getElementState("logBox");
         // Function to update the position of the logBox
-        const updateLogBoxPosition = (newTop, newLeft, containerRect) => {
+        const updateLogBoxPosition = (newTop, newLeft) => {
             this.position.logBox.top = `${newTop}px`;
-            this.position.logBox.right = `${containerRect.width - newLeft - newLogBox.offsetWidth}px`;
+            this.position.logBox.left = `${newLeft}px`;
         };
 
         // Setup the toggle button for the logBox
@@ -1099,8 +1009,9 @@ export class MeasureToolbox extends HTMLElement {
      * @param {*} mode
      * @param {*} records
      */
-    updateRecords(mode, records) {
-        this._records.push({ [mode]: records });
+    updateRecords(modeName, records) {
+        const logEntry = { [modeName]: records };
+        this._records.push(logEntry);
         this.updateLogBox(); // Ensure the log box is updated every time records change
     }
 
@@ -1120,6 +1031,51 @@ export class MeasureToolbox extends HTMLElement {
         }
     }
 
+    /**
+     * Check if the user has the specified role
+     * @param {String} role - Role to check 
+     * @returns {Boolean} - True if the user has the role, false otherwise
+     */
+    hasRole(role) {
+        const roles = this.app?.currentUser?.sessions?.navigator?.roles;
+
+        // error handling if roles are not available
+        if (!Array.isArray(roles)) {
+            console.warn("Roles information is unavailable or not an array.");
+        }
+
+        return roles.includes(role);
+    }
+
+    /**
+     * Check if the user has the specified component
+     * @param {String} requestMode - Mode to check 
+     * @param {Array} modes - Array of modes
+     * @returns {Boolean} - True if the user has the component, false otherwise
+     */
+    hasComponent(requestMode, modes) {
+        if (modes.length === 0) return false;
+        return modes.some((m) => m.name === requestMode);
+    }
+
+    /***********************
+     * FIRE TRAIL FEATURES *
+     ***********************/
+    initializeFireTrail() {
+        // fire trail is a web component
+        const fireTrail = document.createElement("fire-trail-mode");
+        // setter values for the fire trail
+        fireTrail.viewer = this.viewer;
+        fireTrail.app = this.app;
+        fireTrail.handler = this.handler;
+        fireTrail.stateManager = this.stateManager;
+        fireTrail.cesiumPkg = this.cesiumPkg;
+        fireTrail.logRecordsCallback = this.updateRecords.bind(this, "fire-trail");
+        fireTrail.setupLogBox = this.setupLogBox.bind(this);
+        fireTrail.cesiumStyle = this.cesiumStyle;
+        // append the fire trail to the measure toolbox
+        this.shadowRoot.appendChild(fireTrail);
+    }
 
     /************************
      * FLY THROUGH FEATURES *
