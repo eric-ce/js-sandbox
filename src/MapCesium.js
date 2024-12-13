@@ -20,6 +20,17 @@ export class MapCesium extends HTMLElement {
 
         this._viewer = null;
         this.measureToolbox = null;
+
+        this.app = {
+            log: ["testing"],
+            currentUser: {
+                sessions: {
+                    navigator: {
+                        roles: ["fireTrail", "developer", "tester", "flyThrough"]
+                    }
+                }
+            }
+        }
     }
 
     set viewer(viewer) {
@@ -32,11 +43,11 @@ export class MapCesium extends HTMLElement {
 
     connectedCallback() {
         if (this.viewer) {
-            this.initilizeMeasureToolbox();
+            this.initializeMeasureToolbox();
         }
     }
 
-    initilizeMeasureToolbox() {
+    initializeMeasureToolbox() {
         this.measureToolbox = document.createElement("cesium-measure");
         this.measureToolbox.viewer = this.viewer;
         this.measureToolbox.cesiumPkg = {
@@ -46,6 +57,7 @@ export class MapCesium extends HTMLElement {
             GroundPolylinePrimitive,
             PolylineCollection,
         }
+        this.measureToolbox.app = this.app;
         this.shadowRoot.appendChild(this.measureToolbox);
     }
 }
