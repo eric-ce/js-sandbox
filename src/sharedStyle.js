@@ -68,6 +68,19 @@ sharedStyleSheet.replaceSync(`
         display: flex;
         flex-direction: row;
     }
+    .fly-through-container{
+        position: absolute;
+        bottom: 16rem;
+        left: 10rem; 
+        display: flex;
+        flex-direction: column-reverse;
+    }
+    .fly-path-container, 
+    .kml-container, 
+    .screen-recording-container{
+        display: flex;
+        flex-direction: row;
+    }
     .cesium-infoBox{
         width: 250px;
         padding: 5px;

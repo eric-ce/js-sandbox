@@ -1,31 +1,39 @@
 import * as Cesium from "cesium";
-import { createLineArrowPrimitive, createPointPrimitive, generateId, removeInputActions, showCustomNotification } from "../../helper/helper.js";
+import {
+    createLineArrowPrimitive,
+    createPointPrimitive,
+    generateId,
+    makeDraggable,
+    removeInputActions,
+    showCustomNotification
+} from "../../helper/helper.js";
 import { handleRecordScreen, resumeOrPauseRecording } from "./recordScreen.js";
 import { createFlyPathPrimitives, editFlyPath, removePrimitives } from "./editFlyPath.js";
+import { sharedStyleSheet } from "../../../sharedStyle.js";
 
-class FlyThrough {
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        this.viewer = viewer;
-        this.handler = handler;
-        this.stateManager = stateManager;
+export class FlyThrough extends HTMLElement {
+    constructor() {
+        super();
+        this.attachShadow({ mode: "open" });
 
-        this.pointerOverlay = this.stateManager.getOverlayState("pointer");
+        // Cesium variables
+        this._viewer = null;
+        this._handler = null;
+        this._cesiumPkg = null;
+        this._cesiumPkg = null;
+        // Cesium primitives collections
+        this.pointCollection = null;
+        this.labelCollection = null;
 
-        this.logRecordsCallback = logRecordsCallback;
+        // App variables
+        this._app = null;
+        this._updateRecords = null;
 
-        this.cesiumPkg = cesiumPkg;
+        this._cesiumStyle = null;
+
+        this.pointerOverlay = null;
 
         this.coordinate = new Cesium.Cartesian3();
-
-        this.setupInputActions();
-
-        // find and set Cesium primitives collections
-        this.pointCollection = this.viewer.scene.primitives._primitives.find(
-            (p) => p.id && p.id.startsWith("annotate_point_collection")
-        );
-        this.labelCollection = this.viewer.scene.primitives._primitives.find(
-            (p) => p.id && p.id.startsWith("annotate_label_collection")
-        );
 
         // flags to control the state of the tool
         this.flags = {
@@ -126,8 +134,6 @@ class FlyThrough {
             _flyCache: [{ position: null, hpr: null }], // cache the position and orientation before editing
         };
 
-        this.coordinate = null;
-
         this.interactivePrimitives = {
             hoveredLine: null,
             hoveredPoint: null,
@@ -154,8 +160,99 @@ class FlyThrough {
 
         // Initialize the camera rotation interval as null
         this.cameraRotationInterval = null;
+    }
 
+    connectedCallback() {
+        if (this.viewer) {
+            this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
+            this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
+
+            this.initialize();
+        }
+    }
+
+    /*********************
+     * GETTER AND SETTER *
+     *********************/
+    set app(app) {
+        this._app = app
+        this.log = app.log
+    }
+
+    get app() {
+        return this._app
+    }
+
+    set viewer(viewer) {
+        this._viewer = viewer;
+    }
+
+    get viewer() {
+        return this._viewer;
+    }
+
+    get stateManager() {
+        return this._stateManager;
+    }
+
+    set stateManager(stateManager) {
+        this._stateManager = stateManager;
+    }
+
+    get logRecordsCallback() {
+        return this._logRecordsCallback;
+    }
+
+    set logRecordsCallback(callback) {
+        this._logRecordsCallback = callback;
+    }
+
+    get cesiumPkg() {
+        return this._cesiumPkg;
+    }
+
+    set cesiumPkg(cesiumPkg) {
+        this._cesiumPkg = cesiumPkg;
+    }
+
+    get updateRecords() {
+        return this._updateRecords;
+    }
+
+    set updateRecords(callback) {
+        this._updateRecords = callback;
+    }
+
+    get cesiumStyle() {
+        return this._cesiumStyle;
+    }
+
+    set cesiumStyle(style) {
+        const clonedStyle = style.cloneNode(true);
+        this._cesiumStyle = clonedStyle;
+        if (clonedStyle) {
+            this.shadowRoot.appendChild(clonedStyle)
+        };
+    }
+
+    initialize() {
+        // apply shared style
+        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+
+        // setup buttons
         this.setupButtons();
+
+        // setup pointer overlay
+        this.pointerOverlay = this.stateManager.getOverlayState("pointer");
+
+        // if screenSpaceEventHandler existed use it, if not create a new one
+        if (this.viewer.screenSpaceEventHandler) {
+            this.handler = this.viewer.screenSpaceEventHandler;
+        } else {
+            this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+        }
+
+        this.setupInputActions();
     }
 
     /**
@@ -172,12 +269,12 @@ class FlyThrough {
     setupButtons() {
         // Define button configurations
         const buttonsConfig = [
+            // fly path buttons
             {
                 key: 'fly',
                 text: 'Fly',    // TODO: change to icon img
                 className: 'fly',
                 onClick: this.handleFly.bind(this),
-                left: 45 * 13, // 45px each button * #13th buttons
                 top: 0, // the bottom button in the toolbar
             },
             {
@@ -185,7 +282,6 @@ class FlyThrough {
                 text: 'Replay',
                 className: 'replay',
                 onClick: this.handleReplayFly.bind(this),
-                left: 45 * 13, // 45px each button width * #13th buttons
                 top: -40 * 1, // -40px each button height * #1st buttons
                 disabled: true, // Initially disabled until fly data is available
             },
@@ -194,7 +290,6 @@ class FlyThrough {
                 text: 'Edit',
                 className: 'edit-fly-path',
                 onClick: editFlyPath.bind(this), // Ensure this method exists
-                left: 45 * 13, // 45px each button * #13th buttons
                 top: -40 * 2, // -40px each button * #2nd buttons
                 disabled: true, // Initially disabled until fly data is available
             },
@@ -203,16 +298,15 @@ class FlyThrough {
                 text: 'Show',
                 className: 'show-fly-path',
                 onClick: this.handleShowFlyPath.bind(this), // Ensure this method exists
-                left: 45 * 13, // 45px each button * #13th buttons
                 top: -40 * 3, // -40px each button * #2nd buttons
                 disabled: true, // Initially disabled until fly data is available
             },
+            // kml buttons
             {
                 key: 'importKml',
                 text: 'Import',
                 className: 'import-kml',
                 onClick: this.importKml.bind(this),
-                left: 45 * 15, // 45px each button * #13th buttons
                 top: -40 * 0, // -40px each button * #3rd buttons
             },
             {
@@ -220,15 +314,14 @@ class FlyThrough {
                 text: 'Export',
                 className: 'export-kml',
                 onClick: this.exportKml.bind(this),
-                left: 45 * 15, // 45px each button * #13th buttons
                 top: -40 * 1, // -40px each button * #4th buttons
             },
+            // screen recording buttons
             {
                 key: 'recordScreen',
                 text: 'Record',
                 className: 'record-screen',
                 onClick: handleRecordScreen.bind(this),
-                left: 45 * 14, // 45px each button * #14th buttons
                 top: 0, // the bottom button in the toolbar
             },
             {
@@ -236,27 +329,73 @@ class FlyThrough {
                 text: 'Pause',
                 className: 'pause-resume', // Initially disabled until recording starts
                 onClick: resumeOrPauseRecording.bind(this),
-                left: 45 * 14, // Adjust positioning as needed
                 top: -40, // Adjust positioning as needed
                 disabled: true, // Initially disabled until recording starts
             },
         ];
 
         // Create buttons and store them in this.buttons
-        buttonsConfig.forEach(config => {
-            const button = document.createElement("button");
-            button.textContent = config.text;
-            if (config.disabled) {
-                button.classList.add("disabled-button", config.className);
-            } else {
-                button.classList.add("cesium-button", config.className);
-            }
-            button.addEventListener("click", config.onClick);
-            button.style.position = "absolute";
-            button.style.left = `${config.left}px`;
-            button.style.top = `${config.top}px`;
-            this.buttons[`${config.key}Button`] = button;
-        });
+        const createButtons = (buttonsConfig) => {
+            let buttons = [];
+            buttonsConfig.forEach(config => {
+                const button = document.createElement("button");
+                button.textContent = config.text;
+
+                // set button style
+                if (config.disabled) {
+                    button.classList.add("disabled-button", config.className);
+                } else {
+                    button.classList.add("cesium-button", config.className);
+                }
+                button.classList.add("measure-mode-button", "show")
+
+                // set button attributes
+                button.setAttribute("type", "button");
+                button.setAttribute("aria-label", `${config.key}`);
+                button.setAttribute("aria-pressed", "false"); // For toggle behavior
+
+                // add event listener
+                button.addEventListener("click", config.onClick);
+                this.buttons[`${config.key}Button`] = button;
+
+                buttons.push(button);
+            });
+            return buttons;
+        }
+
+        // setup fly through container
+        this.flyThroughContainer = document.createElement("div");
+        this.flyThroughContainer.classList.add("fly-through-container");
+        this.shadowRoot.appendChild(this.flyThroughContainer);
+        makeDraggable(this.flyThroughContainer, this.viewer.container);
+
+        // fly path container
+        const flyPathContainer = document.createElement("div");
+        flyPathContainer.classList.add("fly-path-container");
+        this.flyThroughContainer.appendChild(flyPathContainer);
+        // fly path buttons
+        const flyPathButtonsConfig = buttonsConfig.filter(button => button.key === "fly" || button.key === "replay" || button.key === "editFlyPath" || button.key === "showFlyPath");
+        const flyPathButtons = createButtons(flyPathButtonsConfig);
+        flyPathButtons.forEach(button => flyPathContainer.appendChild(button));
+
+
+        // kml container
+        const kmlContainer = document.createElement("div");
+        kmlContainer.classList.add("kml-container");
+        this.flyThroughContainer.appendChild(kmlContainer);
+        // kml buttons
+        const kmlButtonsConfig = buttonsConfig.filter(button => button.key === "importKml" || button.key === "exportKml");
+        const kmlButtons = createButtons(kmlButtonsConfig);
+        kmlButtons.forEach(button => kmlContainer.appendChild(button));
+
+        // screen recording container
+        const screenRecordingContainer = document.createElement("div");
+        screenRecordingContainer.classList.add("screen-recording-container");
+        this.flyThroughContainer.appendChild(screenRecordingContainer);
+        // screen recording buttons
+        const screenRecordingButtonsConfig = buttonsConfig.filter(button => button.key === "recordScreen" || button.key === "pauseResume");
+        const screenRecordingButtons = createButtons(screenRecordingButtonsConfig);
+        screenRecordingButtons.forEach(button => screenRecordingContainer.appendChild(button));
 
         // mouse move event listener for button overlay
         this.updateButtonOverlay(this.buttons.replayButton, "Replay fly path");
@@ -267,77 +406,6 @@ class FlyThrough {
         this.updateButtonOverlay(this.buttons.exportKmlButton, "Export KML file");
         this.updateButtonOverlay(this.buttons.recordScreenButton, "Record screen");
         this.updateButtonOverlay(this.buttons.pauseResumeButton, "Pause/Resume recording");
-
-        // Find the measureToolbox element within the mapCesium shadow DOM
-        const mapCesium = document.querySelector("map-cesium");
-        const measureToolbox = mapCesium?.shadowRoot?.querySelector("cesium-measure");
-
-        if (!measureToolbox) {
-            console.warn("measureToolbox element not found.");
-            return;
-        }
-
-        const appendButtons = () => {
-            const toolbar = measureToolbox.shadowRoot.querySelector(".measure-toolbar");
-            const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
-
-            if (!toolbar || !measureToolButton) {
-                console.warn("Toolbar or Measure Tool Button not found.");
-                return;
-            }
-
-            // Append each button if not already appended
-            buttonsConfig.forEach(config => {
-                const button = this.buttons[`${config.key}Button`];
-                if (!toolbar.contains(button)) {
-                    toolbar.appendChild(button);
-                }
-            });
-
-            // Define a function to toggle button visibility based on measureToolButton's active class
-            const toggleButtonVisibility = () => {
-                const shouldDisplay = measureToolButton.classList.contains('active');
-                buttonsConfig.forEach(config => {
-                    const button = this.buttons[`${config.key}Button`];
-                    if (shouldDisplay) {
-                        setTimeout(() => {
-                            button.style.display = 'block';
-                        }, 625);
-                    } else {
-                        button.style.display = 'none';
-                    }
-                });
-            };
-
-            // Initial visibility check
-            toggleButtonVisibility();
-
-            // Observe class changes on measureToolButton to toggle visibility
-            const classObserver = new MutationObserver(toggleButtonVisibility);
-            classObserver.observe(measureToolButton, { attributes: true, attributeFilter: ["class"] });
-        };
-
-        // Check if toolbar and measureToolButton already exist
-        const toolbar = measureToolbox.shadowRoot.querySelector(".measure-toolbar");
-        const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
-
-        if (toolbar && measureToolButton) {
-            appendButtons();
-        } else {
-            // Observe changes in the measureToolbox shadow DOM for child list changes
-            const observer = new MutationObserver((_, obs) => {
-                const toolbar = measureToolbox.shadowRoot.querySelector(".measure-toolbar");
-                const measureToolButton = measureToolbox.shadowRoot.querySelector(".measure-tools");
-
-                if (toolbar && measureToolButton) {
-                    appendButtons();
-                    obs.disconnect(); // Stop observing once the buttons are appended
-                }
-            });
-
-            // Start observing the measureToolbox shadow DOM for child list changes
-            observer.observe(measureToolbox.shadowRoot, { childList: true, subtree: true });
-        }
     }
 
     /**
@@ -548,13 +616,30 @@ class FlyThrough {
      ******************/
 
     resetValue() {
-        this.coordinate = null;
+        // reset flags
+        this.flags.isRecordingFly = false;
+        this.flags.isScreenRecording = false;
+        this.flags.isDragMode = false;
+        this.flags.isShowFlyPath = false;
+        this.flags.isRotating = false;
+        this.flags.isEditing = false;
 
-        this.flags.isComplete = false;
+        // reset coords
+        this.coords._flyRecords = [];
+        this.coords._mockFlyRecords = [];
+        this.coords._flyCache = [];
+
+        // reset interactive primitives
+        this.interactivePrimitives.hoveredLine = null;
+        this.interactivePrimitives.hoveredPoint = null;
+        this.interactivePrimitives.dragPoint = null;
+        this.interactivePrimitives.dragLine = null;
+        this.interactivePrimitives.selectedPoint = null;
     }
 }
 
-export { FlyThrough };
+// Define the custom element
+customElements.define('fly-through-mode', FlyThrough);
 
 // flyTo(index, data, duration = 3) {
 //     console.log("🚀  data:", data);

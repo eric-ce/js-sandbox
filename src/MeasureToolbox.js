@@ -158,7 +158,6 @@ export class MeasureToolbox extends HTMLElement {
         const fireTrailUser = this.hasRole("fireTrail");
         fireTrailUser && this.initializeFireTrail();
 
-
         // initialize fly through mode
         const flyThroughUser = this.hasRole("flyThrough");
         flyThroughUser && this.initializeFlyThrough();
@@ -289,19 +288,7 @@ export class MeasureToolbox extends HTMLElement {
                 ),
                 name: "Profile-Distances",
                 icon: profileDistancesIcon,
-            },
-            // {
-            //     instance: new FireTrail(
-            //         this.viewer,
-            //         this.handler,
-            //         this.stateManager,
-            //         this.actionLogger,
-            //         this.updateRecords.bind(this, "fire-trail"),
-            //         this.cesiumPkg
-            //     ),
-            //     name: "Fire-Trail",
-            //     icon: multiDClampedIcon,
-            // }
+            }
         ];
 
         // Determine allowed modes based on user roles
@@ -1074,15 +1061,27 @@ export class MeasureToolbox extends HTMLElement {
         fireTrail.setupLogBox = this.setupLogBox.bind(this);
         fireTrail.cesiumStyle = this.cesiumStyle;
         // append the fire trail to the measure toolbox
-        this.shadowRoot.appendChild(fireTrail);
+        return this.shadowRoot.appendChild(fireTrail);
     }
 
     /************************
      * FLY THROUGH FEATURES *
      ************************/
     initializeFlyThrough() {
-        const flyThrough = new FlyThrough(this.viewer, this.handler, this.stateManager, this.updateRecords.bind(this, "fly-through"), this.cesiumPkg);
-        return flyThrough;
+        // const flyThrough = new FlyThrough(this.viewer, this.handler, this.stateManager, this.updateRecords.bind(this, "fly-through"), this.cesiumPkg);
+        // return flyThrough;
+        const flyThrough = document.createElement("fly-through-mode");
+        // setter values for the fly through
+        flyThrough.viewer = this.viewer;
+        flyThrough.app = this.app;
+        flyThrough.handler = this.handler;
+        flyThrough.stateManager = this.stateManager;
+        flyThrough.cesiumPkg = this.cesiumPkg;
+        flyThrough.logRecordsCallback = this.updateRecords.bind(this, "fly-through");
+        flyThrough.setupLogBox = this.setupLogBox.bind(this);
+        flyThrough.cesiumStyle = this.cesiumStyle;
+        // append the fly through to the measure toolbox
+        return this.shadowRoot.appendChild(flyThrough);
     }
 }
 
