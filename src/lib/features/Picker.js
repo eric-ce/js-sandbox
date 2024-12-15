@@ -1,7 +1,8 @@
 import * as Cesium from "cesium";
-import { changeLineColor, removeInputActions, resetLineColor, updatePointerOverlay } from "../helper/helper.js";
+import { changeLineColor, getPickedObjectType, removeInputActions, resetLineColor, updatePointerOverlay } from "../helper/helper.js";
+import MeasureModeBase from "./MeasureModeBase.js";
 
-class Picker {
+class Picker extends MeasureModeBase {
     /**
      * Creates a new Picker instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
@@ -10,18 +11,15 @@ class Picker {
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, activateModeCallback) {
-        this.viewer = viewer;
-        this.handler = handler;
-        this.stateManager = stateManager;
+    constructor(viewer, handler, stateManager, logRecordsCallback, activateModeCallback, cesiumPkg) {
+        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
 
         this._button = null;
 
         // Callback functions
-        this.logRecordsCallback = logRecordsCallback;
         this.activateModeCallback = activateModeCallback;
 
-        // mesaure toolbox measure modes
+        // measure toolbox measure modes
         this._measureModes = this.stateManager.getButtonState("measureModes");
 
         // Coordinate management and related properties
@@ -56,22 +54,14 @@ class Picker {
      * Sets up input actions for picker mode.
     */
     setupInputActions() {
-        removeInputActions(this.handler);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePickerLeftClick(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-        this.handler.setInputAction((movement) => {
-            this.handlePickerMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        super.setupInputActions();
     }
 
 
     /***********************
      * LEFT CLICK FEATURES *
      ***********************/
-    handlePickerLeftClick(movement) {
+    handleLeftClick(movement) {
         const pickedObject = this.viewer.scene.pick(movement.position);
         if (Cesium.defined(pickedObject) && pickedObject.id && pickedObject.id.startsWith("annotate")) {
 
@@ -107,10 +97,14 @@ class Picker {
                     }
                 });
 
+                // reset highlighting
+                this.resetHighlighting();
+
                 // Activate the corresponding mode
                 this.activateModeCallback(modeMapping[lookupId]);
                 // Log the formatted ID
                 this.logRecordsCallback(formattedId);
+
             }
         }
     }
@@ -119,7 +113,7 @@ class Picker {
     /***********************
      * MOUSE MOVE FEATURES *
      ***********************/
-    handlePickerMouseMove(movement) {
+    handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
         if (!Cesium.defined(cartesian)) return;
@@ -146,34 +140,20 @@ class Picker {
             pickedObject.id &&
             pickedObject.id.startsWith("annotate_") &&
             !pickedObject.id.includes("moving")) {
-            if (pickedObject.id.includes(`point`)) {
+            if (pickedObject.id.includes('point')) {
                 pickedObjectType = "point"
-            } else if (pickedObject.id.includes(`line`)) {
+            } else if (pickedObject.id.includes('line') && !pickedObject.id.includes('outline')) {
                 pickedObjectType = "line"
-            } else if (pickedObject.id.includes(`label`)) {
+            } else if (pickedObject.id.includes('label')) {
                 pickedObjectType = "label"
             } else {
                 pickedObjectType = "other"
             }
         }
-
         // reset highlighting
-        const resetHighlighting = () => {
-            if (this.interactivePrimitives.hoveredLine) {
-                resetLineColor(this.interactivePrimitives.hoveredLine);
-                this.interactivePrimitives.hoveredLine = null;
-            }
-            if (this.interactivePrimitives.hoveredPoint) {
-                this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
-                this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
-                this.interactivePrimitives.hoveredPoint = null;
-            }
-            if (this.interactivePrimitives.hoveredLabel) {
-                this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
-                this.interactivePrimitives.hoveredLabel = null;
-            }
-        };
-        resetHighlighting();
+        this.resetHighlighting();
+
+        const hoverColor = this.stateManager.getColorState("hover");
 
         switch (pickedObjectType) {
             case "line": // highlight the line when hovering
@@ -181,14 +161,14 @@ class Picker {
 
                 if (linePrimitive) {
                     // Highlight the line
-                    changeLineColor(linePrimitive, Cesium.Color.BLUE);
+                    changeLineColor(linePrimitive, hoverColor);
                     this.interactivePrimitives.hoveredLine = linePrimitive;
                 }
                 break;
             case "point":  // highlight the point when hovering
                 const pointPrimitive = pickedObject.primitive;
                 if (pointPrimitive) {
-                    pointPrimitive.outlineColor = Cesium.Color.YELLOW;
+                    pointPrimitive.outlineColor = hoverColor;
                     pointPrimitive.outlineWidth = 2;
                     this.interactivePrimitives.hoveredPoint = pointPrimitive;
                 }
@@ -196,12 +176,28 @@ class Picker {
             case "label":   // highlight the label when hovering
                 const labelPrimitive = pickedObject.primitive;
                 if (labelPrimitive) {
-                    labelPrimitive.fillColor = Cesium.Color.YELLOW;
+                    labelPrimitive.fillColor = hoverColor;
                     this.interactivePrimitives.hoveredLabel = labelPrimitive;
                 }
                 break;
             default:
                 break;
+        }
+    }
+
+    resetHighlighting() {
+        if (this.interactivePrimitives.hoveredLine) {
+            resetLineColor(this.interactivePrimitives.hoveredLine);
+            this.interactivePrimitives.hoveredLine = null;
+        }
+        if (this.interactivePrimitives.hoveredPoint) {
+            this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
+            this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
+            this.interactivePrimitives.hoveredPoint = null;
+        }
+        if (this.interactivePrimitives.hoveredLabel) {
+            this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
+            this.interactivePrimitives.hoveredLabel = null;
         }
     }
 
@@ -231,15 +227,7 @@ class Picker {
     }
 
     resetValue() {
-        this.coordinate = null;
-
-        const pointer = this.stateManager.getOverlayState('pointer')
-        pointer && (pointer.style.display = 'none');
-
-        // reset primitives
-        this.interactivePrimitives.hoveredLabel = null;
-        this.interactivePrimitives.hoveredPoint = null;
-        this.interactivePrimitives.hoveredLine = null;
+        super.resetValue();
     }
 }
 

@@ -68,7 +68,7 @@ export class FireTrail extends HTMLElement {
 
         this.sentGroupKeys = new Set();
 
-        // lookup and set Cesium primitives collections
+        // Cesium primitives collections
         this.pointCollection = null;
         this.labelCollection = null;
 
@@ -198,8 +198,8 @@ export class FireTrail extends HTMLElement {
     }
 
     initialize() {
+        // apply shared style
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-        // this.shadowRoot.appendChild(this.cesiumStyle);
 
         // setup label button and submit buttons
         this.setUpButtons();
@@ -1171,7 +1171,7 @@ export class FireTrail extends HTMLElement {
 
     /**
      * look for line primitives by group positions, and update the selected line color
-     * @param {Cesium.Carteisan3[]} group 
+     * @param {Cesium.Cartesian3[]} group 
      * @returns {Cesium.Primitive[]} - the line primitives that match the group positions
      */
     updateSelectedLineColor(group) {

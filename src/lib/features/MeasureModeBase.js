@@ -71,6 +71,7 @@ export default class MeasureModeBase {
 
     handleLeftClick(movement) { /* Default click behavior; override in subclass */ }
     handleMouseMove(movement) { /* Default move behavior; override in subclass */ }
+    handleRightClick(movement) { /* Default right click; override in subclass */ }
     handleDragStart(movement) { /* Default drag start; override in subclass */ }
     handleDragMove(movement) { /* Default drag move; override in subclass */ }
     handleDragEnd() { /* Default drag end; override in subclass */ }
