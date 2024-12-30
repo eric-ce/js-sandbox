@@ -24,10 +24,10 @@ export function convertToCartesian3(coordinate) {
     let cartesian = coordinate;
 
     if (coordinate.longitude) {
-        const isCartographicDregrees = Math.abs(coordinate.longitude) > 10;
+        const isCartographicDegrees = Math.abs(coordinate.longitude) > 10;
         const isCartographicRadians = Math.abs(coordinate.longitude) <= 10;
         switch (true) {
-            case isCartographicDregrees:
+            case isCartographicDegrees:
                 cartesian = Cesium.Cartesian3.fromDegrees(
                     coordinate.longitude,
                     coordinate.latitude,
@@ -200,11 +200,12 @@ export async function convertCartesianArrayToClamped(cartesianArray, scene) {
 // point primitive
 /**
  * Create a point primitive.
- * @param {Cesium.Cartesian3} coordinate - The Cartesian3 coordinate of the point.
- * @param {Cesium.Color} color - The color of the point.
+ * @param {Cesium.Cartesian3 | Cesium.Cartographic} coordinate - The Cartesian3 coordinate of the point.
+ * @param {Cesium.Color} [color=Cesium.Color.RED] - The color of the point.
+ * @param {String} [modeString] - The measure mode string
  * @returns {Cesium.PointPrimitive} - The point primitive.
  */
-export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
+export function createPointPrimitive(coordinate, color = Cesium.Color.RED, modeString) {
     if (!coordinate) return; // Exit early if coordinate is not defined
 
     //check if coordinate is cartographic degrees or radians or cartesian
@@ -215,57 +216,17 @@ export function createPointPrimitive(coordinate, color = Cesium.Color.RED) {
         pixelSize: 8,
         color: color,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    }
+        id: modeString ? generateId(cartesian, modeString) : undefined,
+    };
 }
 
 // line primitive
-/**
- * Create a line geometry instance.
- * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
- * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
- * @returns {Cesium.GeometryInstance} - The geometry instance of the line.
- */
-export function createLineGeometryInstance(coordinateArray, mode) {
-    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return;
-
-    const convertedCoordinates = coordinateArray.map((pos) => convertToCartesian3(pos));
-
-    return new Cesium.GeometryInstance({
-        geometry: new Cesium.PolylineGeometry({
-            positions: convertedCoordinates,
-            width: 3,
-            vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
-        }),
-        id: generateId(convertedCoordinates, mode),
-    });
-}
-
-/**
- * Create a line primitive.
- * @param {Cesium.GeometryInstance} geometryInstance - line geometry instance
- * @param {Cesium.Color} color - the color of the line
- * @param {Cesium.Primitive} Primitive - the cesium primitive
- * @returns {Cesium.Primitive} - the line primitive
- */
-export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, Primitive) {
-    const material = new Cesium.Material.fromType('Color', { color: color });
-    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
-
-    return new Primitive({
-        geometryInstances: geometryInstance,
-        appearance: appearance,
-        depthFailAppearance: appearance,
-        asynchronous: false,
-        releaseGeometryInstances: false
-    });
-}
-
 /**
  * Create a line primitive with custom width and color.
  * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
  * @param {String} modeString - The measure mode string
  * @param {Number} width - The width of the line
- * @param {Cesium.Color} color - The color of the line
+ * @param {Cesium.Color} [color = Cesium.Color.YELLOWGREEN] - The color of the line
  * @param {Cesium.Primitive} Primitive - The Cesium primitive
  * @returns {Cesium.Primitive} - The line primitive
  */
@@ -305,6 +266,17 @@ export function createPolylinePrimitive(coordinateArray, modeString, width = 3, 
     return linePrimitive;
 }
 
+// line arrow primitive
+/**
+ * Create a line arrow primitive.
+ * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {String} modeString - The measure mode string
+ * @param {Number} width - The width of the line
+ * @param {Cesium.Color} [color = Cesium.Color.YELLOWGREEN] - The color of the line
+ * @param {Number} offsetDistance - The distance to offset the arrow from the line
+ * @param {Cesium.Primitive} Primitive - The Cesium primitive
+ * @returns {Cesium.Primitive} - The line arrow primitive
+ */
 export function createLineArrowPrimitive(coordinateArray, modeString, width = 10, color = Cesium.Color.YELLOWGREEN, offsetDistance, Primitive) {
     // Exit early if coordinateArray is not defined or has less than 2 positions
     if (!Array.isArray(coordinateArray) || coordinateArray.length !== 2) return;
@@ -323,6 +295,8 @@ export function createLineArrowPrimitive(coordinateArray, modeString, width = 10
         return;
     }
 
+    // issue: the arrow line is too close to the line, need to offset the arrow line
+    // to solve it by normalize the direction vector and multiply by offset distance
     Cesium.Cartesian3.normalize(direction, direction);
     const offset = Cesium.Cartesian3.multiplyByScalar(direction, offsetDistance, new Cesium.Cartesian3());
 
@@ -343,46 +317,6 @@ export function createLineArrowPrimitive(coordinateArray, modeString, width = 10
     linePrimitive.id = generateId(convertedCoordinates, modeString);
 
     return linePrimitive;
-}
-
-
-/**
- * Create a clamped line geometry instance.
- * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
- * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
- * @returns {Cesium.GeometryInstance} - The geometry instance of the clamped line.
- */
-export function createClampedLineGeometryInstance(coordinateArray, mode) {
-    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return null;
-
-    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
-
-    return new Cesium.GeometryInstance({
-        geometry: new Cesium.GroundPolylineGeometry({
-            positions: convertedCoordinates,
-            width: 3
-        }),
-        id: generateId(convertedCoordinates, mode),
-    });
-}
-
-/**
- * Create a clamped line primitive.
- * @param {Cesium.GeometryInstance} geometryInstance - the geometry instance of the clamped line
- * @param {Cesium.Color} color - the color of the line
- * @param {Cesium.GroundPolylinePrimitive} GroundPolylinePrimitive - the cesium GroundPolylinePrimitive
- * @returns {Cesium.GroundPolylinePrimitive} - the clamped line primitive
- */
-export function createClampedLinePrimitive(geometryInstance, color = Cesium.Color.RED, GroundPolylinePrimitive) {
-    const material = new Cesium.Material.fromType('Color', { color: color });
-    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
-
-    return new GroundPolylinePrimitive({
-        geometryInstances: geometryInstance,
-        appearance: appearance,
-        asynchronous: true,
-        releaseGeometryInstances: false,
-    });
 }
 
 export function createGroundPolylinePrimitive(coordinateArray, modeString, color = Cesium.Color.YELLOWGREEN, GroundPolylinePrimitive) {
@@ -457,84 +391,89 @@ export function createLabelPrimitive(startPoint, endPoint, distanceOrText) {
 
 // polygon primitive
 /**
- * Create a polygon geometry instance.
- * @param {Cesium.Cartsian3[]} coordinateArray - the array of cartesian3 coordinates of the polygon
- * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance" 
- * @returns {Cesium.GeometryInstance} - The geometry instance of the polygon.
+ * Creates a polygon primitive.
+ * @param {Cesium.Cartesian3[]} coordinateArray - An array of Cartesian3 coordinates defining the polygon vertices.
+ * @param {string} modeString - The mode string used to generate the ID.
+ * @param {Cesium.Color} [color=Cesium.Color.GREEN.withAlpha(0.8)] - The color of the polygon.
+ * @param {Cesium.Primitive} Primitive - The Cesium primitive.
+ * @returns {Cesium.Primitive|null} - The polygon primitive or null if input is invalid.
  */
-export function createPolygonGeometryInstance(coordinateArray, mode) {
+export function createPolygonPrimitive(coordinateArray, modeString, color = Cesium.Color.GREEN.withAlpha(0.8), Primitive) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) return null;
 
     const convertedCoordinates = coordinateArray.map(convertToCartesian3);
 
-    return new Cesium.GeometryInstance({
+    // Create the polygon geometry instance
+    const geometryInstance = new Cesium.GeometryInstance({
         geometry: new Cesium.PolygonGeometry({
             polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
             perPositionHeight: true,
             vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT
         }),
-        id: generateId(convertedCoordinates, mode),
+        id: generateId(convertedCoordinates, modeString),
     });
-}
-/**
- * Create a polygon primitive.
- * @param {Cesium.PolygonGeometry} polygonGeometryInstance - The polygon geometry instance.
- * @param {Cesium.Color} color - The color of the polygon.
- * @param {Cesium.Primitive} Primitive - The Cesium primitive.
- * @returns {Cesium.Primitive} - The polygon primitive.
- */
-export function createPolygonPrimitive(polygonGeometryInstance, color = Cesium.Color.GREEN.withAlpha(0.8), Primitive) {
+
+    // Create the polygon primitive
     const material = new Cesium.Material.fromType('Color', { color: color });
     const appearance = new Cesium.EllipsoidSurfaceAppearance({ material: material });
 
-    return new Primitive({
-        geometryInstances: polygonGeometryInstance,
+    const polygonPrimitive = new Primitive({
+        geometryInstances: geometryInstance,
         appearance: appearance,
         depthFailAppearance: appearance,
         asynchronous: false,
         releaseGeometryInstances: false
     });
+
+    // set custom properties to the polygon primitive
+    polygonPrimitive.id = generateId(convertedCoordinates, modeString);
+    polygonPrimitive.positions = convertedCoordinates;
+
+    return polygonPrimitive;
 }
+
 /**
- * Create a polygon outline geometry instance.
- * @param {Cesium.Cartsian3[]} coordinateArray - the array of cartesian3 coordinates of the polygon
- * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
- * @param {Cesium.Color} color - the color of the polygon outline 
- * @returns {Cesium.GeometryInstance} - The geometry instance of the polygon outline.
+ * Create a polygon outline primitive.
+ * @param {Array} coordinateArray - An array of coordinates.
+ * @param {string} modeString - The mode string used for generating the ID.
+ * @param {Cesium.Color} [color=Cesium.Color.YELLOW] - The color of the polygon outline.
+ * @param {Cesium.Primitive} Primitive - The Cesium primitive.
+ * @returns {Cesium.Primitive|null} - The polygon outline primitive or null if input is invalid.
  */
-export function createPolygonOutlineGeometryInstance(coordinateArray, mode, color = Cesium.Color.YELLOW) {
+export function createPolygonOutlinePrimitive(coordinateArray, modeString, color = Cesium.Color.YELLOW, Primitive) {
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) return null;
 
     const convertedCoordinates = coordinateArray.map(convertToCartesian3);
 
-    return new Cesium.GeometryInstance({
+    // create a polygon outline geometry instance
+    const geometryInstance = new Cesium.GeometryInstance({
         geometry: new Cesium.PolygonOutlineGeometry({
             polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
             perPositionHeight: true
         }),
-        id: `${generateId(coordinateArray, mode)}`,
+        id: `${generateId(coordinateArray, modeString)}`,
         attributes: {
             color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
             depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(color)
         }
     });
-}
-/**
- * Create a polygon outline primitive.
- * @param {Cesium.OutlineGeometryInstance} outlineGeometryInstance - the outline geometry instance
- * @param {Cesium.Primitive} Primitive - the cesium primitive
- * @returns {Cesium.Primitive} - the polygon outline primitive
- */
-export function createPolygonOutlinePrimitive(outlineGeometryInstance, Primitive) {
+
+    // create a polygon outline primitive
     const appearance = new Cesium.PerInstanceColorAppearance({ flat: true, translucent: false });
 
-    return new Primitive({
-        geometryInstances: outlineGeometryInstance,
+    const polygonOutlinePrimitive = new Primitive({
+        geometryInstances: geometryInstance,
         appearance: appearance,
         depthFailAppearance: appearance,
         asynchronous: false,
         releaseGeometryInstances: false
     });
+
+    // set custom properties to the polygon outline primitive
+    polygonOutlinePrimitive.id = generateId(convertedCoordinates, modeString);
+    polygonOutlinePrimitive.positions = convertedCoordinates;
+
+    return polygonOutlinePrimitive;
 }
 
 /**
@@ -718,7 +657,7 @@ export function computeDetailedPickPositions(startPosition, endPosition, scene, 
     //         surfaceHeight
     //     )
     // });
-    // repick the position by convert back to window position to repick the carteisan, drawbacks is the current camera must see the whole target. 
+    // repick the position by convert back to window position to repick the cartesian, drawbacks is the current camera must see the whole target. 
     // const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
     //     const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
     //     if (windowPosition) {
@@ -739,7 +678,7 @@ export function computeDetailedPickPositions(startPosition, endPosition, scene, 
  * Calculates the clamped distance between two points by interpolating and summing segment distances.
  * @param {Cesium.Cartesian3} pointA - The first Cartesian coordinate.
  * @param {Cesium.Cartesian3} pointB - The second Cartesian coordinate.
- * @param {Scene} scene - viwer.scene
+ * @param {Scene} scene - viewer.scene
  * @param {number} [interval=2] - The interval between interpolated points.
  * @returns {{distance: number, pickedCartesianGroup: Cesium.Cartesian3[]}} - An object containing:
  *  - `distance`: The total clamped distance between the two points.
@@ -811,16 +750,15 @@ export function getPrimitiveByPointPosition(position, startsWithMeasureMode, sce
 
     // get line primitives by position
     const linePrimitives = scene.primitives._primitives.filter(p =>
-        p.geometryInstances &&
-        p.geometryInstances.id &&
-        p.geometryInstances.id.includes(startsWithMeasureMode) &&
-        !p.geometryInstances.id.includes("moving") &&
-        p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, position))
+        (typeof p.id === "string") &&
+        p.id.includes(startsWithMeasureMode) &&
+        !p.id.includes("moving") &&
+        p.positions.some(cart => Cesium.Cartesian3.equals(cart, position))
     );
 
     // get label primitives by lines positions
     // it can only be 1 lines or 2 lines, each line has 2 positions [[1,2],[3,4]] | [[1,2]]
-    const linePositions = linePrimitives.map(p => p.geometryInstances.geometry._positions);
+    const linePositions = linePrimitives.map(p => p.positions);
     const midPoints = linePositions.map((positions) => Cesium.Cartesian3.midpoint(positions[0], positions[1], new Cesium.Cartesian3()));
     const labelPrimitives = midPoints.map(midPoint =>
         labelCollection._labels.find(l => l.id && l.id.startsWith(startsWithMeasureMode) &&
@@ -1202,3 +1140,137 @@ export function showCustomNotification(message, viewerContainer) {
 }
 
 
+/********************************************
+ * DEPRECATED FUNCTIONS, TO BE REMOVE LATER *
+ ********************************************/
+/**
+ * Deprecated function. Use createPolylinePrimitive instead.
+ * Create a line geometry instance.
+ * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
+ * @returns {Cesium.GeometryInstance} - The geometry instance of the line.
+ */
+export function createLineGeometryInstance(coordinateArray, mode) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return;
+
+    const convertedCoordinates = coordinateArray.map((pos) => convertToCartesian3(pos));
+
+    return new Cesium.GeometryInstance({
+        geometry: new Cesium.PolylineGeometry({
+            positions: convertedCoordinates,
+            width: 3,
+            vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
+        }),
+        id: generateId(convertedCoordinates, mode),
+    });
+}
+
+/**
+ * Deprecated function. Use createPolylinePrimitive instead.
+ * Create a line primitive.
+ * @param {Cesium.GeometryInstance} geometryInstance - line geometry instance
+ * @param {Cesium.Color} color - the color of the line
+ * @param {Cesium.Primitive} Primitive - the cesium primitive
+ * @returns {Cesium.Primitive} - the line primitive
+ */
+export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, Primitive) {
+    const material = new Cesium.Material.fromType('Color', { color: color });
+    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
+
+    return new Primitive({
+        geometryInstances: geometryInstance,
+        appearance: appearance,
+        depthFailAppearance: appearance,
+        asynchronous: false,
+        releaseGeometryInstances: false
+    });
+}
+
+/**
+ * Deprecated function. Use createGroundPolylinePrimitive instead.
+ * Create a clamped line geometry instance.
+ * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
+ * @returns {Cesium.GeometryInstance} - The geometry instance of the clamped line.
+ */
+export function createClampedLineGeometryInstance(coordinateArray, mode) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return null;
+
+    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
+
+    return new Cesium.GeometryInstance({
+        geometry: new Cesium.GroundPolylineGeometry({
+            positions: convertedCoordinates,
+            width: 3
+        }),
+        id: generateId(convertedCoordinates, mode),
+    });
+}
+
+/**
+ * Deprecated function. Use createGroundPolylinePrimitive instead.
+ * Create a clamped line primitive.
+ * @param {Cesium.GeometryInstance} geometryInstance - the geometry instance of the clamped line
+ * @param {Cesium.Color} color - the color of the line
+ * @param {Cesium.GroundPolylinePrimitive} GroundPolylinePrimitive - the cesium GroundPolylinePrimitive
+ * @returns {Cesium.GroundPolylinePrimitive} - the clamped line primitive
+ */
+export function createClampedLinePrimitive(geometryInstance, color = Cesium.Color.RED, GroundPolylinePrimitive) {
+    const material = new Cesium.Material.fromType('Color', { color: color });
+    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
+
+    return new GroundPolylinePrimitive({
+        geometryInstances: geometryInstance,
+        appearance: appearance,
+        asynchronous: true,
+        releaseGeometryInstances: false,
+    });
+}
+
+/**
+ * Deprecated function: use createPolygonPrimitive instead.
+ * Create a polygon geometry instance.
+ * @param {Cesium.Cartesian3[]} coordinateArray - the array of cartesian3 coordinates of the polygon
+ * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance" 
+ * @returns {Cesium.GeometryInstance} - The geometry instance of the polygon.
+ */
+export function createPolygonGeometryInstance(coordinateArray, mode) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) return null;
+
+    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
+
+    return new Cesium.GeometryInstance({
+        geometry: new Cesium.PolygonGeometry({
+            polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
+            perPositionHeight: true,
+            vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT
+        }),
+        id: generateId(convertedCoordinates, mode),
+    });
+}
+
+/**
+ * Deprecated function: use createPolygonPrimitive instead.
+ * Create a polygon outline geometry instance.
+ * @param {Cesium.Cartesian3[]} coordinateArray - the array of cartesian3 coordinates of the polygon
+ * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
+ * @param {Cesium.Color} color - the color of the polygon outline 
+ * @returns {Cesium.GeometryInstance} - The geometry instance of the polygon outline.
+ */
+export function createPolygonOutlineGeometryInstance(coordinateArray, mode, color = Cesium.Color.YELLOW) {
+    if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) return null;
+
+    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
+
+    return new Cesium.GeometryInstance({
+        geometry: new Cesium.PolygonOutlineGeometry({
+            polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
+            perPositionHeight: true
+        }),
+        id: `${generateId(coordinateArray, mode)}`,
+        attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
+            depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(color)
+        }
+    });
+}
