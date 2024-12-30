@@ -1,5 +1,13 @@
 import * as Cesium from 'cesium';
-import { positionKey, removeInputActions } from '../helper/helper';
+import {
+    positionKey,
+    removeInputActions,
+    calculateDistance,
+    formatDistance,
+    createLabelPrimitive,
+    generateId,
+    changeLineColor
+} from '../helper/helper';
 
 export default class MeasureModeBase {
     constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
@@ -54,7 +62,7 @@ export default class MeasureModeBase {
             selectedLine: null,     // Selected line primitive
             selectedLines: [],      // Array of selected line primitives
             addModeLine: null,      // Selected line primitive in add mode
-
+            chartHoveredPoint: null
         };
     }
 
@@ -117,6 +125,9 @@ export default class MeasureModeBase {
             movingLabels: [],
             draggingPoint: null,
             selectedLine: null,
+            selectedLines: [],
+            addModeLine: null,
+            chartHoveredPoint: null
         };
     }
 
@@ -135,6 +146,46 @@ export default class MeasureModeBase {
             this.labelCollection.remove(label)
         );
         this.interactivePrimitives.movingLabels.length = 0;
+    }
+
+    /**
+     * find the point, line, and label primitive by position
+     * @param {Cesium.Cartesian3} position - the position
+     * @param {String} startsWithMeasureMode - the mode string
+     * @returns {Cesium.PointPrimitive} pointPrimitive - The point primitive that matches the position.
+     * @returns {Cesium.Primitive[]} linePrimitives - The array of line primitives that match the position.
+     * @returns {Cesium.LabelPrimitive[]} labelPrimitives - The array of label primitives that match the position.
+     */
+    findPrimitiveByPosition(position, startsWithMeasureMode) {
+        // get point primitive by position
+        const pointPrimitive = this.pointCollection._pointPrimitives.find(p => p.id && p.id.startsWith(startsWithMeasureMode) &&
+            !p.id.includes("moving") &&
+            Cesium.Cartesian3.equals(p.position, position)
+        );
+
+        // get line primitives by position
+        const linePrimitives = this.viewer.scene.primitives._primitives.filter(p =>
+            p.id &&
+            p.id.includes(startsWithMeasureMode) &&
+            !p.id.includes("moving") &&
+            p.positions.some(cart => Cesium.Cartesian3.equals(cart, position))
+        );
+
+        // get label primitives by lines positions
+        // it can only be 1 lines or 2 lines, each line has 2 positions [[1,2],[3,4]] | [[1,2]]
+        const linePositions = linePrimitives.map(p => p.positions);
+        const midPoints = linePositions.map((positions) => Cesium.Cartesian3.midpoint(positions[0], positions[1], new Cesium.Cartesian3()));
+        const labelPrimitives = midPoints.map(midPoint =>
+            this.labelCollection._labels.find(l => l.id && l.id.startsWith(startsWithMeasureMode) &&
+                !l.id.includes("moving") &&
+                Cesium.Cartesian3.equals(l.position, midPoint)
+            )
+        ).filter(label => label !== undefined);
+
+        // Sort labelPrimitives by their text
+        labelPrimitives.sort((a, b) => a.text.toUpperCase().localeCompare(b.text.toUpperCase()));
+
+        return { pointPrimitive, linePrimitives, labelPrimitives };
     }
 
     /**
@@ -176,4 +227,145 @@ export default class MeasureModeBase {
         return Array.from(linePrimitives);
     }
 
+    /**
+    * Create or update the labels based on the group of data
+    * Intended to be used for all the multiple distance tools.
+    * @param {Object} group - The group of data for which labels are to be created or updated.
+    * @param {number} group.id - The unique identifier for the group.
+    * @param {Cesium.Cartesian3[]} group.coordinates - An array of Cartesian3 coordinates defining the points.
+    * @param {number} group.labelIndex - The index used for labeling purposes.    
+    * @param {String} modeString - the mode string
+    */
+    updateOrCreateLabels(group, modeString) {
+        const midPoints = group.coordinates.slice(0, -1).map((pos, i) =>
+            Cesium.Cartesian3.midpoint(pos, group.coordinates[i + 1], new Cesium.Cartesian3())
+        );
+        const labelPrimitives = this.labelCollection._labels.filter(
+            l => l.id && l.id.includes(`${modeString}_label`)
+        );
+
+        midPoints.forEach((midPoint, index) => {
+            let relativeLabelPrimitives = labelPrimitives.filter(l =>
+                Cesium.Cartesian3.equals(l.position, midPoint)
+            );
+
+            // Wrap the letter back to 'a' after 'z'
+            const currentLetter = String.fromCharCode(97 + index % 26); // 'a' to 'z' to 'a' to 'z'...
+
+            // Don't use getLabelProperties currentLetter in here as midPoint index is not the group coordinate index
+            const { labelNumberIndex } = this._getLabelProperties(
+                group.coordinates[index],
+                group
+            );
+            const distance = calculateDistance(
+                group.coordinates[index],
+                group.coordinates[index + 1],
+            );
+
+            const labelText = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
+
+            if (relativeLabelPrimitives.length > 0) {
+                // Update existing labels
+                relativeLabelPrimitives.forEach(label => {
+                    label.text = labelText;
+                    label.show = this.flags.isShowLabels;
+                    label.showBackground = this.flags.isShowLabels;
+                });
+            } else {
+                // Create new label
+                const newLabel = createLabelPrimitive(
+                    group.coordinates[index],
+                    group.coordinates[index + 1],
+                    distance
+                );
+                newLabel.text = labelText;
+                newLabel.show = this.flags.isShowLabels;
+                newLabel.showBackground = this.flags.isShowLabels;
+                newLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
+                newLabel.position = midPoint;
+                newLabel.id = generateId(midPoint, `${modeString}_label`);
+                this.labelCollection.add(newLabel);
+            }
+        });
+    }
+
+    /**
+     * Create or update the total distance label based on the group of data.
+     * Intended to be used for all the multiple distance tools
+     * @param {Object} group - The group of data for which labels are to be created or updated.
+     * @param {number} group.id - The unique identifier for the group.
+     * @param {Cesium.Cartesian3[]} group.coordinates - An array of Cartesian3 coordinates defining the points.
+     * @param {number} group.labelIndex - The index used for labeling purposes.
+     * @param {number} totalDistance - The total distance calculated from the group of points.
+     * @param {string} modeString - The mode string used to categorize and generate unique IDs for labels.
+     */
+    updateOrCreateTotalLabel(group, totalDistance, modeString) {
+        const currentPosition = group.coordinates[group.coordinates.length - 1];
+
+        let totalLabel = this.labelCollection._labels.find(
+            label =>
+                label.id &&
+                label.id.includes(`${modeString}_label_total`) &&
+                group.coordinates.some(pos => Cesium.Cartesian3.equals(label.position, pos))
+        );
+
+        if (!totalLabel) {
+            const label = createLabelPrimitive(
+                currentPosition,
+                currentPosition,
+                totalDistance
+            );
+            totalLabel = this.labelCollection.add(label);
+        }
+
+        // Update label properties for both new and existing labels
+        totalLabel.id = generateId(currentPosition, `${modeString}_label_total`);
+        totalLabel.show = this.flags.isShowLabels;
+        totalLabel.showBackground = this.flags.isShowLabels;
+        totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
+        totalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
+        totalLabel.position = currentPosition;
+
+        return totalLabel;
+    }
+
+    /**
+     * reset the highlighting feature
+     * @return {Object} - The object containing the resetted highlighting cesium primitives.
+     */
+    resetHighlighting() {
+        const { hoveredLine, addModeLine, selectedLines, hoveredPoint, hoveredLabel } = this.interactivePrimitives;
+        // when mouse move out of the line, reset the line color
+        // Reset hovered line if it's not the selected line
+        if (
+            hoveredLine &&
+            hoveredLine !== addModeLine   // don't change selected line color
+        ) {
+            let colorToSet;
+            if (selectedLines.includes(hoveredLine)) {
+                colorToSet = this.stateManager.getColorState("select");
+            } else {
+                colorToSet = this.stateManager.getColorState("default");
+            }
+
+            if (!colorToSet) console.error('color is not defined');
+
+            changeLineColor(hoveredLine, colorToSet);
+            this.interactivePrimitives.hoveredLine = null;
+        }
+
+        // Reset hover point
+        if (hoveredPoint) {
+            hoveredPoint.outlineColor = Cesium.Color.RED;
+            hoveredPoint.outlineWidth = 0;
+            this.interactivePrimitives.hoveredPoint = null;
+        }
+        // Reset hover label
+        if (hoveredLabel) {
+            hoveredLabel.fillColor = Cesium.Color.WHITE;
+            this.interactivePrimitives.hoveredLabel = null;
+        }
+
+        return { hoveredLine, addModeLine, selectedLines, hoveredPoint, hoveredLabel };
+    }
 }

@@ -1,16 +1,14 @@
 import * as Cesium from "cesium";
 import {
     convertToCartesian3,
-    removeInputActions,
     editableLabel,
     createPointPrimitive,
     generateId,
-    createLinePrimitive,
-    createLineGeometryInstance,
     createLabelPrimitive,
     formatDistance,
     getPickedObjectType,
     getPrimitiveByPointPosition,
+    createPolylinePrimitive,
 } from "../helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
@@ -89,19 +87,17 @@ class Height extends MeasureModeBase {
                         this.coords.groups.push([...this.coords.cache]);
 
                         // create top and bottom points primitives
-                        const topPointPrimitive = createPointPrimitive(topCartesian, Cesium.Color.RED);
-                        topPointPrimitive.id = generateId(topCartesian, "height_point_top");
+                        const topPointPrimitive = createPointPrimitive(topCartesian, Cesium.Color.RED, "height_point_top");
                         this.pointCollection.add(topPointPrimitive);
 
-                        const bottomPointPrimitive = createPointPrimitive(bottomCartesian, Cesium.Color.RED);
-                        bottomPointPrimitive.id = generateId(bottomCartesian, "height_point_bottom");
+                        const bottomPointPrimitive = createPointPrimitive(bottomCartesian, Cesium.Color.RED, "height_point_bottom");
                         this.pointCollection.add(bottomPointPrimitive);
 
                         // create line primitive
                         if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
                         this.interactivePrimitives.movingPolyline = null;
-                        const lineGeometryInstance = createLineGeometryInstance([topCartesian, bottomCartesian], "height_line");
-                        const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+                        const linePrimitive = createPolylinePrimitive([topCartesian, bottomCartesian], "height_line", 3, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+
                         this.viewer.scene.primitives.add(linePrimitive);
 
                         // create label primitive
@@ -141,15 +137,14 @@ class Height extends MeasureModeBase {
             const [_, groundCartesian] = this.getGroundPosition(this.coordinate)
             this.coords.cache = [this.coordinate, groundCartesian];
 
-            // create or update points primitiives
+            // create or update points primitives
             this.coords.cache.forEach((cart, index) => {
                 if (this.interactivePrimitives.movingPoints.length === 2) { // update moving point primitive, if existed
                     this.interactivePrimitives.movingPoints[index].show = true;
                     this.interactivePrimitives.movingPoints[index].position = cart;
                     this.interactivePrimitives.movingPoints[index].id = generateId(cart, "height_point_moving");
                 } else {   // create moving point primitive, if not existed
-                    const pointPrimitive = createPointPrimitive(cart, Cesium.Color.RED);
-                    pointPrimitive.id = generateId(cart, `height_point_moving`);
+                    const pointPrimitive = createPointPrimitive(cart, Cesium.Color.RED, "height_point_moving");
                     const point = this.pointCollection.add(pointPrimitive);
                     this.interactivePrimitives.movingPoints.push(point);
                 }
@@ -159,8 +154,7 @@ class Height extends MeasureModeBase {
             if (this.interactivePrimitives.movingPolyline) {
                 this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
             }
-            const lineGeometryInstance = createLineGeometryInstance(this.coords.cache, "height_line_moving");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            const linePrimitive = createPolylinePrimitive(this.coords.cache, "height_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(linePrimitive);
 
             // create or update label primitive
@@ -311,8 +305,7 @@ class Height extends MeasureModeBase {
                     this.interactivePrimitives.dragPoints[index].position = cart;
                     this.interactivePrimitives.dragPoints[index].id = generateId(cart, "height_point_moving");
                 } else {
-                    const pointPrimitive = createPointPrimitive(cart, Cesium.Color.RED);
-                    pointPrimitive.id = generateId(cart, "height_point_moving");
+                    const pointPrimitive = createPointPrimitive(cart, Cesium.Color.RED, "height_point_moving");
                     const point = this.pointCollection.add(pointPrimitive);
                     this.interactivePrimitives.dragPoints.push(point);
                 }
@@ -320,8 +313,7 @@ class Height extends MeasureModeBase {
 
             // update moving line primitive by remove the old one and create a new one            
             if (this.interactivePrimitives.dragPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.dragPolyline);
-            const lineGeometryInstance = createLineGeometryInstance(newDragPositions, "height_line_moving");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            const linePrimitive = createPolylinePrimitive(newDragPositions, "height_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.interactivePrimitives.dragPolyline = this.viewer.scene.primitives.add(linePrimitive);
 
             // create or update moving label primitive
@@ -381,8 +373,7 @@ class Height extends MeasureModeBase {
             }
 
             // create new line primitive
-            const lineGeometryInstance = createLineGeometryInstance([cartesian, groundCartesian], "height_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+            const linePrimitive = createPolylinePrimitive([cartesian, groundCartesian], "height_line", 3, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(linePrimitive);
 
             // update label primitive

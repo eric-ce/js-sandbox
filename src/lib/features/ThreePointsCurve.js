@@ -1,15 +1,13 @@
 import * as Cesium from "cesium";
 import {
-    removeInputActions,
     editableLabel,
     updatePointerOverlay,
-    createLineGeometryInstance,
-    createLinePrimitive,
     createPointPrimitive,
     generateId,
     createLabelPrimitive,
     formatDistance,
     getPickedObjectType,
+    createPolylinePrimitive,
 } from "../helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
@@ -115,8 +113,7 @@ class ThreePointsCurve extends MeasureModeBase {
         // check if the current position is very close to coordinate in groups, if yes then don't create new point
         const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
         if (!isNearPoint) {
-            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            point.id = generateId(this.coordinate, "curve_point_pending");
+            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED, "curve_point_pending");
             this.pointCollection.add(point);
             // update coordinate data cache
             this.coords.cache.push(this.coordinate);
@@ -150,9 +147,9 @@ class ThreePointsCurve extends MeasureModeBase {
             // create curve line primitive
             if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
             this.interactivePrimitives.movingPolyline = null;
-            const lineGeometryInstance = createLineGeometryInstance(curvePoints, "curve_line");
-            lineGeometryInstance.id = generateId([start, middle, end], "curve_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+            const linePrimitive = createPolylinePrimitive(curvePoints, "curve_line", 3, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+            linePrimitive.id = generateId([start, middle, end], "curve_line");
+            linePrimitive.positions = [start, middle, end];
             this.viewer.scene.primitives.add(linePrimitive);
 
             // create label primitive
@@ -215,9 +212,9 @@ class ThreePointsCurve extends MeasureModeBase {
             // recreate line primitive
             if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
             // create new moving line primitive
-            const movingLineGeometryInstance = createLineGeometryInstance(curvePoints, "curve_line_moving");
-            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
-            movingLineGeometryInstance.id = generateId([start, middle, this.coordinate], "curve_line_moving");
+            const movingLinePrimitive = createPolylinePrimitive(curvePoints, "curve_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            movingLinePrimitive.id = generateId([start, middle, this.coordinate], "curve_line_moving");
+            movingLinePrimitive.positions = [start, middle, this.coordinate];
             this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // create moving label primitive
@@ -374,8 +371,7 @@ class ThreePointsCurve extends MeasureModeBase {
                 this.interactivePrimitives.dragPoint.position = cartesian;
                 this.interactivePrimitives.dragPoint.id = generateId(cartesian, "curve_point_moving");
             } else {      // if dragging point not existed, create a new point
-                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Cesium.Color.RED);
-                pointPrimitive.id = generateId(selectedPoint.primitive.position.clone(), "curve_point_moving");
+                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Cesium.Color.RED, "curve_point_moving");
                 this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 
@@ -397,9 +393,9 @@ class ThreePointsCurve extends MeasureModeBase {
 
             // recreate line primitive
             if (this.interactivePrimitives.dragPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.dragPolyline);
-            const lineGeometryInstance = createLineGeometryInstance(curvePoints, "curve_line_moving");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
-            lineGeometryInstance.id = generateId([start, middle, end], "curve_line_moving");
+            const linePrimitive = createPolylinePrimitive(curvePoints, "curve_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            linePrimitive.id = generateId([start, middle, end], "curve_line_moving");
+            linePrimitive.positions = [start, middle, end];
             this.interactivePrimitives.dragPolyline = this.viewer.scene.primitives.add(linePrimitive);
 
             // update label primitive
@@ -485,9 +481,9 @@ class ThreePointsCurve extends MeasureModeBase {
                 20
             );
             const curvePoints = this.createCurvePoints(group[0], group[1], group[2], numInterpolationPoints);
-            const lineGeometryInstance = createLineGeometryInstance(curvePoints, "curve_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
-            lineGeometryInstance.id = generateId(group, "curve_line");
+            const linePrimitive = createPolylinePrimitive(curvePoints, "curve_line", 3, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+            linePrimitive.id = generateId([group[0], group[1], group[2]], "curve_line");
+            linePrimitive.positions = [group[0], group[1], group[2]];
             this.viewer.scene.primitives.add(linePrimitive);
 
             // log the curve record

@@ -1,6 +1,5 @@
 import * as Cesium from "cesium";
 import {
-    removeInputActions,
     cartesian3ToCartographicDegrees,
     updatePointerOverlay,
     generateId,
@@ -100,8 +99,7 @@ class Points extends MeasureModeBase {
                 if (!Cesium.defined(cartesian)) return;
 
                 // create point primitive
-                const point = createPointPrimitive(cartesian, Cesium.Color.RED);
-                point.id = generateId(cartesian, "bookmark_point");
+                const point = createPointPrimitive(cartesian, Cesium.Color.RED, "bookmark_point");
                 this.pointCollection.add(point);
 
                 // update the coords cache
@@ -253,8 +251,7 @@ class Points extends MeasureModeBase {
                 this.interactivePrimitives.dragPoint.position = cartesian;
                 this.interactivePrimitives.dragPoint.id = generateId(cartesian, "bookmark_point_moving");
             } else {    // if dragging point not existed, create a new point
-                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Cesium.Color.RED);
-                pointPrimitive.id = generateId(selectedPoint.primitive.position.clone(), "bookmark_point_moving");
+                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Cesium.Color.RED, "bookmark_point_moving");
                 this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 

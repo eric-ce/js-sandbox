@@ -1,17 +1,15 @@
 import * as Cesium from "cesium";
 import {
     calculateDistance,
-    removeInputActions,
     editableLabel,
     updatePointerOverlay,
     createPointPrimitive,
-    createLinePrimitive,
-    createLineGeometryInstance,
     generateId,
     createLabelPrimitive,
     getPickedObjectType,
     formatDistance,
     getPrimitiveByPointPosition,
+    createPolylinePrimitive,
 } from "../helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
@@ -118,8 +116,7 @@ class TwoPointsDistance extends MeasureModeBase {
         if (!isNearPoint) {
             // create the first point
             this.coords.cache.push(this.coordinate);
-            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-            point.id = generateId(this.coordinate, "distance_point_pending");
+            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED, "distance_point_pending");
             this.pointCollection.add(point);
         }
 
@@ -128,15 +125,20 @@ class TwoPointsDistance extends MeasureModeBase {
             // update pending point id
             const pendingPoints = this.pointCollection._pointPrimitives.filter(p => p.id && p.id.includes("pending"));
             pendingPoints.forEach(p => { p.id = p.id.replace("_pending", "") });
+
             // create line primitive
-            if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-            const lineGeometryInstance = createLineGeometryInstance(this.coords.cache, "distance_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+            if (this.interactivePrimitives.movingPolyline) {
+                this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline)
+                this.interactivePrimitives.movingPolyline = null;
+            }
+            const linePrimitive = createPolylinePrimitive(this.coords.cache, "distance_line", 3, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive)
             this.viewer.scene.primitives.add(linePrimitive);
 
             // create label primitive
-            if (this.interactivePrimitives.movingLabel) this.labelCollection.remove(this.interactivePrimitives.movingLabel);
-            this.interactivePrimitives.movingLabel = null;
+            if (this.interactivePrimitives.movingLabel) {
+                this.labelCollection.remove(this.interactivePrimitives.movingLabel);
+                this.interactivePrimitives.movingLabel = null;
+            }
             const distance = calculateDistance(this.coords.cache[0], this.coords.cache[1]);
             const label = createLabelPrimitive(this.coords.cache[0], this.coords.cache[1], distance)
             label.id = generateId(this.coords.cache, "distance_label");
@@ -178,8 +180,7 @@ class TwoPointsDistance extends MeasureModeBase {
                 if (this.coords.cache.length > 0 && this.coords.cache.length < 2) {
                     // create line primitive
                     if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-                    const movingLineGeometryInstance = createLineGeometryInstance([this.coords.cache[0], this.coordinate], "distance_line_moving");
-                    const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+                    const movingLinePrimitive = createPolylinePrimitive([this.coords.cache[0], this.coordinate], "distance_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive)
                     this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(movingLinePrimitive);
 
                     // Create or update label primitive
@@ -312,8 +313,7 @@ class TwoPointsDistance extends MeasureModeBase {
                 this.interactivePrimitives.dragPoint.position = cartesian;
                 this.interactivePrimitives.dragPoint.id = generateId(cartesian, "distance_point_moving");
             } else {
-                const pointPrimitive = createPointPrimitive(cartesian, Cesium.Color.RED);
-                pointPrimitive.id = generateId(cartesian, "distance_point_moving");
+                const pointPrimitive = createPointPrimitive(cartesian, Cesium.Color.RED, "distance_point_moving");
                 this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 
@@ -323,8 +323,7 @@ class TwoPointsDistance extends MeasureModeBase {
 
             // update moving line primitive by remove the old one and create a new one
             if (this.interactivePrimitives.dragPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.dragPolyline);
-            const movingLineGeometryInstance = createLineGeometryInstance([otherPointCoords, this.coordinate], "distance_line_moving");
-            const movingLinePrimitive = createLinePrimitive(movingLineGeometryInstance, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+            const movingLinePrimitive = createPolylinePrimitive([otherPointCoords, this.coordinate], "distance_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive)
             this.interactivePrimitives.dragPolyline = this.viewer.scene.primitives.add(movingLinePrimitive);
 
             // create or update moving label primitive
@@ -375,8 +374,7 @@ class TwoPointsDistance extends MeasureModeBase {
             existedPoint.id = generateId(this.coordinate, "distance_point");
 
             // create new line primitive
-            const lineGeometryInstance = createLineGeometryInstance([otherPointCoords, this.coordinate], "distance_line");
-            const linePrimitive = createLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
+            const linePrimitive = createPolylinePrimitive([otherPointCoords, this.coordinate], "distance_line", 3, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive)
             this.viewer.scene.primitives.add(linePrimitive);
 
             // Find and update the existing label primitive

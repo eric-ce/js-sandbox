@@ -1,15 +1,12 @@
 import * as Cesium from "cesium";
 import {
-    removeInputActions,
     editableLabel,
     updatePointerOverlay,
     createLabelPrimitive,
     createPointPrimitive,
     generateId,
-    createPolygonGeometryInstance,
     createPolygonPrimitive,
     createPolygonOutlinePrimitive,
-    createPolygonOutlineGeometryInstance,
     formatArea,
     getPickedObjectType
 } from "../helper/helper.js";
@@ -100,8 +97,7 @@ class Polygon extends MeasureModeBase {
                     // check if the current position is very close to coordinate in groups, if yes then don't create new point
                     const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
                     if (!isNearPoint) {
-                        const point = createPointPrimitive(this.coordinate, color);
-                        point.id = generateId(this.coordinate, "polygon_point_pending");
+                        const point = createPointPrimitive(this.coordinate, color, "polygon_point_pending");
                         this.pointCollection.add(point);
 
                         // update coordinate data cache
@@ -118,13 +114,13 @@ class Polygon extends MeasureModeBase {
                         this.interactivePrimitives.movingPolygonOutline = null;
 
                         // create polygon primitive
-                        const polygonGeometry = createPolygonGeometryInstance(this.coords.cache, "polygon_pending");
-                        const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
+                        // const polygonGeometry = createPolygonGeometryInstance(this.coords.cache, "polygon_pending");
+                        const polygonPrimitive = createPolygonPrimitive(this.coords.cache, "polygon_pending", Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
                         this.interactivePrimitives.movingPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
 
                         // create polygon outline primitive
-                        const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.cache, "polygon_outline_pending");
-                        const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
+                        // const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.cache, "polygon_outline_pending");
+                        const polygonOutlinePrimitive = createPolygonOutlinePrimitive(this.coords.cache, "polygon_outline_pending", Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
                         this.interactivePrimitives.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
                     }
                 }
@@ -154,8 +150,7 @@ class Polygon extends MeasureModeBase {
         switch (true) {
             case isMeasuring:
                 if (this.interactivePrimitives.movingPoint) this.pointCollection.remove(this.interactivePrimitives.movingPoint);
-                const movingPoint = createPointPrimitive(cartesian, Cesium.Color.RED);
-                movingPoint.id = generateId(cartesian, "polygon_moving_point");
+                const movingPoint = createPointPrimitive(cartesian, Cesium.Color.RED, "polygon_moving_point");
                 this.interactivePrimitives.movingPoint = this.pointCollection.add(movingPoint);
 
                 // remove and create the polygon primitive
@@ -168,13 +163,13 @@ class Polygon extends MeasureModeBase {
                 const movingDataCache = [...this.coords.cache, cartesian];
 
                 // create polygon primitive
-                const polygonGeometry = createPolygonGeometryInstance(movingDataCache, "polygon_moving");
-                const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
+                // const polygonGeometry = createPolygonGeometryInstance(movingDataCache, "polygon_moving");
+                const polygonPrimitive = createPolygonPrimitive(movingDataCache, "polygon_moving", Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
                 this.interactivePrimitives.movingPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
 
                 // create polygon outline primitive
-                const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(movingDataCache, "polygon_outline_moving");
-                const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
+                // const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(movingDataCache, "polygon_outline_moving");
+                const polygonOutlinePrimitive = createPolygonOutlinePrimitive(movingDataCache, "polygon_outline_moving", Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
                 this.interactivePrimitives.movingPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
                 // create label primitive
@@ -282,21 +277,20 @@ class Polygon extends MeasureModeBase {
             if (!isPoint) {
                 // create point
                 const color = Cesium.Color.fromRandom({ alpha: 1.0 });
-                const point = createPointPrimitive(this.coordinate, color);
-                point.id = generateId(this.coordinate, "polygon_point");
+                const point = createPointPrimitive(this.coordinate, color, "polygon_point");
                 this.pointCollection.add(point);
 
                 // update coordinate data cache
                 this.coords.cache.push(this.coordinate);
 
                 // create polygon 
-                const polygonGeometry = createPolygonGeometryInstance(this.coords.cache, "polygon");
-                const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
+                // const polygonGeometry = createPolygonGeometryInstance(this.coords.cache, "polygon");
+                const polygonPrimitive = createPolygonPrimitive(this.coords.cache, "polygon", Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
                 this.viewer.scene.primitives.add(polygonPrimitive);
 
                 // create polygon outline 
-                const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.cache, "polygon_outline");
-                const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
+                // const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.cache, "polygon_outline");
+                const polygonOutlinePrimitive = createPolygonOutlinePrimitive(this.coords.cache, "polygon_outline", Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
                 this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
                 // create label primitive
@@ -406,8 +400,7 @@ class Polygon extends MeasureModeBase {
                 this.interactivePrimitives.dragPoint.id = generateId(cartesian, "polygon_point_moving");
             } else {      // if dragging point not existed, create a new point
                 const color = Cesium.Color.fromRandom({ alpha: 1.0 });
-                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), color);
-                pointPrimitive.id = generateId(selectedPoint.primitive.position.clone(), "polygon_point_moving");
+                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), color, "polygon_point_moving");
                 this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 
@@ -428,13 +421,13 @@ class Polygon extends MeasureModeBase {
 
 
             // create polygon primitive
-            const polygonGeometry = createPolygonGeometryInstance(dragDataCache, "polygon_moving");
-            const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
+            // const polygonGeometry = createPolygonGeometryInstance(dragDataCache, "polygon_moving");
+            const polygonPrimitive = createPolygonPrimitive(dragDataCache, "polygon_moving", Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
             this.interactivePrimitives.dragPolygon = this.viewer.scene.primitives.add(polygonPrimitive);
 
             // create polygon outline primitive
-            const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(dragDataCache, "polygon_outline_moving");
-            const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
+            // const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(dragDataCache, "polygon_outline_moving");
+            const polygonOutlinePrimitive = createPolygonOutlinePrimitive(dragDataCache, "polygon_outline_moving", Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.interactivePrimitives.dragPolygonOutline = this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // create or update drag label primitive
@@ -511,12 +504,12 @@ class Polygon extends MeasureModeBase {
             }
 
             // create polygon primitive
-            const polygonGeometry = createPolygonGeometryInstance(this.coords.groups[groupIndex], "polygon");
-            const polygonPrimitive = createPolygonPrimitive(polygonGeometry, Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
+            // const polygonGeometry = createPolygonGeometryInstance(this.coords.groups[groupIndex], "polygon");
+            const polygonPrimitive = createPolygonPrimitive(this.coords.groups[groupIndex], "polygon", Cesium.Color.GREEN.withAlpha(0.8), this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(polygonPrimitive);
             // create polygon outline primitive
-            const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.groups[groupIndex], "polygon_outline");
-            const polygonOutlinePrimitive = createPolygonOutlinePrimitive(polygonOutlineGeometry, this.cesiumPkg.Primitive);
+            // const polygonOutlineGeometry = createPolygonOutlineGeometryInstance(this.coords.groups[groupIndex], "polygon_outline");
+            const polygonOutlinePrimitive = createPolygonOutlinePrimitive(this.coords.groups[groupIndex], "polygon_outline", Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
             this.viewer.scene.primitives.add(polygonOutlinePrimitive);
 
             // update log records

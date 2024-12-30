@@ -1,5 +1,9 @@
 import * as Cesium from "cesium";
-import { changeLineColor, getPickedObjectType, removeInputActions, resetLineColor, updatePointerOverlay } from "../helper/helper.js";
+import {
+    changeLineColor,
+    resetLineColor,
+    updatePointerOverlay
+} from "../helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
 class Picker extends MeasureModeBase {

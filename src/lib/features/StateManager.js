@@ -33,6 +33,7 @@ export class StateManager {
                 hover: Cesium.Color.KHAKI,
                 select: Cesium.Color.BLUE,
                 default: Cesium.Color.YELLOWGREEN,
+                line: Cesium.Color.YELLOWGREEN,
                 submitted: Cesium.Color.DARKGREEN,
                 add: Cesium.Color.YELLOW,
                 move: Cesium.Color.YELLOW,
