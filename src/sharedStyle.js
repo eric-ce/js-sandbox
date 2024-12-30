@@ -74,6 +74,7 @@ sharedStyleSheet.replaceSync(`
         left: 10rem; 
         display: flex;
         flex-direction: column-reverse;
+        height: fit-content;
     }
     .fly-path-container, 
     .kml-container, 
