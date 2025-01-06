@@ -164,8 +164,9 @@ async function removeActionByPoint(pointPrimitive) {
                 if (isLineSubmittedBefore) {
                     const payload = {
                         trailId: group.trailId,
-                        coordinates: "",
+                        coordinates: [],
                         comp_length: 0.0,
+                        email: this.app?.currentUser?.sessions?.navigator?.userId || "",
                     }
                     try {
                         // Submit the removal action and handle the response
@@ -255,8 +256,9 @@ async function removeLineSetByPrimitive(primitive, primitiveType) {
     if (isLineSubmittedBefore) {
         const payload = {
             trackId: group.trailId, // Associate with the correct trail ID
-            content: "",
+            content: [],
             comp_length: 0.0,
+            email: this.app?.currentUser?.sessions?.navigator?.userId || "",
         };
 
         try {

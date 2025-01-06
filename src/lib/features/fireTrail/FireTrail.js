@@ -201,12 +201,6 @@ export class FireTrail extends HTMLElement {
         // apply shared style
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
-        // setup label button and submit buttons
-        this.setUpButtons();
-
-        // set the pointer overlay
-        this.pointerOverlay = this.stateManager.getOverlayState("pointer");
-
         // if screenSpaceEventHandler existed use it, if not create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;
@@ -214,7 +208,11 @@ export class FireTrail extends HTMLElement {
             this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
 
-        this.setupInputActions();
+        // setup label button and submit buttons
+        this.setUpButtons();
+
+        // set the pointer overlay
+        this.pointerOverlay = this.stateManager.getOverlayState("pointer");
     }
 
     /**
@@ -286,26 +284,26 @@ export class FireTrail extends HTMLElement {
             const group = this.coords.groups.find(group =>
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart))
             );
-            if (group) {
-                // reset line color 
-                const resetLinesColor = (lines) => {
-                    lines.forEach(line => {
-                        if (!line.isSubmitted) {    // don't change submitted line color
-                            this.changeLinePrimitiveColor(line, 'default');
-                        }
-                    });
-                }
-                resetLinesColor(this.interactivePrimitives.selectedLines);
+            if (!group) return;
 
-                // highlight the drag lines as selected lines
-                const lines = this.findLinesByPositions(group.coordinates);
-                this.interactivePrimitives.selectedLines = lines;
+            // reset line color 
+            const resetLinesColor = (lines) => {
                 lines.forEach(line => {
                     if (!line.isSubmitted) {    // don't change submitted line color
-                        this.changeLinePrimitiveColor(line, 'select');
+                        this.changeLinePrimitiveColor(line, 'default');
                     }
                 });
             }
+            resetLinesColor(this.interactivePrimitives.selectedLines);
+
+            // highlight the drag lines as selected lines
+            const lines = this.findLinesByPositions(group.coordinates);
+            this.interactivePrimitives.selectedLines = lines;
+            lines.forEach(line => {
+                if (!line.isSubmitted) {    // don't change submitted line color
+                    this.changeLinePrimitiveColor(line, 'select');
+                }
+            });
 
             // set flags to prevent other actions
             if (this.flags.isAddMode) {
@@ -365,7 +363,6 @@ export class FireTrail extends HTMLElement {
             const group = this.coords.groups.find(group =>
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart))
             );
-
             if (!group) return; // Error handling: no group found
 
             // Updated call to findNeighbourPosition
@@ -428,6 +425,7 @@ export class FireTrail extends HTMLElement {
             const group = this.coords.groups.find(group =>
                 group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart))
             );
+            if (!group) return; // Error handling: no group found
 
             // Updated call to findNeighbourPosition
             const neighbourPositions = this.findNeighbourPosition(this.coords.dragStart, group);
@@ -637,6 +635,7 @@ export class FireTrail extends HTMLElement {
         this.updateButtonOverlay(this.buttons.labelButton, "toggle label on or off");
         this.updateButtonOverlay(this.buttons.submitButton, "submit the current annotation");
         this.updateButtonOverlay(this.buttons.fireTrailButton, "toggle fire trail annotation mode");
+
         // Function to toggle visibility of label and submit buttons
         const toggleButtonVisibility = () => {
             const isActive = this.buttons.fireTrailButton.classList.contains('active');
@@ -783,6 +782,7 @@ export class FireTrail extends HTMLElement {
             trackId: groupToSubmit.trailId,
             content: JSON.stringify(cartographicDegreesPos),
             comp_length: totalDistance,
+            email: this.app?.currentUser?.sessions?.navigator?.userId || "",
         };
         console.log("🚀  payload:", payload);
 

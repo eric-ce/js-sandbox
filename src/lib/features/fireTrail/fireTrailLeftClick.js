@@ -444,9 +444,12 @@ async function selectFireTrail(primitive) {
             );
 
             if (!group) {
+                // Reuse ID from layer line if it's a valid number, otherwise generate a new one
+                const trailId = Number(primitive?.feature?.id) || generateIdByTimestamp();
+
                 // Create a new group if none exists
                 const newGroup = {
-                    trailId: generateIdByTimestamp(),
+                    trailId,
                     coordinates: [],
                     labelNumberIndex: this.coords.groupCounter, // Unique index for labeling
                 };
