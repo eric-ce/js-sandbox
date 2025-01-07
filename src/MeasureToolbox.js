@@ -100,11 +100,11 @@ export class MeasureToolbox extends HTMLElement {
         }
 
         // Remove Cesium primitives
-        if (this.pointCollection) {     // point collection is the annotate point collection, remove called if create it agian will throw destroy error 
+        if (this.pointCollection) {     // point collection is the annotate point collection, remove called if create it again will throw destroy error 
             this.viewer.scene.primitives.remove(this.pointCollection);
             this.pointCollection = null;
         }
-        if (this.labelCollection) {     // label collection is the annotate label collection, remove called if create it agian will throw destroy error 
+        if (this.labelCollection) {     // label collection is the annotate label collection, remove called if create it again will throw destroy error 
             this.viewer.scene.primitives.remove(this.labelCollection);
             this.labelCollection = null;
         }
@@ -791,8 +791,12 @@ export class MeasureToolbox extends HTMLElement {
         };
 
         // Setup the toggle button for the helpBox
-        const toggleButton = this.setupMessageBoxToggleButton(helpBox, helpBoxIcon, updateHelpBoxPosition, "helpBox");
-        helpBox.appendChild(toggleButton);
+        const toggleHelpBoxButton = this.stateManager.getButtonState("toggleHelpBoxButton");
+        if (!toggleHelpBoxButton) {
+            const toggleButton = this.setupMessageBoxToggleButton(helpBox, helpBoxIcon, updateHelpBoxPosition, "helpBox");
+            this.stateManager.setButtonState("toggleHelpBoxButton", toggleButton);
+            helpBox.appendChild(toggleButton);
+        }
 
         // Make the helpBox draggable within the viewer container
         makeDraggable(helpBox, this.viewer.container, updateHelpBoxPosition);
@@ -838,8 +842,12 @@ export class MeasureToolbox extends HTMLElement {
         };
 
         // Setup the toggle button for the logBox
-        const toggleButton = this.setupMessageBoxToggleButton(logBox, logBoxIcon, updateLogBoxPosition, "logBox");
-        logBox.appendChild(toggleButton);
+        const toggleLogBoxButton = this.stateManager.getButtonState("toggleLogBoxButton");
+        if (!toggleLogBoxButton) {
+            const toggleButton = this.setupMessageBoxToggleButton(logBox, logBoxIcon, updateLogBoxPosition, "logBox");
+            logBox.appendChild(toggleButton);
+            this.stateManager.setButtonState("toggleLogBoxButton", toggleButton);
+        }
 
         // Make logBox draggable
         makeDraggable(logBox, this.viewer.container, updateLogBoxPosition);
@@ -1059,6 +1067,8 @@ export class MeasureToolbox extends HTMLElement {
         fireTrail.cesiumPkg = this.cesiumPkg;
         fireTrail.logRecordsCallback = this.updateRecords.bind(this, "fire-trail");
         fireTrail.setupLogBox = this.setupLogBox.bind(this);
+        fireTrail.setupHelpBox = this.setupHelpBox.bind(this);
+        fireTrail.updateHelpBox = this.updateHelpBox.bind(this);
         fireTrail.cesiumStyle = this.cesiumStyle;
         // append the fire trail to the measure toolbox
         return this.shadowRoot.appendChild(fireTrail);

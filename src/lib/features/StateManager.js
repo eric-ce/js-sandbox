@@ -9,6 +9,8 @@ export class StateManager {
                 clearButton: null,
                 activeTool: null,
                 measureModes: [],
+                toggleHelpBoxButton: null,
+                toggleLogBoxButton: null,
             },
             flags: {
                 isMeasurementComplete: false,

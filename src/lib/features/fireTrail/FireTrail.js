@@ -34,13 +34,19 @@ export class FireTrail extends HTMLElement {
         this._cesiumPkg = null;
         this._app = null;
 
-        this._updateRecords = null;
-
         this._cesiumPkg = null;
 
         this._cesiumStyle = null;
 
         this.pointerOverlay = null;
+
+        // helpBox
+        this._setupHelpBox = null;
+        this._updateHelpBox = null;
+
+        // logBox
+        this._setupLogBox = null;
+        this._updateRecords = null;
 
         this.coordinate = new Cesium.Cartesian3();
 
@@ -86,6 +92,7 @@ export class FireTrail extends HTMLElement {
             hoveredLine: null,      // Hovered line primitive
         };
 
+        // buttons for fire trail mode
         this.buttons = {
             fireTrailContainer: null,
             fireTrailButton: null,
@@ -93,6 +100,7 @@ export class FireTrail extends HTMLElement {
             submitButton: null,
         }
 
+        // color for cesium primitives
         this.stateColors = {
             hover: Cesium.Color.KHAKI,
             select: Cesium.Color.BLUE,
@@ -102,6 +110,7 @@ export class FireTrail extends HTMLElement {
             layerColor: null,
         }
 
+        // cesium handler action
         this.handleFireTrailLeftClick = handleFireTrailLeftClick.bind(this);
         this.handleFireTrailMouseMove = handleFireTrailMouseMove.bind(this);
         this.handleFireTrailDoubleClick = handleFireTrailDoubleClick.bind(this);
@@ -124,6 +133,7 @@ export class FireTrail extends HTMLElement {
         }
     }
 
+
     connectedCallback() {
         if (this.viewer) {
             this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
@@ -132,6 +142,7 @@ export class FireTrail extends HTMLElement {
             this.initialize();
         }
     }
+
 
     /*********************
      * GETTER AND SETTER *
@@ -145,12 +156,12 @@ export class FireTrail extends HTMLElement {
         return this._app
     }
 
-    set viewer(viewer) {
-        this._viewer = viewer;
-    }
-
     get viewer() {
         return this._viewer;
+    }
+
+    set viewer(viewer) {
+        this._viewer = viewer;
     }
 
     get stateManager() {
@@ -197,6 +208,34 @@ export class FireTrail extends HTMLElement {
         };
     }
 
+    get setupHelpBox() {
+        return this._setupHelpBox;
+    }
+
+    set setupHelpBox(callback) {
+        this._setupHelpBox = callback;
+    }
+
+    get updateHelpBox() {
+        return this._updateHelpBox;
+    }
+
+    set updateHelpBox(callback) {
+        this._updateHelpBox = callback;
+    }
+
+    get setupLogBox() {
+        return this._setupLogBox;
+    }
+
+    set setupLogBox(callback) {
+        this._setupLogBox = callback;
+    }
+
+
+    /***************
+     * MAIN METHOD *
+     ***************/
     initialize() {
         // apply shared style
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
@@ -215,6 +254,10 @@ export class FireTrail extends HTMLElement {
         this.pointerOverlay = this.stateManager.getOverlayState("pointer");
     }
 
+
+    /***************************************
+     * CESIUM FEATURES FOR FIRE TRAIL MODE *
+     ***************************************/
     /**
      * Sets up input actions for fire trail mode.
      */
@@ -618,7 +661,7 @@ export class FireTrail extends HTMLElement {
 
         // setup fire trail button
         const fireTrailImg = `<img src="${multiDClampedIcon}" alt="fire-trail" style="width: 30px; height: 30px;" aria-hidden="true">`
-        this.buttons.fireTrailButton = createButton(fireTrailImg, "fire-trail-button", this.handleFireTrailToggle.bind(this));
+        this.buttons.fireTrailButton = createButton(fireTrailImg, "fire-trail", this.handleFireTrailToggle.bind(this));
         this.fireTrailContainer.appendChild(this.buttons.fireTrailButton);
 
         // setup label button
@@ -673,7 +716,7 @@ export class FireTrail extends HTMLElement {
             this.flags.isActive = !this.flags.isActive;
         }
 
-        if (this.flags.isActive) {
+        if (this.flags.isActive) { // activate fire trail mode
             console.log("click")
             this.setupInputActions();
 
@@ -681,10 +724,18 @@ export class FireTrail extends HTMLElement {
             this.buttons.fireTrailButton.setAttribute("aria-pressed", "true");
 
             this.stateManager.setButtonState("activeButton", this.buttons.fireTrailButton);
-            // remove logBox to recreate it
+
+            // find and update help box
+            const helpBox = this.stateManager.getElementState("helpBox");
+            // if no help box then recreate it
+            if (!helpBox) this.setupHelpBox();
+            // update help box, if there is help box
+            this.updateHelpBox();
+
             const logBox = this.stateManager.getElementState("logBox");
+            // if no log box then recreate it
             if (!logBox) this.setupLogBox();
-        } else {
+        } else { // deactivate fire trail mode
             // remove existing input actions
             removeInputActions(this.handler);
             this.resetValue();
@@ -692,6 +743,14 @@ export class FireTrail extends HTMLElement {
 
             this.buttons.fireTrailButton.classList.remove("active");
             this.buttons.fireTrailButton.setAttribute("aria-pressed", "false");
+
+            // deactivate fireTrail then remove help box and help box toggle button
+            const helpBox = this.stateManager.getElementState("helpBox");
+            helpBox && helpBox.remove();
+            this.stateManager.setElementState("helpBox", null);
+            const toggleHelpBoxButton = this.stateManager.getButtonState("toggleHelpBoxButton");
+            toggleHelpBoxButton && toggleHelpBoxButton.remove();
+            this.stateManager.setButtonState("toggleHelpBoxButton", null);
         }
     }
 
