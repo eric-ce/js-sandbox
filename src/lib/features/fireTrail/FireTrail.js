@@ -85,7 +85,7 @@ export class FireTrail extends HTMLElement {
             dragPoint: null,        // Currently dragged point primitive
             dragPolylines: [],      // Array of dragging polylines
             dragLabels: [],         // Array of dragging labels
-            addModeLine: null,     // Selected line primitive
+            addModeLine: null,      // Selected line primitive in add mode
             selectedLines: [],      // Array of selected line primitives
             hoveredPoint: null,     // Hovered point primitive
             hoveredLabel: null,     // Hovered label primitive

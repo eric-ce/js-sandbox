@@ -59,7 +59,7 @@ class MultiDistance extends MeasureModeBase {
         this.interactivePrimitives = {
             movingPolylines: [],    // Array of moving polylines
             movingLabels: [],       // Array of moving labels
-            draggingPoint: null,    // Currently dragged point primitive
+            dragPoint: null,        // Currently dragged point primitive
             dragPolylines: [],      // Array of dragging polylines
             dragLabels: [],         // Array of dragging labels
             addModeLine: null,      // Selected line primitive in add mode
@@ -109,7 +109,14 @@ class MultiDistance extends MeasureModeBase {
                 break;
             case "line":
                 const linePrimitive = pickedObject.primitive;
-                this.selectLines(linePrimitive);
+
+                if (
+                    !this.flags.isAddMode &&  // not in add mode
+                    (this.coords.cache.length === 0 && !this.flags.isMeasurementComplete) ||  // measurement not started
+                    this.flags.isMeasurementComplete // not during measurement
+                ) {
+                    this.selectLines(linePrimitive);
+                }
                 break;
             case "other":
                 break;
@@ -301,7 +308,7 @@ class MultiDistance extends MeasureModeBase {
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
             // link both cache and groups to the same group
-            // when cache changed groups will be changed due to reference by address
+            // when cache changed groups will be changed due to `reference by address`
             const newGroup = {
                 id: generateIdByTimestamp(),
                 coordinates: [],
@@ -461,11 +468,7 @@ class MultiDistance extends MeasureModeBase {
         this.updateOrCreateTotalLabel(group, totalDistance, "multidistance");
 
         // update selected line color
-        const lines = this.findLinesByPositions(group.coordinates, "multidistance");
-        lines.forEach(line => {
-            changeLineColor(line, this.stateManager.getColorState("select"));
-        });
-        this.interactivePrimitives.selectedLines = lines;
+        this.updateSelectedLineColor(group);
 
         // Update log records
         this.updateMultiDistancesLogRecords(distances, totalDistance, group.coordinates);
@@ -800,7 +803,7 @@ class MultiDistance extends MeasureModeBase {
             // create or update dragging point primitive
             if (this.interactivePrimitives.dragPoint) {     // if dragging point existed, update the point
                 // highlight the point primitive
-                this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.YELLOW;
+                this.interactivePrimitives.dragPoint.outlineColor = this.stateManager.getColorState("move");
                 this.interactivePrimitives.dragPoint.outlineWidth = 2;
                 // update moving point primitive
                 this.interactivePrimitives.dragPoint.position = cartesian;
@@ -1033,13 +1036,10 @@ class MultiDistance extends MeasureModeBase {
         );
         if (!group) return;
 
-        const lines = this.findLinesByPositions(group.coordinates, "multidistance");
-        // highlight the selected lines
-        lines.forEach(line =>
-            changeLineColor(line, this.stateManager.getColorState("select"))
-        );
-        // set the selected lines to the current line set
-        this.interactivePrimitives.selectedLines = lines;
+        // update the selected lines to the selected line and update its highlight color
+        // const lines = this.findLinesByPositions(group.coordinates, "multidistance")
+        // this.interactivePrimitives.selectedLines = lines;
+        this.updateSelectedLineColor(group);
 
         // Change the color of the newly selected line to indicate it is being added
         changeLineColor(linePrimitive, this.stateManager.getColorState("add"));
@@ -1216,9 +1216,49 @@ class MultiDistance extends MeasureModeBase {
         };
     }
 
-    // TODO: remove line set by line primitive
     removeLineSetByPrimitive(linePrimitive) {
-        const linePostions = linePrimitive.positions.clone();
+        const primitivePosition = linePrimitive.positions[0];
+
+        // Find the index of the group that contains the primitive position
+        const groupIndex = this.coords.groups.findIndex(group =>
+            group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePosition))
+        );
+        if (groupIndex === -1) return; // Error handling: no group found
+
+        const group = this.coords.groups[groupIndex];
+
+        // Confirm removal with the user
+        if (!confirm(`Do you want to remove the ENTIRE fire trail ${group.trailId}?`)) return;
+
+        // Retrieve associated primitives for the group
+        const { pointPrimitives, linePrimitives, labelPrimitives } = this.findPrimitivesByPositions(group.coordinates, "multidistance");
+
+        // Reset color of previously selected lines
+        this.interactivePrimitives.selectedLines.forEach(line => changeLineColor(line, this.stateManager.getColorState("default")));
+
+        // Update selected lines to the current group's line primitives and update their colors
+        this.interactivePrimitives.selectedLines = linePrimitives;
+        this.updateSelectedLineColor(group);
+
+        // Remove point, line, and label primitives
+        pointPrimitives.forEach(p => this.pointCollection.remove(p));
+        linePrimitives.forEach(l => this.viewer.scene.primitives.remove(l));
+        labelPrimitives.forEach(l => this.labelCollection.remove(l));
+
+        // If in add mode, exit add mode and notify the user
+        if (this.flags.isAddMode) {
+            this.flags.isAddMode = false;
+            showCustomNotification("You have exited add line mode", this.viewer.container);
+        }
+
+        // Remove the group coordinates from the coords.groups array
+        group.coordinates = [];
+
+        // reset selected lines
+        this.interactivePrimitives.selectedLines = [];
+
+        // Log the removal of the trail
+        this.logRecordsCallback(`${group.id} Removed`);
     }
 
 
@@ -1249,26 +1289,29 @@ class MultiDistance extends MeasureModeBase {
     }
 
     /**
-     * Get the label text properties based on the position and group.
-     * @param {Cesium.Cartesian3} position - The current position.
-     * @param {Array} group - The group.
-     * @returns {{ currentLetter: String, labelNumberIndex: Number }} - The label text properties.
+     * look for line primitives by group positions, and update the selected line color
+     * @param {Cesium.Cartesian3[]} group 
+     * @returns {Cesium.Primitive[]} - the line primitives that match the group positions
      */
-    _getLabelProperties(position, group) {
-        // Find the index of the position in group
-        const positionIndex = group.coordinates.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
-        if (positionIndex === -1 || positionIndex === 0) return { currentLetter: "", labelNumberIndex: 0 }; // label exist when there is at least 2 position.
+    updateSelectedLineColor(group) {
+        const lines = this.findLinesByPositions(group.coordinates, "multidistance");
 
-        // Calculate label index
-        const labelIndex = positionIndex - 1;
-
-        // Map index to alphabet letters starting from 'a'
-        const currentLetter = String.fromCharCode(97 + (labelIndex % 26));
-
-        // Use labelNumberIndex from the group
-        const labelNumberIndex = group.labelNumberIndex;
-
-        return { currentLetter, labelNumberIndex };
+        // check if there is one line in the this.interactivePrimitives.selectedLines
+        let isLineSetSelected = false;
+        if (this.interactivePrimitives.selectedLines.length > 0) {
+            this.interactivePrimitives.selectedLines.forEach(line => {
+                if (lines.includes(line)) {
+                    isLineSetSelected = true;
+                }
+            });
+        }
+        if (isLineSetSelected) {
+            lines.forEach(line => {
+                changeLineColor(line, this.stateManager.getColorState("select"));
+            });
+            this.interactivePrimitives.selectedLines = lines;
+        }
+        return lines;
     }
 
     /**

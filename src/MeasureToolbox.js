@@ -12,9 +12,10 @@ import { Picker } from "./lib/features/Picker.js";
 import { FireTrail } from "./lib/features/fireTrail/FireTrail.js";
 import { FlyThrough } from "./lib/features/flyThrough/FlyThrough.js";
 import { StateManager } from "./lib/features/StateManager.js";
-import { removeInputActions, makeDraggable, createClampedLineGeometryInstance, createClampedLinePrimitive } from "./lib/helper/helper.js";
-import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon, recordIcon, playIcon, stopIcon } from './assets/icons.js';
+import { removeInputActions, makeDraggable, createGroundPolylinePrimitive } from "./lib/helper/helper.js";
+import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon } from './assets/icons.js';
 import { sharedStyleSheet } from './sharedStyle.js';
+
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
  * The toolbox offers functionalities such as point measurements, distance calculations,
@@ -147,9 +148,13 @@ export class MeasureToolbox extends HTMLElement {
         this.labelCollection = this.viewer.scene.primitives.add(labelCollection);
 
         // initiate clamped line due to the delay for the first clamped line creation
-        const lineGeometryInstance = createClampedLineGeometryInstance([Cesium.Cartesian3.fromDegrees(0, 0), Cesium.Cartesian3.fromDegrees(0, 0)], "line_initiate");
-        const linePrimitive = createClampedLinePrimitive(lineGeometryInstance, Cesium.Color.YELLOWGREEN, this.cesiumPkg.GroundPolylinePrimitive);
-        this.initialLine = this.viewer.scene.primitives.add(linePrimitive);
+        const clampedLine = createGroundPolylinePrimitive(
+            [Cesium.Cartesian3.fromDegrees(0, 0), Cesium.Cartesian3.fromDegrees(0, 0)],
+            "line_initiate",
+            Cesium.Color.YELLOWGREEN,
+            this.cesiumPkg.GroundPolylinePrimitive
+        );
+        this.initialLine = this.viewer.scene.primitives.add(clampedLine);
 
         // initialize all the measure modes, including its UI, and event listeners
         this.initializeMeasureModes();
@@ -381,7 +386,7 @@ export class MeasureToolbox extends HTMLElement {
             const activeTool = this.stateManager.getButtonState("activeTool");
 
             // check fireTrail mode to prevent switching/deactivation if there are unsubmitted lines
-            if (activeButton && activeButton.classList.contains("fire-trail-button")) {
+            if (activeButton && activeButton.classList.contains("fire-trail")) {
                 const fireTrailMode = this.shadowRoot.querySelector("fire-trail-mode");
                 const checkUnsubmittedLines = fireTrailMode.checkUnsubmittedLines();
                 if (checkUnsubmittedLines) {
@@ -473,19 +478,21 @@ export class MeasureToolbox extends HTMLElement {
         button.setAttribute("aria-pressed", "false");
 
         // remove moving or pending primitives
+        // remove moving or pending line primitives 
         this.viewer.scene.primitives._primitives.filter(p =>
-            p.geometryInstances &&
-            p.geometryInstances.id &&
-            p.geometryInstances.id.startsWith("annotate") &&
-            (p.geometryInstances.id.includes("moving") || p.geometryInstances.id.includes("pending") || p.geometryInstances.id.includes("line_initiate"))
+            typeof p.id === "string" &&
+            p.id.startsWith("annotate") &&
+            (p.id.includes("moving") || p.id.includes("pending") || p.id.includes("line_initiate"))
         ).forEach(p => { this.viewer.scene.primitives.remove(p) });
 
+        // remove moving or pending label primitives
         this.labelCollection._labels.filter(l =>
             l &&
             l.id &&
             (l.id.includes("moving") || l.id.includes("pending"))
         ).forEach(l => { this.labelCollection.remove(l) });
 
+        // remove moving or pending point primitives
         this.pointCollection._pointPrimitives.filter(p =>
             p &&
             p.id &&
@@ -522,30 +529,13 @@ export class MeasureToolbox extends HTMLElement {
         toolbar.appendChild(clearButton);
 
         this.stateManager.getButtonState("clearButton").addEventListener("click", () => {
-            // remove line primitives
-            const linePrimitives = [];
-            const lines1 = this.viewer.scene.primitives._primitives.filter(
+            // remove line primitives by id
+            this.viewer.scene.primitives._primitives.filter(
                 (p) =>
-                    p.geometryInstances &&
-                    p.geometryInstances.id &&
-                    p.geometryInstances.id.startsWith("annotate") &&
-                    p.geometryInstances.id.includes("line")
+                    p.id &&
+                    p.id.startsWith("annotate") &&
+                    (p.id.includes("line") || p.id.includes("polygon"))
             ).forEach((p) => this.viewer.scene.primitives.remove(p));
-            const lines2 = this.viewer.scene.primitives._primitives.filter(
-                (p) => p.id && p.id.startsWith("annotate") && p.id.includes("line")
-            ).forEach((p) => this.viewer.scene.primitives.remove(p));
-            linePrimitives.push(lines1, lines2);
-            linePrimitives.forEach((p) => this.viewer.scene.primitives.remove(p));
-
-            // remove polygon primitives
-            const polygonPrimitives = this.viewer.scene.primitives._primitives.filter(
-                (p) =>
-                    p.geometryInstances &&
-                    p.geometryInstances.id &&
-                    p.geometryInstances.id.startsWith("annotate") &&
-                    p.geometryInstances.id.includes("polygon")
-            );
-            polygonPrimitives.forEach((p) => this.viewer.scene.primitives.remove(p));
 
             // remove point primitives from point collections
             const pointCollections = this.viewer.scene.primitives._primitives.filter(
@@ -574,7 +564,7 @@ export class MeasureToolbox extends HTMLElement {
             );
             labelCollections &&
                 labelCollections.forEach((labelCollection) => {
-                    labelCollection.removeAll(); // moving label was not remove, because same label cannot recreate and hence cause destory error
+                    labelCollection.removeAll();    // moving label was not remove, because same label cannot recreate and hence cause destroy error
                 });
 
             // reset handler
@@ -586,12 +576,14 @@ export class MeasureToolbox extends HTMLElement {
             // clear helpBox
             const helpBox = this.stateManager.getElementState("helpBox");
             helpBox && helpBox.style.display === "none";
-            // clear logbox
+
+            // clear logBox
             const logBox = this.stateManager.getElementState("logBox");
             if (logBox) {
                 logBox.remove();
                 this.stateManager.setElementState("logBox", null);
             }
+
             // call reset value method in all measure modes
             this.stateManager.getButtonState("measureModes").forEach((mode) => {
                 mode?.resetValue();
