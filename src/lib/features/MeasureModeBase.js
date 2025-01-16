@@ -29,6 +29,7 @@ export default class MeasureModeBase {
         this.coords = {
             cache: [],
             groups: [],
+            groupCounter: 0,
             dragStart: null,
             dragStartToCanvas: null,
             dragStartTop: null,
@@ -93,11 +94,12 @@ export default class MeasureModeBase {
         const pointer = this.stateManager.getOverlayState("pointer");
         pointer && (pointer.style.display = "none");
 
-        this.flags = {};
+        // this.flags = {};
 
         this.coords = {
             cache: [],
-            groups: this.coords.groups, // Preserve the value of this.coords.groups
+            groups: this.coords.groups,             // Preserve the value of this.coords.groups
+            groupCounter: this.coords.groupCounter, // Preserve the value of this.coords.groupCounter
             dragStart: null,
             dragStartToCanvas: null,
             dragStartTop: null,
@@ -126,7 +128,7 @@ export default class MeasureModeBase {
             movingLabels: [],
             draggingPoint: null,
             selectedLine: null,
-            selectedLines: [],
+            selectedLines: this.interactivePrimitives.selectedLines, // Preserve the value of this.interactivePrimitives.selectedLines
             addModeLine: null,
             chartHoveredPoint: null
         };

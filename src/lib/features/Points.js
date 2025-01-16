@@ -1,4 +1,12 @@
-import * as Cesium from "cesium";
+// import * as Cesium from "cesium";
+import {
+    Cartesian3,
+    Cartesian2,
+    Color,
+    defined,
+    ScreenSpaceEventType,
+    SceneTransforms,
+} from "cesium";
 import {
     cartesian3ToCartographicDegrees,
     updatePointerOverlay,
@@ -82,11 +90,11 @@ class Points extends MeasureModeBase {
                     this.pointCollection.remove(primitiveToRemove);
 
                     // remove the label
-                    const labelToRemove = this.labelCollection._labels.find(label => Cesium.Cartesian3.equals(label.position, primitiveToRemove.position));
+                    const labelToRemove = this.labelCollection._labels.find(label => Cartesian3.equals(label.position, primitiveToRemove.position));
                     if (labelToRemove) this.labelCollection.remove(labelToRemove);
 
                     // remove the point position from cache
-                    const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, primitiveToRemove.position))
+                    const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, primitiveToRemove.position))
                     if (positionIndex !== -1) this.coords.groups.splice(positionIndex, 1);
 
                     // log the points records
@@ -96,17 +104,17 @@ class Points extends MeasureModeBase {
             default:
                 // use mouse move position to control only one pickPosition is used
                 const cartesian = this.coordinate;
-                if (!Cesium.defined(cartesian)) return;
+                if (!defined(cartesian)) return;
 
                 // create point primitive
-                const point = createPointPrimitive(cartesian, Cesium.Color.RED, "bookmark_point");
+                const point = createPointPrimitive(cartesian, Color.RED, "bookmark_point");
                 this.pointCollection.add(point);
 
                 // update the coords cache
                 this.coords.groups.push(cartesian);
 
                 // create label primitive
-                const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, cartesian));
+                const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, cartesian));
                 const labelString = `Point ${positionIndex + 1}`;
                 const label = createLabelPrimitive(cartesian, cartesian, labelString)
                 label.id = generateId(cartesian, "bookmark_label");
@@ -129,7 +137,7 @@ class Points extends MeasureModeBase {
     handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
-        if (!Cesium.defined(cartesian)) return;
+        if (!defined(cartesian)) return;
 
         this.coordinate = cartesian;
 
@@ -150,12 +158,12 @@ class Points extends MeasureModeBase {
         // reset highlighting
         const resetHighlighting = () => {
             if (this.interactivePrimitives.hoveredPoint) {
-                this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
+                this.interactivePrimitives.hoveredPoint.outlineColor = Color.RED;
                 this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
                 this.interactivePrimitives.hoveredPoint = null;
             }
             if (this.interactivePrimitives.hoveredLabel) {
-                this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
+                this.interactivePrimitives.hoveredLabel.fillColor = Color.WHITE;
                 this.interactivePrimitives.hoveredLabel = null;
             }
         }
@@ -200,7 +208,7 @@ class Points extends MeasureModeBase {
                 primitiveId.startsWith("annotate_bookmark_point") &&
                 !primitiveId.includes("moving");
         });
-        if (Cesium.defined(isPoint)) {
+        if (defined(isPoint)) {
             // disable camera movement
             this.viewer.scene.screenSpaceCameraController.enableInputs = false;
 
@@ -210,7 +218,7 @@ class Points extends MeasureModeBase {
             // set move event for dragging
             this.handler.setInputAction((movement) => {
                 this.handleDrag(movement, isPoint);
-            }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+            }, ScreenSpaceEventType.MOUSE_MOVE);
         }
 
     };
@@ -218,7 +226,7 @@ class Points extends MeasureModeBase {
     handleDrag(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
-        const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
+        const moveDistance = Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
         if (moveDistance > dragThreshold) {
             this.flags.isDragMode = true
         };
@@ -230,7 +238,7 @@ class Points extends MeasureModeBase {
                 l.id &&
                 l.id.startsWith("annotate_bookmark_label") &&
                 !l.id.includes("moving") &&
-                Cesium.Cartesian3.equals(l.position, this.coords.dragStart)
+                Cartesian3.equals(l.position, this.coords.dragStart)
             );
             if (existedLabel) existedLabel.show = false;
 
@@ -239,24 +247,24 @@ class Points extends MeasureModeBase {
             pointer.style.display = 'none';
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-            if (!Cesium.defined(cartesian)) return;
+            if (!defined(cartesian)) return;
             this.coordinate = cartesian;
 
             // create or update dragging point primitive
             if (this.interactivePrimitives.dragPoint) {     // if dragging point existed, update the point
                 // highlight the point primitive
-                this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.YELLOW;
+                this.interactivePrimitives.dragPoint.outlineColor = Color.YELLOW;
                 this.interactivePrimitives.dragPoint.outlineWidth = 2;
                 // update moving point primitive
                 this.interactivePrimitives.dragPoint.position = cartesian;
                 this.interactivePrimitives.dragPoint.id = generateId(cartesian, "bookmark_point_moving");
             } else {    // if dragging point not existed, create a new point
-                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Cesium.Color.RED, "bookmark_point_moving");
+                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Color.RED, "bookmark_point_moving");
                 this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 
             // create or update dragging label primitive
-            const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
+            const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, this.coords.dragStart));
 
             if (this.interactivePrimitives.dragLabel) {    // if dragging label existed, update the label
                 this.interactivePrimitives.dragLabel.id = generateId(cartesian, "bookmark_label_moving");
@@ -279,7 +287,7 @@ class Points extends MeasureModeBase {
         // update the drag primitive to the finish position;
         if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
             // reset dragging point style
-            this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.RED;
+            this.interactivePrimitives.dragPoint.outlineColor = Color.RED;
             this.interactivePrimitives.dragPoint.outlineWidth = 0;
 
             // remove the dragging point and label
@@ -292,7 +300,7 @@ class Points extends MeasureModeBase {
             const existedPoint = this.pointCollection._pointPrimitives.find(p =>
                 p.id &&
                 p.id.startsWith("annotate_bookmark_point") &&
-                Cesium.Cartesian3.equals(p.position, this.coords.dragStart)
+                Cartesian3.equals(p.position, this.coords.dragStart)
             );
             if (existedPoint) {
                 existedPoint.show = true;
@@ -304,7 +312,7 @@ class Points extends MeasureModeBase {
             const existedLabel = this.labelCollection._labels.find(l =>
                 l.id &&
                 l.id.startsWith("annotate_bookmark_label") &&
-                Cesium.Cartesian3.equals(l.position, this.coords.dragStart)
+                Cartesian3.equals(l.position, this.coords.dragStart)
             );
             if (existedLabel) {
                 existedLabel.show = true;
@@ -314,7 +322,7 @@ class Points extends MeasureModeBase {
             }
 
             // update the cache position
-            const positionIndex = this.coords.groups.findIndex(pos => Cesium.Cartesian3.equals(pos, this.coords.dragStart));
+            const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, this.coords.dragStart));
             if (positionIndex > -1) {
                 this.coords.groups[positionIndex] = this.coordinate;
             }
@@ -328,7 +336,7 @@ class Points extends MeasureModeBase {
         // set back to default multi distance mouse moving actions
         this.handler.setInputAction((movement) => {
             this.handleMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        }, ScreenSpaceEventType.MOUSE_MOVE);
     };
 
 
@@ -350,10 +358,10 @@ class Points extends MeasureModeBase {
         this.coordinateInfoOverlay.innerHTML = displayInfo;
 
         let screenPosition;
-        if (Cesium.SceneTransforms.worldToWindowCoordinates) {
-            screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(this.viewer.scene, cartesian);
-        } else if (Cesium.SceneTransforms.wgs84ToWindowCoordinates) {
-            screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
+        if (SceneTransforms.worldToWindowCoordinates) {
+            screenPosition = SceneTransforms.worldToWindowCoordinates(this.viewer.scene, cartesian);
+        } else if (SceneTransforms.wgs84ToWindowCoordinates) {
+            screenPosition = SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
         }
         this.coordinateInfoOverlay.style.display = 'block';
         this.coordinateInfoOverlay.style.left = `${screenPosition.x + 20}px`;

@@ -29,7 +29,9 @@ sharedStyleSheet.replaceSync(`
         border-color: #fff;
         box-shadow: 0 0 8px #fff;
     }
-    .measure-toolbar button:hover{
+    .measure-toolbar button:hover,
+    .fire-trail-container button:hover,
+    .fly-through-container button:hover{
         transform: scale(1.1);
     }
     .measure-tools{

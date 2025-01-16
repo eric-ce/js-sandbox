@@ -18,6 +18,7 @@ import {
     createPolylinePrimitive,
     generateIdByTimestamp,
     createGroundPolylinePrimitive,
+    showCustomNotification,
 } from "../helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
@@ -181,6 +182,62 @@ class MultiDistanceClamped extends MeasureModeBase {
         // If the measurement is complete and not in add mode, select the fire trail
         if (this.flags.isMeasurementComplete && !this.flags.isAddMode) {
             this.selectLines(pointPrimitive);
+        }
+    }
+
+    selectLines(primitive) {
+        let primitivePositions = [];
+
+        const isAnnotateLine = typeof primitive?.id === 'string' && primitive?.id?.includes("multidistance_clamped_line")
+        if (isAnnotateLine) {     // Line primitive from annotations
+            primitivePositions = primitive.positions;
+        } else {     // Point primitive
+            primitivePositions = [primitive.position];
+        }
+
+        if (primitivePositions && primitivePositions.length > 0) {
+            // Find existing group containing the first position
+            const group = this.coords.groups.find(group =>
+                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, primitivePositions[0]))
+            );
+            if (!group) return;
+
+            // Display notification for the selected group
+            showCustomNotification(`selected line: ${group.id}`, this.viewer.container)
+
+            // Update log records callback for the current selected line
+            this.logRecordsCallback(`${group.id} selected`);
+
+            // Reset the previous selection if any
+            if (this.interactivePrimitives.selectedLines.length > 0) {
+                // Use this.interactivePrimitive.selectedLines before assigning the current one to look up previous selected lines
+                // Find the previous selected group
+                const pos = this.interactivePrimitives.selectedLines[0].positions;
+                const prevGroup = this.coords.groups.find(group =>
+                    group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pos[0]))
+                );
+                if (!prevGroup) return; // Exit if no previous group is found
+
+                // Find the previous selected lines
+                const prevLines = this.findLinesByPositions(prevGroup.coordinates, "multidistance_clamped");
+
+                // reset the previous selected lines
+                prevLines.forEach(line => {
+                    // reset line color
+                    changeLineColor(line, this.stateManager.getColorState("default"));
+                });
+            }
+
+            // Find the current selected lines
+            const currentLines = this.findLinesByPositions(group.coordinates, "multidistance_clamped");
+
+            // Highlight the currently selected lines
+            currentLines.forEach(line => {
+                changeLineColor(line, this.stateManager.getColorState("select")); // reset line color
+            });
+
+            // Update the selected group and lines
+            this.interactivePrimitives.selectedLines = currentLines;
         }
     }
 
@@ -569,12 +626,11 @@ class MultiDistanceClamped extends MeasureModeBase {
                 this.coords.cache.push(this.coordinate);
             }
 
-            const linePrimitive = createPolylinePrimitive(
+            const linePrimitive = createGroundPolylinePrimitive(
                 [referencePointCartesian, this.coordinate],
                 "multidistance_clamped_line",
-                3,
                 this.stateManager.getColorState("default"),
-                this.cesiumPkg.Primitive
+                this.cesiumPkg.GroundPolylinePrimitive
             )
             this.viewer.scene.primitives.add(linePrimitive);
 
@@ -720,7 +776,7 @@ class MultiDistanceClamped extends MeasureModeBase {
 
             otherPositions.forEach((pos, idx) => {
                 // Create line primitive
-                const linePrimitive = createPolylinePrimitive([pos, cartesian], "multidistance_clamped_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
+                const linePrimitive = createGroundPolylinePrimitive([pos, cartesian], "multidistance_clamped_line_moving", Cesium.Color.YELLOW, this.cesiumPkg.GroundPolylinePrimitive);
 
                 const addedLinePrimitive = this.viewer.scene.primitives.add(linePrimitive);
 
@@ -796,12 +852,11 @@ class MultiDistanceClamped extends MeasureModeBase {
             );
             otherPositions.forEach(pos => {
                 // Create new line primitive
-                const linePrimitive = createPolylinePrimitive(
+                const linePrimitive = createGroundPolylinePrimitive(
                     [this.coordinate, pos],
                     "multidistance_clamped_line",
-                    3,
                     Cesium.Color.YELLOWGREEN,
-                    this.cesiumPkg.Primitive
+                    this.cesiumPkg.GroundPolylinePrimitive
                 );
                 this.viewer.scene.primitives.add(linePrimitive);
 
@@ -1048,12 +1103,11 @@ class MultiDistanceClamped extends MeasureModeBase {
     _createReconnectPrimitives(neighbourPositions, group, isPending = false) {
         if (neighbourPositions.length === 3) {
             // create reconnect line primitive
-            const linePrimitive = createPolylinePrimitive(
+            const linePrimitive = createGroundPolylinePrimitive(
                 [neighbourPositions[0], neighbourPositions[2]],
                 isPending ? "multidistance_clamped_line_pending" : "multidistance_clamped_line",
-                3,
                 Cesium.Color.YELLOWGREEN,
-                this.cesiumPkg.Primitive
+                this.cesiumPkg.GroundPolylinePrimitive
             );
             this.viewer.scene.primitives.add(linePrimitive);
 

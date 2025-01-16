@@ -2,21 +2,16 @@ import * as Cesium from "cesium";
 import {
     calculateDistance,
     formatDistance,
-    removeInputActions,
     editableLabel,
     updatePointerOverlay,
-    createLineGeometryInstance,
-    createLinePrimitive,
     createLabelPrimitive,
     createPointPrimitive,
     generateId,
     getPickedObjectType,
-    resetLineColor,
     changeLineColor,
     calculateDistanceFromArray,
     getPrimitiveByPointPosition,
     createPolylinePrimitive,
-    positionKey,
     showCustomNotification,
     generateIdByTimestamp
 } from "../helper/helper.js";
@@ -249,10 +244,14 @@ class MultiDistance extends MeasureModeBase {
     }
 
     selectLines(primitive) {
-        const isAnnotateLine = typeof primitive?.id === 'string' && primitive?.id?.includes("multidistance_line")
-        if (!isAnnotateLine) return;
+        let primitivePositions = [];
 
-        const primitivePositions = primitive.positions;
+        const isAnnotateLine = typeof primitive?.id === 'string' && primitive?.id?.includes("multidistance_line")
+        if (isAnnotateLine) {     // Line primitive from annotations
+            primitivePositions = primitive.positions;
+        } else {     // Point primitive
+            primitivePositions = [primitive.position];
+        }
 
         if (primitivePositions && primitivePositions.length > 0) {
             // Find existing group containing the first position

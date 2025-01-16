@@ -1,4 +1,7 @@
-import * as Cesium from "cesium";
+import {
+    defined,
+    Color,
+} from "cesium";
 import {
     changeLineColor,
     resetLineColor,
@@ -67,7 +70,7 @@ class Picker extends MeasureModeBase {
      ***********************/
     handleLeftClick(movement) {
         const pickedObject = this.viewer.scene.pick(movement.position);
-        if (Cesium.defined(pickedObject) && pickedObject.id && pickedObject.id.startsWith("annotate")) {
+        if (defined(pickedObject) && pickedObject.id && pickedObject.id.startsWith("annotate")) {
 
             const modeMapping = {
                 "annotate_multidistance_clamped": "multi-distances-clamped", // More specific goes first
@@ -120,7 +123,7 @@ class Picker extends MeasureModeBase {
     handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
-        if (!Cesium.defined(cartesian)) return;
+        if (!defined(cartesian)) return;
 
         this.coordinate = cartesian;
 
@@ -140,7 +143,7 @@ class Picker extends MeasureModeBase {
      */
     handleHoverHighlighting(pickedObject) {
         let pickedObjectType = null;
-        if (Cesium.defined(pickedObject) &&
+        if (defined(pickedObject) &&
             pickedObject.id &&
             pickedObject.id.startsWith("annotate_") &&
             !pickedObject.id.includes("moving")) {
@@ -195,12 +198,12 @@ class Picker extends MeasureModeBase {
             this.interactivePrimitives.hoveredLine = null;
         }
         if (this.interactivePrimitives.hoveredPoint) {
-            this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
+            this.interactivePrimitives.hoveredPoint.outlineColor = Color.RED;
             this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
             this.interactivePrimitives.hoveredPoint = null;
         }
         if (this.interactivePrimitives.hoveredLabel) {
-            this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
+            this.interactivePrimitives.hoveredLabel.fillColor = Color.WHITE;
             this.interactivePrimitives.hoveredLabel = null;
         }
     }
