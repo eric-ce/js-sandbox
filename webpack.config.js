@@ -2,9 +2,10 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const HtmlWebpackHarddiskPlugin = require('html-webpack-harddisk-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
-const url = require('url');
 const webpack = require('webpack');
+const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 const cesiumSource = "node_modules/cesium/Source";
 const cesiumWorkers = "node_modules/cesium/Build/Cesium/Workers";
@@ -53,13 +54,8 @@ module.exports = {
         }),
         new NodePolyfillPlugin(),
     ],
-    output: {
-        filename: "[name].bundle.js",
-        path: path.resolve(__dirname, 'dist'), // Output directory
-        clean: true,
-    },
     mode: 'development',
-    devtool: 'inline-source-map',
+    devtool: 'source-map', // Generate source maps for easier debugging
     resolve: {
         extensions: [".js", ".css"],
         modules: ["src", "node_modules"],
@@ -75,5 +71,23 @@ module.exports = {
     amd: {
         // Enable webpack-friendly use of require in Cesium
         toUrlUndefined: true,
+    },
+    optimization: {
+        splitChunks: {
+            chunks: 'all',
+        },
+        runtimeChunk: 'single',
+        minimize: true,
+        minimizer: [
+            new TerserPlugin({
+                terserOptions: {
+                    compress: {
+                        drop_console: true,
+                    },
+                },
+                extractComments: false, // Do not extract comments to a separate file
+            }),
+            new CssMinimizerPlugin(),
+        ],
     },
 };
