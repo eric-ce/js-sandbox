@@ -78,16 +78,16 @@ module.exports = {
         },
         runtimeChunk: 'single',
         minimize: true,
-        minimizer: [
-            new TerserPlugin({
-                terserOptions: {
-                    compress: {
-                        drop_console: true,
-                    },
-                },
-                extractComments: false, // Do not extract comments to a separate file
-            }),
-            new CssMinimizerPlugin(),
-        ],
+        // minimizer: [
+        //     new TerserPlugin({
+        //         terserOptions: {
+        //             compress: {
+        //                 drop_console: true,
+        //             },
+        //         },
+        //         extractComments: false, // Do not extract comments to a separate file
+        //     }),
+        //     new CssMinimizerPlugin(),
+        // ],
     },
 };
