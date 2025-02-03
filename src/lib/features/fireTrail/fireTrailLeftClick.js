@@ -165,46 +165,44 @@ function removeActionByPointMeasuring(pointPrimitive) {
         return;
     }
 
-    // compare if the pick point is from the latest one in group that is still drawing
-    const isFromMeasuring = group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, pointPosition));
+    // Check if the clicked point is from the same group
+    const isFromSameGroup = group.coordinates.some(cart =>
+        Cartesian3.equals(cart, this.coords.cache[0])
+    );
+    if (!isFromSameGroup) return;
 
-    if (isFromMeasuring) {
-        // find line and label primitives by the point position
-        const { linePrimitives, labelPrimitives } = this.findPrimitiveByPosition(
-            pointPosition,
-            "annotate_fire_trail",
-            this.viewer.scene,
-            this.pointCollection,
-            this.labelCollection
-        );
+    // find line and label primitives by the point position
+    const { linePrimitives, labelPrimitives } = this.findPrimitiveByPosition(
+        pointPosition,
+        "fire_trail",
+    );
 
-        // Remove relevant point, line, and label primitives
-        this.pointCollection.remove(pointPrimitive);
-        linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
-        labelPrimitives.forEach(l => this.labelCollection.remove(l));
+    // Remove relevant point, line, and label primitives
+    this.pointCollection.remove(pointPrimitive);
+    linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
+    labelPrimitives.forEach(l => this.labelCollection.remove(l));
 
-        // Remove moving line and label primitives
-        this.removeMovingPrimitives();
+    // Remove moving line and label primitives
+    this.removeMovingPrimitives();
 
-        // Create reconnect primitives
-        const neighbourPositions = this.findNeighbourPosition(pointPosition, group);
+    // Create reconnect primitives
+    const neighbourPositions = this.findNeighbourPosition(pointPosition, group);
 
-        this._createReconnectPrimitives(neighbourPositions, { coordinates: this.coords.cache }, true);
+    this._createReconnectPrimitives(neighbourPositions, { coordinates: this.coords.cache }, true);
 
-        // Update coords cache
-        const pointIndex = this.coords.cache.findIndex(cart =>
-            Cesium.Cartesian3.equals(cart, pointPosition)
-        );
-        if (pointIndex !== -1) this.coords.cache.splice(pointIndex, 1);
+    // Update coords cache
+    const pointIndex = this.coords.cache.findIndex(cart =>
+        Cesium.Cartesian3.equals(cart, pointPosition)
+    );
+    if (pointIndex !== -1) this.coords.cache.splice(pointIndex, 1);
 
-        // Update or create labels for the group
-        this.updateOrCreateLabels(group);
+    // Update or create labels for the group
+    this.updateOrCreateLabels(group);
 
-        if (group.coordinates.length === 0) {
-            this.flags.isMeasurementComplete = true; // When removing the only point, consider the measure ended
-            this.interactivePrimitives.selectedLines = [];
-            this.coords.groupToSubmit = null;
-        }
+    if (group.coordinates.length === 0) {
+        this.flags.isMeasurementComplete = true; // When removing the only point, consider the measure ended
+        this.interactivePrimitives.selectedLines = [];
+        this.coords.groupToSubmit = null;
     }
 }
 

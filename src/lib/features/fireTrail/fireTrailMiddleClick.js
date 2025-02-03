@@ -58,10 +58,7 @@ async function removeActionByPoint(pointPrimitive) {
     // Retrieve associated line and label primitives based on the point's position
     const { linePrimitives, labelPrimitives } = this.findPrimitiveByPosition(
         pointPosition,
-        "annotate_fire_trail",
-        this.viewer.scene,
-        this.pointCollection,
-        this.labelCollection
+        "fire_trail",
     );
 
     // Remove the point, associated lines, and associated labels primitives

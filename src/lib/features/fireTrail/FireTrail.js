@@ -2,14 +2,11 @@ import * as Cesium from "cesium";
 import {
     formatDistance,
     removeInputActions,
-    createClampedLineGeometryInstance,
-    createClampedLinePrimitive,
     createLabelPrimitive,
     createPointPrimitive,
     generateId,
     calculateClampedDistance,
     calculateClampedDistanceFromArray,
-    getPickedObjectType,
     positionKey,
     showCustomNotification,
     createGroundPolylinePrimitive,
@@ -373,10 +370,7 @@ export class FireTrail extends HTMLElement {
             // Set existing point and label primitives to not show, remove line primitive
             const { linePrimitives, labelPrimitives } = this.findPrimitiveByPosition(
                 this.coords.dragStart,
-                "annotate_fire_trail",
-                this.viewer.scene,
-                this.pointCollection,
-                this.labelCollection
+                "fire_trail",
             );
             selectedPoint.primitive.show = false;
             linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
@@ -1000,17 +994,19 @@ export class FireTrail extends HTMLElement {
         return { pointPrimitives, linePrimitives, labelPrimitives };
     }
 
-    findPrimitiveByPosition(position, startsWithMeasureMode, scene, pointCollection, labelCollection) {
+    findPrimitiveByPosition(position, modeString) {
         // get point primitive by position
-        const pointPrimitive = pointCollection._pointPrimitives.find(p => p.id && p.id.startsWith(startsWithMeasureMode) &&
+        const pointPrimitive = this.pointCollection._pointPrimitives.find(p =>
+            p.id &&
+            p.id.startsWith(`annotate_${modeString}`) &&
             !p.id.includes("moving") &&
             Cesium.Cartesian3.equals(p.position, position)
         );
 
         // get line primitives by position
-        const linePrimitives = scene.primitives._primitives.filter(p =>
+        const linePrimitives = this.viewer.scene.primitives._primitives.filter(p =>
             p.id &&
-            p.id.includes(startsWithMeasureMode) &&
+            p.id.startsWith(`annotate_${modeString}`) &&
             !p.id.includes("moving") &&
             p.positions.some(cart => Cesium.Cartesian3.equals(cart, position))
         );
@@ -1020,7 +1016,9 @@ export class FireTrail extends HTMLElement {
         const linePositions = linePrimitives.map(p => p.positions);
         const midPoints = linePositions.map((positions) => Cesium.Cartesian3.midpoint(positions[0], positions[1], new Cesium.Cartesian3()));
         const labelPrimitives = midPoints.map(midPoint =>
-            labelCollection._labels.find(l => l.id && l.id.startsWith(startsWithMeasureMode) &&
+            this.labelCollection._labels.find(l =>
+                l.id &&
+                l.id.startsWith(`annotate_${modeString}`) &&
                 !l.id.includes("moving") &&
                 Cesium.Cartesian3.equals(l.position, midPoint)
             )
