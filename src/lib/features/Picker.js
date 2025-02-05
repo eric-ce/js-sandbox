@@ -14,8 +14,9 @@ class Picker extends MeasureModeBase {
      * Creates a new Picker instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
      * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
-     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
-     * @param {Function} logRecordsCallback - The callback function to log records.
+     * @param {Object} stateManager - The state manager holding various tool states.
+     * @param {Function} logRecordsCallback - Callback function to log records.
+     * @param {Function} activateModeCallback - Callback to activate a measurement mode.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, stateManager, logRecordsCallback, activateModeCallback, cesiumPkg) {
@@ -41,25 +42,39 @@ class Picker extends MeasureModeBase {
     }
 
     // Getters and setters
+    /**
+     * Gets the measure modes.
+     *
+     * @returns {Object} The current measurement modes.
+     */
     get measureModes() {
         return this._measureModes;
     }
-
+    /**
+     * Sets the measure modes.
+     * @param {Object} value - The new measurement modes.
+     */
     set measureModes(value) {
         this._measureModes = value;
     }
-
+    /**
+     * Gets the button element.
+     * @returns {HTMLElement} The current button element.
+     */
     get button() {
         return this._button;
     }
-
+    /**
+     * Sets the button element.
+     * @param {HTMLElement} value - The new button element.
+     */
     set button(value) {
         this._button = value;
     }
 
     /**
-     * Sets up input actions for picker mode.
-    */
+     * Configures input actions for picker mode.
+     */
     setupInputActions() {
         super.setupInputActions();
     }
@@ -68,13 +83,18 @@ class Picker extends MeasureModeBase {
     /***********************
      * LEFT CLICK FEATURES *
      ***********************/
+    /**
+     * Handles left-click events for picker mode.
+     * Analyzes the picked object's identifier and activates the corresponding measurement mode.
+     * @param {Object} movement - The mouse movement event data.
+     */
     handleLeftClick(movement) {
         const pickedObject = this.viewer.scene.pick(movement.position);
         if (defined(pickedObject) && pickedObject.id && pickedObject.id.startsWith("annotate")) {
 
             const modeMapping = {
-                "annotate_multidistance_clamped": "multi-distances-clamped", // More specific goes first
-                "annotate_multidistance": "multi-distances",
+                "annotate_multi_distances_clamped": "multi-distances-clamped", // More specific goes first
+                "annotate_multi_distances": "multi-distances",
                 "annotate_bookmark": "points",
                 "annotate_distance": "distance",
                 "annotate_height": "height",
@@ -120,6 +140,10 @@ class Picker extends MeasureModeBase {
     /***********************
      * MOUSE MOVE FEATURES *
      ***********************/
+    /**
+     * Handles mouse move events to update the current coordinate, pointer overlay, and highlight primitives.
+     * @param {Object} movement - The mouse movement event data.
+     */
     handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
 
@@ -138,8 +162,9 @@ class Picker extends MeasureModeBase {
 
 
     /**
-     * Hover to the clamped line to highlight it when the mouse move over it
-     * @param {*} pickedObjects - the picked objects from the drillPick method
+     * Highlights the primitive under the mouse when hovered over.
+     * Determines the type of the picked object and applies hover styles.
+     * @param {*} pickedObject - The picked object from the drillPick method.
      */
     handleHoverHighlighting(pickedObject) {
         let pickedObjectType = null;
@@ -192,6 +217,10 @@ class Picker extends MeasureModeBase {
         }
     }
 
+    /**
+     * Resets highlighting on any primitives that were highlighted.
+     * Restores default styles to line, point, and label primitives.
+     */
     resetHighlighting() {
         if (this.interactivePrimitives.hoveredLine) {
             resetLineColor(this.interactivePrimitives.hoveredLine);

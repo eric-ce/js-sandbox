@@ -35,7 +35,7 @@ export class MeasureToolbox extends HTMLElement {
         // cesium variables
         this._viewer = null;
         this.handler = null;
-        this.cesiumPkg = null;
+        this._cesiumPkg = null;
 
         this.pointCollection = null;
         this.labelCollection = null;
@@ -77,6 +77,13 @@ export class MeasureToolbox extends HTMLElement {
         return this._viewer;
     }
 
+    set cesiumPkg(cesiumPkg) {
+        this._cesiumPkg = cesiumPkg;
+    }
+
+    get cesiumPkg() {
+        return this._cesiumPkg;
+    }
 
     /**********************
      * CONNECTED CALLBACK *

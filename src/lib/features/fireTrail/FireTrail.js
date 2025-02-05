@@ -711,7 +711,6 @@ export class FireTrail extends HTMLElement {
         }
 
         if (this.flags.isActive) { // activate fire trail mode
-            console.log("click")
             this.setupInputActions();
 
             this.buttons.fireTrailButton.classList.add("active");
@@ -837,7 +836,6 @@ export class FireTrail extends HTMLElement {
             comp_length: totalDistance,
             email: this.app?.currentUser?.sessions?.navigator?.userId || "",
         };
-        console.log("🚀  payload:", payload);
 
         // Prompt the user for confirmation before proceeding with the submission
         if (!confirm(`Do you want to submit this fire trail ${groupToSubmit.trailId}?`)) {

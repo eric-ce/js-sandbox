@@ -2,7 +2,6 @@
 import {
     Cartesian3,
     Cartesian2,
-    Color,
     defined,
     ScreenSpaceEventType,
     SceneTransforms,
@@ -15,23 +14,25 @@ import {
     getPickedObjectType,
     createLabelPrimitive,
     editableLabel,
+    generateIdByTimestamp,
 } from "../helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
+
 /**
- * Represents points bookmark tool in Cesium.
- * @class
- * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
- * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
- * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
- * @param {Function} logRecordsCallback - The callback function to log records.
+ * @typedef {Object} Group
+ * @property {string|number} id - Group identifier
+ * @property {Cartesian3[]} coordinates - Array of position coordinates
+ * @property {number} labelNumber - Label counter for the group
  */
+
+
 class Points extends MeasureModeBase {
     /**
-     * Creates a new Point instance.
+     * Creates a new Points instance.
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
      * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
-     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
+     * @param {Object} stateManager - The state manager holding various tool states.
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
@@ -40,26 +41,33 @@ class Points extends MeasureModeBase {
 
         this.coordinateInfoOverlay = this.createCoordinateInfoOverlay();
 
-        // flags
+        // Flags to control the state of the tool
         this.flags = {
-            isDragMode: false
+            isMeasurementComplete: false,
+            isDragMode: false,
         };
 
-        // coordinates data
+        // Coordinate management and related properties
         this.coords = {
-            groups: [],      // Stores temporary coordinates during operations
-            dragStart: null // Stores the initial position before a drag begins
+            cache: [],                  // Stores temporary coordinates during operations
+            groups: [],                 // Stores temporary coordinates during operations
+            groupCounter: 0,            // Counter for the number of groups
+            dragStart: null,            // Stores the initial position before a drag begins
+            dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
         };
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
-            dragPoint: null,    // Currently dragged point primitive
-            dragLabel: null,    // Currently dragged label primitive
-            hoveredPoint: null,
-            hoveredLabel: null
+            dragPoint: null,        // Currently dragged point primitive
+            dragLabels: [],         // Array of dragging labels 
+            hoveredPoint: null,     // Point that is currently hovered
+            hoveredLabel: null      // Label that is currently hovered
         }
     }
 
+    /**
+     * Configures input actions for the points bookmark mode.
+     */
     setupInputActions() {
         super.setupInputActions();
     }
@@ -69,10 +77,14 @@ class Points extends MeasureModeBase {
      * LEFT CLICK FEATURES *
      ***********************/
     /**
-     * Handles left-click events to place points, if selected point existed remove the point
-     * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
+     * Handles left-click events to place or remove points.
+     * @param {{position: Cesium.Cartesian2}} movement - The mouse movement event.
      */
     handleLeftClick(movement) {
+        // use move position for the position
+        const cartesian = this.coordinate
+        if (!defined(cartesian)) return;
+
         const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
         const pickedObjectType = getPickedObjectType(pickedObject, "bookmark");
 
@@ -93,37 +105,72 @@ class Points extends MeasureModeBase {
                     const labelToRemove = this.labelCollection._labels.find(label => Cartesian3.equals(label.position, primitiveToRemove.position));
                     if (labelToRemove) this.labelCollection.remove(labelToRemove);
 
-                    // remove the point position from cache
-                    const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, primitiveToRemove.position))
-                    if (positionIndex !== -1) this.coords.groups.splice(positionIndex, 1);
+                    // Find the group of the point
+                    const group = this.coords.groups.find(group => group.coordinates.some(cart => Cartesian3.equals(cart, primitiveToRemove.position)));
+                    if (!group) return; // Error handling: group not found early exit
+
+                    // remove the point position from group coordinates
+                    const positionIndex = group.coordinates.findIndex(pos => Cartesian3.equals(pos, primitiveToRemove.position));
+                    if (positionIndex !== -1) group.coordinates.splice(positionIndex, 1);
 
                     // log the points records
-                    this._updateBookmarkLogRecords(primitiveToRemove.position, "remove");
+                    this.updateLogRecords(primitiveToRemove.position, "remove");
                 }
                 break;
             default:
-                // use mouse move position to control only one pickPosition is used
-                const cartesian = this.coordinate;
-                if (!defined(cartesian)) return;
-
-                // create point primitive
-                const point = createPointPrimitive(cartesian, Color.RED, "bookmark_point");
-                this.pointCollection.add(point);
-
-                // update the coords cache
-                this.coords.groups.push(cartesian);
-
-                // create label primitive
-                const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, cartesian));
-                const labelString = `Point ${positionIndex + 1}`;
-                const label = createLabelPrimitive(cartesian, cartesian, labelString)
-                label.id = generateId(cartesian, "bookmark_label");
-                this.labelCollection.add(label);
-
-                // log the points records
-                this._updateBookmarkLogRecords(cartesian, "add");
+                if (!this.flags.isDragMode) {
+                    this.startMeasure();
+                }
                 break;
         }
+    }
+
+    /**
+     * Starts the measurement process by creating a new group if needed,
+     * adding a point primitive, and logging the record.
+     */
+    startMeasure() {
+        if (this.flags.isMeasurementComplete) {
+            this.flags.isMeasurementComplete = false;
+            this.coords.cache = [];
+        }
+
+        // Initiate cache if it is empty, start a new group and assign cache to it
+        if (this.coords.cache.length === 0) {
+            // link both cache and groups to the same group
+            // when cache changed groups will be changed due to reference by address
+            const newGroup = {
+                id: generateIdByTimestamp(),
+                coordinates: [],
+                labelNumberIndex: this.coords.groupCounter,
+            };
+            this.coords.groups.push(newGroup);
+            this.coords.cache = newGroup.coordinates;
+            this.coords.groupCounter++;
+        }
+
+        // create point primitive
+        const point = createPointPrimitive(this.coordinate, this.stateManager.getColorState("pointColor"), "bookmark_point");
+        this.pointCollection.add(point);
+
+        // update the coords cache
+        this.coords.cache.push(this.coordinate);
+
+        // Find the group
+        const group = this.coords.groups.find(group => group.coordinates.some(cart => Cartesian3.equals(cart, this.coordinate)));
+
+        // Create label primitive
+        const labelString = `Point ${group.labelNumberIndex + 1}`;
+        const label = createLabelPrimitive(this.coordinate, this.coordinate, labelString)
+        label.id = generateId(this.coordinate, "bookmark_label");
+        this.labelCollection.add(label);
+
+        // log the points records
+        this.updateLogRecords(this.coordinate, "add");
+
+        // set flag that the measure has ended
+        this.flags.isMeasurementComplete = true;
+        this.coords.cache = [];
     }
 
 
@@ -131,17 +178,19 @@ class Points extends MeasureModeBase {
      * MOUSE MOVE FEATURES *
      ***********************/
     /**
-     * Handles mouse move events to display moving dot with mouse.
-     * @param {{endPosition: Cesium.Cartesian2}} movement
+     * Handles mouse move events to update the moving pointer and coordinate overlay.
+     * @param {{endPosition: Cesium.Cartesian2}} movement - The mouse movement event.
      */
     handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-
         if (!defined(cartesian)) return;
 
+        // update coordinate
         this.coordinate = cartesian;
 
+        // pick objects
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
+
         // update pointerOverlay: the moving dot with mouse
         const pointer = this.stateManager.getOverlayState("pointer");
         updatePointerOverlay(this.viewer, pointer, cartesian, pickedObjects);
@@ -152,22 +201,27 @@ class Points extends MeasureModeBase {
         this.coordinateInfoOverlay && this.updateCoordinateInfoOverlay(this.coordinate);
     }
 
+    /**
+     * Highlights the primitive under the mouse based on the picked object type.
+     * @param {*} pickedObject - The object picked by the drillPick method.
+     */
     handleHoverHighlighting(pickedObject) {
         const pickedObjectType = getPickedObjectType(pickedObject, "bookmark");
 
         // reset highlighting
-        const resetHighlighting = () => {
-            if (this.interactivePrimitives.hoveredPoint) {
-                this.interactivePrimitives.hoveredPoint.outlineColor = Color.RED;
-                this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
-                this.interactivePrimitives.hoveredPoint = null;
-            }
-            if (this.interactivePrimitives.hoveredLabel) {
-                this.interactivePrimitives.hoveredLabel.fillColor = Color.WHITE;
-                this.interactivePrimitives.hoveredLabel = null;
-            }
-        }
-        resetHighlighting();
+        // const resetHighlighting = () => {
+        //     if (this.interactivePrimitives.hoveredPoint) {
+        //         this.interactivePrimitives.hoveredPoint.outlineColor = Color.RED;
+        //         this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
+        //         this.interactivePrimitives.hoveredPoint = null;
+        //     }
+        //     if (this.interactivePrimitives.hoveredLabel) {
+        //         this.interactivePrimitives.hoveredLabel.fillColor = Color.WHITE;
+        //         this.interactivePrimitives.hoveredLabel = null;
+        //     }
+        // }
+        // resetHighlighting();
+        super.resetHighlighting();
 
         const hoverColor = this.stateManager.getColorState("hover");
 
@@ -195,34 +249,45 @@ class Points extends MeasureModeBase {
     /*****************
      * DRAG FEATURES *
      *****************/
+    /**
+     * Initiates the drag action for a point.
+     * @param {{position: Cesium.Cartesian2}} movement - The mouse movement event at drag start.
+     */
     handleDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         // pick the point primitive
         const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
-        // const pointPrimitive = pickedObjects.find(pickedObject => pickedObject.id && typeof pickedObject.id === 'string' && pickedObject.id.startsWith("annotate_bookmark"));
+
         const isPoint = pickedObjects.find(p => {
             const primitiveId = p.primitive.id;
             return typeof primitiveId === 'string' &&
                 primitiveId.startsWith("annotate_bookmark_point") &&
                 !primitiveId.includes("moving");
         });
-        if (defined(isPoint)) {
-            // disable camera movement
-            this.viewer.scene.screenSpaceCameraController.enableInputs = false;
 
-            this.coords.dragStart = isPoint.primitive.position.clone();
-            this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
+        // Error handling: if no point primitives found then early exit
+        if (!defined(isPoint)) return;
 
-            // set move event for dragging
-            this.handler.setInputAction((movement) => {
-                this.handleDrag(movement, isPoint);
-            }, ScreenSpaceEventType.MOUSE_MOVE);
-        }
+        // Disable camera movement
+        this.viewer.scene.screenSpaceCameraController.enableInputs = false;
 
+        // Set drag start position
+        this.coords.dragStart = isPoint.primitive.position.clone();
+        this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
+
+        // set move event for dragging
+        this.handler.setInputAction((movement) => {
+            this.handleDrag(movement, isPoint);
+        }, ScreenSpaceEventType.MOUSE_MOVE);
     };
 
+    /**
+     * Processes the drag action by updating the dragging point and label primitives.
+     * @param {Object} movement - The mouse movement event data.
+     * @param {Object} selectedPoint - The point primitive being dragged.
+     */
     handleDrag(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
@@ -233,7 +298,6 @@ class Points extends MeasureModeBase {
 
         if (this.flags.isDragMode) {
             // set existed point, label primitives to no show
-            selectedPoint.primitive.show = false;
             const existedLabel = this.labelCollection._labels.find(l =>
                 l.id &&
                 l.id.startsWith("annotate_bookmark_label") &&
@@ -241,62 +305,71 @@ class Points extends MeasureModeBase {
                 Cartesian3.equals(l.position, this.coords.dragStart)
             );
             if (existedLabel) existedLabel.show = false;
+            selectedPoint.primitive.show = false;
 
-            // set point overlay no show
+            // Set point overlay no show
             const pointer = this.stateManager.getOverlayState("pointer");
             pointer.style.display = 'none';
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
             if (!defined(cartesian)) return;
-            this.coordinate = cartesian;
+            this.coordinate = cartesian;    // update coordinate
 
-            // create or update dragging point primitive
+            // Update or create dragging point primitive
             if (this.interactivePrimitives.dragPoint) {     // if dragging point existed, update the point
                 // highlight the point primitive
-                this.interactivePrimitives.dragPoint.outlineColor = Color.YELLOW;
+                this.interactivePrimitives.dragPoint.outlineColor = this.stateManager.getColorState("move");
                 this.interactivePrimitives.dragPoint.outlineWidth = 2;
                 // update moving point primitive
                 this.interactivePrimitives.dragPoint.position = cartesian;
                 this.interactivePrimitives.dragPoint.id = generateId(cartesian, "bookmark_point_moving");
             } else {    // if dragging point not existed, create a new point
-                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Color.RED, "bookmark_point_moving");
+                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), this.stateManager.getColorState("pointColor"), "bookmark_point_moving");
                 this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 
             // create or update dragging label primitive
-            const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, this.coords.dragStart));
+            // const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, this.coords.dragStart));
 
-            if (this.interactivePrimitives.dragLabel) {    // if dragging label existed, update the label
-                this.interactivePrimitives.dragLabel.id = generateId(cartesian, "bookmark_label_moving");
-                this.interactivePrimitives.dragLabel.position = cartesian;
-                this.interactivePrimitives.dragLabel.showBackground = false;
-            } else {    // if dragging label not existed, create a new label
-                const labelString = `Point ${positionIndex + 1}`;
-                const label = createLabelPrimitive(cartesian, cartesian, labelString)
-                label.id = generateId(cartesian, "bookmark_label_moving");
-                label.showBackground = false;
-                this.interactivePrimitives.dragLabel = this.labelCollection.add(label)
-            }
+            // const labelPrimitive = this.interactivePrimitives.dragLabels[0];
+            // if (labelPrimitive) {    // if dragging label existed, update the label
+            //     labelPrimitive.id = generateId(cartesian, "bookmark_label_moving");
+            //     labelPrimitive.position = cartesian;
+            //     labelPrimitive.showBackground = false;
+            // } else {    // if dragging label not existed, create a new label
+            //     const labelString = `Point`;
+            //     const label = createLabelPrimitive(cartesian, cartesian, "Point")
+            //     label.id = generateId(cartesian, "bookmark_label_moving");
+            //     label.showBackground = false;
+            //     const labelPrimitive = this.labelCollection.add(label);
+            //     this.interactivePrimitives.dragLabels.push(labelPrimitive);
+            // }
 
             // update coordinateInfoOverlay
             this.coordinateInfoOverlay && this.updateCoordinateInfoOverlay(this.coordinate);
         }
     };
 
+    /**
+     * Concludes the drag action by updating primitives and the coordinates cache.
+     */
     handleDragEnd() {
-        // update the drag primitive to the finish position;
+        // Enable camera movement
+        this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+
         if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
             // reset dragging point style
-            this.interactivePrimitives.dragPoint.outlineColor = Color.RED;
+            this.interactivePrimitives.dragPoint.outlineColor = this.stateManager.getColorState("pointColor");
             this.interactivePrimitives.dragPoint.outlineWidth = 0;
 
-            // remove the dragging point and label
-            if (this.interactivePrimitives.dragPoint) this.pointCollection.remove(this.interactivePrimitives.dragPoint);
-            this.interactivePrimitives.dragPoint = null;
-            if (this.interactivePrimitives.dragLabel) this.labelCollection.remove(this.interactivePrimitives.dragLabel);
-            this.interactivePrimitives.dragLabel = null;
+            // Find the group containing the dragged point
+            const group = this.coords.groups.find(group => group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart)))
+            if (!group) return;     // Error handling: no group found
 
-            // update existed point
+            // Remove dragging point, and dragging labels
+            super.removeDragMovingPrimitives({ removePoint: true, removeLines: false, removeLabel: true });
+
+            // Update existed point primitive
             const existedPoint = this.pointCollection._pointPrimitives.find(p =>
                 p.id &&
                 p.id.startsWith("annotate_bookmark_point") &&
@@ -304,31 +377,31 @@ class Points extends MeasureModeBase {
             );
             if (existedPoint) {
                 existedPoint.show = true;
-                existedPoint.id = generateId(this.coordinate, "bookmark_point");
                 existedPoint.position = this.coordinate;
+                existedPoint.id = generateId(this.coordinate, "bookmark_point");
             }
 
-            // update existed label 
+            // Find and update the existing label primitive
             const existedLabel = this.labelCollection._labels.find(l =>
                 l.id &&
                 l.id.startsWith("annotate_bookmark_label") &&
                 Cartesian3.equals(l.position, this.coords.dragStart)
             );
             if (existedLabel) {
-                existedLabel.show = true;
                 existedLabel.id = generateId(this.coordinate, "bookmark_label");
                 existedLabel.position = this.coordinate;
+                existedLabel.show = true;
                 existedLabel.showBackground = true;
             }
 
-            // update the cache position
-            const positionIndex = this.coords.groups.findIndex(pos => Cartesian3.equals(pos, this.coords.dragStart));
-            if (positionIndex > -1) {
-                this.coords.groups[positionIndex] = this.coordinate;
+            // Update the coordinate data
+            const positionIndex = group.coordinates.findIndex(cart => Cartesian3.equals(cart, this.coords.dragStart));
+            if (positionIndex !== -1) {
+                group.coordinates[positionIndex] = this.coordinate;
             }
 
             // log the points records
-            this._updateBookmarkLogRecords(this.coordinate, "update");
+            this.updateLogRecords(this.coordinate, "update");
 
             // reset dragging primitive and flags
             this.flags.isDragMode = false;
@@ -343,6 +416,10 @@ class Points extends MeasureModeBase {
     /******************
      * OTHER FEATURES *
      ******************/
+    /**
+     * Creates the coordinate info overlay element.
+     * @returns {HTMLElement} The created coordinate info overlay element.
+     */
     createCoordinateInfoOverlay() {
         this.coordinateInfoOverlay = document.createElement("div");
         this.coordinateInfoOverlay.className = "coordinate-info-overlay";
@@ -352,6 +429,10 @@ class Points extends MeasureModeBase {
         return this.coordinateInfoOverlay;
     }
 
+    /**
+     * Updates the coordinate info overlay with the current coordinate information.
+     * @param {Cesium.Cartesian3} cartesian - The current Cartesian3 coordinate.
+     */
     updateCoordinateInfoOverlay(cartesian) {
         const cartographicDegrees = cartesian3ToCartographicDegrees(cartesian);
         const displayInfo = `Lat: ${cartographicDegrees.latitude.toFixed(6)}<br>Lon: ${cartographicDegrees.longitude.toFixed(6)} <br>Alt: ${cartographicDegrees.height.toFixed(2)}`;
@@ -362,6 +443,8 @@ class Points extends MeasureModeBase {
             screenPosition = SceneTransforms.worldToWindowCoordinates(this.viewer.scene, cartesian);
         } else if (SceneTransforms.wgs84ToWindowCoordinates) {
             screenPosition = SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, cartesian);
+        } else {
+            console.error("SceneTransforms.worldToWindowCoordinates or SceneTransforms.wgs84ToWindowCoordinates is not available in the current version of Cesium.");
         }
         this.coordinateInfoOverlay.style.display = 'block';
         this.coordinateInfoOverlay.style.left = `${screenPosition.x + 20}px`;
@@ -378,19 +461,19 @@ class Points extends MeasureModeBase {
      * HELPER FUNCTIONS *
      ********************/
     /**
-     * Update the bookmark log records.
+     * Updates the bookmark log records with the provided coordinate information.
      * @param {Cesium.Cartesian3} cartesian - The Cartesian3 coordinate.
-     * @param {String} action - The action type.
+     * @param {string} action - The action type (e.g., "add", "remove", or "update").
      */
-    _updateBookmarkLogRecords(cartesian, action) {
+    updateLogRecords(cartesian, action) {
         const cartographicDegrees = cartesian3ToCartographicDegrees(cartesian);
         this.logRecordsCallback({ [action]: this._formatCartographicDegrees(cartographicDegrees) });
     }
 
     /**
-     * To format the cartographic degrees.
-     * @param {{latitude: number, longitude: number, height: number}} cartographicDegrees - The cartographic degrees. 
-     * @returns {{lat, lon: string}} - The formatted cartographic degrees.
+     * Formats the cartographic degrees into a structured object.
+     * @param {{latitude: number, longitude: number, height: number}} cartographicDegrees - The cartographic degrees.
+     * @returns {{ "lat, lon": string }} An object containing the formatted latitude and longitude.
      */
     _formatCartographicDegrees(cartographicDegrees) {
         const { longitude, latitude } = cartographicDegrees;
@@ -399,14 +482,6 @@ class Points extends MeasureModeBase {
             "lat, lon": `${latitude.toFixed(6)},${longitude.toFixed(6)} `,
         }
     }
-
-    // /**
-    //  * Gets the points records.
-    //  * @returns {Array} The points records.
-    //  */
-    // get pointsRecords() {
-    //     return this._pointsRecords.map(cartesian3ToCartographicDegrees);
-    // }
 
     resetValue() {
         super.resetValue();

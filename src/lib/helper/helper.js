@@ -257,7 +257,9 @@ export function createPolylinePrimitive(coordinateArray, modeString, width = 3, 
         appearance: appearance,
         depthFailAppearance: appearance,
         asynchronous: false,
-        releaseGeometryInstances: false,
+        releaseGeometryInstances: true,
+        vertexCacheOptimize: true,
+        interleave: true,
     });
     // add custom properties positions and id to line primitive
     linePrimitive.positions = convertedCoordinates;
@@ -422,7 +424,9 @@ export function createPolygonPrimitive(coordinateArray, modeString, color = Cesi
         appearance: appearance,
         depthFailAppearance: appearance,
         asynchronous: false,
-        releaseGeometryInstances: false
+        releaseGeometryInstances: true,
+        vertexCacheOptimize: true,
+        interleave: true,
     });
 
     // set custom properties to the polygon primitive
@@ -466,7 +470,9 @@ export function createPolygonOutlinePrimitive(coordinateArray, modeString, color
         appearance: appearance,
         depthFailAppearance: appearance,
         asynchronous: false,
-        releaseGeometryInstances: false
+        releaseGeometryInstances: true,
+        vertexCacheOptimize: true,
+        interleave: true,
     });
 
     // set custom properties to the polygon outline primitive
@@ -634,7 +640,7 @@ export function computeDetailedPickPositions(startPosition, endPosition, scene, 
                 height !== undefined ? height : cartographic.height // Fallback to original height if sampling fails
             );
         });
-        return clampedPositions;
+        return { interpolatePoints: interpolatedCartographics, clampedPositions };
     }
     // getHeight() approach
     // the height of the surface
@@ -671,7 +677,7 @@ export function computeDetailedPickPositions(startPosition, endPosition, scene, 
     // return groundCartesianArray;
 
     // Fallback: return original interpolated points if sampling is not supported
-    return interpolatedPoints;
+    // return interpolatedPoints;
 }
 
 /**
@@ -680,39 +686,48 @@ export function computeDetailedPickPositions(startPosition, endPosition, scene, 
  * @param {Cesium.Cartesian3} pointB - The second Cartesian coordinate.
  * @param {Scene} scene - viewer.scene
  * @param {number} [interval=2] - The interval between interpolated points.
- * @returns {{distance: number, pickedCartesianGroup: Cesium.Cartesian3[]}} - An object containing:
+ * @returns {{distance: number, clampedPositions: Cesium.Cartesian3[]}} - An object containing:
  *  - `distance`: The total clamped distance between the two points.
- *  - `pickedCartesianGroup`: An array of interpolated Cartesian coordinates used in the calculation.
+ *  - `clampedPositions`: An array of interpolated Cartesian coordinates used in the calculation.
  */
 export function calculateClampedDistance(pointA, pointB, scene, interval = 2) {
-    const pickedCartesianGroup = computeDetailedPickPositions(pointA, pointB, scene, interval);
+    const { clampedPositions } = computeDetailedPickPositions(pointA, pointB, scene, interval);
     let distance = 0; // Initialize to 0 instead of null
 
-    for (let i = 0; i < pickedCartesianGroup.length - 1; i++) {
-        distance += Cesium.Cartesian3.distance(pickedCartesianGroup[i], pickedCartesianGroup[i + 1]);
+    for (let i = 0; i < clampedPositions.length - 1; i++) {
+        distance += Cesium.Cartesian3.distance(clampedPositions[i], clampedPositions[i + 1]);
     }
 
-    return { distance, pickedCartesianGroup };
+    return { distance, clampedPositions };
 }
 
 /**
- * Calculates the clamped distances between each pair of points in the array and the total distance.
- * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian coordinates.
- * @param {Scene} scene - viewer.scene
- * @param {number} [interval=2] - The interval between interpolated points.
- * @returns {{ distances: number[], totalDistance: number, pickedCartesianGroups: Cesium.Cartesian3[] }} - The distances between each pair of points and the total distance.
+ * Calculates clamped distances between consecutive points in an array of cartesian coordinates.
+ * 
+ * @param {Cartesian3[]} cartesianArray - Array of cartesian coordinates to calculate distances between.
+ * @param {Scene} scene - The Cesium scene object used for ground clamping.
+ * @param {number} [interval=2] - Number of intermediate points to generate between each pair of coordinates.
+ * @returns {Object} Object containing calculated distances and positions.
+ * @returns {number[]} .distances - Array of clamped distances between consecutive points.
+ * @returns {number} .totalDistance - Sum of all clamped distances.
+ * @returns {Cartesian3[][]} .clampedPositions - Array of arrays containing clamped intermediate positions.
  */
 export function calculateClampedDistanceFromArray(cartesianArray, scene, interval = 2) {
     const distances = [];
-    const pickedCartesianGroups = [];
+    const clampedPositionsArray = [];
     for (let i = 0; i < cartesianArray.length - 1; i++) {
-        const { distance, pickedCartesianGroup } = calculateClampedDistance(cartesianArray[i], cartesianArray[i + 1], scene, interval);
+        const { distance, clampedPositions } = calculateClampedDistance(
+            cartesianArray[i],
+            cartesianArray[i + 1],
+            scene,
+            interval
+        );
         distances.push(distance);
-        pickedCartesianGroups.push(pickedCartesianGroup);
+        clampedPositionsArray.push(...clampedPositions);
     }
 
     const totalDistance = distances.reduce((a, b) => a + b, 0);
-    return { distances, totalDistance, pickedCartesianGroups };
+    return { distances, totalDistance, clampedPositions: clampedPositionsArray };
 }
 
 /**
@@ -1139,138 +1154,3 @@ export function showCustomNotification(message, viewerContainer) {
     return notification;
 }
 
-
-/********************************************
- * DEPRECATED FUNCTIONS, TO BE REMOVE LATER *
- ********************************************/
-/**
- * Deprecated function. Use createPolylinePrimitive instead.
- * Create a line geometry instance.
- * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
- * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
- * @returns {Cesium.GeometryInstance} - The geometry instance of the line.
- */
-export function createLineGeometryInstance(coordinateArray, mode) {
-    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return;
-
-    const convertedCoordinates = coordinateArray.map((pos) => convertToCartesian3(pos));
-
-    return new Cesium.GeometryInstance({
-        geometry: new Cesium.PolylineGeometry({
-            positions: convertedCoordinates,
-            width: 3,
-            vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
-        }),
-        id: generateId(convertedCoordinates, mode),
-    });
-}
-
-/**
- * Deprecated function. Use createPolylinePrimitive instead.
- * Create a line primitive.
- * @param {Cesium.GeometryInstance} geometryInstance - line geometry instance
- * @param {Cesium.Color} color - the color of the line
- * @param {Cesium.Primitive} Primitive - the cesium primitive
- * @returns {Cesium.Primitive} - the line primitive
- */
-export function createLinePrimitive(geometryInstance, color = Cesium.Color.RED, Primitive) {
-    const material = new Cesium.Material.fromType('Color', { color: color });
-    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
-
-    return new Primitive({
-        geometryInstances: geometryInstance,
-        appearance: appearance,
-        depthFailAppearance: appearance,
-        asynchronous: false,
-        releaseGeometryInstances: false
-    });
-}
-
-/**
- * Deprecated function. Use createGroundPolylinePrimitive instead.
- * Create a clamped line geometry instance.
- * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
- * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
- * @returns {Cesium.GeometryInstance} - The geometry instance of the clamped line.
- */
-export function createClampedLineGeometryInstance(coordinateArray, mode) {
-    if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) return null;
-
-    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
-
-    return new Cesium.GeometryInstance({
-        geometry: new Cesium.GroundPolylineGeometry({
-            positions: convertedCoordinates,
-            width: 3
-        }),
-        id: generateId(convertedCoordinates, mode),
-    });
-}
-
-/**
- * Deprecated function. Use createGroundPolylinePrimitive instead.
- * Create a clamped line primitive.
- * @param {Cesium.GeometryInstance} geometryInstance - the geometry instance of the clamped line
- * @param {Cesium.Color} color - the color of the line
- * @param {Cesium.GroundPolylinePrimitive} GroundPolylinePrimitive - the cesium GroundPolylinePrimitive
- * @returns {Cesium.GroundPolylinePrimitive} - the clamped line primitive
- */
-export function createClampedLinePrimitive(geometryInstance, color = Cesium.Color.RED, GroundPolylinePrimitive) {
-    const material = new Cesium.Material.fromType('Color', { color: color });
-    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
-
-    return new GroundPolylinePrimitive({
-        geometryInstances: geometryInstance,
-        appearance: appearance,
-        asynchronous: true,
-        releaseGeometryInstances: false,
-    });
-}
-
-/**
- * Deprecated function: use createPolygonPrimitive instead.
- * Create a polygon geometry instance.
- * @param {Cesium.Cartesian3[]} coordinateArray - the array of cartesian3 coordinates of the polygon
- * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance" 
- * @returns {Cesium.GeometryInstance} - The geometry instance of the polygon.
- */
-export function createPolygonGeometryInstance(coordinateArray, mode) {
-    if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) return null;
-
-    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
-
-    return new Cesium.GeometryInstance({
-        geometry: new Cesium.PolygonGeometry({
-            polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
-            perPositionHeight: true,
-            vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT
-        }),
-        id: generateId(convertedCoordinates, mode),
-    });
-}
-
-/**
- * Deprecated function: use createPolygonPrimitive instead.
- * Create a polygon outline geometry instance.
- * @param {Cesium.Cartesian3[]} coordinateArray - the array of cartesian3 coordinates of the polygon
- * @param {string} mode - the mode string to filter the picked object. e.g. "multi_distance"
- * @param {Cesium.Color} color - the color of the polygon outline 
- * @returns {Cesium.GeometryInstance} - The geometry instance of the polygon outline.
- */
-export function createPolygonOutlineGeometryInstance(coordinateArray, mode, color = Cesium.Color.YELLOW) {
-    if (!Array.isArray(coordinateArray) || coordinateArray.length < 3) return null;
-
-    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
-
-    return new Cesium.GeometryInstance({
-        geometry: new Cesium.PolygonOutlineGeometry({
-            polygonHierarchy: new Cesium.PolygonHierarchy(convertedCoordinates),
-            perPositionHeight: true
-        }),
-        id: `${generateId(coordinateArray, mode)}`,
-        attributes: {
-            color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
-            depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(color)
-        }
-    });
-}

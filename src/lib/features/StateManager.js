@@ -1,5 +1,7 @@
-import * as Cesium from "cesium";
-
+import { Color } from "cesium";
+/**
+ * Manages the global state for measurement tools.
+ */
 export class StateManager {
     constructor() {
         // Initialize the state with your specified structure
@@ -11,6 +13,7 @@ export class StateManager {
                 measureModes: [],
                 toggleHelpBoxButton: null,
                 toggleLogBoxButton: null,
+                labelButton: null,
             },
             flags: {
                 isMeasurementComplete: false,
@@ -32,16 +35,20 @@ export class StateManager {
                 button: null,
             },
             color: {
-                hover: Cesium.Color.KHAKI,
-                select: Cesium.Color.BLUE,
-                default: Cesium.Color.YELLOWGREEN,
-                line: Cesium.Color.YELLOWGREEN,
-                submitted: Cesium.Color.DARKGREEN,
-                add: Cesium.Color.YELLOW,
-                move: Cesium.Color.YELLOW,
-                pointColor: Cesium.Color.RED,
+                add: Color.YELLOW,
+                default: Color.YELLOWGREEN,
+                hover: Color.KHAKI,
+                hoverChatPoint: Color.ALICEBLUE,
                 layerColor: null,
-                lineCacheColor: null
+                line: Color.YELLOWGREEN,
+                lineCacheColor: null,
+                move: Color.YELLOW,
+                pointColor: Color.RED,
+                polygon: Color.GREEN.withAlpha(0.8),
+                polygonOutline: Color.YELLOW,
+                random: Color.fromRandom({ alpha: 1.0 }),
+                select: Color.BLUE,
+                submitted: Color.DARKGREEN
             }
         };
 
@@ -49,7 +56,12 @@ export class StateManager {
         this._listeners = [];
     }
 
-    // Get a specific flag state property or the entire flags state
+    /**
+     * Gets a specific flag state property or the entire flags state.
+     *
+     * @param {string} [key] - The key of the flag state property.
+     * @returns {*} The flag state value for the specified key, or a shallow copy of all flags.
+     */
     getFlagState(key) {
         if (key) {
             if (key in this._state.flags) {
@@ -64,7 +76,12 @@ export class StateManager {
         }
     }
 
-    // Set a specific flag state property
+    /**
+     * Sets a specific flag state property.
+     *
+     * @param {string} key - The key of the flag state property.
+     * @param {*} value - The new value to assign.
+     */
     setFlagState(key, value) {
         if (key in this._state.flags) {
             this._state.flags[key] = value;
@@ -74,7 +91,12 @@ export class StateManager {
         }
     }
 
-    // Get a specific button state property or the entire button state
+    /**
+     * Gets a specific button state property or the entire button state.
+     *
+     * @param {string} [key] - The key of the button state property.
+     * @returns {*} The button state value for the specified key, or a shallow copy of all button states.
+     */
     getButtonState(key) {
         if (key) {
             if (key in this._state.button) {
@@ -88,7 +110,15 @@ export class StateManager {
         }
     }
 
-    // Set a specific button state property
+    /**
+     * Updates the state of a specific button and notifies listeners.
+     *
+     * @param {string} key - The identifier for the button state property.
+     * @param {*} value - The new value to assign.
+     *
+     * @example
+     * setButtonState("labelButton", labelButtonElement);
+     */
     setButtonState(key, value) {
         if (key in this._state.button) {
             this._state.button[key] = value;
@@ -98,8 +128,12 @@ export class StateManager {
         }
     }
 
-    // Get a specific element state property or the entire element state
-    getElementState(key) {
+/**
+ * Gets a specific element state property or the entire element state.
+ *
+ * @param {string} [key] - The key of the element state property.
+ * @returns {*} The element state value for the specified key, or a shallow copy of all element states.
+ */    getElementState(key) {
         if (key) {
             if (key in this._state.element) {
                 return this._state.element[key];
@@ -112,7 +146,12 @@ export class StateManager {
         }
     }
 
-    // Set a specific element state property
+    /**
+     * Sets a specific element state property.
+     *
+     * @param {string} key - The key of the element state property.
+     * @param {*} value - The new value to assign.
+     */
     setElementState(key, value) {
         if (key in this._state.element) {
             this._state.element[key] = value;
@@ -122,7 +161,12 @@ export class StateManager {
         }
     }
 
-    // Get a specific position state property or the entire position state
+    /**
+     * Gets a specific position state property or the entire position state.
+     *
+     * @param {string} [key] - The key of the position state property.
+     * @returns {*} The position state value for the specified key, or a shallow copy of all position states.
+     */
     getPositionState(key) {
         if (key) {
             if (key in this._state.position) {
@@ -136,7 +180,12 @@ export class StateManager {
         }
     }
 
-    // Set a specific position state property
+    /**
+     * Sets a specific position state property.
+     *
+     * @param {string} key - The key of the position state property.
+     * @param {Object} value - The new value to assign.
+     */
     setPositionState(key, value) {
         if (key in this._state.position) {
             if (typeof value === 'object' && value !== null) {
@@ -150,7 +199,12 @@ export class StateManager {
         }
     }
 
-    // Get a specific overlay state property or the entire overlay state
+    /**
+     * Gets a specific overlay state property or the entire overlay state.
+     *
+     * @param {string} [key] - The key of the overlay state property.
+     * @returns {*} The overlay state value for the specified key, or a shallow copy of all overlay states.
+     */
     getOverlayState(key) {
         if (key) {
             if (key in this._state.overlay) {
@@ -164,7 +218,12 @@ export class StateManager {
         }
     }
 
-    // Set a specific overlay state property
+    /**
+     * Sets a specific overlay state property.
+     *
+     * @param {string} key - The key of the overlay state property.
+     * @param {*} value - The new value to assign.
+     */
     setOverlayState(key, value) {
         if (key in this._state.overlay) {
             this._state.overlay[key] = value;
@@ -174,7 +233,12 @@ export class StateManager {
         }
     }
 
-    // Get a specific color state property or the entire color state
+    /**
+     * Gets a specific color state property or the entire color state.
+     *
+     * @param {string} [key] - The key of the color state property.
+     * @returns {*} The color state value for the specified key, or a shallow copy of all color states.
+     */
     getColorState(key) {
         if (key) {
             if (key in this._state.color) {
@@ -188,7 +252,12 @@ export class StateManager {
         }
     }
 
-    // Set a specific color state property
+    /**
+     * Sets a specific color state property.
+     *
+     * @param {string} key - The key of the color state property.
+     * @param {*} value - The new value to assign.
+     */
     setColorState(key, value) {
         if (key in this._state.color) {
             this._state.color[key] = value;
@@ -198,14 +267,25 @@ export class StateManager {
         }
     }
 
-    // Optional: Subscribe to state changes
+    /**
+     * Subscribes a listener function to state changes.
+     *
+     * @param {Function} listener - The function to be called on state changes.
+     */
     subscribe(listener) {
         if (typeof listener === 'function') {
             this._listeners.push(listener);
         }
     }
 
-    // Optional: Notify listeners of state changes
+    /**
+     * Notifies all subscribed listeners of a state change.
+     *
+     * @param {string} section - The section of the state that changed.
+     * @param {string} key - The key of the changed property.
+     * @param {*} value - The new value of the property.
+     * @private
+     */
     _notifyListeners(section, key, value) {
         for (const listener of this._listeners) {
             listener(section, key, value);

@@ -1,4 +1,10 @@
-import * as Cesium from "cesium";
+import {
+    Cartesian2,
+    Cartesian3,
+    defined,
+    CatmullRomSpline,
+    ScreenSpaceEventType,
+} from "cesium";
 import {
     editableLabel,
     updatePointerOverlay,
@@ -8,16 +14,27 @@ import {
     formatDistance,
     getPickedObjectType,
     createPolylinePrimitive,
+    generateIdByTimestamp,
+    getPrimitiveByPointPosition,
 } from "../helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
+
+/**
+ * @typedef {Object} Group
+ * @property {string|number} id - Group identifier
+ * @property {Cartesian3[]} coordinates - Array of position coordinates
+ * @property {number} labelNumber - Label counter for the group
+ */
+
+
 class ThreePointsCurve extends MeasureModeBase {
     /**
-     * Creates a new Three Points Curve instance.
-     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
-     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
-     * @param {HTMLElement} pointerOverlay - The HTML element for displaying names.
-     * @param {Function} logRecordsCallback - The callback function to log records.
+     * Creates a new ThreePointsCurve instance.
+     * @param {Viewer} viewer - The Cesium Viewer instance.
+     * @param {ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {Object} stateManager - The state manager instance.
+     * @param {Function} logRecordsCallback - Callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
@@ -29,20 +46,23 @@ class ThreePointsCurve extends MeasureModeBase {
             isDragMode: false,
         }
 
-        // coordinates data
+        // Coordinate management and related properties
         this.coords = {
             cache: [],          // Stores temporary coordinates during operations
             groups: [],         // Tracks all coordinates involved in operations
+            groupCounter: 0,    // Counter for the number of groups
             dragStart: null,    // Stores the initial position before a drag begins
+            dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
+            _records: []                // Stores the distance records
         };
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
-            movingPolyline: null,  // Line that visualizes dragging or moving
-            movingLabel: null,     // Label that updates during moving or dragging
-            dragPoint: null,                // Currently dragged point primitive
-            dragPolyline: null,                 // Line that connects the dragged point to the curve
-            dragLabel: null,                 // Label that updates during dragging
+            movingPolylines: [],      // Array of moving polylines
+            movingLabels: [],         // Array of moving labels
+            dragPoint: null,          // Currently dragged point primitive
+            dragPolylines: [],        // Array of dragging polylines
+            dragLabels: [],           // Array of dragging labels                
             hoveredPoint: null,             // Point that is currently hovered over
             hoveredLabel: null,             // Label that is currently hovered over
         };
@@ -60,13 +80,13 @@ class ThreePointsCurve extends MeasureModeBase {
      * LEFT CLICK FEATURES *
      ***********************/
     /**
-     * Handles left-click events to place points, draw and calculate curves.
-     * @param {{position: Cesium.Cartesian2}} movement - The movement event from the mouse.
+     * Handles left-click events to place points, draw curves, and calculate distances.
+     * @param {{position: Cartesian2}} movement - The mouse movement event.
      */
     handleLeftClick(movement) {
         // use move position for the position
         const cartesian = this.coordinate
-        if (!Cesium.defined(cartesian)) return;
+        if (!defined(cartesian)) return;
 
         const pickedObject = this.viewer.scene.pick(movement.position, 1, 1);
         const pickedObjectType = getPickedObjectType(pickedObject, "curve");
@@ -93,9 +113,11 @@ class ThreePointsCurve extends MeasureModeBase {
         }
     }
 
+    /**
+     * Initiates the measurement process by creating a new group or adding a point.
+     */
     startMeasure() {
         if (this.flags.isMeasurementComplete) {
-            // Set flag that the measurement has started
             this.flags.isMeasurementComplete = false;
             this.coords.cache = [];
         }
@@ -104,20 +126,28 @@ class ThreePointsCurve extends MeasureModeBase {
         if (this.coords.cache.length === 0) {
             // link both cache and groups to the same group
             // when cache changed groups will be changed due to reference by address
-            const newGroup = [];
+            const newGroup = {
+                id: generateIdByTimestamp(),
+                coordinates: [],
+                labelNumberIndex: this.coords.groupCounter,
+            };
             this.coords.groups.push(newGroup);
-            this.coords.cache = newGroup;
+            this.coords.cache = newGroup.coordinates;
+            this.coords.groupCounter++;
         }
 
-        // create point primitive
-        // check if the current position is very close to coordinate in groups, if yes then don't create new point
-        const isNearPoint = this.coords.groups.flat().some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.5); // doesn't matter with the first point, it mainly focus on the continue point
-        if (!isNearPoint) {
-            const point = createPointPrimitive(this.coordinate, Cesium.Color.RED, "curve_point_pending");
-            this.pointCollection.add(point);
-            // update coordinate data cache
-            this.coords.cache.push(this.coordinate);
-        }
+        // Check if the current coordinate is near any existing point (distance < 0.3)
+        const isNearPoint = this.coords.groups
+            .flatMap(group => group.coordinates)
+            .some(cart => Cartesian3.distance(cart, this.coordinate) < 0.3);
+        if (isNearPoint) return; // Do not create a new point if near an existing one
+
+        // Create a new point primitive
+        const point = createPointPrimitive(this.coordinate, this.stateManager.getColorState("pointColor"), "curve_point_pending");
+        this.pointCollection.add(point);
+
+        // Update the coordinate cache
+        this.coords.cache.push(this.coordinate);
 
         // Check if it had 3 points, then measure the curve distance
         if (this.coords.cache.length === 3) {
@@ -129,39 +159,26 @@ class ThreePointsCurve extends MeasureModeBase {
                 pendingPoints.forEach(p => p.id = p.id.replace("_pending", ""));
             }
 
-            // create curve points
-            const numInterpolationPoints = Math.max(
-                Math.round(
-                    Cesium.Cartesian3.distance(start, middle) +
-                    Cesium.Cartesian3.distance(middle, end)
-                ) * 30,
-                50
-            );
-            const curvePoints = this.createCurvePoints(
-                start,
-                middle,
-                end,
-                numInterpolationPoints
-            );
+            // Remove moving primitives
+            super.removeMovingPrimitives();
 
-            // create curve line primitive
-            if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-            this.interactivePrimitives.movingPolyline = null;
-            const linePrimitive = createPolylinePrimitive(curvePoints, "curve_line", 3, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
-            linePrimitive.id = generateId([start, middle, end], "curve_line");
-            linePrimitive.positions = [start, middle, end];
-            this.viewer.scene.primitives.add(linePrimitive);
+            // Create curve line primitive
+            const { linePrimitive: line, curvePoints } = this.createCurveLinePrimitive(start, middle, end, "curve_line", 3, this.stateManager.getColorState("line"));
+            const linePrimitive = this.viewer.scene.primitives.add(line);
+            this.interactivePrimitives.movingPolylines.push(linePrimitive);
 
             // create label primitive
-            if (this.interactivePrimitives.movingLabel) this.interactivePrimitives.movingLabel.show = false;
+            // if (this.interactivePrimitives.movingLabel) this.interactivePrimitives.movingLabel.show = false;
             const totalDistance = this.measureCurveDistance(curvePoints);
             const label = createLabelPrimitive(start, end, totalDistance);
-            const midPoint = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
-            label.id = generateId(midPoint, "curve_label");
-            this.labelCollection.add(label);
+            const midPoint = Cartesian3.midpoint(start, end, new Cartesian3());
+            label.position = midPoint;
+            label.id = generateId(this.coords.cache, "curve_label");
+            const labelPrimitive = this.labelCollection.add(label);
+            labelPrimitive.positions = [start, end];    // store positions data in label primitive
 
             // log the curve record
-            this.logRecordsCallback(totalDistance.toFixed(2));
+            this.updateLogRecords(totalDistance);
 
             // set flag that the measurement has ended
             this.flags.isMeasurementComplete = true;
@@ -176,103 +193,83 @@ class ThreePointsCurve extends MeasureModeBase {
      * MOUSE MOVE FEATURES *
      ***********************/
     /**
-     * Handles mouse move events to display moving dot with mouse.
-     * @param {{endPosition: Cesium.Cartesian2}} movement
+     * Handles mouse move events to update the current coordinate and display pointer overlay.
+     * @param {{endPosition: Cartesian2}} movement - The mouse movement event.
      */
     handleMouseMove(movement) {
         const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-        if (!Cesium.defined(cartesian)) return;
-
+        if (!defined(cartesian)) return;
+        // update coordinate
         this.coordinate = cartesian;
 
         const pickedObjects = this.viewer.scene.drillPick(movement.endPosition, 3, 1, 1);
 
         // update pointerOverlay: the moving dot with mouse
         const pointer = this.stateManager.getOverlayState("pointer");
-        pickedObjects && updatePointerOverlay(this.viewer, pointer, cartesian, pickedObjects)
+        updatePointerOverlay(this.viewer, pointer, cartesian, pickedObjects)
 
-        if (this.coords.cache.length > 1 && !this.flags.isMeasurementComplete) {
-            // create curve line for the points
-            const [start, middle] = this.coords.cache;
-            const numInterpolationPoints = Math.max(
-                Math.round(
-                    Cesium.Cartesian3.distance(start, middle) +
-                    Cesium.Cartesian3.distance(middle, this.coordinate)
-                ) * 5,
-                20
-            );
+        // Handle different scenarios based on the state of the tool
+        // the condition to determine if it is measuring
+        const isMeasuring = this.coords.cache.length > 0 && !this.flags.isMeasurementComplete;
 
-            const curvePoints = this.createCurvePoints(
-                start,
-                middle,
-                this.coordinate,
-                numInterpolationPoints
-            );
+        switch (true) {
+            case isMeasuring:
+                if (this.coords.cache.length > 1 && this.coords.cache.length < 3) {
+                    // Remove existing moving primitives
+                    super.removeMovingPrimitives();
 
-            // recreate line primitive
-            if (this.interactivePrimitives.movingPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.movingPolyline);
-            // create new moving line primitive
-            const movingLinePrimitive = createPolylinePrimitive(curvePoints, "curve_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
-            movingLinePrimitive.id = generateId([start, middle, this.coordinate], "curve_line_moving");
-            movingLinePrimitive.positions = [start, middle, this.coordinate];
-            this.interactivePrimitives.movingPolyline = this.viewer.scene.primitives.add(movingLinePrimitive);
+                    // Compute the curve points
+                    const [start, middle] = this.coords.cache;
 
-            // create moving label primitive
-            const distance = this.measureCurveDistance(curvePoints);
-            const midPoint = Cesium.Cartesian3.midpoint(start, this.coordinate, new Cesium.Cartesian3());
-            if (this.interactivePrimitives.movingLabel) {
-                this.interactivePrimitives.movingLabel.show = true;
-                this.interactivePrimitives.movingLabel.showBackground = false;
-                this.interactivePrimitives.movingLabel.position = midPoint;
-                this.interactivePrimitives.movingLabel.text = formatDistance(distance);
-                this.interactivePrimitives.movingLabel.id = generateId(midPoint, "curve_label_moving");
-            } else {
-                const label = createLabelPrimitive(start, this.coordinate, distance);
-                label.id = generateId(midPoint, "curve_label_moving");
-                label.showBackground = false;
-                this.interactivePrimitives.movingLabel = this.labelCollection.add(label);
-            }
+                    // Create current line primitive
+                    const { linePrimitive: movingLine, curvePoints } = this.createCurveLinePrimitive(start, middle, this.coordinate, "curve_line_moving", 3, this.stateManager.getColorState("move"));
+                    const movingLinePrimitive = this.viewer.scene.primitives.add(movingLine);
+                    this.interactivePrimitives.movingPolylines.push(movingLinePrimitive);
+
+                    // Create label primitive
+                    const distance = this.measureCurveDistance(curvePoints);
+                    const midPoint = Cartesian3.midpoint(start, this.coordinate, new Cartesian3());
+                    const label = createLabelPrimitive(start, this.coordinate, distance);
+                    label.id = generateId(midPoint, "curve_label_moving");
+                    label.showBackground = false;
+                    label.position = midPoint;
+                    const labelPrimitive = this.labelCollection.add(label);
+                    labelPrimitive.positions = [start, middle, this.coordinate]; // store positions data in label primitive
+                    this.interactivePrimitives.movingLabels.push(labelPrimitive);
+                }
+                break;
+            default:
+                this.handleHoverHighlighting(pickedObjects[0]);
+                break;
         }
-        // handle hover highlighting
-        if (this.coords.cache.length === 0) {
-            this.handleHoverHighlighting(pickedObjects[0])
-        }
-
     }
 
+    /**
+     * Highlights primitives when hovering with the mouse.
+     * @param {*} pickedObject - The object from the scene pick.
+     */
     handleHoverHighlighting(pickedObject) {
         const pickedObjectType = getPickedObjectType(pickedObject, "curve");
 
         // reset highlighting
-        const resetHighlighting = () => {
-            if (this.interactivePrimitives.hoveredPoint) {
-                this.interactivePrimitives.hoveredPoint.outlineColor = Cesium.Color.RED;
-                this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
-                this.interactivePrimitives.hoveredPoint = null;
-            }
-            if (this.interactivePrimitives.hoveredLabel) {
-                this.interactivePrimitives.hoveredLabel.fillColor = Cesium.Color.WHITE;
-                this.interactivePrimitives.hoveredLabel = null;
-            }
-        }
-        resetHighlighting();
+        super.resetHighlighting();
 
         const hoverColor = this.stateManager.getColorState("hover");
 
         switch (pickedObjectType) {
             case "point":  // highlight the point when hovering
-                const pointPrimitive = pickedObject.primitive;
-                if (pointPrimitive) {
-                    pointPrimitive.outlineColor = hoverColor;
-                    pointPrimitive.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = pointPrimitive;
+                const point = pickedObject.primitive;
+                if (point) {
+                    point.outlineColor = hoverColor;
+                    point.outlineWidth = 2;
+                    this.interactivePrimitives.hoveredPoint = point;
                 }
                 break;
             case "label":   // highlight the label when hovering
-                const labelPrimitive = pickedObject.primitive;
-                if (labelPrimitive) {
-                    labelPrimitive.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = labelPrimitive;
+                const label = pickedObject.primitive;
+                if (label) {
+                    label.fillColor = hoverColor;
+                    this.interactivePrimitives.hoveredLabel = label;
                 }
                 break;
             default:
@@ -284,11 +281,15 @@ class ThreePointsCurve extends MeasureModeBase {
     /*****************
      * DRAG FEATURES *
      *****************/
+    /**
+     * Initiates the drag action for curve measurement.
+     * @param {*} movement - The movement event triggering drag start.
+     */
     handleDragStart(movement) {
         // initialize camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
-        if (this.coords.groups.length > 0 && this.coords.cache.length === 0) {
+        if (this.coords.groups.length > 0 && this.coords.cache.length === 0) { // when the measure is ended and with at least one completed measure
             const pickedObjects = this.viewer.scene.drillPick(movement.position, 3, 1, 1);
 
             const isPoint = pickedObjects.find(p => {
@@ -299,202 +300,191 @@ class ThreePointsCurve extends MeasureModeBase {
             });
 
             // error handling: if no point primitives found then early exit
-            if (!Cesium.defined(isPoint)) return;
+            if (!defined(isPoint)) return;
 
-            // disable camera movement
+            // Disable camera movement
             this.viewer.scene.screenSpaceCameraController.enableInputs = false;
 
-            // set drag point position
+            // Set drag start position
             this.coords.dragStart = isPoint.primitive.position.clone();
             this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
 
-            // set move event for dragging
+            // Set move event for dragging
             this.handler.setInputAction((movement) => {
                 this.handleDragMove(movement, isPoint);
-            }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+            }, ScreenSpaceEventType.MOUSE_MOVE);
         }
     }
 
-
     /**
-     * 
-     * @param {{endPosition: Cesium.Cartesian2}} movement 
-     * @param {Cesium.Primitive} pointPrimitive - The dragging point primitive
-     * @param {Number} groupIndexForDragPoint - The index of before drag position in the group from this.coords.groups
-     * @returns 
+     * Processes drag movement by updating the dragged point and curve primitive.
+     * @param {{endPosition: Cartesian2}} movement - The mouse movement event during drag.
+     * @param {PointPrimitive} selectedPoint - The point primitive being dragged.
      */
     handleDragMove(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
-        const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
+        const moveDistance = Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
         if (moveDistance > dragThreshold) {
             this.flags.isDragMode = true
         };
 
         if (this.flags.isDragMode) {
-            // set existed point, label primitives to no show, line primitive to remove
+            // set existed point, line primitive to remove
+            const { linePrimitives } = getPrimitiveByPointPosition(
+                this.coords.dragStart,
+                `annotate_curve`,
+                this.viewer.scene,
+                this.pointCollection,
+                this.labelCollection
+            );
             selectedPoint.primitive.show = false;
-            const groupIndex = this.coords.groups.findIndex(group => group.some(coord => Cesium.Cartesian3.equals(coord, this.coords.dragStart)));
-            if (groupIndex === -1) return;
-            const group = this.coords.groups[groupIndex];
-            const oldMidPoint = Cesium.Cartesian3.midpoint(group[0], group[2], new Cesium.Cartesian3());
+            linePrimitives.forEach(p => this.viewer.scene.primitives.remove(p));
+
+            // Find the group containing the dragged point
+            const group = this.coords.groups.find(group => group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart)));
+            if (!group) return;
+
+            // find and set existed label to no show
+            const oldMidPoint = Cartesian3.midpoint(group.coordinates[0], group.coordinates[2], new Cartesian3());
             const existedLabel = this.labelCollection._labels.find(l =>
                 l.id &&
                 l.id.includes("curve_label") &&
                 !l.id.includes("moving") &&
-                Cesium.Cartesian3.equals(l.position, oldMidPoint)
+                Cartesian3.equals(l.position, oldMidPoint)
             );
             if (existedLabel) existedLabel.show = false;
-            const existedLine = this.viewer.scene.primitives._primitives.find(p =>
-                p.geometryInstances &&
-                p.geometryInstances.id &&
-                p.geometryInstances.id.includes("curve_line") &&
-                !p.geometryInstances.id.includes("moving") &&
-                p.geometryInstances.geometry._positions.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart))
-            );
-            if (existedLine) this.viewer.scene.primitives.remove(existedLine);
 
             // set point overlay no show
             const pointer = this.stateManager.getOverlayState("pointer");
             pointer.style.display = "none";  // hide pointer overlay so it won't interfere with dragging
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-            if (!Cesium.defined(cartesian)) return;
+            if (!defined(cartesian)) return;
             this.coordinate = cartesian;
 
             // create or update dragging point primitive
             if (this.interactivePrimitives.dragPoint) {     // if dragging point existed, update the point
                 // highlight the point primitive
-                this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.YELLOW;
+                this.interactivePrimitives.dragPoint.outlineColor = this.stateManager.getColorState("move");
                 this.interactivePrimitives.dragPoint.outlineWidth = 2;
                 // update moving point primitive
                 this.interactivePrimitives.dragPoint.position = cartesian;
                 this.interactivePrimitives.dragPoint.id = generateId(cartesian, "curve_point_moving");
             } else {      // if dragging point not existed, create a new point
-                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Cesium.Color.RED, "curve_point_moving");
+                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), this.stateManager.getColorState("pointColor"), "curve_point_moving");
                 this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 
-            // set moving position
-            const positionIndex = this.coords.groups[groupIndex].findIndex(coord => Cesium.Cartesian3.equals(coord, this.coords.dragStart));
-            const newDragPositions = [...this.coords.groups[groupIndex]];
+            // For line primitive
+            // Remove existing moving lines 
+            super.removeDragMovingPrimitives({ removeLines: true, removeLabels: false });
+
+            // Update drag moving position, DO NOT update the group coordinates during moving.
+            const positionIndex = group.coordinates.findIndex(cart => Cartesian3.equals(cart, this.coords.dragStart));
+            const newDragPositions = [...group.coordinates];
             newDragPositions[positionIndex] = cartesian;
             const [start, middle, end] = newDragPositions;
 
-            // create curve points
-            const numInterpolationPoints = Math.max(
-                Math.round(
-                    Cesium.Cartesian3.distance(start, middle) +
-                    Cesium.Cartesian3.distance(middle, end)
-                ) * 5,
-                20
-            );
-            const curvePoints = this.createCurvePoints(start, middle, end, numInterpolationPoints);
+            // Create moving line primitive
+            const { linePrimitive: movingLine, curvePoints } = this.createCurveLinePrimitive(start, middle, end, "curve_line_moving", 3, this.stateManager.getColorState("move"));
+            const movingLinePrimitive = this.viewer.scene.primitives.add(movingLine);
+            this.interactivePrimitives.dragPolylines.push(movingLinePrimitive);
 
-            // recreate line primitive
-            if (this.interactivePrimitives.dragPolyline) this.viewer.scene.primitives.remove(this.interactivePrimitives.dragPolyline);
-            const linePrimitive = createPolylinePrimitive(curvePoints, "curve_line_moving", 3, Cesium.Color.YELLOW, this.cesiumPkg.Primitive);
-            linePrimitive.id = generateId([start, middle, end], "curve_line_moving");
-            linePrimitive.positions = [start, middle, end];
-            this.interactivePrimitives.dragPolyline = this.viewer.scene.primitives.add(linePrimitive);
-
-            // update label primitive
+            // For label primitive
+            // Update or create the label primitive
             const distance = this.measureCurveDistance(curvePoints);
-            const midPoint = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
-            if (this.interactivePrimitives.dragLabel) {
-                this.interactivePrimitives.dragLabel.show = true;
-                this.interactivePrimitives.dragLabel.showBackground = false;
-                this.interactivePrimitives.dragLabel.position = midPoint;
-                this.interactivePrimitives.dragLabel.id = generateId([start, middle, end], "curve_label_moving");
-                this.interactivePrimitives.dragLabel.text = formatDistance(distance);
+            const midPoint = Cartesian3.midpoint(start, end, new Cartesian3());
+            const labelPrimitive = this.interactivePrimitives.dragLabels[0];
+
+            if (labelPrimitive) {
+                this.interactivePrimitives.dragLabels[0].id = generateId(midPoint, `curve_label_moving`);
+                this.interactivePrimitives.dragLabels[0].position = midPoint;
+                this.interactivePrimitives.dragLabels[0].text = `${formatDistance(distance)}`;
+                this.interactivePrimitives.dragLabels[0].showBackground = false;
+                this.interactivePrimitives.dragLabels[0].positions = [start, middle, end];  // store positions data in label primitive
             } else {
-                const label = createLabelPrimitive(start, end, distance);
-                label.id = generateId([start, middle, end], "curve_label_moving");
-                label.showBackground = false;
-                this.interactivePrimitives.dragLabel = this.labelCollection.add(label);
+                const labelPrimitive = createLabelPrimitive(start, end, distance);
+                labelPrimitive.id = generateId(midPoint, `curve_label_moving`);
+                labelPrimitive.showBackground = false;
+                const addedLabelPrimitive = this.labelCollection.add(labelPrimitive);
+                addedLabelPrimitive.positions = [start, middle, end];   // store positions data in label primitive
+                this.interactivePrimitives.dragLabels.push(addedLabelPrimitive);
             }
         }
     }
 
+    /**
+     * Concludes the drag action, finalizing the position and updating the curve primitive.
+     */
     handleDragEnd() {
         // set camera movement back to default
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
             // reset dragging point style
-            this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.RED;
+            this.interactivePrimitives.dragPoint.outlineColor = this.stateManager.getColorState("pointColor");
             this.interactivePrimitives.dragPoint.outlineWidth = 0;
 
-            const groupIndex = this.coords.groups.findIndex(group => group.find(coord => Cesium.Cartesian3.equals(coord, this.coords.dragStart)));
+            // Find the group containing the dragged point
+            const groupIndex = this.coords.groups.findIndex(group => group.coordinates.some(coord => Cartesian3.equals(coord, this.coords.dragStart)));
+            if (groupIndex === -1) return; // Error handling: no group found
             const group = this.coords.groups[groupIndex];
-            const positionIndex = this.coords.groups[groupIndex].findIndex(coord => Cesium.Cartesian3.equals(coord, this.coords.dragStart));
+            const positionIndex = group.coordinates.findIndex(coord => Cartesian3.equals(coord, this.coords.dragStart));
 
-            // remove dragging temporary moving primitives
-            this.viewer.scene.primitives.remove(this.interactivePrimitives.dragPolyline);
-            this.interactivePrimitives.dragPolyline = null;
-            if (this.interactivePrimitives.dragLabel) this.labelCollection.remove(this.interactivePrimitives.dragLabel);
-            this.interactivePrimitives.dragLabel = null;
-            if (this.interactivePrimitives.dragPoint) this.pointCollection.remove(this.interactivePrimitives.dragPoint);
-            this.interactivePrimitives.dragPoint = null;
+            // Remove dragging point, dragging lines and dragging labels
+            super.removeDragMovingPrimitives({ removePoint: true, removeLines: true, removeLabels: true });
 
             // update existed point primitive
             const existedPoint = this.pointCollection._pointPrimitives.find(p =>
                 p.id &&
-                p.id.includes("curve_point") &&
-                !p.id.includes("moving") &&
-                Cesium.Cartesian3.equals(p.position, this.coords.dragStart)
+                p.id.includes(`curve_point`) &&
+                Cartesian3.equals(p.position, this.coords.dragStart)
             );
             if (existedPoint) {
-                existedPoint.id = generateId(this.coordinate, "curve_point");
-                existedPoint.position = this.coordinate;
                 existedPoint.show = true;
+                existedPoint.position = this.coordinate;
+                existedPoint.id = generateId(this.coordinate, `curve_point`);
             }
 
-            // lookup existed line and label primitive
-            const oldMidPoint = Cesium.Cartesian3.midpoint(group[0], group[2], new Cesium.Cartesian3());
-            const existedLabel = this.labelCollection._labels.find(l =>
-                l.id &&
-                l.id.includes("curve_label") &&
-                !l.id.includes("moving") &&
-                Cesium.Cartesian3.equals(l.position, oldMidPoint)
+            // Find and update the existing label primitive
+            const oldMidPoint = Cartesian3.midpoint(group.coordinates[0], group.coordinates[2], new Cartesian3());
+            const labelPrimitive = this.labelCollection._labels.find(
+                label =>
+                    label.id &&
+                    label.id.startsWith(`annotate_curve_label`) &&
+                    Cartesian3.equals(label.position, oldMidPoint)
             );
 
-            // update the this.coords.groups
-            this.coords.groups[groupIndex][positionIndex] = this.coordinate;
+            // Update the coordinate data
+            group.coordinates[positionIndex] = this.coordinate;
+            const [start, middle, end] = group.coordinates;
 
-            // update existed label primitive, recreate new line primitive
-            const newMidPoint = Cesium.Cartesian3.midpoint(group[0], group[2], new Cesium.Cartesian3());
-            if (existedLabel) {
-                existedLabel.show = true;
-                existedLabel.showBackground = true;
-                existedLabel.position = newMidPoint;
-                existedLabel.text = formatDistance(this.measureCurveDistance(group));
-                existedLabel.id = generateId([group[0], group[2]], "curve_label");
-            }
-
-            // recreate new line primitive
-            const numInterpolationPoints = Math.max(
-                Math.round(
-                    Cesium.Cartesian3.distance(group[0], group[1]) +
-                    Cesium.Cartesian3.distance(group[1], group[2])
-                ) * 5,
-                20
-            );
-            const curvePoints = this.createCurvePoints(group[0], group[1], group[2], numInterpolationPoints);
-            const linePrimitive = createPolylinePrimitive(curvePoints, "curve_line", 3, Cesium.Color.YELLOWGREEN, this.cesiumPkg.Primitive);
-            linePrimitive.id = generateId([group[0], group[1], group[2]], "curve_line");
-            linePrimitive.positions = [group[0], group[1], group[2]];
+            // Create new line primitive
+            const { linePrimitive, curvePoints } = this.createCurveLinePrimitive(start, middle, end, "curve_line", 3, this.stateManager.getColorState("line"));
             this.viewer.scene.primitives.add(linePrimitive);
 
+            // update existed label primitive
+            const newMidPoint = Cartesian3.midpoint(start, end, new Cartesian3());
+            const distance = this.measureCurveDistance(curvePoints);
+            if (labelPrimitive) {
+                labelPrimitive.text = formatDistance(distance);
+                labelPrimitive.id = generateId([start, end], "curve_label");
+                labelPrimitive.position = newMidPoint;
+                labelPrimitive.show = true;
+                labelPrimitive.showBackground = true;
+            }
+
             // log the curve record
-            this.logRecordsCallback(this.measureCurveDistance(group).toFixed(2));
+            // this.logRecordsCallback(this.measureCurveDistance(group).toFixed(2));
+            this.updateLogRecords(distance);
 
             // reset dragging primitive and flags
             this.flags.isDragMode = false;
         }
         this.handler.setInputAction((movement) => {
             this.handleMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        }, ScreenSpaceEventType.MOUSE_MOVE);
 
     }
 
@@ -503,16 +493,16 @@ class ThreePointsCurve extends MeasureModeBase {
      * HELPER FUNCTIONS *
      ********************/
     /**
-    * Creates curve points between three specified points.
-    * @param {Cesium.Cartesian3} startPoint - The starting point of the curve.
-    * @param {Cesium.Cartesian3} middlePoint - The middle point of the curve.
-    * @param {Cesium.Cartesian3} endPoint - The ending point of the curve.
-    * @param {number} numInterpolationPoints - The number of interpolation points to create.
-    * @returns {Cesium.Cartesian3[]} An array of points representing the curve.
-    */
+     * Creates an array of interpolated curve points between three specified points.
+     * @param {Cartesian3} startPoint - The starting point of the curve.
+     * @param {Cartesian3} middlePoint - The middle point of the curve.
+     * @param {Cartesian3} endPoint - The ending point of the curve.
+     * @param {number} numInterpolationPoints - The number of interpolation points to generate.
+     * @returns {Cartesian3[]} An array of Cartesian3 points representing the curve.
+     */
     createCurvePoints(startPoint, middlePoint, endPoint, numInterpolationPoints) {
         if (!startPoint || !middlePoint || !endPoint) return;
-        const spline = new Cesium.CatmullRomSpline({
+        const spline = new CatmullRomSpline({
             times: [0, 0.5, 1],
             points: [startPoint, middlePoint, endPoint],
         });
@@ -522,13 +512,13 @@ class ThreePointsCurve extends MeasureModeBase {
         );
 
         // Ensure the start, middle, and end points are included
-        if (!Cesium.Cartesian3.equals(interpolatedPoints[0], startPoint)) {
+        if (!Cartesian3.equals(interpolatedPoints[0], startPoint)) {
             interpolatedPoints.unshift(startPoint);
         }
-        if (!Cesium.Cartesian3.equals(interpolatedPoints[Math.floor(numInterpolationPoints / 2)], middlePoint)) {
+        if (!Cartesian3.equals(interpolatedPoints[Math.floor(numInterpolationPoints / 2)], middlePoint)) {
             interpolatedPoints.splice(Math.floor(numInterpolationPoints / 2), 0, middlePoint);
         }
-        if (!Cesium.Cartesian3.equals(interpolatedPoints[interpolatedPoints.length - 1], endPoint)) {
+        if (!Cartesian3.equals(interpolatedPoints[interpolatedPoints.length - 1], endPoint)) {
             interpolatedPoints.push(endPoint);
         }
 
@@ -536,18 +526,70 @@ class ThreePointsCurve extends MeasureModeBase {
     }
 
     /**
-     * Measures the distance along a curve.
-     * @param {Cesium.Cartesian3[]} curvePoints - The points along the curve.
-     * @returns {Number} The total distance of the curve.
+     * Calculates the total distance along a curve defined by an array of points.
+     * @param {Cartesian3[]} curvePoints - The points along the curve.
+     * @returns {number} The total distance of the curve.
      */
     measureCurveDistance(curvePoints) {
-        return curvePoints.reduce(
+        if (!Array.isArray(curvePoints) && curvePoints.length === 0) return;
+        const distance = curvePoints.reduce(
             (acc, point, i, arr) =>
                 i > 0
-                    ? acc + Cesium.Cartesian3.distance(arr[i - 1], point)
+                    ? acc + Cartesian3.distance(arr[i - 1], point)
                     : acc,
             0
         );
+        return distance;
+    }
+
+    /**
+     * Creates a curve line primitive and returns the resulting primitive along with the interpolated curve points.
+     * @param {Cartesian3} start - The starting point of the curve.
+     * @param {Cartesian3} middle - The middle point of the curve.
+     * @param {Cartesian3} end - The ending point of the curve.
+     * @param {string} modeString - Mode identifier for the curve primitive.
+     * @param {number} width - The width of the curve line.
+     * @param {*} color - The color of the curve line.
+     * @param {number} numInterpolationPoints - The number of interpolation points to create.
+     * @returns {{ linePrimitive: Primitive, curvePoints: Cartesian3[] }} An object containing the curve line primitive and the interpolated points.
+     */
+    createCurveLinePrimitive(start, middle, end, modeString, width, color, numInterpolationPoints) {
+        if (!numInterpolationPoints) {
+            numInterpolationPoints = Math.max(
+                Math.round(
+                    Cartesian3.distance(start, middle) +
+                    Cartesian3.distance(middle, end)
+                ) * 5,
+                20
+            );
+        }
+        const curvePoints = this.createCurvePoints(start, middle, end, numInterpolationPoints);
+        const linePrimitive = createPolylinePrimitive(
+            curvePoints,
+            modeString,
+            width,
+            color,
+            this.cesiumPkg.Primitive
+        );
+
+        linePrimitive.id = generateId([start, middle, end], modeString);
+
+        return { linePrimitive, curvePoints };
+    }
+
+    /**
+     * Updates the log records with the measured curve distance.
+     * @param {number} distance - The measured curve distance.
+     * @returns {number} The logged curve distance.
+     */
+    updateLogRecords(distance) {
+        // update log records in logBox
+        this.logRecordsCallback(distance.toFixed(2));
+
+        // update this.coords._records
+        this.coords._records.push(distance);
+
+        return distance;
     }
 
     resetValue() {

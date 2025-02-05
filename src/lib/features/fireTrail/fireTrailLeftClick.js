@@ -275,11 +275,7 @@ function continueMeasure(position) {
         group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, position))
     );
 
-    if (!group) {
-        console.warn("Group not found for the given position.");
-        //TODO: here it can picked fire trail in the layer and continue, assign new id and set it to the cache
-        return;
-    }
+    if (!group) return;
 
     // Determine the indices of the previous and current points based on the measurement direction
     const [prevIndex, currIndex] = this.flags.isReverse
