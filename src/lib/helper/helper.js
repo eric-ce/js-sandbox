@@ -578,7 +578,8 @@ export function getPickedObjectType(pickedObject, modeString) {
     } else if (id.startsWith(`${searchString}_label`)) {
         return 'label';
     } else {
-        return 'other';
+        // return 'other';
+        return;
     }
 }
 
