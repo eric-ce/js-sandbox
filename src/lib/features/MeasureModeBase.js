@@ -1149,6 +1149,15 @@ export default class MeasureModeBase {
             labelButton.style.display = shouldDisplay ? 'block' : 'none';
         };
 
+        const updateLabelButtonOverlay = (labelButton) => {
+            const labelButtonText = labelButton.innerHTML.toLowerCase();
+            if (labelButtonText === "hide") {
+                this.updateButtonOverlay(labelButton, "toggle label off");
+            } else if (labelButtonText === "show") {
+                this.updateButtonOverlay(labelButton, "toggle label on");
+            }
+        }
+
         // Get the map cesium web component
         const mapCesium = document.querySelector("map-cesium");
         // Get the measure toolbox under map cesium
@@ -1161,10 +1170,15 @@ export default class MeasureModeBase {
             existingLabelButton.remove();
         }
         // create the label button
-        const labelButton = createButton("Show", "toggle-label-button", this.handleLabelToggle.bind(this, modeString));
+        const labelButton = createButton("Hide", "toggle-label-button", this.handleLabelToggle.bind(this, modeString));
         labelButton.style.display = "none"; // Initially hidden
         this.stateManager.setButtonState("labelButton", labelButton); // Set the label button state
 
+        // initialize the overlay text for the label button
+        updateLabelButtonOverlay(labelButton);
+
+        // Set up a MutationObserver on labelButton to update the overlay whenever its text changes.
+        setUpObserver(labelButton, () => { updateLabelButtonOverlay(labelButton) }, { childList: true, characterData: true, subtree: true });
 
         // Set up a MutationObserver to watch for the presence of required elements
         setUpObserver(measureToolbox.shadowRoot, (_, obs) => {
@@ -1181,9 +1195,6 @@ export default class MeasureModeBase {
 
             const labelButton = this.stateManager.getButtonState("labelButton");
             if (!labelButton) return; // Error handling: Exit if the label button is not found
-
-            // Update button overlay text
-            this.updateButtonOverlay(labelButton, "toggle label on or off");
 
             // Position buttons
             const BUTTON_WIDTH = 45; // Width of each button in pixels; This is common width of annotation buttons

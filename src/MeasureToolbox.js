@@ -536,6 +536,20 @@ export class MeasureToolbox extends HTMLElement {
         toolbar.appendChild(clearButton);
 
         this.stateManager.getButtonState("clearButton").addEventListener("click", () => {
+            // check fireTrail mode to prevent switching/deactivation if there are unsubmitted lines
+            const activeButton = this.stateManager.getButtonState("activeButton");
+
+            if (activeButton && activeButton.classList.contains("fire-trail")) {
+                const fireTrailMode = this.shadowRoot.querySelector("fire-trail-mode");
+                const checkUnsubmittedLines = fireTrailMode.checkUnsubmittedLines();
+                if (checkUnsubmittedLines) {
+                    const confirmed = confirm("There is unsubmitted fireTrail, please confirm to clear all annotations.");
+                    if (!confirmed) {
+                        return; // Exit if the user cancels
+                    }
+                }
+            }
+
             // remove line primitives by id
             this.viewer.scene.primitives._primitives.filter(
                 (p) =>
