@@ -12,24 +12,6 @@ class CesiumTools {
         this.coordinate = null;
         this._emitter = null;
         this.counter = 0;
-
-        this.emitter = new EmitterClass();
-
-        const listener = new ListenerClass();
-        listener.emitter = this.emitter
-
-        this.groupData = [
-            { id: 1, name: "Group 1" },
-            { id: 2, name: "Group 2" },
-            { id: 3, name: "Group 3" },
-        ]
-
-        this.initializeData();
-
-        setTimeout(() => {
-            this.initializeData2();
-            this.emitter.emit("initializeData", this.groupData);
-        }, 1000);
     }
 
     get emitter() {
@@ -40,12 +22,26 @@ class CesiumTools {
         this._emitter = emitter;
     }
 
-    initializeData() {
-        this.emitter.emit("initializeData", this.groupData);
+    initiateCoordinate() {
+
     }
 
-    initializeData2() {
-        this.groupData.push({ id: 4, name: "Group 4" });
+    counterIncrementTil20() {
+        this.counter = 0;
+        for (let i = 0; i < 20; i++) {
+            this.counter++;
+            this.emitter.emit("counterReached20", this.counter);
+        }
+    }
+
+    convertCart3ToCartDegrees(cartesian3) {
+        const cartographic = Cesium.Cartographic.fromCartesian(cartesian3);
+        const cartographicDegrees = {
+            longitude: Cesium.Math.toDegrees(cartographic.longitude),
+            latitude: Cesium.Math.toDegrees(cartographic.latitude),
+            height: cartographic.height
+        };
+        return cartographicDegrees;
     }
 }
 
@@ -69,12 +65,18 @@ class ListenerClass {
     }
 
     setupListener() {
-        this.emitter.on('initializeData', (data) => console.log("catch msg", data));
+        this.emitter.on('coordinatesTest', (data) => console.log("catch msg", data));
+        this.emitter.on('counterReached20', (count) => console.log(`Counter has reached: ${count}`));
     }
 }
 
-const cesiumTools = new CesiumTools();
-// cesiumTools.emitter = emitter;
+const emitter = new EmitterClass();
 
-// const listener = new ListenerClass();
-// listener.emitter = emitter;
+
+const cesiumTools = new CesiumTools();
+cesiumTools.emitter = emitter;
+
+const listener = new ListenerClass();
+listener.emitter = emitter;
+
+cesiumTools.counterIncrementTil20();

@@ -16,8 +16,6 @@ import { removeInputActions, makeDraggable, createGroundPolylinePrimitive } from
 import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon } from './assets/icons.js';
 import { sharedStyleSheet } from './sharedStyle.js';
 
-import EventEmitter from "eventemitter3";
-
 /**
  * An HTMLElement that provides tools for various measurement functions on a Cesium Viewer.
  * The toolbox offers functionalities such as point measurements, distance calculations,
@@ -56,11 +54,6 @@ export class MeasureToolbox extends HTMLElement {
 
         // cesium style
         this.cesiumStyle = null;
-
-        this.data = [];
-
-        // event emitter
-        this.emitter = new EventEmitter();
     }
 
 
@@ -180,12 +173,6 @@ export class MeasureToolbox extends HTMLElement {
         // initialize fly through mode
         const flyThroughUser = this.hasRole("flyThrough");
         flyThroughUser && this.initializeFlyThrough();
-
-        // initialize event listeners
-        this.emitter.on("dataUpdate", (data) => {
-            this.data.push(data);
-            console.log(this.data);
-        })
     }
 
     /**
@@ -232,7 +219,6 @@ export class MeasureToolbox extends HTMLElement {
                     this.handler,
                     this.stateManager,
                     this.updateRecords.bind(this, "distances"),
-                    this.emitter,
                     this.cesiumPkg
                 ),
                 name: "Distance",
