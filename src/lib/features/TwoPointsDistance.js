@@ -34,8 +34,11 @@ class TwoPointsDistance extends MeasureModeBase {
      * @param {Function} logRecordsCallback - Callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
+    constructor(viewer, handler, stateManager, logRecordsCallback, emitter, cesiumPkg) {
         super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+
+        // Event emitter
+        this.emitter = emitter;
 
         // Flags to control the state of the tool
         this.flags = {
@@ -204,11 +207,12 @@ class TwoPointsDistance extends MeasureModeBase {
             // set flag that the measure has ended
             this.flags.isMeasurementComplete = true;
             // this.coords.group.coordinates = [];
-
-            console.log(this.measureData.groups);
-            console.log(this.coords.group);
+            this.emitter.emit("dataUpdate", this.coords.group);
+            // console.log(this.measureData.groups);
+            // console.log(this.coords.group);
         }
     }
+
 
     /***********************
      * MOUSE MOVE FEATURES *
