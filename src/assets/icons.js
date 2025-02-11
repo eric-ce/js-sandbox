@@ -1,0 +1,17 @@
+export { default as toolIcon } from './tool-icon.svg';
+export { default as pickerIcon } from './picker-icon.svg';
+export { default as pointsIcon } from './points-icon.svg';
+export { default as distanceIcon } from './distance-icon.svg';
+export { default as curveIcon } from './curve-icon.svg';
+export { default as heightIcon } from './height-icon.svg';
+export { default as multiDImage } from './multi-d-icon.svg';
+export { default as multiDClampedIcon } from './multi-d-clamped-icon.svg';
+export { default as polygonIcon } from './polygon-icon.svg';
+export { default as profileIcon } from './profile-icon.svg';
+export { default as profileDistancesIcon } from './profile-d-icon.svg';
+export { default as clearIcon } from './clear-icon.svg';
+export { default as helpBoxIcon } from './help-box-icon.svg';
+export { default as logBoxIcon } from './log-box-icon.svg';
+export { default as recordIcon } from './record-icon.svg';
+export { default as playIcon } from './play-icon.svg';
+export { default as stopIcon } from './stop-icon.svg';

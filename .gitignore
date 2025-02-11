@@ -133,3 +133,6 @@ dist
 **/.DS_Store
 
 /package-lock.json
+
+# intellij idea files
+.idea/
