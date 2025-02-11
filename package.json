@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "cesium": "^1.118.2",
-    "chart.js": "^4.4.3",
-    "eventemitter3": "^5.0.1"
+    "chart.js": "^4.4.3"
   }
 }
