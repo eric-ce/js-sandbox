@@ -2,7 +2,7 @@ import * as Cesium from "cesium";
 import {
     getPickedObjectType,
     showCustomNotification,
-} from "../../helper/helper.js";
+} from "../../lib/helper/helper.js";
 
 
 export function handleFireTrailDoubleClick(movement) {

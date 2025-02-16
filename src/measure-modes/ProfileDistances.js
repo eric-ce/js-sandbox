@@ -16,7 +16,7 @@ import {
     generateIdByTimestamp,
     createGroundPolylinePrimitive,
     showCustomNotification,
-} from "../helper/helper.js";
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
 
@@ -38,8 +38,8 @@ class ProfileDistances extends MeasureModeBase {
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
 
         this.pointerOverlay = this.stateManager.getOverlayState("pointer");
 
@@ -84,6 +84,8 @@ class ProfileDistances extends MeasureModeBase {
         // chart
         this.chart = null;
         this.chartDiv = null;
+
+        this.emitter = emitter;
     }
 
     /**

@@ -14,7 +14,7 @@ import {
     generateIdByTimestamp,
     createGroundPolylinePrimitive,
     showCustomNotification,
-} from "../helper/helper.js";
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
 
@@ -36,8 +36,8 @@ class MultiDistanceClamped extends MeasureModeBase {
      * @param {Function} logRecordsCallback - Callback function to log measurement records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
 
         this.pointerOverlay = this.stateManager.getOverlayState("pointer");
 
@@ -76,6 +76,8 @@ class MultiDistanceClamped extends MeasureModeBase {
             addModeLine: null,      // Primitive for adding a new line
             selectedLines: [],      // Array of selected line primitives
         };
+
+        this.emitter = emitter;
     }
 
     /**

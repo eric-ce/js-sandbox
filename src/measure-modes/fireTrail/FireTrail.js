@@ -11,9 +11,9 @@ import {
     showCustomNotification,
     createGroundPolylinePrimitive,
     makeDraggable,
-} from "../../helper/helper.js";
-import { sharedStyleSheet } from "../../../sharedStyle.js";
-import { multiDClampedIcon } from '../../../assets/icons.js';
+} from "../../lib/helper/helper.js";
+import { sharedStyleSheet } from "../../styles/sharedStyle.js";
+import { multiDClampedIcon } from '../../assets/icons.js';
 import { handleFireTrailLeftClick } from "./fireTrailLeftClick.js";
 import { handleFireTrailMouseMove } from "./fireTrailMouseMove.js";
 import { handleFireTrailDoubleClick } from "./fireTrailDoubleLeftClick.js";

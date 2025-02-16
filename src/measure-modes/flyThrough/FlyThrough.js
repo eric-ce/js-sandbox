@@ -6,10 +6,10 @@ import {
     makeDraggable,
     removeInputActions,
     showCustomNotification
-} from "../../helper/helper.js";
+} from "../../lib/helper/helper.js";
 import { handleRecordScreen, resumeOrPauseRecording } from "./recordScreen.js";
 import { createFlyPathPrimitives, editFlyPath, removePrimitives } from "./editFlyPath.js";
-import { sharedStyleSheet } from "../../../sharedStyle.js";
+import { sharedStyleSheet } from "../../styles/sharedStyle.js";
 
 export class FlyThrough extends HTMLElement {
     constructor() {

@@ -6,7 +6,7 @@ import {
     changeLineColor,
     resetLineColor,
     updatePointerOverlay
-} from "../helper/helper.js";
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
 class Picker extends MeasureModeBase {
@@ -19,8 +19,11 @@ class Picker extends MeasureModeBase {
      * @param {Function} activateModeCallback - Callback to activate a measurement mode.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, activateModeCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, activateModeCallback, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
+
+        // Set the event emitter
+        this.emitter = emitter;
 
         this._button = null;
 
@@ -125,13 +128,14 @@ class Picker extends MeasureModeBase {
                 });
 
                 // reset highlighting
-                this.resetHighlighting();
+                super.resetHighlighting();
 
                 // Activate the corresponding mode
                 this.activateModeCallback(modeMapping[lookupId]);
-                // Log the formatted ID
-                this.logRecordsCallback(formattedId);
 
+                // Log the formatted ID
+                // this.logRecordsCallback(formattedId);
+                this.emitter.emit("mode:selected", [{ "mode selected": formattedId }]);
             }
         }
     }
@@ -168,6 +172,7 @@ class Picker extends MeasureModeBase {
      */
     handleHoverHighlighting(pickedObject) {
         let pickedObjectType = null;
+
         if (defined(pickedObject) &&
             pickedObject.id &&
             pickedObject.id.startsWith("annotate_") &&
@@ -182,61 +187,40 @@ class Picker extends MeasureModeBase {
                 pickedObjectType = "other"
             }
         }
+
         // reset highlighting
-        this.resetHighlighting();
+        super.resetHighlighting();
 
         const hoverColor = this.stateManager.getColorState("hover");
 
         switch (pickedObjectType) {
             case "line": // highlight the line when hovering
-                const linePrimitive = pickedObject.primitive;
-
-                if (linePrimitive) {
+                const line = pickedObject.primitive;
+                if (line) {
                     // Highlight the line
-                    changeLineColor(linePrimitive, hoverColor);
-                    this.interactivePrimitives.hoveredLine = linePrimitive;
+                    changeLineColor(line, hoverColor);
+                    this.interactivePrimitives.hoveredLine = line;
                 }
                 break;
             case "point":  // highlight the point when hovering
-                const pointPrimitive = pickedObject.primitive;
-                if (pointPrimitive) {
-                    pointPrimitive.outlineColor = hoverColor;
-                    pointPrimitive.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = pointPrimitive;
+                const point = pickedObject.primitive;
+                if (point) {
+                    point.outlineColor = hoverColor;
+                    point.outlineWidth = 2;
+                    this.interactivePrimitives.hoveredPoint = point;
                 }
                 break;
             case "label":   // highlight the label when hovering
-                const labelPrimitive = pickedObject.primitive;
-                if (labelPrimitive) {
-                    labelPrimitive.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = labelPrimitive;
+                const label = pickedObject.primitive;
+                if (label) {
+                    label.fillColor = hoverColor;
+                    this.interactivePrimitives.hoveredLabel = label;
                 }
                 break;
             default:
                 break;
         }
     }
-
-    /**
-     * Resets highlighting on any primitives that were highlighted.
-     * Restores default styles to line, point, and label primitives.
-     */
-    resetHighlighting() {
-        if (this.interactivePrimitives.hoveredLine) {
-            resetLineColor(this.interactivePrimitives.hoveredLine);
-            this.interactivePrimitives.hoveredLine = null;
-        }
-        if (this.interactivePrimitives.hoveredPoint) {
-            this.interactivePrimitives.hoveredPoint.outlineColor = Color.RED;
-            this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
-            this.interactivePrimitives.hoveredPoint = null;
-        }
-        if (this.interactivePrimitives.hoveredLabel) {
-            this.interactivePrimitives.hoveredLabel.fillColor = Color.WHITE;
-            this.interactivePrimitives.hoveredLabel = null;
-        }
-    }
-
 
     /********************
      * HELPER FUNCTIONS *

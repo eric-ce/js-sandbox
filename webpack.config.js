@@ -62,7 +62,7 @@ module.exports = {
         alias: {
             cesium: path.resolve(__dirname, cesiumSource, "Cesium.js"),
             cesiumStyle: path.resolve(__dirname, cesiumSource, "Widgets", "widgets.css"),
-            mainStyle: path.resolve(__dirname, 'src', 'style.css'),
+            mainStyle: path.resolve(__dirname, 'src', 'styles', 'style.css'),
         },
         fallback: {
             fs: false,

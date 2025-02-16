@@ -14,6 +14,34 @@ export function calculateDistance(startPoint, endPoint) {
 }
 
 /**
+ * Compares two coordinates based on the specified coordinate type.
+ *
+ * @param {"cartographicDegrees"|"cartographic"|"cartesian"} [coordType="cartographicDegrees"] - The type of coordinate to compare.
+ * @param {Object} coordinate1 - The first coordinate object.
+ * @param {Object} coordinate2 - The second coordinate object.
+ * @returns {boolean} - True if the coordinates match; otherwise false.
+ */
+export function areCoordinatesEqual(coordType = "cartographicDegrees", coordinate1, coordinate2) {
+    switch (coordType) {
+        case "cartographicDegrees":
+        case "cartographic":
+            return (
+                coordinate1.longitude === coordinate2.longitude &&
+                coordinate1.latitude === coordinate2.latitude &&
+                coordinate1.height === coordinate2.height
+            );
+        case "cartesian":
+            return (
+                coordinate1.x === coordinate2.x &&
+                coordinate1.y === coordinate2.y &&
+                coordinate1.z === coordinate2.z
+            );
+        default:
+            return false;
+    }
+}
+
+/**
  * Convert the coordinate to cartesian3 coordinate
  * @param {*} coordinate - cesium coordinate object. It could be either cartographic degrees or cartographic radians or cartesian3
  * @returns {Cesium.Cartesian3} cartesian - the cartesian3 coordinate
@@ -64,6 +92,60 @@ export function cartesian3ToCartographicDegrees(cartesian) {
         height: cartographic.height
     };
 }
+
+/**
+ * Convert options of Cartesian3 or Cartographic to CartographicDegrees
+ * @param {Cartesian3|Cartographic} coordinate 
+ * @returns 
+ */
+export function convertToCartographicDegrees(coordinate) {
+    const coordType = checkCoordinateType(coordinate);
+    if (!coordType) return;
+
+    // If it's Cartesian3, convert it to Cartographic degrees.
+    if (coordType === 'cartesian3') {
+        const cartographic = Cesium.Cartographic.fromCartesian(coordinate);
+        return {
+            longitude: Cesium.Math.toDegrees(cartographic.longitude),
+            latitude: Cesium.Math.toDegrees(cartographic.latitude),
+            height: cartographic.height,
+        };
+    }
+    // If it's Cartographic, convert it to Cartographic degrees.
+    if (coordType === 'cartographic') {
+        return {
+            longitude: Cesium.Math.toDegrees(coordinate.longitude),
+            latitude: Cesium.Math.toDegrees(coordinate.latitude),
+            height: coordinate.height,
+        };
+    }
+    // If it's already in Cartographic degrees, return it as is.
+    if (coordType === 'cartographicDegrees') {
+        return coordinate;
+    }
+
+    return;
+}
+
+function checkCoordinateType(coordinate) {
+    // Error handling: check if the coordinate is defined and an object
+    if (!coordinate || typeof coordinate !== 'object') return;
+
+    // Deconstruct the coordinate object
+    const { x, y, z, longitude, latitude } = coordinate;
+
+    // Check if the coordinate is in cartesian3
+    if ([x, y, z].every(num => typeof num === 'number')) {
+        return 'cartesian3';
+    }
+
+    // Check if the coordinate is in cartographic or cartographic degrees
+    if (typeof longitude === 'number' && typeof latitude === 'number') {
+        return Math.abs(longitude) > 10 ? 'cartographicDegrees' : 'cartographic';
+    }
+
+    return;
+};
 
 /**
  * Format the distance.
@@ -561,7 +643,8 @@ export function getPickedObjectType(pickedObject, modeString) {
     }
 
     const { id, primitive } = pickedObject;
-    const searchString = `annotate_${modeString}`;
+
+    const searchString = modeString ? `annotate_${modeString}` : `annotate_`;
 
     // Return null if 'id' doesn't start with the search string or contains 'moving'
     if (id.includes('moving')) {
@@ -569,16 +652,20 @@ export function getPickedObjectType(pickedObject, modeString) {
     }
 
     // Determine the type based on the suffix of the 'id'
-    if (id.startsWith(`${searchString}_point`)) {
+    const isPoint = modeString ? id.startsWith(`${searchString}_point`) : (id.startsWith(`${searchString}`) && id.includes('_point'));
+    const isLine = modeString ? id.startsWith(`${searchString}_line`) : (id.startsWith(`${searchString}`) && id.includes('_line'));
+    const isLabel = modeString ? id.startsWith(`${searchString}_label`) : (id.startsWith(`${searchString}`) && id.includes('_label'));
+
+
+    if (isPoint) {
         return 'point';
-    } else if (id.startsWith(`${searchString}_line`)) {
+    } else if (isLine) {
         return 'line';
     } else if (id.includes("tileId") && primitive?.feature?.type === "fireTrail") {
         return 'line'
-    } else if (id.startsWith(`${searchString}_label`)) {
+    } else if (isLabel) {
         return 'label';
     } else {
-        // return 'other';
         return;
     }
 }

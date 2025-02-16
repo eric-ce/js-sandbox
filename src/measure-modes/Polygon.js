@@ -17,7 +17,7 @@ import {
     formatArea,
     getPickedObjectType,
     generateIdByTimestamp,
-} from "../helper/helper.js";
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
 class Polygon extends MeasureModeBase {
@@ -29,8 +29,8 @@ class Polygon extends MeasureModeBase {
      * @param {Function} logRecordsCallback - Callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
 
         // Flags to control the state of the tool
         this.flags = {
@@ -61,6 +61,8 @@ class Polygon extends MeasureModeBase {
             hoveredPoint: null,             // Hovered point primitive
             hoveredLabel: null,             // Hovered label primitive
         };
+
+        this.emitter = emitter;
     }
 
     /**

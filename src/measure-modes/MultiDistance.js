@@ -15,9 +15,9 @@ import {
     createPolylinePrimitive,
     showCustomNotification,
     generateIdByTimestamp
-} from "../helper/helper.js";
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
-
+import dataPool from "../lib/data/DataPool.js";
 
 /**
  * @typedef {Object} Group
@@ -36,8 +36,11 @@ class MultiDistance extends MeasureModeBase {
      * @param {Function} logRecordsCallback - Callback function to log measurement records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
+
+        // Set the event emitter
+        this.emitter = emitter;
 
         this.pointerOverlay = this.stateManager.getOverlayState("pointer");
 
@@ -59,6 +62,9 @@ class MultiDistance extends MeasureModeBase {
             dragStartToCanvas: null, // Store the drag start position to canvas in Cartesian2
             _records: [],       // Records of the measurements
         };
+
+        // Measurement data
+        this.measure = super._createDefaultMeasure();
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -288,15 +294,15 @@ class MultiDistance extends MeasureModeBase {
 
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
-            // link both cache and groups to the same group
-            // when cache changed groups will be changed due to `reference by address`
-            const newGroup = {
-                id: generateIdByTimestamp(),
-                coordinates: [],
-                labelNumberIndex: this.coords.groupCounter,
-            };
-            this.coords.groups.push(newGroup);
-            this.coords.cache = newGroup.coordinates;
+            // Set values for the new measure
+            this.measure.id = generateIdByTimestamp()
+            this.measure.mode = "multi-distance";
+            this.measure.labelNumberIndex = this.coords.groupCounter;
+            this.measure.status = "pending";
+
+            // Establish data relation
+            this.coords.groups.push(this.measure);
+            this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
             this.coords.groupCounter++;
         }
 
@@ -324,6 +330,9 @@ class MultiDistance extends MeasureModeBase {
         } else {
             this.coords.cache.push(this.coordinate);
         }
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Continue measurement if there are enough points in the cache
         if (this.coords.cache.length > 1) {
@@ -370,7 +379,13 @@ class MultiDistance extends MeasureModeBase {
         const { distances, totalDistance } = this.updateOrCreateLabels(group, "multi_distances", false, true);
 
         // Update log records
-        this.updateMultiDistancesLogRecords(distances, totalDistance);
+        // this.updateMultiDistancesLogRecords(distances, totalDistance);
+
+        // Update this.measure
+        this.measure._records = [{ distances, totalDistance: [totalDistance] }];
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
     }
 
     /**
@@ -456,7 +471,7 @@ class MultiDistance extends MeasureModeBase {
         this.updateSelectedLineColor(group);
 
         // Update log records
-        this.updateMultiDistancesLogRecords(distances, totalDistance);
+        // this.updateMultiDistancesLogRecords(distances, totalDistance);
 
         // Reset flags
         this.flags.isAddMode = false;
@@ -665,7 +680,7 @@ class MultiDistance extends MeasureModeBase {
             this.updateOrCreateTotalLabel(group, totalDistance, "multi_distances");
 
             // log distance result
-            this.updateMultiDistancesLogRecords(distances, totalDistance);
+            // this.updateMultiDistancesLogRecords(distances, totalDistance);
 
             // update selected line
             const lines = this.findLinesByPositions(group.coordinates, "multi_distances");
@@ -838,27 +853,27 @@ class MultiDistance extends MeasureModeBase {
         return lines;
     }
 
-    /**
-     * Updates the log records with the distances between measurement points and the total computed distance.
-     * @param {number[]} distances - Array of distances between each point.
-     * @param {number} totalDistance - The cumulative distance of the measurement.
-     * @returns {Object} An object containing the distances and totalDistance.
-     * @returns {number[]} return.distances - The array of distances.
-     * @returns {number} return.totalDistance - The cumulative distance.
-     */
-    updateMultiDistancesLogRecords(distances, totalDistance) {
-        const distanceRecord = {
-            distances: distances.map(d => d.toFixed(2)),
-            totalDistance: totalDistance.toFixed(2)
-        };
-        // update log records in logBox
-        this.logRecordsCallback(distanceRecord);
+    // /**
+    //  * Updates the log records with the distances between measurement points and the total computed distance.
+    //  * @param {number[]} distances - Array of distances between each point.
+    //  * @param {number} totalDistance - The cumulative distance of the measurement.
+    //  * @returns {Object} An object containing the distances and totalDistance.
+    //  * @returns {number[]} return.distances - The array of distances.
+    //  * @returns {number} return.totalDistance - The cumulative distance.
+    //  */
+    // updateMultiDistancesLogRecords(distances, totalDistance) {
+    //     const distanceRecord = {
+    //         distances: distances.map(d => d.toFixed(2)),
+    //         totalDistance: totalDistance.toFixed(2)
+    //     };
+    //     // update log records in logBox
+    //     this.logRecordsCallback(distanceRecord);
 
-        // update this.coords._records
-        this.coords._records.push(distanceRecord);
+    //     // update this.coords._records
+    //     this.coords._records.push(distanceRecord);
 
-        return distanceRecord;
-    }
+    //     return distanceRecord;
+    // }
 
     resetValue() {
         super.resetValue();

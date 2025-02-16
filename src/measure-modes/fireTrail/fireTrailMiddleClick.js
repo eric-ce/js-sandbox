@@ -3,7 +3,7 @@ import {
     calculateClampedDistanceFromArray,
     getPickedObjectType,
     positionKey,
-} from "../../helper/helper.js";
+} from "../../lib/helper/helper.js";
 
 /***********************
  * DOUBLE CLICK ACTION *

@@ -7,7 +7,7 @@ import {
     calculateClampedDistance,
     getPickedObjectType,
     createGroundPolylinePrimitive,
-} from "../../helper/helper.js";
+} from "../../lib/helper/helper.js";
 
 /***********************
  * MOUSE MOVE FEATURES *

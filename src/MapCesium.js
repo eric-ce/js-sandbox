@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import MeasureToolbox from "./MeasureToolbox";
+import { MeasureToolbox } from "./components/MeasureToolbox.js";
 import {
     PointPrimitiveCollection,
     Primitive,
@@ -19,7 +19,7 @@ export class MapCesium extends HTMLElement {
         this.shadowRoot.appendChild(this.div);
 
         this._viewer = null;
-        this.measureToolbox = null;
+        // this.measureToolbox = null;
 
         this.app = {
             log: ["testing"],
@@ -31,6 +31,8 @@ export class MapCesium extends HTMLElement {
                 }
             }
         }
+
+        this.measureToolbox = null;
     }
 
     set viewer(viewer) {
@@ -43,22 +45,30 @@ export class MapCesium extends HTMLElement {
 
     connectedCallback() {
         if (this.viewer) {
-            this.initializeMeasureToolbox();
+            this.measureToolbox = this.initializeMeasureToolbox();
         }
     }
 
     initializeMeasureToolbox() {
-        this.measureToolbox = document.createElement("cesium-measure");
-        this.measureToolbox.viewer = this.viewer;
-        this.measureToolbox.cesiumPkg = {
+        // this.measureToolbox = document.createElement("cesium-measure");
+        // this.measureToolbox.viewer = this.viewer;
+        // this.measureToolbox.cesiumPkg = {
+        //     PointPrimitiveCollection,
+        //     Primitive,
+        //     LabelCollection,
+        //     GroundPolylinePrimitive,
+        //     PolylineCollection,
+        // }
+        // this.measureToolbox.app = this.app;
+        // this.shadowRoot.appendChild(this.measureToolbox);
+        const cesiumPkg = {
             PointPrimitiveCollection,
             Primitive,
             LabelCollection,
             GroundPolylinePrimitive,
             PolylineCollection,
         }
-        this.measureToolbox.app = this.app;
-        this.shadowRoot.appendChild(this.measureToolbox);
+        return new MeasureToolbox(this.app, this.viewer, cesiumPkg);
     }
 }
 

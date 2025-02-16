@@ -6,7 +6,7 @@ import {
     calculateClampedDistanceFromArray,
     createGroundPolylinePrimitive,
     showCustomNotification,
-} from "../../helper/helper.js";
+} from "../../lib/helper/helper.js";
 
 /************************
  * RIGHT CLICK FEATURES *

@@ -17,8 +17,9 @@ import {
     getPrimitiveByPointPosition,
     createPolylinePrimitive,
     generateIdByTimestamp,
-} from "../helper/helper.js";
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
+import dataPool from "../lib/data/DataPool.js";
 
 class Height extends MeasureModeBase {
     /**
@@ -29,8 +30,11 @@ class Height extends MeasureModeBase {
      * @param {Function} logRecordsCallback - Callback function to log measurement records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
+
+        // Set the event emitter
+        this.emitter = emitter;
 
         // Flags to control the state of the tool
         this.flags = {
@@ -41,13 +45,15 @@ class Height extends MeasureModeBase {
         this.coords = {
             cache: [],                  // Stores temporary coordinates during operations
             groups: [],                 // Tracks all coordinates involved in operations
-            groupCounter: 0,            // Counter for the number of groups
+            measureCounter: 0,            // Counter for the number of groups
             dragStartTop: null,         // Stores the initial position before a drag begins
             dragStartBottom: null,      // Stores the initial position before a drag begins
             dragStart: null,            // Stores the initial position before a drag begins
-            dragStartToCanvas: null,    // Store the drag start position to canvas in Cartesian2
-            _records: [],               // Stores the measurement records
+            dragStartToCanvas: null,    // Store the drag start position to canvas in Cartesian2               // Stores the measurement records
         };
+
+        // Measurement data
+        this.measure = super._createDefaultMeasure();
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -107,16 +113,19 @@ class Height extends MeasureModeBase {
         if (this.coords.cache.length === 2) {
             const [topCartesian, bottomCartesian] = this.coords.cache;
 
-            const newGroup = {
-                id: generateIdByTimestamp(),
-                coordinates: [],
-                labelNumberIndex: this.coords.groupCounter,
-            };
-            this.coords.groups.push(newGroup);
-            this.coords.groupCounter++;
+            // Reset for a new measure using the default structure
+            this.measure = super._createDefaultMeasure();
 
-            // update group coordinates 
-            newGroup.coordinates = this.coords.cache;
+            // Set values for the new measure
+            this.measure.id = generateIdByTimestamp();
+            this.measure.mode = "height";
+            this.measure.labelNumberIndex = this.coords.measureCounter;
+            this.measure.status = "pending";
+
+            // Establish data relation
+            this.coords.groups.push(this.measure);
+            this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
+            this.coords.measureCounter++;
 
             // create top and bottom points primitives
             const topPointPrimitive = createPointPrimitive(topCartesian, this.stateManager.getColorState("pointColor"), "height_point_top");
@@ -146,8 +155,12 @@ class Height extends MeasureModeBase {
             const labelPrimitive = this.labelCollection.add(label);
             labelPrimitive.positions = [topCartesian, bottomCartesian]; // store the positions for the label
 
-            // log the height result
-            this.updateLogRecords(distance);
+            // Update this.measure
+            this.measure._records.push(distance);
+            this.measure.status = "completed";
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
@@ -223,18 +236,6 @@ class Height extends MeasureModeBase {
         const pickedObjectType = getPickedObjectType(pickedObject, "height");
 
         // reset highlighting
-        // const resetHighlighting = () => {
-        //     if (this.interactivePrimitives.hoveredPoint) {
-        //         this.interactivePrimitives.hoveredPoint.outlineColor = Color.RED;
-        //         this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
-        //         this.interactivePrimitives.hoveredPoint = null;
-        //     }
-        //     if (this.interactivePrimitives.hoveredLabel) {
-        //         this.interactivePrimitives.hoveredLabel.fillColor = Color.WHITE;
-        //         this.interactivePrimitives.hoveredLabel = null;
-        //     }
-        // };
-        // resetHighlighting();
         super.resetHighlighting();
 
         const hoverColor = this.stateManager.getColorState("hover");
@@ -296,6 +297,11 @@ class Height extends MeasureModeBase {
             if (!group) return;
             // find the point primitive by the positions
             const selectedPoints = group.coordinates.map(pos => this.pointCollection._pointPrimitives.find(p => Cartesian3.equals(p.position, pos)));
+
+            // Set status to pending 
+            group.status = "pending";
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
 
             // set move event for dragging
             this.handler.setInputAction((movement) => {
@@ -449,11 +455,14 @@ class Height extends MeasureModeBase {
                 labelPrimitive.showBackground = true;
             }
 
-            // Update the log records
-            this.updateLogRecords(distance);
-
             // Update coords
             group.coordinates = newPositions;
+            // Update _records and status of the group
+            group.status = "completed";
+            group._records = [distance];
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
 
             // Set flags
             this.flags.isDragMode = false;
@@ -489,21 +498,6 @@ class Height extends MeasureModeBase {
         );
 
         return groundCartesian;
-    }
-
-    /**
-     * update the log records with the distance
-     * @param {Number} distance - the distance between two points
-     * @returns {Number} distance - the distance between two points
-     */
-    updateLogRecords(distance) {
-        // update log records in logBox
-        this.logRecordsCallback(distance.toFixed(2));
-
-        // update this.coords._records
-        this.coords._records.push(distance);
-
-        return distance;
     }
 
     resetValue() {

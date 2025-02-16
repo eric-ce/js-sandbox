@@ -16,8 +16,10 @@ import {
     createPolylinePrimitive,
     generateIdByTimestamp,
     getPrimitiveByPointPosition,
-} from "../helper/helper.js";
+    changeLineColor,
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
+import dataPool from "../lib/data/DataPool.js";
 
 
 /**
@@ -37,8 +39,11 @@ class ThreePointsCurve extends MeasureModeBase {
      * @param {Function} logRecordsCallback - Callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
+
+        // Set the event emitter
+        this.emitter = emitter;
 
         // flags to control the state of the tool
         this.flags = {
@@ -50,11 +55,13 @@ class ThreePointsCurve extends MeasureModeBase {
         this.coords = {
             cache: [],          // Stores temporary coordinates during operations
             groups: [],         // Tracks all coordinates involved in operations
-            groupCounter: 0,    // Counter for the number of groups
+            measureCounter: 0,    // Counter for the number of groups
             dragStart: null,    // Stores the initial position before a drag begins
             dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
-            _records: []                // Stores the distance records
         };
+
+        // Measurement data
+        this.measure = super._createDefaultMeasure();
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -65,6 +72,7 @@ class ThreePointsCurve extends MeasureModeBase {
             dragLabels: [],           // Array of dragging labels                
             hoveredPoint: null,             // Point that is currently hovered over
             hoveredLabel: null,             // Label that is currently hovered over
+            hoveredLine: null,              // Line that is currently hovered over
         };
     }
 
@@ -124,16 +132,19 @@ class ThreePointsCurve extends MeasureModeBase {
 
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
-            // link both cache and groups to the same group
-            // when cache changed groups will be changed due to reference by address
-            const newGroup = {
-                id: generateIdByTimestamp(),
-                coordinates: [],
-                labelNumberIndex: this.coords.groupCounter,
-            };
-            this.coords.groups.push(newGroup);
-            this.coords.cache = newGroup.coordinates;
-            this.coords.groupCounter++;
+            // Reset for a new measure using the default structure
+            this.measure = super._createDefaultMeasure();
+
+            // Set values for the new measure
+            this.measure.id = generateIdByTimestamp()
+            this.measure.mode = "curve";
+            this.measure.labelNumberIndex = this.coords.measureCounter;
+            this.measure.status = "pending";
+
+            // Establish data relation
+            this.coords.groups.push(this.measure);
+            this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
+            this.coords.measureCounter++;
         }
 
         // Check if the current coordinate is near any existing point (distance < 0.3)
@@ -148,6 +159,9 @@ class ThreePointsCurve extends MeasureModeBase {
 
         // Update the coordinate cache
         this.coords.cache.push(this.coordinate);
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Check if it had 3 points, then measure the curve distance
         if (this.coords.cache.length === 3) {
@@ -177,8 +191,12 @@ class ThreePointsCurve extends MeasureModeBase {
             const labelPrimitive = this.labelCollection.add(label);
             labelPrimitive.positions = [start, end];    // store positions data in label primitive
 
-            // log the curve record
-            this.updateLogRecords(totalDistance);
+            // Update this.measure
+            this.measure._records.push(totalDistance);
+            this.measure.status = "completed";
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...this.measure });
 
             // set flag that the measurement has ended
             this.flags.isMeasurementComplete = true;
@@ -257,6 +275,13 @@ class ThreePointsCurve extends MeasureModeBase {
         const hoverColor = this.stateManager.getColorState("hover");
 
         switch (pickedObjectType) {
+            case "line":
+                const line = pickedObject.primitive;
+                if (line && line !== this.interactivePrimitives.addModeLine) {
+                    changeLineColor(line, hoverColor);
+                    this.interactivePrimitives.hoveredLine = line;
+                }
+                break;
             case "point":  // highlight the point when hovering
                 const point = pickedObject.primitive;
                 if (point) {
@@ -308,6 +333,17 @@ class ThreePointsCurve extends MeasureModeBase {
             // Set drag start position
             this.coords.dragStart = isPoint.primitive.position.clone();
             this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
+
+            // Find the group containing the dragged point
+            const group = this.coords.groups.find(group =>
+                group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart))
+            );
+            if (!group) return;
+
+            // Set status to pending 
+            group.status = "pending";
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
 
             // Set move event for dragging
             this.handler.setInputAction((movement) => {
@@ -458,6 +494,7 @@ class ThreePointsCurve extends MeasureModeBase {
 
             // Update the coordinate data
             group.coordinates[positionIndex] = this.coordinate;
+
             const [start, middle, end] = group.coordinates;
 
             // Create new line primitive
@@ -475,9 +512,12 @@ class ThreePointsCurve extends MeasureModeBase {
                 labelPrimitive.showBackground = true;
             }
 
-            // log the curve record
-            // this.logRecordsCallback(this.measureCurveDistance(group).toFixed(2));
-            this.updateLogRecords(distance);
+            // update _records and status of the group
+            group.status = "completed";
+            group._records = [distance];
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
 
             // reset dragging primitive and flags
             this.flags.isDragMode = false;
@@ -575,21 +615,6 @@ class ThreePointsCurve extends MeasureModeBase {
         linePrimitive.id = generateId([start, middle, end], modeString);
 
         return { linePrimitive, curvePoints };
-    }
-
-    /**
-     * Updates the log records with the measured curve distance.
-     * @param {number} distance - The measured curve distance.
-     * @returns {number} The logged curve distance.
-     */
-    updateLogRecords(distance) {
-        // update log records in logBox
-        this.logRecordsCallback(distance.toFixed(2));
-
-        // update this.coords._records
-        this.coords._records.push(distance);
-
-        return distance;
     }
 
     resetValue() {

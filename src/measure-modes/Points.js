@@ -15,9 +15,10 @@ import {
     createLabelPrimitive,
     editableLabel,
     generateIdByTimestamp,
-} from "../helper/helper.js";
+    convertToCartographicDegrees,
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
-
+import dataPool from "../lib/data/DataPool.js";
 
 /**
  * @typedef {Object} Group
@@ -36,8 +37,11 @@ class Points extends MeasureModeBase {
      * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
+
+        // Set the event emitter
+        this.emitter = emitter;
 
         this.coordinateInfoOverlay = this.createCoordinateInfoOverlay();
 
@@ -51,10 +55,13 @@ class Points extends MeasureModeBase {
         this.coords = {
             cache: [],                  // Stores temporary coordinates during operations
             groups: [],                 // Stores temporary coordinates during operations
-            groupCounter: 0,            // Counter for the number of groups
+            measureCounter: 0,            // Counter for the number of groups
             dragStart: null,            // Stores the initial position before a drag begins
             dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
         };
+
+        // Measurement data
+        this.measure = super._createDefaultMeasure();
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -111,10 +118,15 @@ class Points extends MeasureModeBase {
 
                     // remove the point position from group coordinates
                     const positionIndex = group.coordinates.findIndex(pos => Cartesian3.equals(pos, primitiveToRemove.position));
+                    const positionToRemove = primitiveToRemove.position.clone();
                     if (positionIndex !== -1) group.coordinates.splice(positionIndex, 1);
 
-                    // log the points records
-                    this.updateLogRecords(primitiveToRemove.position, "remove");
+                    // Update _records and status of the group
+                    group.status = "completed";
+                    group._records = [{ removed: convertToCartographicDegrees(positionToRemove) }];
+
+                    // Update to data pool
+                    dataPool.updateOrAddMeasure({ ...group });
                 }
                 break;
             default:
@@ -137,16 +149,19 @@ class Points extends MeasureModeBase {
 
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
-            // link both cache and groups to the same group
-            // when cache changed groups will be changed due to reference by address
-            const newGroup = {
-                id: generateIdByTimestamp(),
-                coordinates: [],
-                labelNumberIndex: this.coords.groupCounter,
-            };
-            this.coords.groups.push(newGroup);
-            this.coords.cache = newGroup.coordinates;
-            this.coords.groupCounter++;
+            // Reset for a new measure using the default structure
+            this.measure = super._createDefaultMeasure();
+
+            // Set values for the new measure
+            this.measure.id = generateIdByTimestamp();
+            this.measure.mode = "bookmark";
+            this.measure.labelNumberIndex = this.coords.measureCounter;
+            this.measure.status = "pending";
+
+            // Establish data relation
+            this.coords.groups.push(this.measure);
+            this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
+            this.coords.measureCounter++;
         }
 
         // create point primitive
@@ -165,8 +180,14 @@ class Points extends MeasureModeBase {
         label.id = generateId(this.coordinate, "bookmark_label");
         this.labelCollection.add(label);
 
-        // log the points records
-        this.updateLogRecords(this.coordinate, "add");
+        // Convert to cartographic degrees
+        const cartographicDegrees = cartesian3ToCartographicDegrees(this.coordinate);
+        // Update this.measure
+        this.measure._records.push({ add: cartographicDegrees });
+        this.measure.status = "completed";
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
 
         // set flag that the measure has ended
         this.flags.isMeasurementComplete = true;
@@ -208,19 +229,6 @@ class Points extends MeasureModeBase {
     handleHoverHighlighting(pickedObject) {
         const pickedObjectType = getPickedObjectType(pickedObject, "bookmark");
 
-        // reset highlighting
-        // const resetHighlighting = () => {
-        //     if (this.interactivePrimitives.hoveredPoint) {
-        //         this.interactivePrimitives.hoveredPoint.outlineColor = Color.RED;
-        //         this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
-        //         this.interactivePrimitives.hoveredPoint = null;
-        //     }
-        //     if (this.interactivePrimitives.hoveredLabel) {
-        //         this.interactivePrimitives.hoveredLabel.fillColor = Color.WHITE;
-        //         this.interactivePrimitives.hoveredLabel = null;
-        //     }
-        // }
-        // resetHighlighting();
         super.resetHighlighting();
 
         const hoverColor = this.stateManager.getColorState("hover");
@@ -276,6 +284,17 @@ class Points extends MeasureModeBase {
         // Set drag start position
         this.coords.dragStart = isPoint.primitive.position.clone();
         this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
+
+        // Find the group containing the dragged point
+        const group = this.coords.groups.find(group =>
+            group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart))
+        );
+        if (!group) return;
+
+        // Set status to pending 
+        group.status = "pending";
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...group });
 
         // set move event for dragging
         this.handler.setInputAction((movement) => {
@@ -400,8 +419,12 @@ class Points extends MeasureModeBase {
                 group.coordinates[positionIndex] = this.coordinate;
             }
 
-            // log the points records
-            this.updateLogRecords(this.coordinate, "update");
+            // Update _records and status of the group
+            group.status = "completed";
+            group._records = [{ updated: convertToCartographicDegrees(this.coordinate) }];
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
 
             // reset dragging primitive and flags
             this.flags.isDragMode = false;
@@ -459,17 +482,7 @@ class Points extends MeasureModeBase {
 
     /********************
      * HELPER FUNCTIONS *
-     ********************/
-    /**
-     * Updates the bookmark log records with the provided coordinate information.
-     * @param {Cesium.Cartesian3} cartesian - The Cartesian3 coordinate.
-     * @param {string} action - The action type (e.g., "add", "remove", or "update").
-     */
-    updateLogRecords(cartesian, action) {
-        const cartographicDegrees = cartesian3ToCartographicDegrees(cartesian);
-        this.logRecordsCallback({ [action]: this._formatCartographicDegrees(cartographicDegrees) });
-    }
-
+    ********************/
     /**
      * Formats the cartographic degrees into a structured object.
      * @param {{latitude: number, longitude: number, height: number}} cartographicDegrees - The cartographic degrees.

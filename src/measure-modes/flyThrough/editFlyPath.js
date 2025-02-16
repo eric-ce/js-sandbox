@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { createLineArrowPrimitive, createPointPrimitive, generateId, getPickedObjectType, removeInputActions, showCustomNotification } from "../../helper/helper.js";
+import { createLineArrowPrimitive, createPointPrimitive, generateId, getPickedObjectType, removeInputActions, showCustomNotification } from "../../lib/helper/helper.js";
 
 export function editFlyPath() {
     if (this.flags.isRecording) {

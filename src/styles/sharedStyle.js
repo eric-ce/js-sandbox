@@ -107,12 +107,15 @@ sharedStyleSheet.replaceSync(`
         scrollbar-width: thin;
         scrollbar-color: #888 rgba(38, 38, 38, 0.95);
     }
-    .toggle-log-box-button{
+    .toggle-table-button{
         cursor : pointer;
-        transition : all 0.2s ease-in-out;
         color :  #e6f8f8;
         opacity : 0.9;
         padding: 3px 7px;
+        transition: background-color 0.3s, transform 0.2s;
+    }
+    .toggle-table-button:hover{
+       transform: scale(1.1);
     }
     .helpBox-expanded{
         width: 250px;

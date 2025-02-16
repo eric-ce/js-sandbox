@@ -22,17 +22,19 @@ import {
     calculateClampedDistanceFromArray,
     calculateDistanceFromArray,
     makeDraggable
-} from '../helper/helper';
+} from '../lib/helper/helper.js';
 import Chart from "chart.js/auto";
+import dataPool from '../lib/data/DataPool.js';
+
 
 export default class MeasureModeBase {
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
+    constructor(viewer, handler, stateManager, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
 
         this.stateManager = stateManager;
 
-        this.logRecordsCallback = logRecordsCallback;
+        // this.logRecordsCallback = logRecordsCallback;
 
         this.cesiumPkg = cesiumPkg;
 
@@ -81,6 +83,16 @@ export default class MeasureModeBase {
             chartHoveredPoint: null     // Hovered point on the chart
         };
 
+        this.measure = {
+            id: null,
+            mode: null,
+            coordinates: [],
+            labelNumberIndex: null,
+            status: "pending",
+            _records: [],
+            interpolatedPoints: []
+        }
+
         // common used chart
         this.chart = null;
         this.chartDiv = null;
@@ -115,16 +127,18 @@ export default class MeasureModeBase {
         // this.flags = {};
 
         this.coords = {
-            cache: [],                          // Reset temporary coordinates
-            groups: this.coords.groups,         // Preserve existing measurement groups
+            cache: [],                              // Reset temporary coordinates
+            groups: this.coords.groups,             // Preserve existing measurement groups
             groupCounter: this.coords.groupCounter, // Preserve the current group counter
-            dragStart: null,                    // Reset drag start position
-            dragStartToCanvas: null,            // Reset drag start canvas coordinates
-            dragStartTop: null,                 // Reset drag start top position
-            dragStartBottom: null,              // Reset drag start bottom position
-            _records: this.coords._records,      // Preserve existing measurement records
+            dragStart: null,                        // Reset drag start position
+            dragStartToCanvas: null,                // Reset drag start canvas coordinates
+            dragStartTop: null,                     // Reset drag start top position
+            dragStartBottom: null,                  // Reset drag start bottom position
+            _records: this.coords._records,         // Preserve existing measurement records
             selectedGroupIndex: this.coords.selectedGroupIndex,     // Preserve the value of this.coords.selectedGroupIndex
         }
+
+        this.measure = this._createDefaultMeasure();   // Reset measurement object
 
         this.interactivePrimitives = {
             movingPoint: null,                        // Reset moving point primitive
@@ -187,13 +201,18 @@ export default class MeasureModeBase {
             this.coords.dragStart = isPoint.primitive.position.clone();
             this.coords.dragStartToCanvas = this.viewer.scene.cartesianToCanvasCoordinates(this.coords.dragStart);
 
-            if (isMultiDistance) { // if it is multi distance, multi distance clamped or profile distances mode
-                // Find the group containing the dragged point
-                const group = this.coords.groups.find(group =>
-                    group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart))
-                );
-                if (!group) return;
+            // Find the group containing the dragged point
+            const group = this.coords.groups.find(group =>
+                group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart))
+            );
+            if (!group) return;
 
+            // Set status to pending 
+            group.status = "pending";
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
+
+            if (isMultiDistance) { // if it is multi distance, multi distance clamped or profile distances mode
                 // Reset line color 
                 const resetLinesColor = (lines) => {
                     lines.forEach(line => {
@@ -505,8 +524,13 @@ export default class MeasureModeBase {
                         group.interpolatedPoints = clampedPositions;
                     }
                 }
-                // log distance records
-                this.updateLogRecords && this.updateLogRecords(distance);
+
+                // update _records and status of the group
+                group.status = "completed";
+                group._records = [distance];
+
+                // Update to data pool
+                dataPool.updateOrAddMeasure({ ...group });
             }
 
             // Handle Chart
@@ -666,7 +690,7 @@ export default class MeasureModeBase {
                 this.interactivePrimitives.selectedLines = [];
 
                 // Log the removal of the line set
-                this.logRecordsCallback(`${group.id} Removed`);
+                // this.logRecordsCallback(`${group.id} Removed`);
             }
 
             return {
@@ -738,7 +762,7 @@ export default class MeasureModeBase {
         this.interactivePrimitives.selectedLines = [];
 
         // Log the removal of the trail
-        this.logRecordsCallback(`${group.id} Removed`);
+        // this.logRecordsCallback(`${group.id} Removed`);
 
         return {
             updatedGroup: group,
@@ -903,7 +927,7 @@ export default class MeasureModeBase {
             hoveredLine !== addModeLine   // don't change selected line color
         ) {
             let colorToSet;
-            if (selectedLines.includes(hoveredLine)) {
+            if (selectedLines && selectedLines.includes(hoveredLine)) {
                 colorToSet = this.stateManager.getColorState("select");
             } else {
                 colorToSet = this.stateManager.getColorState("default");
@@ -1699,5 +1723,33 @@ export default class MeasureModeBase {
 
         // Convert the set of line primitives to an array and return it
         return Array.from(linePrimitives);
+    }
+
+    /**
+     * Creates a default measurement record object with a consistent structure.
+     *
+     * This method returns a new object that serves as the template for measurement
+     * records. The returned object contains default values for properties that
+     * can be later customized by specific measurement modes.
+     *
+     * @returns {Object} A measurement record object with the following properties:
+     * @property {null|number|string} id - The unique identifier for the measurement (initially null).
+     * @property {string} mode - The measurement mode (initially an empty string).
+     * @property {Array.<Cartesian3>} coordinates - An array to store the measurement's coordinate positions.
+     * @property {number} labelNumberIndex - The index used for labeling or ordering (initially 0).
+     * @property {string} status - The status of the measurement, e.g. "pending" or "completed" (default is "pending").
+     * @property {Array.<number>} _records - An array to store intermediate or final measurement values.
+     * @property {Array} interpolationPoints - An array to hold interpolated coordinate points (if applicable).
+     */
+    _createDefaultMeasure() {
+        return {
+            id: null,
+            mode: "",
+            coordinates: [],
+            labelNumberIndex: 0,
+            status: "pending",
+            _records: [],
+            interpolationPoints: []
+        };
     }
 }

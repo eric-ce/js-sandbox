@@ -14,7 +14,7 @@ import {
     calculateClampedDistance,
     createGroundPolylinePrimitive,
     generateIdByTimestamp,
-} from "../helper/helper.js";
+} from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
 
@@ -36,8 +36,8 @@ class Profile extends MeasureModeBase {
      * @param {Function} logRecordsCallback - Callback function to log distance records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
-    constructor(viewer, handler, stateManager, logRecordsCallback, cesiumPkg) {
-        super(viewer, handler, stateManager, logRecordsCallback, cesiumPkg);
+    constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
+        super(viewer, handler, stateManager, cesiumPkg);
 
         // Flags to control the state of the tool
         this.flags = {
@@ -76,6 +76,8 @@ class Profile extends MeasureModeBase {
         // chart
         this.chart = null;
         this.chartDiv = null;
+
+        this.emitter = emitter;
     }
 
     /**
