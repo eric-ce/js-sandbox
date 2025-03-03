@@ -28,8 +28,10 @@
     "webpack-dev-server": "^5.0.4"
   },
   "dependencies": {
+    "@googlemaps/js-api-loader": "^1.16.8",
     "cesium": "^1.118.2",
     "chart.js": "^4.4.3",
-    "eventemitter3": "^5.0.1"
+    "eventemitter3": "^5.0.1",
+    "leaflet": "^1.9.4"
   }
 }
