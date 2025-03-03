@@ -11,9 +11,13 @@ export class LogTable extends HTMLElement {
         this._stateManager = null;  // shared state manager, to be set via property
         this._cesiumStyle = null;   // shared cesium style, to be set via property
 
-        // 
+
         this.logBox = null; // container for the log table
         this.table = null;  // table element for the log entries
+
+        const mapCesium = document.querySelector("map-cesium");
+
+        this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("cesiumContainer");
 
         // create log table UI
         this._createUI();
@@ -33,7 +37,7 @@ export class LogTable extends HTMLElement {
         this._emitter.on('data:updated', this._handleDataAdded.bind(this));
 
         // listen for mode:selected
-        this._emitter.on('mode:selected', this._handleModeSelected.bind(this));
+        this._emitter.on('selected:info', this._handleModeSelected.bind(this));
     }
 
     // state manager
@@ -49,13 +53,40 @@ export class LogTable extends HTMLElement {
      ************/
     // apply Cesium style when connected
     connectedCallback() {
-        // FIXME: create custom style instead of relying on cesium style
+        // initialize the style for the web component
+        this.style.position = "absolute";
+        this.updatePositions();
 
-        // link cesium package default style
-        this._cesiumStyle = document.createElement("link");
-        this._cesiumStyle.rel = "stylesheet";
-        this._cesiumStyle.href = `/Widgets/widgets.css`;
-        this.shadowRoot.appendChild(this._cesiumStyle);
+        // observe for changes in the viewer container, to update the position of the log table
+        this.setupObservers();
+    }
+
+    updatePositions() {
+        const rect = this.viewerContainer.getBoundingClientRect();
+        this.style.bottom = rect ? (rect.height - 260) + "px" : "40px";
+        this.style.left = rect ? (rect.width - 267) + "px" : "0px";
+    }
+
+    setupObservers() {
+        const navigatorContainer = document.querySelector('.navigator-container');
+        if (!navigatorContainer) return;
+
+        // Create a ResizeObserver to watch for dimension changes
+        this.resizeObserver = new ResizeObserver(() => {
+            this.updatePositions();
+        });
+        this.resizeObserver.observe(navigatorContainer);
+
+        // Create a MutationObserver to watch for DOM changes
+        this.mutationObserver = new MutationObserver((mutations) => {
+            // You could filter mutations if needed
+            this.updatePositions();
+        });
+        this.mutationObserver.observe(navigatorContainer, {
+            childList: true,
+            attributes: true,
+            subtree: true
+        });
     }
 
     // Create the basic UI structure.
@@ -63,11 +94,8 @@ export class LogTable extends HTMLElement {
         // Button that toggles the log box
         this.logIconButton = document.createElement("button");
         // set button style
-        this.logIconButton.className = "cesium-button toggle-table-button";
+        this.logIconButton.className = "annotate-button animate-on-show hidden";
         this.logIconButton.style.position = "absolute";
-        this.logIconButton.style.top = "18rem";
-        this.logIconButton.style.left = "calc(100% - 45px)";
-        this.logIconButton.style.display = "none"; // hidden by default
         // set the icon as button image
         this.logIconButton.innerHTML = `<img src="${logBoxIcon}" alt="help box icon" style="width: 30px; height: 30px;" aria-hidden="true">`;
         // set aria attributes
@@ -83,13 +111,9 @@ export class LogTable extends HTMLElement {
 
         // Create container div for the log table.
         this.logBox = document.createElement("div");
-        this.logBox.className = "log-box cesium-infoBox cesium-infoBox-visible log-box-expanded";
+        this.logBox.className = "info-box log-box log-box-expanded visible";
         // Set an initial position (could be customized or made responsive)
         this.logBox.style.position = "absolute";
-        this.logBox.style.top = "18rem";
-        // For example, position it 250px from the right edge:
-        this.logBox.style.left = "calc(100% - 260px)";
-        // this.logBox.style.display = "block"; // show by default
         // Add click handler to close help box when clicked
         this.logBox.addEventListener("click", () => {
             this.hideLogBox();
@@ -112,13 +136,12 @@ export class LogTable extends HTMLElement {
 
         // Make the logBox draggable.
         // (Assuming your makeDraggable function accepts the element and a container.)
-        const viewerContainer = document.getElementById("cesiumContainer");
-        makeDraggable(this.logBox, viewerContainer, (newTop, newLeft) => {
+        makeDraggable(this.logBox, this.viewerContainer, (newTop, newLeft) => {
             this.logBox.style.top = `${newTop}px`;
             this.logBox.style.left = `${newLeft}px`;
         });
         // Make the log icon draggable.
-        makeDraggable(this.logIconButton, viewerContainer, (newTop, newLeft) => {
+        makeDraggable(this.logIconButton, this.viewerContainer, (newTop, newLeft) => {
             this.logIconButton.style.top = `${newTop}px`;
             this.logIconButton.style.left = `${newLeft}px`;
         });
@@ -127,16 +150,20 @@ export class LogTable extends HTMLElement {
     // Show the log box and hide the log icon
     showLogBox() {
         this.logVisible = true;
-        this.logBox.style.display = "block";
-        this.logIconButton.style.display = "none";
+        this.logBox.classList.add("visible");
+        this.logBox.classList.remove("hidden");
+        this.logIconButton.classList.add("hidden");
+        this.logIconButton.classList.remove("visible");
         this.logIconButton.setAttribute("aria-pressed", "true");
     }
 
     // Hide the log box and show the log icon
     hideLogBox() {
         this.logVisible = false;
-        this.logBox.style.display = "none";
-        this.logIconButton.style.display = "block";
+        this.logBox.classList.add("hidden");
+        this.logBox.classList.remove("visible");
+        this.logIconButton.classList.add("visible");
+        this.logIconButton.classList.remove("hidden");
         this.logIconButton.setAttribute("aria-pressed", "false");
     }
 
@@ -163,8 +190,11 @@ export class LogTable extends HTMLElement {
         // Only process if the record’s status is "completed"
         if (record.status !== "completed") return;
 
-        const mode = record.mode; // e.g., "multi-distance"
-        const valueArray = record._records; // use the _records property
+        // Extract the mode and valueArray from the record.
+        const { mode, _records: valueArray } = record;
+        if (!mode || !valueArray) return;
+
+        // Convert the record into an array of formatted strings.
         const formattedLines = this._formatRecordsToStrings(mode, valueArray);
 
         // Append each formatted line to the internal _records array.
@@ -172,6 +202,7 @@ export class LogTable extends HTMLElement {
             this._records.push(line);
         });
 
+        // Update the table UI.
         this._updateTable();
     }
 
@@ -185,14 +216,13 @@ export class LogTable extends HTMLElement {
         const lines = [];
         // Error handling: if valueArray is empty or undefined, return an "unknown" line.
         if (!valueArray || valueArray.length === 0) {
-            lines.push(`${mode}: unknown`);
-            return lines;
+            return [];
         }
 
         // Case 1: valueArray is an array of numbers. e.g: [1234.3456]
         if (typeof valueArray[0] === 'number') {
             const roundedNumbers = valueArray.map(n =>
-                ((n * 1000) % 1 === 0) ? n : n.toFixed(5)
+                ((n * 1000) % 1 === 0) ? n : n.toFixed(2)
             );
             lines.push(`${mode}: ${roundedNumbers.join(", ")}`);
             return lines;
@@ -225,15 +255,15 @@ export class LogTable extends HTMLElement {
                 if (!latitude || !longitude) return [];  // Error handling
                 // Round to 6 decimal places for lat and lon.
                 const roundedLat = latitude.toFixed(6);
-                const roundedLon = longitude.toFixed(6);
+                const roundedLng = longitude.toFixed(6);
                 // const roundedHeight = coords.height.toFixed(2);
 
                 // Add the formatted line to the array
-                lines.push(`${mode}: ${actionKey}: lat,lon,height: ${roundedLat},${roundedLon}`);
+                lines.push(`${mode}: ${actionKey}: lat,lng: ${roundedLat},${roundedLng}`);
                 return lines;
             }
         }
-        // Error handling: if the valueArray is not recognized, return an "unknown" line.
+        // Error handling: if the valueArray is not recognized, return any value in string.
         lines.push(`${mode}: ${JSON.stringify(valueArray)}`);
 
         return lines;

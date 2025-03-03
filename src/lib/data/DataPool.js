@@ -49,7 +49,7 @@ class DataPool {
 
         // Emit the new data 
         if (this.emitter) {
-            // Emit namespaced event so listeners know a new measurement was added.
+            // Emit the new data
             this.emitter.emit("data:updated", measure);
         }
     }

@@ -16,13 +16,13 @@ export class HelpTable extends HTMLElement {
         // help table messages of instructions 
         const multiDistancesInstructions = [
             "Left Click to start measure",
-            "Right Click to finish measure",
-            "Hold Left Click to drag point",
             "Left Click on label to edit",
+            "Left Click on first or last point to continue measure",
+            "Hold Left Click to drag point",
+            "Right Click to finish measure",
             "Double Left Click on line to add line",
             "Middle Click on point to remove line segment",
             "Middle Click on line to remove line set",
-            "Left Click on first or last point to continue measure",
         ];
 
         // Define default instruction messages keyed by mode.
@@ -67,6 +67,10 @@ export class HelpTable extends HTMLElement {
         this.table = null;
         this.helpIconButton = null;
 
+        // cesium container
+        const mapCesium = document.querySelector("map-cesium");
+        this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("cesiumContainer");
+
         // create help table UI
         this._createUI();
     }
@@ -74,10 +78,48 @@ export class HelpTable extends HTMLElement {
     // use Cesium style
     connectedCallback() {
         // link cesium package default style
-        this._cesiumStyle = document.createElement("link");
-        this._cesiumStyle.rel = "stylesheet";
-        this._cesiumStyle.href = `/Widgets/widgets.css`;
-        this.shadowRoot.appendChild(this._cesiumStyle);
+        // this._cesiumStyle = document.createElement("link");
+        // this._cesiumStyle.rel = "stylesheet";
+        // this._cesiumStyle.href = `/Widgets/widgets.css`;
+        // this.shadowRoot.appendChild(this._cesiumStyle);
+
+        // Apply shared styles
+        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+
+        // initialize the style for the web component
+        this.style.position = "absolute";
+        this.updatePositions();
+
+        // observe for changes in the viewer container, to update the position of the help table
+        this.setupObservers();
+    }
+
+    updatePositions() {
+        const rect = this.viewerContainer.getBoundingClientRect();
+        this.style.bottom = rect ? (rect.height - 60) + "px" : "40px";
+        this.style.left = rect ? (rect.width - 267) + "px" : "0px";
+    }
+
+    setupObservers() {
+        const navigatorContainer = document.querySelector('.navigator-container');
+        if (!navigatorContainer) return;
+
+        // Create a ResizeObserver to watch for dimension changes
+        this.resizeObserver = new ResizeObserver(() => {
+            this.updatePositions();
+        });
+        this.resizeObserver.observe(navigatorContainer);
+
+        // Create a MutationObserver to watch for DOM changes
+        this.mutationObserver = new MutationObserver((mutations) => {
+            // You could filter mutations if needed
+            this.updatePositions();
+        });
+        this.mutationObserver.observe(navigatorContainer, {
+            childList: true,
+            attributes: true,
+            subtree: true
+        });
     }
 
     // Create the basic UI structure.
@@ -85,10 +127,8 @@ export class HelpTable extends HTMLElement {
         // Button that toggles the help box
         this.helpIconButton = document.createElement("button");
         // set button style
-        this.helpIconButton.className = "cesium-button toggle-table-button";
+        this.helpIconButton.className = "annotate-button animate-on-show visible";
         this.helpIconButton.style.position = "absolute";
-        this.helpIconButton.style.top = "70px";
-        this.helpIconButton.style.left = "calc(100% - 45px)";
         // set the icon as button image
         this.helpIconButton.innerHTML = `<img src="${helpBoxIcon}" alt="help box icon" style="width: 30px; height: 30px;" aria-hidden="true">`;
         // set aria attributes
@@ -105,11 +145,10 @@ export class HelpTable extends HTMLElement {
 
         // Create the container (the help box)
         this.helpBox = document.createElement("div");
-        this.helpBox.className = "cesium-infoBox cesium-infoBox-visible helpBox-expanded";
+        this.helpBox.className = "info-box help-box hidden";
         this.helpBox.style.position = "absolute";
-        this.helpBox.style.top = "70px";
-        this.helpBox.style.left = "calc(100% - 260px)";
-        this.helpBox.style.display = "none"; // hidden by default
+
+        // this.helpBox.style.display = "none"; // hidden by default
 
         // Add click handler to close help box when clicked
         this.helpBox.addEventListener("click", () => {
@@ -123,17 +162,14 @@ export class HelpTable extends HTMLElement {
         // Append the container to the shadow DOM
         this.shadowRoot.appendChild(this.helpBox);
 
-        // Apply shared styles
-        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-
-        const viewerContainer = document.getElementById("cesiumContainer");
+        // const viewerContainer = document.getElementById("cesiumContainer");
         // Make the help box draggable
-        makeDraggable(this.helpBox, viewerContainer, (newTop, newLeft) => {
+        makeDraggable(this.helpBox, this.viewerContainer, (newTop, newLeft) => {
             this.helpBox.style.top = `${newTop}px`;
             this.helpBox.style.left = `${newLeft}px`;
         });
         // Make the help icon draggable
-        makeDraggable(this.helpIconButton, viewerContainer, (newTop, newLeft) => {
+        makeDraggable(this.helpIconButton, this.viewerContainer, (newTop, newLeft) => {
             this.helpIconButton.style.top = `${newTop}px`;
             this.helpIconButton.style.left = `${newLeft}px`;
         });
@@ -145,17 +181,26 @@ export class HelpTable extends HTMLElement {
     // Show the help box and hide the help icon
     showHelpBox() {
         this.helpVisible = true;
-        this.helpBox.style.display = "block";
-        this.helpIconButton.style.display = "none";
+        // this.helpBox.style.display = "block";
+        this.helpBox.classList.add("visible");
+        this.helpBox.classList.remove("hidden");
+        // this.helpIconButton.style.display = "none";
+        this.helpIconButton.classList.add("hidden");
+        this.helpIconButton.classList.remove("visible");
         this.helpIconButton.setAttribute("aria-pressed", "true");
     }
 
     // Hide the help box and show the help icon
     hideHelpBox() {
         this.helpVisible = false;
-        this.helpBox.style.display = "none";
-        this.helpIconButton.style.display = "block";
+        // this.helpBox.style.display = "none";
+        // this.helpIconButton.style.display = "block";
+        this.helpBox.classList.add("hidden");
+        this.helpBox.classList.remove("visible");
+        this.helpIconButton.classList.add("visible");
+        this.helpIconButton.classList.remove("hidden");
         this.helpIconButton.setAttribute("aria-pressed", "false");
+
     }
 
     /**
