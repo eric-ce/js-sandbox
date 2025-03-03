@@ -1,6 +1,11 @@
 // This is the cesium measure web component that will be used in the MapCesium component.
-// !important: This component needs to refactor to put shared code for google-measure and leaflet-measure into measureComponentBase.js
-import * as Cesium from "cesium";
+import {
+    ScreenSpaceEventHandler,
+    BlendOption,
+    Cartesian3,
+    Color,
+    Viewer,
+} from "cesium";
 import { TwoPointsDistance } from "../measure-modes/TwoPointsDistance.js";
 import { Points } from "../measure-modes/Points.js";
 import { ThreePointsCurve } from "../measure-modes/ThreePointsCurve.js";
@@ -46,7 +51,7 @@ export default class CesiumMeasure extends HTMLElement {
         this._stateManager = null;
 
         // cesium style
-        this._cesiumStyle = null;
+        // this._cesiumStyle = null;
 
         // event emitter
         this._emitter = null;
@@ -102,14 +107,21 @@ export default class CesiumMeasure extends HTMLElement {
      **********************/
     async connectedCallback() {
         // link cesium package default style
-        this.cesiumStyle = document.createElement("link");
-        this.cesiumStyle.rel = "stylesheet";
-        this.cesiumStyle.href = `/Widgets/widgets.css`;
-        this.shadowRoot.appendChild(this.cesiumStyle);
+        // this.cesiumStyle = document.createElement("link");
+        // this.cesiumStyle.rel = "stylesheet";
+        // this.cesiumStyle.href = `/Widgets/widgets.css`;
+        // this.shadowRoot.appendChild(this.cesiumStyle);
+
+        // set the web component style
+        this.style.position = "relative";
+        // this.classList.add("cesium-measure");
+
+        // apply style for the web component
+        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
         // add measure toolbox with measure modes
-        if (this.viewer) {
-            this.initialize();
+        if (this.viewer && this.viewer instanceof Viewer) {
+            await this.initialize();
         }
     }
 
@@ -145,12 +157,12 @@ export default class CesiumMeasure extends HTMLElement {
     /**
      * Initializes the MeasureToolbox, setting up event handlers
      */
-    initialize() {
+    async initialize() {
         // if screenSpaceEventHandler existed use it, if not create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;
         } else {
-            this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+            this.handler = new ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
 
         // remove relevant input actions assigned to the handler
@@ -159,8 +171,8 @@ export default class CesiumMeasure extends HTMLElement {
         // Initialize Cesium primitives collections
         const pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
         const labelCollection = new this.cesiumPkg.LabelCollection();
-        pointCollection.blendOption = Cesium.BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
-        labelCollection.blendOption = Cesium.BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
+        pointCollection.blendOption = BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
+        labelCollection.blendOption = BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
         pointCollection.id = "annotate_point_collection";
         labelCollection.id = "annotate_label_collection";
         this.pointCollection = this.viewer.scene.primitives.add(pointCollection);
@@ -168,23 +180,27 @@ export default class CesiumMeasure extends HTMLElement {
 
         // initiate clamped line due to the delay for the first clamped line creation
         const clampedLine = createGroundPolylinePrimitive(
-            [Cesium.Cartesian3.fromDegrees(0, 0), Cesium.Cartesian3.fromDegrees(0, 0)],
+            [Cartesian3.fromDegrees(0, 0), Cartesian3.fromDegrees(0, 0)],
             "line_initiate",
-            Cesium.Color.YELLOWGREEN,
+            Color.YELLOWGREEN,
             this.cesiumPkg.GroundPolylinePrimitive
         );
         this.initialLine = this.viewer.scene.primitives.add(clampedLine);
 
         // initialize all the measure modes, including its UI, and event listeners
-        this.initializeMeasureModes();
+        await this.initializeMeasureModes();
 
-        // // initialize fire trail mode
-        // const fireTrailUser = this.hasRole("fireTrail");
-        // fireTrailUser && this.initializeFireTrail();
+        // initialize fire trail mode
+        const fireTrailUser = this.hasRole("fireTrail");
+        if (fireTrailUser) {
+            await this.initializeFireTrail();
+        }
 
-        // // initialize fly through mode
-        // const flyThroughUser = this.hasRole("flyThrough");
-        // flyThroughUser && this.initializeFlyThrough();
+        // initialize fly through mode
+        const flyThroughUser = this.hasRole("flyThrough");
+        if (flyThroughUser) {
+            await this.initializeFlyThrough();
+        }
     }
 
     /**
@@ -195,9 +211,6 @@ export default class CesiumMeasure extends HTMLElement {
         this.setupToolButton();
         // initialize style of pointerOverlay, the moving dot
         this.setupPointerOverlay();
-
-        // apply style for the web component
-        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
         // all measure modes
         const modes = [
@@ -360,22 +373,26 @@ export default class CesiumMeasure extends HTMLElement {
         const toolbar = document.createElement("div");
         toolbar.setAttribute("role", "toolbar");
         toolbar.setAttribute("aria-label", "Measurement Tools");
-        toolbar.className = "measure-toolbar";
+        toolbar.classList.add("measure-toolbar");
+        // toolbar.style.display = "flex";
+        // toolbar.style.position = "absolute";
+        // toolbar.style.left = 45 * 4 + "px";
+        // toolbar.style.top = "-120px";
+
+        this.shadowRoot.appendChild(toolbar);
 
         // set state for the toolbar
         this.stateManager.setElementState("toolbar", toolbar);
 
         // initialize tool button to control collapse/expand for buttons
         const toolButton = document.createElement("button");
-        toolButton.className = "measure-tools cesium-button";
+        toolButton.className = "measure-tools annotate-button visible animate-on-show";
         toolButton.innerHTML = `<img src="${toolIcon}" alt="tool" style="width: 30px; height: 30px;">`;
         toolButton.addEventListener("click", () => {
             toolButton.classList.toggle("active");
             this.toggleTools();
         });
         toolbar.appendChild(toolButton);
-
-        this.shadowRoot.appendChild(toolbar);
 
         // make toolbar draggable
         makeDraggable(toolbar, this.viewer.container);
@@ -392,7 +409,7 @@ export default class CesiumMeasure extends HTMLElement {
         // Setup the button element
         const button = document.createElement("button");
         const lowerCaseString = buttonText.toLowerCase().replace(/\s+/g, '-');
-        button.className = `${lowerCaseString} cesium-button measure-mode-button`;
+        button.className = `${lowerCaseString} annotate-button animate-on-show hidden`;
         button.innerHTML = `<img src="${icon}" alt="${lowerCaseString}" style="width: 30px; height: 30px;" aria-hidden="true">`;
         button.setAttribute("type", "button");
         button.setAttribute("aria-label", `${buttonText} Tool`);
@@ -414,32 +431,28 @@ export default class CesiumMeasure extends HTMLElement {
                 }
             }
 
+            // Prevent switching mode if mode's flag isAddMode is true;
+            if (activeTool && activeTool.flags.isAddMode) {
+                alert("Please finish adding line segments before switching modes.");
+                return;
+            }
 
             // Check if a log table exists; if not, create one.
-            let logBox = this.stateManager.getElementState("logBox");
-            if (!logBox) {
-                logBox = document.createElement("log-table");
-                // Pass shared properties as needed
-                logBox.emitter = this.emitter;
-                this.shadowRoot.appendChild(logBox);
-                // Set the log table to the state manager
-                this.stateManager.setElementState("logBox", logBox);
+            let logTable = this.stateManager.getElementState("logTable");
+            if (!logTable) {
+                logTable = this._setupLogTable();
             }
 
             // Check if a help table exists; if not, create one.
-            let helpBox = this.stateManager.getElementState("helpBox");
-            if (!helpBox) {
-                helpBox = document.createElement("help-table");
-                // Pass shared properties as needed
-                helpBox.emitter = this.emitter;
-                this.shadowRoot.appendChild(helpBox);
-                // Set the help table to the state manager
-                this.stateManager.setElementState("helpBox", helpBox);
+            let helpTable = this.stateManager.getElementState("helpTable");
+            if (!helpTable) {
+                helpTable = this._setupHelpTable();
             }
+
             // Show the help table
-            helpBox.style.display = "block";
+            // helpTable.style.display = "block";
             // Update its content if your mode changes:
-            helpBox.updateContent(buttonText);
+            helpTable.updateContent(buttonText);
 
             // Deactivate active button if not the same button
             if (activeButton && !isSameButton) {
@@ -452,15 +465,16 @@ export default class CesiumMeasure extends HTMLElement {
                 this.stateManager.setButtonState("activeButton", null);
                 this.stateManager.setButtonState("activeTool", null);
 
-                // Hide the help table and log table components
-                const helpBox = this.stateManager.getElementState("helpBox");
-                const logBox = this.stateManager.getElementState("logBox");
-                if (helpBox) {
-                    helpBox.style.display = "none";
+                // Remove the help table and log table components
+                const helpTable = this.stateManager.getElementState("helpTable");
+                const logTable = this.stateManager.getElementState("logTable");
+                if (helpTable) {
+                    helpTable.remove();
+                    this.stateManager.setElementState("helpTable", null);
                 }
-                if (logBox) {
-                    logBox.remove();
-                    this.stateManager.setElementState("logBox", null);
+                if (logTable) {
+                    logTable.remove();
+                    this.stateManager.setElementState("logTable", null);
                 }
             } else {    // If it is not the same button, it means to toggle on the other button
                 this.activateButton(button, toolInstance);
@@ -479,6 +493,7 @@ export default class CesiumMeasure extends HTMLElement {
         const toolbar = this.stateManager.getElementState("toolbar");
         toolbar.appendChild(button);
         toolInstance.button = button;
+        return button;
     }
 
     /**
@@ -536,16 +551,37 @@ export default class CesiumMeasure extends HTMLElement {
      * toggle action for the tool button to show/hide measure modes
      */
     toggleTools() {
-        const isToolsExpanded = this.stateManager.getFlagState("isToolsExpanded");
-        this.stateManager.setFlagState("isToolsExpanded", !isToolsExpanded);
+        const isExpanded = this.stateManager.getFlagState("isToolsExpanded");
+        this.stateManager.setFlagState("isToolsExpanded", !isExpanded);
 
-        const buttons = Array.from(this.shadowRoot.querySelectorAll(".measure-mode-button"));
+        // Find toolbarDiv
+        const toolbarDiv = this.shadowRoot.querySelector(".measure-toolbar");
+        if (!toolbarDiv) return; // Error handling
+        // Get all modes buttons under toolbarDiv
+        const buttons = Array.from(toolbarDiv.querySelectorAll("button"));
+        // Buttons without the measure-tools
+        const filterButtons = buttons.filter(button => !button.classList.contains("measure-tools"));
 
-        buttons.forEach((button, index) => {
-            setTimeout(() => {
-                button.classList.toggle("show", this.stateManager.getFlagState("isToolsExpanded"));
-            }, index * 50 + 25);
-        });
+        const delayStep = 50; // milliseconds delay per button
+
+        if (!isExpanded) {
+            // Expanding: show buttons from left to right.
+            filterButtons.forEach((button, index) => {
+                setTimeout(() => {
+                    button.classList.remove("hidden");
+                    button.classList.add("visible");
+                }, index * delayStep);
+            });
+        } else {
+            // Collapsing: hide buttons from right to left.
+            const n = buttons.length;
+            filterButtons.forEach((button, index) => {
+                setTimeout(() => {
+                    button.classList.remove("visible");
+                    button.classList.add("hidden");
+                }, (n - index - 1) * delayStep);
+            });
+        }
     }
 
     /**
@@ -553,7 +589,7 @@ export default class CesiumMeasure extends HTMLElement {
      */
     setupClearButton() {
         const clearButton = document.createElement("button");
-        clearButton.className = "clear-button cesium-button measure-mode-button";
+        clearButton.className = "clear-button annotate-button animate-on-show hidden";
         clearButton.innerHTML = `<img src="${clearIcon}" alt="clear" style="width: 30px; height: 30px;">`;
         this.stateManager.setButtonState("clearButton", clearButton);
 
@@ -647,6 +683,28 @@ export default class CesiumMeasure extends HTMLElement {
         });
     }
 
+    _setupHelpTable() {
+        const helpTable = document.createElement("help-table");
+        // Pass shared properties as needed
+        helpTable.emitter = this.emitter;
+        this.shadowRoot.appendChild(helpTable);
+        // Set the help table to the state manager
+        this.stateManager.setElementState("helpTable", helpTable);
+
+        return helpTable;
+    }
+
+    _setupLogTable() {
+        const logTable = document.createElement("log-table");
+        // Pass shared properties as needed
+        logTable.emitter = this.emitter;
+        this.shadowRoot.appendChild(logTable);
+        // Set the log table to the state manager
+        this.stateManager.setElementState("logTable", logTable);
+
+        return logTable;
+    }
+
     /**
      * Sets up the button overlay to display the description of the button when mouse hover.
      */
@@ -654,29 +712,42 @@ export default class CesiumMeasure extends HTMLElement {
         const buttonOverlay = document.createElement("div");
         buttonOverlay.className = "button-overlay";
         buttonOverlay.style.cssText =
-            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; display: none; background: white; border-radius: 5px; box-shadow: 0 0 10px #000; transition: 0.1s ease-in-out; z-index: 1000;";
+            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px 8px; opacity: 0; border: 1px solid #444; color: rgba(38, 38, 38, 0.95); background: #edffff; border-radius: 5px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); z-index: 1000; transition: opacity 0.2s ease-in, transform 0.2s ease-in;";
         this.viewer.container.appendChild(buttonOverlay);
         this.stateManager.setOverlayState("button", buttonOverlay);
 
-        this.shadowRoot.querySelectorAll(".measure-mode-button").forEach((button) => {
+        // Store timeout ID
+        let tooltipTimeout;
+        const TOOLTIP_DELAY = 800; // 0.8 seconds in milliseconds
+
+        this.shadowRoot.querySelectorAll(".annotate-button").forEach((button) => {
             button.addEventListener("mouseover", (e) => {
-                // cesium container rectangle
-                const cesiumRect = this.viewer.container.getBoundingClientRect();
-                const buttonOverlay = this.stateManager.getOverlayState("button");
-                // set overlay to display
-                buttonOverlay.style.display = "block";
-                // get description of the button
-                const description = button.querySelector("img")?.alt.split("-").join(" ");
-                buttonOverlay.innerHTML = `${description} mode`;
-                // set position of the overlay
-                buttonOverlay.style.left = e.pageX - cesiumRect.x + "px"; // Position the overlay right of the cursor
-                buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
+                // Clear any existing timeout
+                clearTimeout(tooltipTimeout);
+
+                // Set new timeout
+                tooltipTimeout = setTimeout(() => {
+                    const cesiumRect = this.viewer.container.getBoundingClientRect();
+                    const buttonOverlay = this.stateManager.getOverlayState("button");
+
+                    // set overlay to display
+                    buttonOverlay.style.opacity = "0.95";
+
+                    // get description of the button
+                    const description = button.querySelector("img")?.alt.split("-").join(" ");
+                    buttonOverlay.innerHTML = `${description} mode`;
+
+                    // set position of the overlay
+                    buttonOverlay.style.left = e.pageX - cesiumRect.x + "px";
+                    buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
+                }, TOOLTIP_DELAY);
             });
 
             button.addEventListener("mouseout", () => {
                 // set overlay to not display
+                clearTimeout(tooltipTimeout);
                 const buttonOverlay = this.stateManager.getOverlayState("button");
-                buttonOverlay.style.display = "none";
+                buttonOverlay.style.opacity = "0";
             });
         });
     }
@@ -691,76 +762,6 @@ export default class CesiumMeasure extends HTMLElement {
             "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
         this.viewer.container.appendChild(pointer);
         this.stateManager.setOverlayState("pointer", pointer);
-    }
-
-    /**
-     * Setup a toggle button for expanding and collapsing boxes (helpBox or logBox)
-     * @param {HTMLElement} targetBox - The box to toggle
-     * @param {string} toggleButtonImageSrc - The image source for the toggle button
-     * @param {Function} updatePositionFn - The function to update the position of the box
-     * @param {string} expandedClass - The class name for the expanded
-     * @returns {HTMLElement} The toggle button element
-     */
-    setupMessageBoxToggleButton(targetBox, toggleButtonImageSrc, updatePositionFn, expandedClass) {
-        const table = targetBox.querySelector("table");
-        const toggleButton = document.createElement("button");
-        toggleButton.className = "toggle-log-box-button cesium-button";
-        toggleButton.innerHTML = `<img src="${toggleButtonImageSrc}" alt="toggle button" style="width: 30px; height: 30px;">`;
-        toggleButton.style.display = "none"; // Initially hidden
-
-        // Handle the expand action when the toggle button is clicked
-        toggleButton.addEventListener("click", (event) => {
-            event.stopPropagation();
-            if (table.style.display === "none") {
-                table.style.display = "table"; // Show the table
-                toggleButton.style.display = "none"; // Hide the toggle button
-                targetBox.classList.add(`${expandedClass}-expanded`);
-                targetBox.classList.remove("messageBox-collapsed");
-            }
-
-            // Make sure it stays within the container
-            makeDraggable(targetBox, this.viewer.container, updatePositionFn);
-        });
-
-        // Handle the collapse action when clicking on the target box
-        targetBox.addEventListener("click", (event) => {
-            if (table.style.display !== "none") {
-                table.style.display = "none"; // Hide the table
-                toggleButton.style.display = "block"; // Show the toggle button
-
-                targetBox.classList.add("messageBox-collapsed");
-                targetBox.classList.remove(`${expandedClass}-expanded`);
-                event.stopPropagation(); // Prevent triggering any parent click events
-            }
-        });
-
-        return toggleButton;
-    }
-
-    /**
-     * create the row for the table
-     * @param {string|number} value
-     * @returns
-     */
-    createRow(value) {
-        const row = document.createElement("tr");
-        const cell = document.createElement("td");
-        cell.style.borderBottom = "1px solid white";
-        cell.innerHTML = value;
-        row.appendChild(cell);
-
-        return row;
-    }
-
-    /**
-     * Update the records of the measure modes
-     * @param {*} mode
-     * @param {*} records
-     */
-    updateRecords(modeName, records) {
-        const logEntry = { [modeName]: records };
-        this._records.push(logEntry);
-        this.updateLogBox(); // Ensure the log box is updated every time records change
     }
 
     activateModeByName(modeName) {
@@ -809,43 +810,40 @@ export default class CesiumMeasure extends HTMLElement {
     // /***********************
     //  * FIRE TRAIL FEATURES *
     //  ***********************/
-    // initializeFireTrail() {
-    //     // fire trail is a web component
-    //     const fireTrail = document.createElement("fire-trail-mode");
-    //     // setter values for the fire trail
-    //     fireTrail.viewer = this.viewer;
-    //     fireTrail.app = this.app;
-    //     fireTrail.handler = this.handler;
-    //     fireTrail.stateManager = this.stateManager;
-    //     fireTrail.cesiumPkg = this.cesiumPkg;
-    //     fireTrail.logRecordsCallback = this.updateRecords.bind(this, "fire-trail");
-    //     fireTrail.setupLogBox = this.setupLogBox.bind(this);
-    //     fireTrail.setupHelpBox = this.setupHelpBox.bind(this);
-    //     fireTrail.updateHelpBox = this.updateHelpBox.bind(this);
-    //     fireTrail.cesiumStyle = this.cesiumStyle;
-    //     // append the fire trail to the measure toolbox
-    //     return this.shadowRoot.appendChild(fireTrail);
-    // }
+    async initializeFireTrail() {
+        // fire trail is a web component
+        const fireTrail = document.createElement("fire-trail-mode");
+        // setter values for the fire trail
+        fireTrail.viewer = this.viewer;
+        fireTrail.app = this.app;
+        fireTrail.handler = this.handler;
+        fireTrail.stateManager = this.stateManager;
+        fireTrail.cesiumPkg = this.cesiumPkg;
+        fireTrail.setupLogTable = this._setupLogTable.bind(this);
+        fireTrail.setupHelpTable = this._setupHelpTable.bind(this);
+
+        // append the fire trail to the measure toolbox
+        return this.shadowRoot.appendChild(fireTrail);
+    }
 
     // /************************
     //  * FLY THROUGH FEATURES *
     //  ************************/
-    // initializeFlyThrough() {
-    //     // const flyThrough = new FlyThrough(this.viewer, this.handler, this.stateManager, this.updateRecords.bind(this, "fly-through"), this.cesiumPkg);
-    //     // return flyThrough;
-    //     const flyThrough = document.createElement("fly-through-mode");
-    //     // setter values for the fly through
-    //     flyThrough.viewer = this.viewer;
-    //     flyThrough.app = this.app;
-    //     flyThrough.handler = this.handler;
-    //     flyThrough.stateManager = this.stateManager;
-    //     flyThrough.cesiumPkg = this.cesiumPkg;
-    //     flyThrough.logRecordsCallback = this.updateRecords.bind(this, "fly-through");
-    //     flyThrough.setupLogBox = this.setupLogBox.bind(this);
-    //     flyThrough.cesiumStyle = this.cesiumStyle;
-    //     // append the fly through to the measure toolbox
-    //     return this.shadowRoot.appendChild(flyThrough);
-    // }
+    async initializeFlyThrough() {
+        // const flyThrough = new FlyThrough(this.viewer, this.handler, this.stateManager, this.updateRecords.bind(this, "fly-through"), this.cesiumPkg);
+        // return flyThrough;
+        const flyThrough = document.createElement("fly-through-mode");
+        // setter values for the fly through
+        flyThrough.viewer = this.viewer;
+        flyThrough.app = this.app;
+        flyThrough.handler = this.handler;
+        flyThrough.stateManager = this.stateManager;
+        flyThrough.cesiumPkg = this.cesiumPkg;
+        flyThrough.setupLogTable = this._setupLogTable.bind(this);
+        flyThrough.setupHelpTable = this._setupHelpTable.bind(this);
+        // append the fly through to the measure toolbox
+        return this.shadowRoot.appendChild(flyThrough);
+    }
 }
 
 customElements.define("cesium-measure", CesiumMeasure);

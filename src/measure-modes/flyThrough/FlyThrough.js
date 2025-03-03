@@ -1,8 +1,5 @@
 import * as Cesium from "cesium";
 import {
-    createLineArrowPrimitive,
-    createPointPrimitive,
-    generateId,
     makeDraggable,
     removeInputActions,
     showCustomNotification
@@ -16,24 +13,21 @@ export class FlyThrough extends HTMLElement {
         super();
         this.attachShadow({ mode: "open" });
 
+        // App variables
+        this._app = null;
+
         // Cesium variables
         this._viewer = null;
         this._handler = null;
         this._cesiumPkg = null;
-        this._cesiumPkg = null;
+
         // Cesium primitives collections
         this.pointCollection = null;
         this.labelCollection = null;
 
-        // App variables
-        this._app = null;
-        this._updateRecords = null;
-
-        this._cesiumStyle = null;
-
         this.pointerOverlay = null;
 
-        this.coordinate = new Cesium.Cartesian3();
+        this.coordinate = null;
 
         // flags to control the state of the tool
         this.flags = {
@@ -163,6 +157,9 @@ export class FlyThrough extends HTMLElement {
     }
 
     connectedCallback() {
+        // apply shared style
+        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+
         if (this.viewer) {
             this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
             this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
@@ -199,14 +196,6 @@ export class FlyThrough extends HTMLElement {
         this._stateManager = stateManager;
     }
 
-    get logRecordsCallback() {
-        return this._logRecordsCallback;
-    }
-
-    set logRecordsCallback(callback) {
-        this._logRecordsCallback = callback;
-    }
-
     get cesiumPkg() {
         return this._cesiumPkg;
     }
@@ -215,42 +204,19 @@ export class FlyThrough extends HTMLElement {
         this._cesiumPkg = cesiumPkg;
     }
 
-    get updateRecords() {
-        return this._updateRecords;
-    }
-
-    set updateRecords(callback) {
-        this._updateRecords = callback;
-    }
-
-    get cesiumStyle() {
-        return this._cesiumStyle;
-    }
-
-    set cesiumStyle(style) {
-        const clonedStyle = style.cloneNode(true);
-        this._cesiumStyle = clonedStyle;
-        if (clonedStyle) {
-            this.shadowRoot.appendChild(clonedStyle)
-        };
-    }
-
     initialize() {
-        // apply shared style
-        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-
-        // setup buttons
-        this.setupButtons();
-
-        // setup pointer overlay
-        this.pointerOverlay = this.stateManager.getOverlayState("pointer");
-
         // if screenSpaceEventHandler existed use it, if not create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;
         } else {
             this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
+
+        // setup buttons
+        this.setupButtons();
+
+        // setup pointer overlay
+        this.pointerOverlay = this.stateManager.getOverlayState("pointer");
 
         this.setupInputActions();
     }
@@ -275,14 +241,12 @@ export class FlyThrough extends HTMLElement {
                 text: 'Fly',    // TODO: change to icon img
                 className: 'fly',
                 onClick: this.handleFly.bind(this),
-                top: 0, // the bottom button in the toolbar
             },
             {
                 key: 'replay',
                 text: 'Replay',
                 className: 'replay',
                 onClick: this.handleReplayFly.bind(this),
-                top: -40 * 1, // -40px each button height * #1st buttons
                 disabled: true, // Initially disabled until fly data is available
             },
             {
@@ -290,7 +254,6 @@ export class FlyThrough extends HTMLElement {
                 text: 'Edit',
                 className: 'edit-fly-path',
                 onClick: editFlyPath.bind(this), // Ensure this method exists
-                top: -40 * 2, // -40px each button * #2nd buttons
                 disabled: true, // Initially disabled until fly data is available
             },
             {
@@ -298,7 +261,6 @@ export class FlyThrough extends HTMLElement {
                 text: 'Show',
                 className: 'show-fly-path',
                 onClick: this.handleShowFlyPath.bind(this), // Ensure this method exists
-                top: -40 * 3, // -40px each button * #2nd buttons
                 disabled: true, // Initially disabled until fly data is available
             },
             // kml buttons
@@ -307,14 +269,12 @@ export class FlyThrough extends HTMLElement {
                 text: 'Import',
                 className: 'import-kml',
                 onClick: this.importKml.bind(this),
-                top: -40 * 0, // -40px each button * #3rd buttons
             },
             {
                 key: 'exportKml',
                 text: 'Export',
                 className: 'export-kml',
                 onClick: this.exportKml.bind(this),
-                top: -40 * 1, // -40px each button * #4th buttons
             },
             // screen recording buttons
             {
@@ -322,14 +282,12 @@ export class FlyThrough extends HTMLElement {
                 text: 'Record',
                 className: 'record-screen',
                 onClick: handleRecordScreen.bind(this),
-                top: 0, // the bottom button in the toolbar
             },
             {
                 key: 'pauseResume',
                 text: 'Pause',
                 className: 'pause-resume', // Initially disabled until recording starts
                 onClick: resumeOrPauseRecording.bind(this),
-                top: -40, // Adjust positioning as needed
                 disabled: true, // Initially disabled until recording starts
             },
         ];
@@ -339,19 +297,18 @@ export class FlyThrough extends HTMLElement {
             let buttons = [];
             buttonsConfig.forEach(config => {
                 const button = document.createElement("button");
-                button.textContent = config.text;
+                button.innerHTML = config.text;
 
                 // set button style
+                const styleList = [config.className, "annotate-button", "animate-on-show", "visible"];
                 if (config.disabled) {
-                    button.classList.add("disabled-button", config.className);
-                } else {
-                    button.classList.add("cesium-button", config.className);
+                    styleList.push("disabled-button");
                 }
-                button.classList.add("measure-mode-button", "show")
+                button.classList.add(...styleList);
 
                 // set button attributes
                 button.setAttribute("type", "button");
-                button.setAttribute("aria-label", `${config.key}`);
+                button.setAttribute("aria-label", `${config.key} Tool`);
                 button.setAttribute("aria-pressed", "false"); // For toggle behavior
 
                 // add event listener
@@ -397,15 +354,69 @@ export class FlyThrough extends HTMLElement {
         const screenRecordingButtons = createButtons(screenRecordingButtonsConfig);
         screenRecordingButtons.forEach(button => screenRecordingContainer.appendChild(button));
 
+        this.setupButtonOverlay();
+
         // mouse move event listener for button overlay
-        this.updateButtonOverlay(this.buttons.replayButton, "Replay fly path");
-        this.updateButtonOverlay(this.buttons.flyButton, "Record fly path");
-        this.updateButtonOverlay(this.buttons.editFlyPathButton, "Edit fly path");
-        this.updateButtonOverlay(this.buttons.showFlyPathButton, "Show/Hide fly path");
-        this.updateButtonOverlay(this.buttons.importKmlButton, "Import KML file");
-        this.updateButtonOverlay(this.buttons.exportKmlButton, "Export KML file");
-        this.updateButtonOverlay(this.buttons.recordScreenButton, "Record screen");
-        this.updateButtonOverlay(this.buttons.pauseResumeButton, "Pause/Resume recording");
+        // this.updateButtonOverlay(this.buttons.replayButton, "Replay fly path");
+        // this.updateButtonOverlay(this.buttons.flyButton, "Record fly path");
+        // this.updateButtonOverlay(this.buttons.editFlyPathButton, "Edit fly path");
+        // this.updateButtonOverlay(this.buttons.showFlyPathButton, "Show/Hide fly path");
+        // this.updateButtonOverlay(this.buttons.importKmlButton, "Import KML file");
+        // this.updateButtonOverlay(this.buttons.exportKmlButton, "Export KML file");
+        // this.updateButtonOverlay(this.buttons.recordScreenButton, "Record screen");
+        // this.updateButtonOverlay(this.buttons.pauseResumeButton, "Pause/Resume recording");
+    }
+
+    /**
+     * update the button overlay with the overlay text
+     */
+    setupButtonOverlay() {
+        const dictionary = {
+            "fly": "Record fly path",
+            "replay": "Replay fly path",
+            "edit-fly-path": "Edit fly path",
+            "show-fly-path": "Show/Hide fly path",
+            "import-kml": "Import KML",
+            "export-kml": "Export KML",
+            "record-screen": "Record screen",
+            "pause-resume": "Pause/Resume recording",
+        };
+
+        // Store timeout ID
+        let tooltipTimeout;
+        const TOOLTIP_DELAY = 800; // 0.8 seconds in milliseconds
+
+        this.shadowRoot.querySelectorAll(".annotate-button").forEach((button) => {
+            button.addEventListener("mouseover", (e) => {
+                // Clear any existing timeout
+                clearTimeout(tooltipTimeout);
+
+                // Set new timeout
+                tooltipTimeout = setTimeout(() => {
+                    const cesiumRect = this.viewer.container.getBoundingClientRect();
+                    const buttonOverlay = this.stateManager.getOverlayState("button");
+
+                    // set overlay to display
+                    buttonOverlay.style.opacity = "0.95";
+
+                    // set description of the button using first className in style of a button
+                    const buttonClass = button.classList[0];
+                    const description = dictionary[buttonClass] ? dictionary[buttonClass] : buttonOverlay.style.opacity = "0";
+                    buttonOverlay.innerHTML = description;
+
+                    // set position of the overlay
+                    buttonOverlay.style.left = e.pageX - cesiumRect.x + "px";
+                    buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
+                }, TOOLTIP_DELAY);
+            });
+
+            button.addEventListener("mouseout", () => {
+                // set overlay to not display
+                clearTimeout(tooltipTimeout);
+                const buttonOverlay = this.stateManager.getOverlayState("button");
+                buttonOverlay.style.opacity = "0";
+            });
+        });
     }
 
     /**
@@ -499,15 +510,15 @@ export class FlyThrough extends HTMLElement {
                 if (this.coords._flyRecords.length > 0) {
                     this.buttons.replayButton.disabled = false;
                     this.buttons.replayButton.classList.remove("disabled-button");
-                    this.buttons.replayButton.classList.add("cesium-button");
+                    // this.buttons.replayButton.classList.add("cesium-button");
 
                     this.buttons.editFlyPathButton.disabled = false;
                     this.buttons.editFlyPathButton.classList.remove("disabled-button");
-                    this.buttons.editFlyPathButton.classList.add("cesium-button");
+                    // this.buttons.editFlyPathButton.classList.add("cesium-button");
 
                     this.buttons.showFlyPathButton.disabled = false;
                     this.buttons.showFlyPathButton.classList.remove("disabled-button");
-                    this.buttons.showFlyPathButton.classList.add("cesium-button");
+                    // this.buttons.showFlyPathButton.classList.add("cesium-button");
                 }
             }
             updateButtons();

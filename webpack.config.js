@@ -11,6 +11,8 @@ const cesiumSource = "node_modules/cesium/Source";
 const cesiumWorkers = "node_modules/cesium/Build/Cesium/Workers";
 // const cesiumBaseUrl = "cesiumStatic";
 
+const leafletSource = "node_modules/leaflet/dist";
+
 module.exports = {
     entry: ['./src/index.js'], // Your entry point
     output: {
@@ -46,6 +48,8 @@ module.exports = {
                 { from: path.join(cesiumSource, "Assets"), to: "Assets" },
                 { from: path.join(cesiumSource, "Widgets"), to: "Widgets" },
                 { from: path.join(cesiumSource, "ThirdParty"), to: "ThirdParty" },
+                { from: path.join(__dirname, leafletSource), to: "leaflet" },
+                { from: path.join(__dirname, leafletSource, 'images'), to: "leaflet/images" }
             ],
         }),
         new webpack.DefinePlugin({
@@ -63,6 +67,8 @@ module.exports = {
             cesium: path.resolve(__dirname, cesiumSource, "Cesium.js"),
             cesiumStyle: path.resolve(__dirname, cesiumSource, "Widgets", "widgets.css"),
             mainStyle: path.resolve(__dirname, 'src', 'styles', 'style.css'),
+            leafletStyle: path.resolve(__dirname, 'node_modules', 'leaflet', 'dist', 'leaflet.css'),
+            googleMapsLoader: path.resolve(__dirname, 'node_modules/@googlemaps/js-api-loader'),
         },
         fallback: {
             fs: false,

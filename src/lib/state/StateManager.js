@@ -14,8 +14,6 @@ export class StateManager {
                 clearButton: null,
                 activeTool: null,
                 measureModes: [],
-                toggleHelpBoxButton: null,
-                toggleLogBoxButton: null,
                 labelButton: null,
             },
             flags: {
@@ -25,8 +23,8 @@ export class StateManager {
                 isToolsExpanded: false,
             },
             element: {
-                helpBox: null,
-                logBox: null,
+                helpTable: null,
+                logTable: null,
                 toolbar: null,
             },
             position: {

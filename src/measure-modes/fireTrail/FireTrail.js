@@ -1,4 +1,14 @@
-import * as Cesium from "cesium";
+import {
+    Cartesian2,
+    Cartesian3,
+    Color,
+    defined,
+    ScreenSpaceEventHandler,
+    ScreenSpaceEventType,
+    Cartographic,
+    Math,
+    Primitive
+} from "cesium";
 import {
     formatDistance,
     removeInputActions,
@@ -33,19 +43,17 @@ export class FireTrail extends HTMLElement {
 
         this._cesiumPkg = null;
 
-        this._cesiumStyle = null;
+        // this._cesiumStyle = null;
 
         this.pointerOverlay = null;
 
         // helpBox
-        this._setupHelpBox = null;
-        this._updateHelpBox = null;
+        this._setupHelpTable = null;
 
         // logBox
-        this._setupLogBox = null;
-        this._updateRecords = null;
+        this._setupLogTable = null;
 
-        this.coordinate = new Cesium.Cartesian3();
+        this.coordinate = new Cartesian3();
 
         // flags to control the state of the tool
         this.flags = {
@@ -62,12 +70,16 @@ export class FireTrail extends HTMLElement {
         this.coords = {
             cache: [],          // Stores temporary coordinates during operations
             groups: [],         // Tracks all coordinates involved in operations e.g [{trailId:111, coordinates: [{cart1}, {cart2}]}},{...}]
-            groupCounter: 0,    // New counter for labelNumberIndex
+            measureCounter: 0,    // New counter for labelNumberIndex
             _distanceRecords: [],
             dragStart: null,    // Stores the initial position before a drag begins
             dragStartToCanvas: null, // Store the drag start position to canvas in Cartesian2
             groupToSubmit: null,  // Stores the group to submit
         };
+
+        // Current Measure 
+        this.mode = "fireTrail";
+        this.measure = this._createDefaultMeasure();
 
         this.sentGroupKeys = new Set();
 
@@ -99,11 +111,11 @@ export class FireTrail extends HTMLElement {
 
         // color for cesium primitives
         this.stateColors = {
-            hover: Cesium.Color.KHAKI,
-            select: Cesium.Color.BLUE,
-            default: Cesium.Color.YELLOWGREEN,
-            submitted: Cesium.Color.DARKGREEN,
-            add: Cesium.Color.YELLOW,
+            hover: Color.KHAKI,
+            select: Color.BLUE,
+            default: Color.YELLOWGREEN,
+            submitted: Color.DARKGREEN,
+            add: Color.YELLOW,
             layerColor: null,
         }
 
@@ -132,6 +144,17 @@ export class FireTrail extends HTMLElement {
 
 
     connectedCallback() {
+        // apply cesium style
+        // link cesium package default style
+        // this.cesiumStyle = document.createElement("link");
+        // this.cesiumStyle.rel = "stylesheet";
+        // this.cesiumStyle.href = `/Widgets/widgets.css`;
+        // this.shadowRoot.appendChild(this.cesiumStyle);
+
+        // apply shared style
+        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+
+        // initialize fire trail mode
         if (this.viewer) {
             this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
             this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
@@ -161,20 +184,20 @@ export class FireTrail extends HTMLElement {
         this._viewer = viewer;
     }
 
+    get handler() {
+        return this._handler;
+    }
+
+    set handler(handler) {
+        this._handler = handler;
+    }
+
     get stateManager() {
         return this._stateManager;
     }
 
     set stateManager(stateManager) {
         this._stateManager = stateManager;
-    }
-
-    get logRecordsCallback() {
-        return this._logRecordsCallback;
-    }
-
-    set logRecordsCallback(callback) {
-        this._logRecordsCallback = callback;
     }
 
     get cesiumPkg() {
@@ -185,48 +208,20 @@ export class FireTrail extends HTMLElement {
         this._cesiumPkg = cesiumPkg;
     }
 
-    get updateRecords() {
-        return this._updateRecords;
+    get setupHelpTable() {
+        return this._setupHelpTable;
     }
 
-    set updateRecords(callback) {
-        this._updateRecords = callback;
+    set setupHelpTable(callback) {
+        this._setupHelpTable = callback;
     }
 
-    get cesiumStyle() {
-        return this._cesiumStyle;
+    get setupLogTable() {
+        return this._setupLogTable;
     }
 
-    set cesiumStyle(style) {
-        const clonedStyle = style.cloneNode(true);
-        this._cesiumStyle = clonedStyle;
-        if (clonedStyle) {
-            this.shadowRoot.appendChild(clonedStyle)
-        };
-    }
-
-    get setupHelpBox() {
-        return this._setupHelpBox;
-    }
-
-    set setupHelpBox(callback) {
-        this._setupHelpBox = callback;
-    }
-
-    get updateHelpBox() {
-        return this._updateHelpBox;
-    }
-
-    set updateHelpBox(callback) {
-        this._updateHelpBox = callback;
-    }
-
-    get setupLogBox() {
-        return this._setupLogBox;
-    }
-
-    set setupLogBox(callback) {
-        this._setupLogBox = callback;
+    set setupLogTable(callback) {
+        this._setupLogTable = callback;
     }
 
 
@@ -234,14 +229,11 @@ export class FireTrail extends HTMLElement {
      * MAIN METHOD *
      ***************/
     initialize() {
-        // apply shared style
-        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-
         // if screenSpaceEventHandler existed use it, if not create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;
         } else {
-            this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+            this.handler = new ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
 
         // setup label button and submit buttons
@@ -265,31 +257,31 @@ export class FireTrail extends HTMLElement {
         // Set up input actions for fire trail mode
         this.handler.setInputAction((movement) => {
             this.handleFireTrailLeftClick(movement);
-        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        }, ScreenSpaceEventType.LEFT_CLICK);
 
         this.handler.setInputAction((movement) => {
             this.handleFireTrailMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        }, ScreenSpaceEventType.MOUSE_MOVE);
 
         this.handler.setInputAction((movement) => {
             this.handleFireTrailRightClick(movement);
-        }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+        }, ScreenSpaceEventType.RIGHT_CLICK);
 
         this.handler.setInputAction((movement) => {
             this.handleFireTrailDragStart(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+        }, ScreenSpaceEventType.LEFT_DOWN);
 
         this.handler.setInputAction((movement) => {
             this.handleFireTrailDragEnd(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_UP);
+        }, ScreenSpaceEventType.LEFT_UP);
 
         this.handler.setInputAction((movement) => {
             this.handleFireTrailDoubleClick(movement)
-        }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+        }, ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
         this.handler.setInputAction((movement) => {
             this.handleFireTrailMiddleClick(movement)
-        }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+        }, ScreenSpaceEventType.MIDDLE_CLICK);
     }
 
 
@@ -311,7 +303,7 @@ export class FireTrail extends HTMLElement {
             });
 
             // Error handling: if no point primitives found, then early exit
-            if (!Cesium.defined(isPoint)) return;
+            if (!defined(isPoint)) return;
 
             // Disable camera movement
             this.viewer.scene.screenSpaceCameraController.enableInputs = false;
@@ -322,9 +314,10 @@ export class FireTrail extends HTMLElement {
 
             // hightlight the line set that is being dragged
             const group = this.coords.groups.find(group =>
-                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart))
+                group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart))
             );
             if (!group) return;
+            this.measure = group; // set current measure to the group
 
             // reset line color 
             const resetLinesColor = (lines) => {
@@ -351,17 +344,20 @@ export class FireTrail extends HTMLElement {
                 showCustomNotification("you have exited add line mode", this.viewer.container);
             }
 
+            // Set status to pending 
+            group.status = "pending";
+
             // Set move event for dragging
             this.handler.setInputAction((movement) => {
                 this.handleFireTrailDrag(movement, isPoint);
-            }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+            }, ScreenSpaceEventType.MOUSE_MOVE);
         }
     }
 
     handleFireTrailDrag(movement, selectedPoint) {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
-        const moveDistance = Cesium.Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
+        const moveDistance = Cartesian2.distance(this.coords.dragStartToCanvas, movement.endPosition);
         if (moveDistance > dragThreshold) {
             this.flags.isDragMode = true;
         }
@@ -379,28 +375,29 @@ export class FireTrail extends HTMLElement {
             this.pointerOverlay.style.display = "none"; // Hide pointer overlay
 
             const cartesian = this.viewer.scene.pickPosition(movement.endPosition);
-            if (!Cesium.defined(cartesian)) return;
+            if (!defined(cartesian)) return;
             this.coordinate = cartesian;
 
             // Create or update dragging point primitive
             if (this.interactivePrimitives.dragPoint) {
                 // If dragging point exists, update it
-                this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.YELLOW;
+                this.interactivePrimitives.dragPoint.outlineColor = Color.YELLOW;
                 this.interactivePrimitives.dragPoint.outlineWidth = 2;
                 this.interactivePrimitives.dragPoint.position = cartesian;
                 this.interactivePrimitives.dragPoint.id = generateId(cartesian, "fire_trail_point_moving");
             } else {
                 // If dragging point doesn't exist, create a new one
-                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Cesium.Color.RED);
+                const pointPrimitive = createPointPrimitive(selectedPoint.primitive.position.clone(), Color.RED);
                 pointPrimitive.id = generateId(selectedPoint.primitive.position.clone(), "fire_trail_point_moving");
                 this.interactivePrimitives.dragPoint = this.pointCollection.add(pointPrimitive);
             }
 
             // Find the group containing the dragged point
             const group = this.coords.groups.find(group =>
-                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart))
+                group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart))
             );
             if (!group) return; // Error handling: no group found
+            this.measure = group; // set current measure to the group
 
             // Updated call to findNeighbourPosition
             const neighbourPositions = this.findNeighbourPosition(this.coords.dragStart, group);
@@ -413,7 +410,7 @@ export class FireTrail extends HTMLElement {
             this.interactivePrimitives.dragPolylines.length = 0;
 
             const otherPositions = neighbourPositions.filter(cart =>
-                !Cesium.Cartesian3.equals(cart, this.coords.dragStart)
+                !Cartesian3.equals(cart, this.coords.dragStart)
             );
 
             otherPositions.forEach((pos, idx) => {
@@ -421,7 +418,7 @@ export class FireTrail extends HTMLElement {
                 const linePrimitive = createGroundPolylinePrimitive(
                     [pos, cartesian],
                     "fire_trail_line_moving",
-                    Cesium.Color.YELLOW,
+                    Color.YELLOW,
                     this.cesiumPkg.GroundPolylinePrimitive
                 )
                 const addedLinePrimitive = this.viewer.scene.primitives.add(linePrimitive);
@@ -430,7 +427,7 @@ export class FireTrail extends HTMLElement {
 
                 // Create or update label primitive
                 const { distance } = calculateClampedDistance(pos, cartesian, this.viewer.scene, 4);
-                const midPoint = Cesium.Cartesian3.midpoint(pos, cartesian, new Cesium.Cartesian3());
+                const midPoint = Cartesian3.midpoint(pos, cartesian, new Cartesian3());
                 const labelPrimitive = this.interactivePrimitives.dragLabels[idx];
                 if (labelPrimitive) {
                     labelPrimitive.id = generateId(midPoint, "fire_trail_label_moving");
@@ -451,18 +448,18 @@ export class FireTrail extends HTMLElement {
     }
 
     handleFireTrailDragEnd() {
+        // Enable camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 
         if (this.interactivePrimitives.dragPoint && this.flags.isDragMode) {
             // Reset dragging point style
-            this.interactivePrimitives.dragPoint.outlineColor = Cesium.Color.RED;
+            this.interactivePrimitives.dragPoint.outlineColor = Color.RED;
             this.interactivePrimitives.dragPoint.outlineWidth = 0;
 
             // Find the group containing the dragged point
-            const group = this.coords.groups.find(group =>
-                group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, this.coords.dragStart))
-            );
+            const group = this.coords.groups.find(group => group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart)));
             if (!group) return; // Error handling: no group found
+            this.measure = group; // set current measure to the group
 
             // Updated call to findNeighbourPosition
             const neighbourPositions = this.findNeighbourPosition(this.coords.dragStart, group);
@@ -487,7 +484,7 @@ export class FireTrail extends HTMLElement {
                 p =>
                     p.id &&
                     p.id.includes("fire_trail_point") &&
-                    Cesium.Cartesian3.equals(p.position, this.coords.dragStart)
+                    Cartesian3.equals(p.position, this.coords.dragStart)
             );
             if (existedPoint) {
                 existedPoint.show = true;
@@ -497,14 +494,14 @@ export class FireTrail extends HTMLElement {
 
             // Create new line primitives and update labels
             const otherPositions = neighbourPositions.filter(cart =>
-                !Cesium.Cartesian3.equals(cart, this.coords.dragStart)
+                !Cartesian3.equals(cart, this.coords.dragStart)
             );
             otherPositions.forEach(pos => {
                 // Create new line primitive
                 const linePrimitive = createGroundPolylinePrimitive(
                     [this.coordinate, pos],
                     "fire_trail_line",
-                    Cesium.Color.YELLOWGREEN,
+                    Color.YELLOWGREEN,
                     this.cesiumPkg.GroundPolylinePrimitive
                 )
                 linePrimitive.isSubmitted = false;
@@ -512,15 +509,15 @@ export class FireTrail extends HTMLElement {
 
                 // Calculate distances and midpoints
                 const { distance } = calculateClampedDistance(pos, this.coordinate, this.viewer.scene, 4);
-                const oldMidPoint = Cesium.Cartesian3.midpoint(
+                const oldMidPoint = Cartesian3.midpoint(
                     pos,
                     this.coords.dragStart,
-                    new Cesium.Cartesian3()
+                    new Cartesian3()
                 );
-                const newMidPoint = Cesium.Cartesian3.midpoint(
+                const newMidPoint = Cartesian3.midpoint(
                     pos,
                     this.coordinate,
-                    new Cesium.Cartesian3()
+                    new Cartesian3()
                 );
 
                 // Find and update the existing label primitive
@@ -528,7 +525,7 @@ export class FireTrail extends HTMLElement {
                     label =>
                         label.id &&
                         label.id.startsWith("annotate_fire_trail_label") &&
-                        Cesium.Cartesian3.equals(label.position, oldMidPoint)
+                        Cartesian3.equals(label.position, oldMidPoint)
                 );
                 if (labelPrimitive) {
                     const oldLabelText = labelPrimitive.text.split(":")[0].trim();
@@ -546,18 +543,19 @@ export class FireTrail extends HTMLElement {
                 label =>
                     label.id &&
                     label.id.includes("fire_trail_label_total") &&
-                    Cesium.Cartesian3.equals(label.position, lastPosition)
+                    Cartesian3.equals(label.position, lastPosition)
             );
 
             // Update the coordinate data
             const positionIndex = group.coordinates.findIndex(cart =>
-                Cesium.Cartesian3.equals(cart, this.coords.dragStart)
+                Cartesian3.equals(cart, this.coords.dragStart)
             );
-            if (positionIndex !== -1)
+            if (positionIndex !== -1) {
                 group.coordinates[positionIndex] = this.coordinate;
+            }
 
             // Update total distance label
-            const { distances, totalDistance } = calculateClampedDistanceFromArray(
+            const { distances, totalDistance, clampedPositions } = calculateClampedDistanceFromArray(
                 group.coordinates,
                 this.viewer.scene,
                 4
@@ -568,8 +566,6 @@ export class FireTrail extends HTMLElement {
                 totalLabel.id = generateId(lastPosition, "fire_trail_label_total");
             }
 
-            // Update log records
-            this.updateMultiDistancesLogRecords(distances, totalDistance);
             this.coords.groupToSubmit = group;
 
             // Update selected line color
@@ -577,13 +573,24 @@ export class FireTrail extends HTMLElement {
             this.interactivePrimitives.selectedLines = lines;
             this.updateSelectedLineColor(group);
 
+            // Update group records and interpolated points
+            group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
+            group.interpolatedPoints = clampedPositions;
+
+            // Update group status
+            group.status = "completed";
+
+            // Update log table
+            const logTable = this.stateManager.getElementState("logTable");
+            logTable && logTable._handleDataAdded({ ...group });
+
             // Reset flag
             this.flags.isDragMode = false;
         }
         // Set back to default multi-distance mouse moving actions
         this.handler.setInputAction((movement) => {
             this.handleFireTrailMouseMove(movement);
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        }, ScreenSpaceEventType.MOUSE_MOVE);
     }
 
 
@@ -593,7 +600,7 @@ export class FireTrail extends HTMLElement {
             const linePrimitive = createGroundPolylinePrimitive(
                 [neighbourPositions[0], neighbourPositions[2]],
                 isPending ? "fire_trail_line_pending" : "fire_trail_line",
-                Cesium.Color.YELLOWGREEN,
+                Color.YELLOWGREEN,
                 this.cesiumPkg.GroundPolylinePrimitive
             );
             linePrimitive.isSubmitted = false;
@@ -606,10 +613,10 @@ export class FireTrail extends HTMLElement {
                 this.viewer.scene,
                 4
             );
-            const midPoint = Cesium.Cartesian3.midpoint(
+            const midPoint = Cartesian3.midpoint(
                 neighbourPositions[0],
                 neighbourPositions[2],
-                new Cesium.Cartesian3()
+                new Cartesian3()
             );
             const label = createLabelPrimitive(
                 neighbourPositions[0],
@@ -638,9 +645,12 @@ export class FireTrail extends HTMLElement {
         const createButton = (text, className, onClick) => {
             const button = document.createElement("button");
             button.innerHTML = text;
-            button.classList.add("cesium-button", "measure-mode-button", "show", className);
+
+            const styleList = [className, "annotate-button", "animate-on-show"];
+            button.classList.add(...styleList);
+
             button.setAttribute("type", "button");
-            button.setAttribute("aria-label", `${className}`);
+            button.setAttribute("aria-label", `${className} Tool`);
             button.setAttribute("aria-pressed", "false"); // For toggle behavior
             button.addEventListener("click", onClick);
             // button.style.position = "absolute";
@@ -656,32 +666,51 @@ export class FireTrail extends HTMLElement {
         // setup fire trail button
         const fireTrailImg = `<img src="${multiDClampedIcon}" alt="fire-trail" style="width: 30px; height: 30px;" aria-hidden="true">`
         this.buttons.fireTrailButton = createButton(fireTrailImg, "fire-trail", this.handleFireTrailToggle.bind(this));
+        this.buttons.fireTrailButton.classList.add("visible");
         this.fireTrailContainer.appendChild(this.buttons.fireTrailButton);
 
         // setup label button
         this.buttons.labelButton = createButton("Show", "toggle-label-button", this.handleLabelToggle.bind(this));
-        this.buttons.labelButton.style.display = "none"; // Initially hidden
+        // this.buttons.labelButton.style.display = "none"; // Initially hidden
+        this.buttons.labelButton.classList.add("hidden");
         this.fireTrailContainer.appendChild(this.buttons.labelButton);
 
         // setup submit button
         this.buttons.submitButton = createButton("Submit", "submit-button", this.handleSubmit.bind(this));
-        this.buttons.submitButton.style.display = "none";
+        // this.buttons.submitButton.style.display = "none";
+        this.buttons.submitButton.classList.add("hidden");
         this.fireTrailContainer.appendChild(this.buttons.submitButton);
 
-        // Update button overlay text
-        this.updateButtonOverlay(this.buttons.labelButton, "toggle label on or off");
-        this.updateButtonOverlay(this.buttons.submitButton, "submit the current annotation");
-        this.updateButtonOverlay(this.buttons.fireTrailButton, "toggle fire trail annotation mode");
+        // setup button overlay
+        this.setupButtonOverlay();
 
         // Function to toggle visibility of label and submit buttons
         const toggleButtonVisibility = () => {
+            const delayStep = 50; // milliseconds delay per button0.8 seconds in milliseconds
+
             const isActive = this.buttons.fireTrailButton.classList.contains('active');
-            this.buttons.labelButton.style.display = isActive ? 'block' : 'none';
-            this.buttons.submitButton.style.display = isActive ? 'block' : 'none';
+            const buttons = [this.buttons.submitButton, this.buttons.labelButton];
+            if (!isActive) {
+                buttons.forEach((button, index) => {
+                    setTimeout(() => {
+                        button.classList.remove("visible");
+                        button.classList.add("hidden");
+                    }, index * delayStep);
+                })
+            } else {
+                // Collapsing: hide buttons from right to left.
+                const n = buttons.length;
+                buttons.forEach((button, index) => {
+                    setTimeout(() => {
+                        button.classList.remove("hidden");
+                        button.classList.add("visible");
+                    }, (n - index - 1) * delayStep);
+                })
+            }
         };
 
         // Initial visibility check
-        toggleButtonVisibility();
+        // toggleButtonVisibility();
         // Set up MutationObserver for class changes on fireTrailButton
         this._classObserver = new MutationObserver(toggleButtonVisibility);
         this._classObserver.observe(this.buttons.fireTrailButton, { attributes: true, attributeFilter: ['class'] });
@@ -718,16 +747,21 @@ export class FireTrail extends HTMLElement {
 
             this.stateManager.setButtonState("activeButton", this.buttons.fireTrailButton);
 
-            // find and update help box
-            const helpBox = this.stateManager.getElementState("helpBox");
-            // if no help box then recreate it
-            if (!helpBox) this.setupHelpBox();
-            // update help box, if there is help box
-            this.updateHelpBox();
+            // find or create help table
+            let helpTable = this.stateManager.getElementState("helpTable");
+            // if no help table then recreate it
+            if (!helpTable) {
+                helpTable = this._setupHelpTable();
+            }
+            // update help table content
+            helpTable.updateContent("fireTrail");
 
-            const logBox = this.stateManager.getElementState("logBox");
-            // if no log box then recreate it
-            if (!logBox) this.setupLogBox();
+            // find or create log table
+            let logTable = this.stateManager.getElementState("logTable");
+            // if no log table then recreate it
+            if (!logTable) {
+                logTable = this._setupLogTable();
+            }
         } else { // deactivate fire trail mode
             // remove existing input actions
             removeInputActions(this.handler);
@@ -738,12 +772,9 @@ export class FireTrail extends HTMLElement {
             this.buttons.fireTrailButton.setAttribute("aria-pressed", "false");
 
             // deactivate fireTrail then remove help box and help box toggle button
-            const helpBox = this.stateManager.getElementState("helpBox");
-            helpBox && helpBox.remove();
-            this.stateManager.setElementState("helpBox", null);
-            const toggleHelpBoxButton = this.stateManager.getButtonState("toggleHelpBoxButton");
-            toggleHelpBoxButton && toggleHelpBoxButton.remove();
-            this.stateManager.setButtonState("toggleHelpBoxButton", null);
+            const helpTable = this.stateManager.getElementState("helpTable");
+            helpTable && helpTable.remove();
+            this.stateManager.setElementState("helpTable", null);
         }
     }
 
@@ -814,10 +845,10 @@ export class FireTrail extends HTMLElement {
 
         // Transform Cartesian coordinates to cartographic degrees
         const cartographicDegreesPos = groupToSubmit.coordinates.map(cart => {
-            const cartographic = Cesium.Cartographic.fromCartesian(cart);
+            const cartographic = Cartographic.fromCartesian(cart);
             return {
-                longitude: Cesium.Math.toDegrees(cartographic.longitude),
-                latitude: Cesium.Math.toDegrees(cartographic.latitude),
+                longitude: Math.toDegrees(cartographic.longitude),
+                latitude: Math.toDegrees(cartographic.latitude),
                 height: cartographic.height,
             };
         });
@@ -831,20 +862,23 @@ export class FireTrail extends HTMLElement {
 
         // Prepare the payload to be sent to the server
         const payload = {
-            trackId: groupToSubmit.trailId,
+            trackId: groupToSubmit.id,
             content: JSON.stringify(cartographicDegreesPos),
             comp_length: totalDistance,
             email: this.app?.currentUser?.sessions?.navigator?.userId || "",
         };
 
         // Prompt the user for confirmation before proceeding with the submission
-        if (!confirm(`Do you want to submit this fire trail ${groupToSubmit.trailId}?`)) {
+        if (!confirm(`Do you want to submit this fire trail ${groupToSubmit.id}?`)) {
             this.flags.isSubmitting = false;
             if (!this.flags.isSubmitting) {
                 this.buttons.submitButton.setAttribute("aria-pressed", "false");
             }
             return;
         }
+
+        // get the log table 
+        const logTable = this.stateManager.getElementState("logTable");
 
         try {
             // Retrieve all line primitives associated with the group's coordinates
@@ -864,17 +898,17 @@ export class FireTrail extends HTMLElement {
             this.sentGroupKeys.add(groupKey);
 
             // Display a notification to the user indicating successful submission
-            showCustomNotification(`Fire Trail ${groupToSubmit.trailId} Submitted Successfully!`, this.viewer.container);
+            showCustomNotification(`Fire Trail ${groupToSubmit.id} Submitted Successfully!`, this.viewer.container);
 
             // Log the successful submission status
-            this.logRecordsCallback({ submitStatus: `${groupToSubmit.trailId} Submit Successful` });
+            logTable && logTable._handleModeSelected([{ "line removed from server": groupToSubmit.id }]);
         } catch (error) {
             // Handle any errors that occur during the submission process
             console.error("❌ Error logging action:", error);
-            alert(`Fire Trail ${groupToSubmit.trailId} submission failed. Please try again`);
+            alert(`Fire Trail ${groupToSubmit.id} submission failed. Please try again`);
 
             // Log the failed submission status
-            this.logRecordsCallback({ submitStatus: `${groupToSubmit.trailId} Submit Failed` });
+            logTable && logTable._handleModeSelected([{ "line removed from server failed": groupToSubmit.id }]);
         } finally {
             // Reset the submitting flag regardless of success or failure to allow future submissions
             this.flags.isSubmitting = false;
@@ -890,14 +924,14 @@ export class FireTrail extends HTMLElement {
      ********************/
     /**
      * Finds the previous, current, and next positions of a given position within a group's coordinates.
-     * @param {Cesium.Cartesian3} position - The Cartesian3 coordinate to find.
-     * @param {{ trailId: string, coordinates: Cesium.Cartesian3[] }} group - The group object containing the coordinates.
-     * @returns {Cesium.Cartesian3[]} - An array containing the previous position, current position, and next position.
+     * @param {Cartesian3} position - The Cartesian3 coordinate to find.
+     * @param {{ trailId: string, coordinates: Cartesian3[] }} group - The group object containing the coordinates.
+     * @returns {Cartesian3[]} - An array containing the previous position, current position, and next position.
      */
     findNeighbourPosition(position, group) {
         const { coordinates } = group;
         const pointIndex = coordinates.findIndex(cart =>
-            Cesium.Cartesian3.equals(cart, position)
+            Cartesian3.equals(cart, position)
         );
         if (pointIndex === -1) return [];
 
@@ -910,13 +944,13 @@ export class FireTrail extends HTMLElement {
 
     /**
      * Get the label text properties based on the position and group.
-     * @param {Cesium.Cartesian3} position - The current position.
+     * @param {Cartesian3} position - The current position.
      * @param {}
      * @returns {{ currentLetter: String, labelNumberIndex: Number }} - The label text properties.
      */
     _getLabelProperties(position, group) {
         // Find the index of the position in group
-        const positionIndex = group.coordinates.findIndex(cart => Cesium.Cartesian3.equals(cart, position));
+        const positionIndex = group.coordinates.findIndex(cart => Cartesian3.equals(cart, position));
         if (positionIndex === -1 || positionIndex === 0) return { currentLetter: "", labelNumberIndex: 0 }; // label exist when there is at least 2 position.
 
         // Calculate label index
@@ -933,29 +967,55 @@ export class FireTrail extends HTMLElement {
 
     /**
      * update the button overlay with the overlay text
-     * @param { HTMLElement } button - the button element
-     * @param {String} overlayText - the overlay text
-     * @returns {HTMLElement} - the button overlay element
      */
-    updateButtonOverlay(button, overlayText) {
-        const buttonOverlay = this.stateManager.getOverlayState("button");
+    setupButtonOverlay() {
+        // display text map
+        const dictionary = {
+            "fire-trail": "fire trail mode",
+            "toggle-label-button": "toggle label on or off",
+            "submit-button": "submit the current annotation",
+        }
 
-        button.addEventListener("mouseover", (e) => {
-            const cesiumRect = this.viewer.container.getBoundingClientRect();
-            buttonOverlay.style.display = "block";
-            buttonOverlay.innerHTML = `${overlayText}`;
-            buttonOverlay.style.left = e.pageX - cesiumRect.x + "px";
-            buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
-        });
+        // Store timeout ID
+        let tooltipTimeout;
+        const TOOLTIP_DELAY = 800; // 0.8 seconds in milliseconds
 
-        button.addEventListener("mouseout", () => {
-            buttonOverlay.style.display = "none";
+        this.shadowRoot.querySelectorAll(".annotate-button").forEach((button) => {
+            button.addEventListener("mouseover", (e) => {
+                // Clear any existing timeout
+                clearTimeout(tooltipTimeout);
+
+                // Set new timeout
+                tooltipTimeout = setTimeout(() => {
+                    const cesiumRect = this.viewer.container.getBoundingClientRect();
+                    const buttonOverlay = this.stateManager.getOverlayState("button");
+
+                    // set overlay to display
+                    buttonOverlay.style.opacity = "0.95";
+
+                    // set description of the button using first className in style of a button
+                    const buttonClass = button.classList[0];
+                    const description = dictionary[buttonClass] ? dictionary[buttonClass] : buttonOverlay.style.opacity = "0";
+                    buttonOverlay.innerHTML = description;
+
+                    // set position of the overlay
+                    buttonOverlay.style.left = e.pageX - cesiumRect.x + "px";
+                    buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
+                }, TOOLTIP_DELAY);
+            });
+
+            button.addEventListener("mouseout", () => {
+                // set overlay to not display
+                clearTimeout(tooltipTimeout);
+                const buttonOverlay = this.stateManager.getOverlayState("button");
+                buttonOverlay.style.opacity = "0";
+            });
         });
     }
 
     /**
      * Lookup the line primitives array by the positions array
-     * @param {Cesium.Cartesian3[]} positions - The array of Cartesian3 positions to lookup the lines.
+     * @param {Cartesian3[]} positions - The array of Cartesian3 positions to lookup the lines.
      * @returns {Object} - The array of line primitives that match the positions.
      */
     findPrimitivesByPositions(positions) {
@@ -965,25 +1025,25 @@ export class FireTrail extends HTMLElement {
                 p.id &&
                 p.id.startsWith("annotate_fire_trail_point") &&
                 !p.id.includes("moving") &&
-                positions.some(pos => Cesium.Cartesian3.equals(p.position, pos))
+                positions.some(pos => Cartesian3.equals(p.position, pos))
             )
         // lookup line primitives
         const linePrimitives = this.findLinesByPositions(positions);
 
         // lookup label primitives
         const midPoints = positions.slice(0, -1).map((pos, i) =>
-            Cesium.Cartesian3.midpoint(pos, positions[i + 1], new Cesium.Cartesian3())
+            Cartesian3.midpoint(pos, positions[i + 1], new Cartesian3())
         );
         const labelPrimitives = this.labelCollection._labels
             .filter(l =>
                 l.id &&
                 l.id.startsWith("annotate_fire_trail_label") &&
-                midPoints.some(pos => Cesium.Cartesian3.equals(l.position, pos))
+                midPoints.some(pos => Cartesian3.equals(l.position, pos))
             );
         const totalLabelPrimitive = this.labelCollection._labels.find(l =>
             l.id &&
             l.id.includes("fire_trail_label_total") &&
-            Cesium.Cartesian3.equals(l.position, positions[positions.length - 1])
+            Cartesian3.equals(l.position, positions[positions.length - 1])
         );
         if (totalLabelPrimitive) {
             labelPrimitives.push(totalLabelPrimitive);
@@ -998,7 +1058,7 @@ export class FireTrail extends HTMLElement {
             p.id &&
             p.id.startsWith(`annotate_${modeString}`) &&
             !p.id.includes("moving") &&
-            Cesium.Cartesian3.equals(p.position, position)
+            Cartesian3.equals(p.position, position)
         );
 
         // get line primitives by position
@@ -1006,19 +1066,19 @@ export class FireTrail extends HTMLElement {
             p.id &&
             p.id.startsWith(`annotate_${modeString}`) &&
             !p.id.includes("moving") &&
-            p.positions.some(cart => Cesium.Cartesian3.equals(cart, position))
+            p.positions.some(cart => Cartesian3.equals(cart, position))
         );
 
         // get label primitives by lines positions
         // it can only be 1 lines or 2 lines, each line has 2 positions [[1,2],[3,4]] | [[1,2]]
         const linePositions = linePrimitives.map(p => p.positions);
-        const midPoints = linePositions.map((positions) => Cesium.Cartesian3.midpoint(positions[0], positions[1], new Cesium.Cartesian3()));
+        const midPoints = linePositions.map((positions) => Cartesian3.midpoint(positions[0], positions[1], new Cartesian3()));
         const labelPrimitives = midPoints.map(midPoint =>
             this.labelCollection._labels.find(l =>
                 l.id &&
                 l.id.startsWith(`annotate_${modeString}`) &&
                 !l.id.includes("moving") &&
-                Cesium.Cartesian3.equals(l.position, midPoint)
+                Cartesian3.equals(l.position, midPoint)
             )
         ).filter(label => label !== undefined);
 
@@ -1030,8 +1090,8 @@ export class FireTrail extends HTMLElement {
 
     /**
      * Lookup the line primitives array by the positions array
-     * @param {Cesium.Cartesian3[]} positions - The array of Cartesian3 positions to lookup the lines.
-     * @returns {Cesium.Primitive[]} - The array of line primitives that match the positions.
+     * @param {Cartesian3[]} positions - The array of Cartesian3 positions to lookup the lines.
+     * @returns {Primitive[]} - The array of line primitives that match the positions.
      */
     findLinesByPositions(positions) {
         // Create a set of position keys from the input positions for quick lookup
@@ -1067,17 +1127,21 @@ export class FireTrail extends HTMLElement {
 
     updateOrCreateLabels(group) {
         const midPoints = group.coordinates.slice(0, -1).map((pos, i) =>
-            Cesium.Cartesian3.midpoint(pos, group.coordinates[i + 1], new Cesium.Cartesian3())
+            Cartesian3.midpoint(pos, group.coordinates[i + 1], new Cartesian3())
         );
         const labelPrimitives = this.labelCollection._labels.filter(
             l => l.id && l.id.includes("fire_trail_label")
         );
 
+        // Arrays to collect distances and clampedPositions
+        const distances = [];
+        const allClampedPositions = [];
+
         // Update or create label primitives
         midPoints.forEach((midPoint, index) => {
             // find existed label primitives    
             let relativeLabelPrimitives = labelPrimitives.filter(l =>
-                Cesium.Cartesian3.equals(l.position, midPoint)
+                Cartesian3.equals(l.position, midPoint)
             );
 
             // Wrap the letter back to 'a' after 'z'
@@ -1088,12 +1152,18 @@ export class FireTrail extends HTMLElement {
                 group.coordinates[index + 1],
                 group
             );
-            const { distance } = calculateClampedDistance(
+            const { distance, clampedPositions } = calculateClampedDistance(
                 group.coordinates[index],
                 group.coordinates[index + 1],
                 this.viewer.scene,
                 4
             );
+            // Store the calculated values
+            distances.push(distance);
+            if (clampedPositions) {
+                allClampedPositions.push(...clampedPositions);
+            }
+
             const labelText = `${currentLetter}${labelNumberIndex}: ${formatDistance(distance)}`;
 
             // update existed labels if any
@@ -1113,12 +1183,18 @@ export class FireTrail extends HTMLElement {
                 newLabel.text = labelText;
                 newLabel.show = this.flags.isShowLabels;
                 newLabel.showBackground = this.flags.isShowLabels;
-                newLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
+                newLabel.pixelOffset = new Cartesian2(0, -20);
                 newLabel.position = midPoint;
                 newLabel.id = generateId(midPoint, "fire_trail_label");
                 this.labelCollection.add(newLabel);
             }
         });
+
+        return {
+            distances,
+            clampedPositions: allClampedPositions.length > 0 ? allClampedPositions : undefined,
+            totalDistance: distances.reduce((acc, val) => acc + val, 0),
+        };
     }
 
     updateOrCreateTotalLabel(group, totalDistance) {
@@ -1128,7 +1204,7 @@ export class FireTrail extends HTMLElement {
             label =>
                 label.id &&
                 label.id.includes("fire_trail_label_total") &&
-                group.coordinates.some(pos => Cesium.Cartesian3.equals(label.position, pos))
+                group.coordinates.some(pos => Cartesian3.equals(label.position, pos))
         );
 
         if (!totalLabel) {
@@ -1145,7 +1221,7 @@ export class FireTrail extends HTMLElement {
         totalLabel.show = this.flags.isShowLabels;
         totalLabel.showBackground = this.flags.isShowLabels;
         totalLabel.text = `Total: ${formatDistance(totalDistance)}`;
-        totalLabel.pixelOffset = new Cesium.Cartesian2(0, -20);
+        totalLabel.pixelOffset = new Cartesian2(0, -20);
         totalLabel.position = currentPosition;
 
         return totalLabel;
@@ -1166,27 +1242,10 @@ export class FireTrail extends HTMLElement {
     };
 
     /**
-     * update the log records with the distances and the total distance
-     * @param {Number[]} distances - the distances between each point
-     * @param {Number} totalDistance - the total distance
-     * @returns {Object} - the distance record object 
-     */
-    updateMultiDistancesLogRecords(distances, totalDistance) {
-        const distanceRecord = {
-            distances: distances.map(d => d.toFixed(2)),
-            totalDistance: totalDistance.toFixed(2)
-        };
-        this.coords._distanceRecords.push(distanceRecord);
-        this.logRecordsCallback(distanceRecord);
-
-        return distanceRecord;
-    }
-
-    /**
      * change the color of the line primitive based on the color type
-     * @param {Cesium.Primitive} linePrimitive 
+     * @param {Primitive} linePrimitive 
      * @param {String} colorType 
-     * @returns {Cesium.Primitive} - the line primitive with the updated color
+     * @returns {Primitive} - the line primitive with the updated color
      */
     changeLinePrimitiveColor(linePrimitive, colorType) {
         let colorToSet;
@@ -1207,7 +1266,7 @@ export class FireTrail extends HTMLElement {
                 colorToSet = this.stateColors.default;
                 break;
             default:
-                if (colorType instanceof Cesium.Color) {
+                if (colorType instanceof Color) {
                     colorToSet = colorType
                 };
                 break;
@@ -1226,12 +1285,12 @@ export class FireTrail extends HTMLElement {
 
     /**
      * look for line primitives by group positions, and update the selected line color
-     * @param {Cesium.Cartesian3[]} group 
-     * @returns {Cesium.Primitive[]} - the line primitives that match the group positions
+     * @param {Cartesian3[]} group 
+     * @returns {Primitive[]} - the line primitives that match the group positions
      */
     updateSelectedLineColor(group) {
         // const groupIndex = this.coords.groups.findIndex(group =>
-        //     group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, position))
+        //     group.coordinates.some(cart => Cartesian3.equals(cart, position))
         // );
         // if (groupIndex === -1) return;
         // const group = this.coords.groups[groupIndex];
@@ -1269,6 +1328,19 @@ export class FireTrail extends HTMLElement {
             this.labelCollection.remove(label)
         );
         this.interactivePrimitives.movingLabels.length = 0;
+    }
+
+    _createDefaultMeasure() {
+        return {
+            id: null,
+            mode: "",
+            coordinates: [],
+            labelNumberIndex: 0,
+            status: "pending",
+            _records: [],
+            interpolatedPoints: [],
+            mapName: "cesium",
+        };
     }
 
     resetValue() {

@@ -2,24 +2,13 @@ export const sharedStyleSheet = new CSSStyleSheet();
 // replace the contents of the sharedStyleSheet with the following CSS
 sharedStyleSheet.replaceSync(`
     *{
-        font-family:Roboto, sans-serif;
+        font-family: Roboto, sans-serif;
     }
     .measure-toolbar{ 
-        position:absolute;
-        bottom: 6rem;
-        left: 10rem;
+        position: absolute;
+        bottom: 120px;
+        left: 135px;
         display: flex;
-    }
-    .measure-toolbar button,
-    .fire-trail-container button{
-        height: 40px;
-        width: 45px;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: background-color 0.3s, transform 0.2s; /* Existing transitions */
-        color: #e6f8f8;
-        opacity: 0.9;
-        position: relative; /* For tooltip positioning */
     }
     .measure-toolbar button.active, 
     .fire-trail-container button.active {
@@ -39,41 +28,17 @@ sharedStyleSheet.replaceSync(`
         justify-content: center;
         align-items: center;
     }
-    .measure-mode-button { 
-        display: none;
-        opacity: 0;
-        position: relative;
-    }
-    .measure-mode-button.show {
-        opacity: 0.9;
-        display: flex; 
-        justify-content: center; /* Center the icon */
-        align-items: center;     /* Center the icon */
-        height: 40px;
-        width: 45px;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: background-color 0.3s, transform 0.2s;
-        color: rgb(230, 248, 248);
-    }
-    .cesium-button{
-        margin: 0;
-        padding: 0;
-    }
-    .cesium-button:hover{
-        z-index: 2;
-    }
     .fire-trail-container{
         position: absolute;
-        bottom: 11rem;
-        left: 10rem;
+        bottom: 200px;
+        left: 135px;
         display: flex;
         flex-direction: row;
     }
     .fly-through-container{
         position: absolute;
-        bottom: 16rem;
-        left: 10rem; 
+        bottom: 240px;
+        left: 135px; 
         display: flex;
         flex-direction: column-reverse;
         height: fit-content;
@@ -84,54 +49,83 @@ sharedStyleSheet.replaceSync(`
         display: flex;
         flex-direction: row;
     }
-    .cesium-infoBox{
-        width: 250px;
+    .info-box {
         padding: 5px;
         font-size: 0.8rem;
-        border-radius: 7px;
-        cursor: grab; /* Indicates it can be moved */  
+        max-width: 250px;
+        height: 250px;
+        background: rgba(38, 38, 38, 0.95);
+        color: #edffff;
+        border: 1px solid #444;
+        border-radius: 5px;
+        box-shadow: 0 0 10px 1px #000;
+        opacity: 0; /* Hidden by default */
     }
-    .cesium-infoBox table{
+    .log-box,
+    .help-box{
+        width: 250px;
+        max-height: 250px;
+        background-color: rgba(38, 38, 38, 0.95);
+        opacity: 0.95;
+        cursor: grab; /* Indicates it can be moved */ 
+        scrollbar-width: thin;
+        scrollbar-color: #edffff rgba(38, 38, 38, 0) ;
+        z-index: 2;
+        overflow: scroll; 
+        user-select: text;
+    }
+    .help-box{
+        max-height: 150px;
+    }
+    .log-box table, 
+    .help-box table{
         width: 100%;
     }
-    .cesium-infoBox td{
+    .log-box td, 
+    .help-box td{
         padding: 5px 0;
         border: none;
     }
-    .log-box {
-        position: absolute;
-        height: 250px;
-        overflow-y: auto;
+    .hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none; /* Disable interaction when hidden */
+        transition: opacity 0.2s ease-in, transform 0.2s ease-in;
+    }
+    .visible {
+        opacity: 0.95;
+        visibility: visible;
+        pointer-events: auto; /* Enable interaction when visible */
+        transition: opacity 0.2s ease-in-out, transform 0.2s ease-in;
+    }
+    .annotate-button{
+        opacity : 0.95;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: rgba(38, 38, 38, 0.95);
+        border: 1px solid #444;
+        color: #edffff;
+        fill: #edffff;
+        border-radius: 4px;
+        cursor: pointer;
+        overflow: hidden;
+        user-select: none;
+        height: 40px;
+        width: 45px;
+        border-radius: 5px;
         z-index: 2;
-        cursor: grab; /* Indicates it can be moved */
-        scrollbar-width: thin;
-        scrollbar-color: #888 rgba(38, 38, 38, 0.95);
     }
-    .toggle-table-button{
-        cursor : pointer;
-        color :  #e6f8f8;
-        opacity : 0.9;
-        padding: 3px 7px;
-        transition: background-color 0.3s, transform 0.2s;
+    .annotate-button:hover{
+        transform: scale(1.1);
+        fill: #fff;
+        background: #48b;
+        border-color: #aef;
+        box-shadow: 0 0 8px #fff;
+        z-index: 3;
     }
-    .toggle-table-button:hover{
-       transform: scale(1.1);
-    }
-    .helpBox-expanded{
-        width: 250px;
-        background-color: rgba(38, 38, 38, 0.95);
-    }
-    .messageBox-collapsed{
-        width: fit-content;
-        height: fit-content;
-        background-color: transparent;
-        border: none;
-        box-shadow: none;
-    }
-    .logBox-expanded{
-        width: 250px;
-        height: 250px;
-        background-color: rgba(38, 38, 38, 0.95);
+    .annotate-button.animate-on-show.visible {
+        animation: jumpIn 0.3s ease-out;
     }
     .disabled-button{
         display: flex;
@@ -143,5 +137,18 @@ sharedStyleSheet.replaceSync(`
     }
     .disabled-button:hover{
         cursor: not-allowed;
+    }
+    @keyframes jumpIn {
+        0% {
+            transform: translateY(15px);
+            opacity: 0;
+        }
+        50% {
+            transform: translateY(-5px);
+            opacity: 0.95;
+        }
+        100% {
+            transform: translateY(0);
+        }
     }
 `);
