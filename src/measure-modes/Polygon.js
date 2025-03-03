@@ -3,6 +3,7 @@ import {
     Cartesian3,
     defined,
     ScreenSpaceEventType,
+    ScreenSpaceEventHandler,
     PolygonHierarchy,
     PolygonPipeline
 } from "cesium";
@@ -19,18 +20,24 @@ import {
     generateIdByTimestamp,
 } from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
+import dataPool from "../lib/data/DataPool.js";
 
 class Polygon extends MeasureModeBase {
     /**
      * Creates a new Polygon instance.
-     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
-     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
-     * @param {Object} stateManager - The state manager holding various tool states.
-     * @param {Function} logRecordsCallback - Callback function to log records.
+     * @param {Viewer} viewer - The Cesium Viewer instance.
+     * @param {ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {StateManager} stateManager - The state manager instance.
      * @param {Object} cesiumPkg - The Cesium package object.
+     * @param {EventEmitter} emitter - The event emitter instance.
      */
     constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
         super(viewer, handler, stateManager, cesiumPkg);
+
+        this.mode = "polygon";
+
+        // Set the event emitter
+        this.emitter = emitter;
 
         // Flags to control the state of the tool
         this.flags = {
@@ -42,11 +49,13 @@ class Polygon extends MeasureModeBase {
         this.coords = {
             cache: [],          // Stores temporary coordinates during operations
             groups: [],         // Tracks all coordinates involved in operations
-            groupCounter: 0,        // Counter for the number of groups
+            measureCounter: 0,        // Counter for the number of groups
             dragStart: null,    // Stores the initial position before a drag begins
             dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
-            _records: []                // Stores the area records
         };
+
+        // Measurement data
+        this.measure = super._createDefaultMeasure();
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -61,12 +70,10 @@ class Polygon extends MeasureModeBase {
             hoveredPoint: null,             // Hovered point primitive
             hoveredLabel: null,             // Hovered label primitive
         };
-
-        this.emitter = emitter;
     }
 
     /**
-     * Configures input actions for the polygon mode.
+     * Sets up input actions for polygon mode.
      */
     setupInputActions() {
         super.setupInputActions();
@@ -113,16 +120,19 @@ class Polygon extends MeasureModeBase {
         }
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
-            // link both cache and groups to the same group
-            // when cache changed groups will be changed due to reference by address
-            const newGroup = {
-                id: generateIdByTimestamp(),
-                coordinates: [],
-                labelNumberIndex: this.coords.groupCounter,
-            };
-            this.coords.groups.push(newGroup);
-            this.coords.cache = newGroup.coordinates;
-            this.coords.groupCounter++;
+            // Reset for a new measure using the default structure
+            this.measure = super._createDefaultMeasure();
+
+            // Set values for the new measure
+            this.measure.id = generateIdByTimestamp()
+            this.measure.mode = this.mode;
+            this.measure.labelNumberIndex = this.coords.measureCounter;
+            this.measure.status = "pending";
+
+            // Establish data relation
+            this.coords.groups.push(this.measure);
+            this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
+            this.coords.measureCounter++;
         }
 
         // Check if the current coordinate is near any existing point (distance < 0.3)
@@ -137,6 +147,9 @@ class Polygon extends MeasureModeBase {
 
         // Update the coordinate cache
         this.coords.cache.push(this.coordinate);
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
 
         // If three points create the polygon primitive
         if (this.coords.cache.length > 2) {
@@ -238,44 +251,7 @@ class Polygon extends MeasureModeBase {
      * @param {*} pickedObject - The picked object from the drillPick method.
      */
     handleHoverHighlighting(pickedObject) {
-        const pickedObjectType = getPickedObjectType(pickedObject, "polygon");
-
-        // reset highlighting
-        // const resetHighlighting = () => {
-        //     if (this.interactivePrimitives.hoveredPoint) {
-        //         this.interactivePrimitives.hoveredPoint.outlineColor = Color.RED;
-        //         this.interactivePrimitives.hoveredPoint.outlineWidth = 0;
-        //         this.interactivePrimitives.hoveredPoint = null;
-        //     }
-        //     if (this.interactivePrimitives.hoveredLabel) {
-        //         this.interactivePrimitives.hoveredLabel.fillColor = Color.WHITE;
-        //         this.interactivePrimitives.hoveredLabel = null;
-        //     }
-        // };
-        // resetHighlighting();
-        super.resetHighlighting();
-
-        const hoverColor = this.stateManager.getColorState("hover");
-
-        switch (pickedObjectType) {
-            case "point":  // highlight the point when hovering
-                const pointPrimitive = pickedObject.primitive;
-                if (pointPrimitive) {
-                    pointPrimitive.outlineColor = hoverColor;
-                    pointPrimitive.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = pointPrimitive;
-                }
-                break;
-            case "label":   // highlight the label when hovering
-                const labelPrimitive = pickedObject.primitive;
-                if (labelPrimitive) {
-                    labelPrimitive.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = labelPrimitive;
-                }
-                break;
-            default:
-                break;
-        }
+        super.handleHoverHighlighting(pickedObject, "polygon");
     }
 
 
@@ -353,8 +329,12 @@ class Polygon extends MeasureModeBase {
             const labelPrimitive = this.labelCollection.add(label);
             labelPrimitive.positions = this.coords.cache; // store the positions in the primitive
 
-            // log area result
-            this.updateLogRecords(area);
+            // Update this.measure
+            this.measure._records.push(area);
+            this.measure.status = "completed";
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...this.measure });
 
             // set flags
             this.flags.isMeasurementComplete = true;
@@ -573,8 +553,12 @@ class Polygon extends MeasureModeBase {
                 existedLabel.id = generateId(newMidPoint, "polygon_label");
             }
 
-            // update log records
-            this.updateLogRecords(area);
+            // update _records and status of the group
+            group.status = "completed";
+            group._records = [area];
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
 
             // reset flag
             this.flags.isDragMode = false;
@@ -612,21 +596,6 @@ class Polygon extends MeasureModeBase {
             let areaVector = Cartesian3.cross(vectorC, vectorD, new Cartesian3());
             area += Cartesian3.magnitude(areaVector) / 2.0;
         }
-        return area;
-    }
-
-    /**
-     * Updates the log records with the area of the polygon.
-     * @param {Number} area - The area of the polygon.
-     * @returns {Number} The area of the polygon.
-     */
-    updateLogRecords(area) {
-        // update log records in logBox
-        this.logRecordsCallback(area.toFixed(2));
-
-        // update this.coords._records
-        this.coords._records.push(area);
-
         return area;
     }
 

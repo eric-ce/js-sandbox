@@ -16,16 +16,7 @@ import {
     showCustomNotification,
 } from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
-
-
-/**
- * @typedef {Object} Group
- * @property {string|number} id - Group identifier
- * @property {Cartesian3[]} coordinates - Array of position coordinates
- * @property {number} labelNumber - Label counter for the group
- * @property {Cartesian3[]} interpolatedPoints - Array of interpolated points
- */
-
+import dataPool from "../lib/data/DataPool.js";
 
 class MultiDistanceClamped extends MeasureModeBase {
     /**
@@ -33,13 +24,19 @@ class MultiDistanceClamped extends MeasureModeBase {
      * @param {Viewer} viewer - The Cesium Viewer instance.
      * @param {ScreenSpaceEventHandler} handler - The event handler for screen space.
      * @param {StateManager} stateManager - The state manager holding the tool states.
-     * @param {Function} logRecordsCallback - Callback function to log measurement records.
      * @param {Object} cesiumPkg - The Cesium package object.
+     * @param {EventEmitter} emitter - The event emitter instance.
      */
     constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
         super(viewer, handler, stateManager, cesiumPkg);
 
+        this.mode = "multi_distances_clamped";
+
+        // Set the event emitter
+        this.emitter = emitter;
+
         this.pointerOverlay = this.stateManager.getOverlayState("pointer");
+
 
         // Flags to control the state of the tool
         this.flags = {
@@ -54,11 +51,13 @@ class MultiDistanceClamped extends MeasureModeBase {
         this.coords = {
             cache: [],          // Stores temporary coordinates during operations
             groups: [],         // Tracks all coordinates involved in operations
-            groupCounter: 0,    // Counter for the number of groups
+            measureCounter: 0,    // Counter for the number of groups
             dragStart: null,    // Stores the initial position before a drag begins
             dragStartToCanvas: null, // Store the drag start position to canvas in Cartesian2
-            _records: [],       // Records of the measurements
         };
+
+        // Measurement data
+        this.measure = super._createDefaultMeasure();
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -76,8 +75,6 @@ class MultiDistanceClamped extends MeasureModeBase {
             addModeLine: null,      // Primitive for adding a new line
             selectedLines: [],      // Array of selected line primitives
         };
-
-        this.emitter = emitter;
     }
 
     /**
@@ -184,12 +181,8 @@ class MultiDistanceClamped extends MeasureModeBase {
                 group.coordinates.some(cart =>
                     Cartesian3.equals(cart, pointPrimitive.position))
             )
-
-            // If no group is found, exit the function
-            if (!group) {
-                console.warn("Clicked point does not belong to any group.");
-                return;
-            }
+            if (!group) return; // error handling: exit if no group is found
+            this.measure = group; // set the group as the current measure
 
             // Find the index of the clicked point within the group
             const pointIndex = group.coordinates.findIndex(cart =>
@@ -207,10 +200,15 @@ class MultiDistanceClamped extends MeasureModeBase {
                     label.id.includes("multi_distances_clamped_label_total") &&
                     Cartesian3.equals(label.position, group.coordinates[group.coordinates.length - 1])
                 );
-
                 if (totalLabel) {
                     this.labelCollection.remove(totalLabel);
                 }
+
+                // Update group status
+                group.status = "pending"; // Reset the group status to pending
+
+                // Update to data pool
+                dataPool.updateOrAddMeasure({ ...this.measure });
 
                 // Reset measurement state to allow continuation
                 this.flags.isMeasurementComplete = false;
@@ -239,13 +237,14 @@ class MultiDistanceClamped extends MeasureModeBase {
             const group = this.coords.groups.find(group =>
                 group.coordinates.some(cart => Cartesian3.equals(cart, primitivePositions[0]))
             );
-            if (!group) return;
+            if (!group) return; // error handling: exit if no group is found
+            this.measure = group; // set the group as the current measure
 
             // Display notification for the selected group
             showCustomNotification(`selected line: ${group.id}`, this.viewer.container)
 
-            // Update log records callback for the current selected line
-            this.logRecordsCallback(`${group.id} selected`);
+            // Update log table for the current selected line 
+            this.emitter.emit("selected:info", [{ "selected line": group.id }]);
 
             // Reset the previous selection if any
             if (this.interactivePrimitives.selectedLines.length > 0) {
@@ -290,17 +289,19 @@ class MultiDistanceClamped extends MeasureModeBase {
 
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
-            // link both cache and groups to the same group
-            // when cache changed, groups will be changed due to `reference by address`
-            const newGroup = {
-                id: generateIdByTimestamp(),
-                coordinates: [],
-                labelNumberIndex: this.coords.groupCounter,
-                interpolatedPoints: [],
-            };
-            this.coords.groups.push(newGroup);
-            this.coords.cache = newGroup.coordinates;
-            this.coords.groupCounter++;
+            // Reset for a new measure using the default structure
+            this.measure = super._createDefaultMeasure();
+
+            // Set values for the new measure
+            this.measure.id = generateIdByTimestamp();
+            this.measure.mode = this.mode;
+            this.measure.labelNumberIndex = this.coords.measureCounter;
+            this.measure.status = "pending";
+
+            // Establish data relation
+            this.coords.groups.push(this.measure);
+            this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
+            this.coords.measureCounter++;
         }
 
         // Reset the selection highlight to the default color for lines
@@ -328,6 +329,9 @@ class MultiDistanceClamped extends MeasureModeBase {
             this.coords.cache.push(this.coordinate);
         }
 
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
+
         // Continue measurement if there are enough points in the cache
         if (this.coords.cache.length > 1) {
             this.continueMeasure(firstPointPosition);
@@ -346,11 +350,8 @@ class MultiDistanceClamped extends MeasureModeBase {
         const group = this.coords.groups.find(group =>
             group.coordinates.some(cart => Cartesian3.equals(cart, position))
         );
-
-        if (!group) {
-            console.warn("Group not found for the given position.");
-            return;
-        }
+        if (!group) return; // error handling: exit if no group is found
+        this.measure = group; // set the group as the current measure
 
         // Determine the indices of the previous and current points based on the measurement direction
         const [prevIndex, currIndex] = this.flags.isReverse
@@ -374,8 +375,12 @@ class MultiDistanceClamped extends MeasureModeBase {
         // Update group interpolated points
         group.interpolatedPoints = clampedPositions;
 
-        // Update log records
-        this.updateMultiDistancesLogRecords(distances, totalDistance);
+        // Update group status and records
+        group.status = "pending";
+        group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
     }
 
     /**
@@ -391,6 +396,7 @@ class MultiDistanceClamped extends MeasureModeBase {
             group.coordinates.some(cart => Cartesian3.equals(cart, linePositions[0]))
         );
         if (!group || group.length === 0) return;
+        this.measure = group; // set the group as the current measure
 
         // Find the smallest index of the line positions in the group
         const linePositionIndex1 = group.coordinates.findIndex(cart => Cartesian3.equals(cart, linePositions[0]));
@@ -412,7 +418,7 @@ class MultiDistanceClamped extends MeasureModeBase {
         }
 
         // Create line and label primitives
-        const neighbourPositions = this.findNeighbourPosition(
+        const neighbourPositions = super.findNeighbourPosition(
             group.coordinates[positionIndex + 1],
             group
         );
@@ -459,8 +465,12 @@ class MultiDistanceClamped extends MeasureModeBase {
         // Update the interpolated points of the group
         group.interpolatedPoints = clampedPositions;
 
-        // Update log records
-        this.updateMultiDistancesLogRecords(distances, totalDistance);
+        // Update groups status and records
+        group.status = "completed";
+        group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Reset flags
         this.flags.isAddMode = false;
@@ -551,39 +561,7 @@ class MultiDistanceClamped extends MeasureModeBase {
      * @param {Object} pickedObject - The object obtained from the scene pick.
      */
     handleHoverHighlighting(pickedObject) {
-        const pickedObjectType = getPickedObjectType(pickedObject, "multi_distances_clamped");
-
-        // reset highlighting
-        super.resetHighlighting();  // reset highlighting, need to reset before highlighting
-
-        const hoverColor = this.stateManager.getColorState("hover");
-
-        switch (pickedObjectType) {
-            case "line":
-                const line = pickedObject.primitive;
-                if (line && line !== this.interactivePrimitives.addModeLine) {
-                    changeLineColor(line, hoverColor);
-                    this.interactivePrimitives.hoveredLine = line;
-                }
-                break;
-            case "point":  // highlight the point when hovering
-                const point = pickedObject.primitive;
-                if (point) {
-                    point.outlineColor = hoverColor;
-                    point.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = point;
-                }
-                break;
-            case "label":   // highlight the label when hovering
-                const label = pickedObject.primitive;
-                if (label) {
-                    label.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = label;
-                }
-                break;
-            default:
-                break;
-        }
+        super.handleHoverHighlighting(pickedObject, "multi_distances_clamped");
     }
 
 
@@ -664,6 +642,8 @@ class MultiDistanceClamped extends MeasureModeBase {
 
             // Find the group that contains the line positions
             const group = this.coords.groups.find(g => g.coordinates.some(cart => Cartesian3.equals(this.coordinate, cart)));
+            if (!group) return; // error handling: exit if no group is found
+            this.measure = group; // set the group as the current measure
 
             // Update or create labels for the group
             const { distances, totalDistance, clampedPositions } = super.updateOrCreateLabels(group, "multi_distances_clamped", true);
@@ -671,18 +651,22 @@ class MultiDistanceClamped extends MeasureModeBase {
             // Update or create total distance label
             super.updateOrCreateTotalLabel(group, totalDistance, "multi_distances_clamped");
 
-            // Update group interpolated points
-            group.interpolatedPoints = clampedPositions;
-
-            // log distance result
-            this.updateMultiDistancesLogRecords(distances, totalDistance);
-
             // update selected line
             const lines = super.findLinesByPositions(group.coordinates, "multi_distances_clamped");
             this.interactivePrimitives.selectedLines = lines;
             lines.forEach(line => {
                 changeLineColor(line, this.stateManager.getColorState("select"));
             });
+
+            // Update group interpolated points
+            group.interpolatedPoints = clampedPositions;
+
+            // Update this.measure status and records
+            group.status = "completed";
+            group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...this.measure });
 
             // Set flags
             this.flags.isMeasurementComplete = true; // set to true to prevent further measurement
@@ -774,7 +758,8 @@ class MultiDistanceClamped extends MeasureModeBase {
         const group = this.coords.groups.find(group =>
             group.coordinates.some(cart => Cartesian3.equals(cart, linePrimitive.positions[0]))
         );
-        if (!group) return;
+        if (!group) return; // error handling: exit if no group is found
+        this.measure = group; // set the group as the current measure
 
         // update the selected lines to the selected line and update its highlight color
         this.updateSelectedLineColor(group);
@@ -789,6 +774,14 @@ class MultiDistanceClamped extends MeasureModeBase {
             this.flags.isAddMode = true;
             // Display a custom notification to inform the user
             showCustomNotification(`Trail id ${group.id} have entered add line mode`, this.viewer.container);
+
+            // Update log table for the current selected line
+            this.emitter.emit("selected:info", [{ "select line": `${group.id}` }]);
+
+            // Update group status
+            group.status = "pending";
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
@@ -847,28 +840,6 @@ class MultiDistanceClamped extends MeasureModeBase {
             this.interactivePrimitives.selectedLines = lines;
         }
         return lines;
-    }
-
-    /**
-     * Updates the log records with the distances between measurement points and the total computed distance.
-     * @param {number[]} distances - Array of distances between each point.
-     * @param {number} totalDistance - The cumulative distance of the measurement.
-     * @returns {Object} An object containing the distances and totalDistance.
-     * @returns {number[]} return.distances - The array of distances.
-     * @returns {number} return.totalDistance - The cumulative distance.
-     */
-    updateMultiDistancesLogRecords(distances, totalDistance) {
-        const distanceRecord = {
-            distances: distances.map(d => d.toFixed(2)),
-            totalDistance: totalDistance.toFixed(2)
-        };
-        // update log records in logBox
-        this.logRecordsCallback(distanceRecord);
-
-        // update this.coords._records
-        this.coords._records.push(distanceRecord);
-
-        return distanceRecord;
     }
 
     resetValue() {

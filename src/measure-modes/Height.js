@@ -5,6 +5,7 @@ import {
     Cartesian3,
     Cartographic,
     ScreenSpaceEventType,
+    ScreenSpaceEventHandler,
 } from "cesium";
 import {
     convertToCartesian3,
@@ -24,14 +25,16 @@ import dataPool from "../lib/data/DataPool.js";
 class Height extends MeasureModeBase {
     /**
      * Creates a new Height instance.
-     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
-     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space events.
+     * @param {Viewer} viewer - The Cesium Viewer instance.
+     * @param {ScreenSpaceEventHandler} handler - The event handler for screen space events.
      * @param {StateManager} stateManager - The state manager for tool states.
      * @param {Function} logRecordsCallback - Callback function to log measurement records.
      * @param {Object} cesiumPkg - The Cesium package object.
      */
     constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
         super(viewer, handler, stateManager, cesiumPkg);
+
+        this.mode = "height";
 
         // Set the event emitter
         this.emitter = emitter;
@@ -118,7 +121,7 @@ class Height extends MeasureModeBase {
 
             // Set values for the new measure
             this.measure.id = generateIdByTimestamp();
-            this.measure.mode = "height";
+            this.measure.mode = this.mode;
             this.measure.labelNumberIndex = this.coords.measureCounter;
             this.measure.status = "pending";
 
@@ -233,32 +236,7 @@ class Height extends MeasureModeBase {
      * @param {Object} pickedObject - The object obtained from picking.
      */
     handleHoverHighlighting(pickedObject) {
-        const pickedObjectType = getPickedObjectType(pickedObject, "height");
-
-        // reset highlighting
-        super.resetHighlighting();
-
-        const hoverColor = this.stateManager.getColorState("hover");
-
-        switch (pickedObjectType) {
-            case "point":  // highlight the point when hovering
-                const point = pickedObject.primitive;
-                if (point) {
-                    point.outlineColor = hoverColor;
-                    point.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = point;
-                }
-                break;
-            case "label":   // highlight the label when hovering
-                const label = pickedObject.primitive;
-                if (label) {
-                    label.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = label;
-                }
-                break;
-            default:
-                break;
-        }
+        super.handleHoverHighlighting(pickedObject, "height");
     }
 
 

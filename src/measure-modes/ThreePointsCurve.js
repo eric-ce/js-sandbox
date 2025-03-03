@@ -4,6 +4,7 @@ import {
     defined,
     CatmullRomSpline,
     ScreenSpaceEventType,
+    ScreenSpaceEventHandler,
 } from "cesium";
 import {
     editableLabel,
@@ -21,26 +22,19 @@ import {
 import MeasureModeBase from "./MeasureModeBase.js";
 import dataPool from "../lib/data/DataPool.js";
 
-
-/**
- * @typedef {Object} Group
- * @property {string|number} id - Group identifier
- * @property {Cartesian3[]} coordinates - Array of position coordinates
- * @property {number} labelNumber - Label counter for the group
- */
-
-
 class ThreePointsCurve extends MeasureModeBase {
     /**
      * Creates a new ThreePointsCurve instance.
      * @param {Viewer} viewer - The Cesium Viewer instance.
      * @param {ScreenSpaceEventHandler} handler - The event handler for screen space.
      * @param {Object} stateManager - The state manager instance.
-     * @param {Function} logRecordsCallback - Callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
+     * @param {EventEmitter} emitter - The event emitter instance.
      */
     constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
         super(viewer, handler, stateManager, cesiumPkg);
+
+        this.mode = "curve";
 
         // Set the event emitter
         this.emitter = emitter;
@@ -67,9 +61,11 @@ class ThreePointsCurve extends MeasureModeBase {
         this.interactivePrimitives = {
             movingPolylines: [],      // Array of moving polylines
             movingLabels: [],         // Array of moving labels
+
             dragPoint: null,          // Currently dragged point primitive
             dragPolylines: [],        // Array of dragging polylines
             dragLabels: [],           // Array of dragging labels                
+
             hoveredPoint: null,             // Point that is currently hovered over
             hoveredLabel: null,             // Label that is currently hovered over
             hoveredLine: null,              // Line that is currently hovered over
@@ -137,7 +133,7 @@ class ThreePointsCurve extends MeasureModeBase {
 
             // Set values for the new measure
             this.measure.id = generateIdByTimestamp()
-            this.measure.mode = "curve";
+            this.measure.mode = this.mode;
             this.measure.labelNumberIndex = this.coords.measureCounter;
             this.measure.status = "pending";
 
@@ -267,39 +263,7 @@ class ThreePointsCurve extends MeasureModeBase {
      * @param {*} pickedObject - The object from the scene pick.
      */
     handleHoverHighlighting(pickedObject) {
-        const pickedObjectType = getPickedObjectType(pickedObject, "curve");
-
-        // reset highlighting
-        super.resetHighlighting();
-
-        const hoverColor = this.stateManager.getColorState("hover");
-
-        switch (pickedObjectType) {
-            case "line":
-                const line = pickedObject.primitive;
-                if (line && line !== this.interactivePrimitives.addModeLine) {
-                    changeLineColor(line, hoverColor);
-                    this.interactivePrimitives.hoveredLine = line;
-                }
-                break;
-            case "point":  // highlight the point when hovering
-                const point = pickedObject.primitive;
-                if (point) {
-                    point.outlineColor = hoverColor;
-                    point.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = point;
-                }
-                break;
-            case "label":   // highlight the label when hovering
-                const label = pickedObject.primitive;
-                if (label) {
-                    label.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = label;
-                }
-                break;
-            default:
-                break;
-        }
+        super.handleHoverHighlighting(pickedObject, "curve");
     }
 
 

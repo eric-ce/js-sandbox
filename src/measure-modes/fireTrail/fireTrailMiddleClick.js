@@ -1,6 +1,5 @@
 import * as Cesium from "cesium";
 import {
-    calculateClampedDistanceFromArray,
     getPickedObjectType,
     positionKey,
 } from "../../lib/helper/helper.js";
@@ -77,6 +76,7 @@ async function removeActionByPoint(pointPrimitive) {
         );
         // Exit if no matching group is found
         if (!group) return;
+        this.measure = group; // set the group as the current measure
 
         // Identify neighboring positions to reconnect the remaining points, lines, and labels
         const neighbourPositions = this.findNeighbourPosition(pointPosition, group);
@@ -106,14 +106,11 @@ async function removeActionByPoint(pointPrimitive) {
         group.coordinates.splice(pointIndex, 1);
 
         // update or create labels for the group
-        this.updateOrCreateLabels(group);
+        const { distances, totalDistance, clampedPositions } = this.updateOrCreateLabels(group);
 
-        // Calculate the updated distances and total distance after removal
-        const { distances, totalDistance } = calculateClampedDistanceFromArray(
-            group.coordinates,
-            this.viewer.scene,
-            4
-        );
+        // Update group records and interpolated points
+        group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
+        group.interpolatedPoints = clampedPositions;
 
         // Update or create the total label for the group
         this.updateOrCreateTotalLabel(group, totalDistance);
@@ -125,10 +122,15 @@ async function removeActionByPoint(pointPrimitive) {
         // Update the color of selected lines to indicate selection change
         this.updateSelectedLineColor(group);
 
+        // get the log table
+        const logTable = this.stateManager.getElementState("logTable");
+
         // If the group still has more than one coordinate, update the log records
         if (group.coordinates.length > 1) {
-            this.updateMultiDistancesLogRecords(distances, totalDistance);
             this.coords.groupToSubmit = group;
+
+            // update log records
+            logTable && logTable._handleDataAdded({ ...this.measure });
         }
 
         // If only one coordinate remains, perform additional cleanup
@@ -160,7 +162,7 @@ async function removeActionByPoint(pointPrimitive) {
                 // If the line was submitted before, log the removal action
                 if (isLineSubmittedBefore) {
                     const payload = {
-                        trailId: group.trailId,
+                        trailId: group.id,
                         coordinates: [],
                         comp_length: 0.0,
                         email: this.app?.currentUser?.sessions?.navigator?.userId || "",
@@ -170,12 +172,12 @@ async function removeActionByPoint(pointPrimitive) {
                         const response = await this.actionLogger("annotateTracks_V5", payload);
                         console.log("✅ Remove action submitted:", response);
                         // Update the log with a successful removal status
-                        this.logRecordsCallback({ submitStatus: `${group.trailId} Remove From Server Success` });
+                        logTable && logTable._handleModeSelected([{ "line removed from server": group.id }]);
                     } catch (error) {
                         console.error("❌ Error logging action:", error);
-                        alert(`Fire Trail ${group.trailId} Submission Failed`);
+                        alert(`Fire Trail ${group.id} Submission Failed`);
                         // Update the log with a failed removal status
-                        this.logRecordsCallback({ submitStatus: `${group.trailId} Remove From Server Failed` });
+                        logTable && logTable._handleModeSelected([{ "line removed from server failed": group.id }]);
                     }
                 }
             }
@@ -183,12 +185,15 @@ async function removeActionByPoint(pointPrimitive) {
             // Clear the group's coordinates as all points have been removed
             group.coordinates = [];
 
+            // Clear group records
+            group._records = [];
+
             // Reset submission-related properties to their default states
             this.coords.groupToSubmit = null;
             this.interactivePrimitives.selectedLines = [];
 
             // Log the removal of the trail
-            this.logRecordsCallback(`${group.trailId} Removed`);
+            logTable && logTable._handleModeSelected([{ "line removed": group.id }]);
         }
     }
 }
@@ -214,9 +219,11 @@ async function removeLineSetByPrimitive(primitive, primitiveType) {
     if (groupIndex === -1) return; // Error handling: no group found
 
     const group = this.coords.groups[groupIndex];
+    if (!group) return;
+    this.measure = group; // set the group as current measure
 
     // Confirm removal with the user
-    if (!confirm(`Do you want to remove the ENTIRE fire trail ${group.trailId}?`)) return;
+    if (!confirm(`Do you want to remove the ENTIRE fire trail ${group.id}?`)) return;
 
     // Retrieve associated primitives for the group
     const { pointPrimitives, linePrimitives, labelPrimitives } = this.findPrimitivesByPositions(group.coordinates);
@@ -249,10 +256,13 @@ async function removeLineSetByPrimitive(primitive, primitiveType) {
         groupKey.split('|').includes(posKey)
     );
 
+    // get the log table
+    const logTable = this.stateManager.getElementState("logTable");
+
     // If the line set was submitted, log the removal action
     if (isLineSubmittedBefore) {
         const payload = {
-            trackId: group.trailId, // Associate with the correct trail ID
+            trackId: group.id, // Associate with the correct trail ID
             content: [],
             comp_length: 0.0,
             email: this.app?.currentUser?.sessions?.navigator?.userId || "",
@@ -262,21 +272,25 @@ async function removeLineSetByPrimitive(primitive, primitiveType) {
             // Await the actionLogger promise and handle the response
             const response = await this.actionLogger("annotateTracks_V5", payload);
             console.log("✅ Remove action submitted:", response);
-            this.logRecordsCallback({ submitStatus: `${group.trailId} Removed From Server Successfully` });
+            logTable && logTable._handleModeSelected([{ "line removed from server": group.id }]);
         } catch (error) {
             console.error("❌ Error logging action:", error);
-            alert(`Fire Trail ${group.trailId} Submission Failed`);
-            this.logRecordsCallback({ submitStatus: `${group.trailId} Removal From Server Failed` });
+            alert(`Fire Trail ${group.id} Submission Failed`);
+            logTable && logTable._handleModeSelected([{ "line removed from server failed": group.id }]);
         }
     }
 
     // Remove the group coordinates from the coords.groups array
     group.coordinates = [];
 
+    // Remove the group records
+    group._records = [];
+
     // Reset submission-related properties to their default states
     this.coords.groupToSubmit = null;
     this.interactivePrimitives.selectedLines = [];
 
     // Log the removal of the trail
-    this.logRecordsCallback(`${group.trailId} Removed`);
+    logTable && logTable._handleModeSelected([{ "line removed": group.id }]);
+
 }

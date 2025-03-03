@@ -1,10 +1,10 @@
 import {
     defined,
-    Color,
+    ScreenSpaceEventHandler,
 } from "cesium";
 import {
     changeLineColor,
-    resetLineColor,
+    getPickedObjectType,
     updatePointerOverlay
 } from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
@@ -12,8 +12,8 @@ import MeasureModeBase from "./MeasureModeBase.js";
 class Picker extends MeasureModeBase {
     /**
      * Creates a new Picker instance.
-     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
-     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {Viewer} viewer - The Cesium Viewer instance.
+     * @param {ScreenSpaceEventHandler} handler - The event handler for screen space.
      * @param {Object} stateManager - The state manager holding various tool states.
      * @param {Function} logRecordsCallback - Callback function to log records.
      * @param {Function} activateModeCallback - Callback to activate a measurement mode.
@@ -21,6 +21,8 @@ class Picker extends MeasureModeBase {
      */
     constructor(viewer, handler, stateManager, activateModeCallback, cesiumPkg, emitter) {
         super(viewer, handler, stateManager, cesiumPkg);
+
+        this.mode = "picker";
 
         // Set the event emitter
         this.emitter = emitter;
@@ -135,7 +137,7 @@ class Picker extends MeasureModeBase {
 
                 // Log the formatted ID
                 // this.logRecordsCallback(formattedId);
-                this.emitter.emit("mode:selected", [{ "mode selected": formattedId }]);
+                this.emitter.emit("selected:info", [{ "mode selected": formattedId }]);
             }
         }
     }
@@ -171,55 +173,7 @@ class Picker extends MeasureModeBase {
      * @param {*} pickedObject - The picked object from the drillPick method.
      */
     handleHoverHighlighting(pickedObject) {
-        let pickedObjectType = null;
-
-        if (defined(pickedObject) &&
-            pickedObject.id &&
-            pickedObject.id.startsWith("annotate_") &&
-            !pickedObject.id.includes("moving")) {
-            if (pickedObject.id.includes('point')) {
-                pickedObjectType = "point"
-            } else if (pickedObject.id.includes('line') && !pickedObject.id.includes('outline')) {
-                pickedObjectType = "line"
-            } else if (pickedObject.id.includes('label')) {
-                pickedObjectType = "label"
-            } else {
-                pickedObjectType = "other"
-            }
-        }
-
-        // reset highlighting
-        super.resetHighlighting();
-
-        const hoverColor = this.stateManager.getColorState("hover");
-
-        switch (pickedObjectType) {
-            case "line": // highlight the line when hovering
-                const line = pickedObject.primitive;
-                if (line) {
-                    // Highlight the line
-                    changeLineColor(line, hoverColor);
-                    this.interactivePrimitives.hoveredLine = line;
-                }
-                break;
-            case "point":  // highlight the point when hovering
-                const point = pickedObject.primitive;
-                if (point) {
-                    point.outlineColor = hoverColor;
-                    point.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = point;
-                }
-                break;
-            case "label":   // highlight the label when hovering
-                const label = pickedObject.primitive;
-                if (label) {
-                    label.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = label;
-                }
-                break;
-            default:
-                break;
-        }
+        super.handleHoverHighlighting(pickedObject);
     }
 
     /********************

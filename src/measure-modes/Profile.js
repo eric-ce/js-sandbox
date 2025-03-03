@@ -16,16 +16,7 @@ import {
     generateIdByTimestamp,
 } from "../lib/helper/helper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
-
-
-/**
- * @typedef {Object} Group
- * @property {string|number} id - Group identifier
- * @property {Cartesian3[]} coordinates - Array of position coordinates
- * @property {number} labelNumber - Label counter for the group
- * @property {Cartesian3[]} interpolatedPoints - Array of interpolated points
- */
-
+import dataPool from "../lib/data/DataPool.js";
 
 class Profile extends MeasureModeBase {
     /**
@@ -33,11 +24,16 @@ class Profile extends MeasureModeBase {
      * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
      * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
      * @param {Object} stateManager - The state manager instance.
-     * @param {Function} logRecordsCallback - Callback function to log distance records.
      * @param {Object} cesiumPkg - The Cesium package object.
+     * @param {Object} emitter - The event emitter instance.
      */
     constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
         super(viewer, handler, stateManager, cesiumPkg);
+
+        this.mode = "profile";
+
+        // Set the event emitter
+        this.emitter = emitter;
 
         // Flags to control the state of the tool
         this.flags = {
@@ -50,12 +46,14 @@ class Profile extends MeasureModeBase {
         this.coords = {
             cache: [],              // Stores temporary coordinates during operations
             groups: [],             // Tracks all coordinates involved in operations
-            groupCounter: 0,        // Counter for the number of groups
+            measureCounter: 0,        // Counter for the number of groups
             dragStart: null,            // Stores the initial position before a drag begins
             dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
             selectedGroupIndex: null,   // Tracks the index of the selected group
-            _records: []                // Stores the distance records
         };
+
+        // Measurement data
+        this.measure = super._createDefaultMeasure();
 
         // Interactive primitives for dynamic actions
         this.interactivePrimitives = {
@@ -76,8 +74,6 @@ class Profile extends MeasureModeBase {
         // chart
         this.chart = null;
         this.chartDiv = null;
-
-        this.emitter = emitter;
     }
 
     /**
@@ -139,17 +135,19 @@ class Profile extends MeasureModeBase {
 
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
-            // link both cache and groups to the same group
-            // when cache changed groups will be changed due to reference by address
-            const newGroup = {
-                id: generateIdByTimestamp(),
-                coordinates: [],
-                labelNumberIndex: this.coords.groupCounter,
-                interpolatedPoints: [],
-            };
-            this.coords.groups.push(newGroup);
-            this.coords.cache = newGroup.coordinates;
-            this.coords.groupCounter++;
+            // Reset for a new measure using the default structure
+            this.measure = super._createDefaultMeasure();
+
+            // Set values for the new measure
+            this.measure.id = generateIdByTimestamp();
+            this.measure.mode = this.mode;
+            this.measure.labelNumberIndex = this.coords.measureCounter;
+            this.measure.status = "pending";
+
+            // Establish data relation
+            this.coords.groups.push(this.measure);
+            this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
+            this.coords.measureCounter++;
         }
 
         // Check if the current coordinate is near any existing point (distance < 0.3)
@@ -164,6 +162,9 @@ class Profile extends MeasureModeBase {
 
         // Update the coordinate cache
         this.coords.cache.push(this.coordinate);
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
 
         // create line and label
         if (this.coords.cache.length === 2) {
@@ -199,16 +200,18 @@ class Profile extends MeasureModeBase {
             const labelPrimitive = this.labelCollection.add(label);
             labelPrimitive.positions = [this.coords.cache[0], this.coords.cache[1]]; // store positions data in label primitive
 
-            // update the interpolated points in the group
-            const groupIndex = this.coords.groups.findIndex(group => group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.cache[0])));
-            const group = this.coords.groups[groupIndex];
-            group.interpolatedPoints = clampedPositions;
+            // update the interpolated points for current measure
+            this.measure.interpolatedPoints = clampedPositions;
 
             // create and or update the chart
-            this.handleChartSpecific(group.interpolatedPoints, group.coordinates);
+            this.handleChartSpecific(this.measure.interpolatedPoints, this.measure.coordinates);
 
-            // log distance result
-            this.updateLogRecords(distance)
+            // Update this.measure
+            this.measure._records.push(distance);
+            this.measure.status = "completed";
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...this.measure });
 
             // set flag that the measurement has ended
             this.flags.isMeasurementComplete = true;
@@ -319,32 +322,7 @@ class Profile extends MeasureModeBase {
      * @param {*} pickedObject - The object picked by the drill pick.
      */
     handleHoverHighlighting(pickedObject) {
-        const pickedObjectType = getPickedObjectType(pickedObject, "profile");
-
-        // reset highlighting
-        super.resetHighlighting();
-
-        const hoverColor = this.stateManager.getColorState("hover");
-
-        switch (pickedObjectType) {
-            case "point":  // highlight the point when hovering
-                const point = pickedObject.primitive;
-                if (point) {
-                    point.outlineColor = hoverColor;
-                    point.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = point;
-                }
-                break;
-            case "label":   // highlight the label when hovering
-                const label = pickedObject.primitive;
-                if (label) {
-                    label.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = label;
-                }
-                break;
-            default:
-                break;
-        }
+        super.handleHoverHighlighting(pickedObject, "profile");
     }
 
 
@@ -421,21 +399,6 @@ class Profile extends MeasureModeBase {
         super.updateChart(labelDistance, diffHeight, clampedPositions, coordinates);
 
         return this.chart;
-    }
-
-    /**
-     * Updates the log records with the provided distance.
-     * @param {number} distance - The distance between two points.
-     * @returns {number} The formatted distance.
-     */
-    updateLogRecords(distance) {
-        // update log records in logBox
-        this.logRecordsCallback(distance.toFixed(2));
-
-        // update this.coords._records
-        this.coords._records.push(distance);
-
-        return distance;
     }
 
     resetValue() {

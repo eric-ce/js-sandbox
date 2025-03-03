@@ -3,7 +3,8 @@ import {
     Cartesian3,
     Color,
     defined,
-    ScreenSpaceEventType
+    ScreenSpaceEventType,
+    ScreenSpaceEventHandler,
 } from 'cesium';
 import {
     positionKey,
@@ -21,13 +22,21 @@ import {
     createPolylinePrimitive,
     calculateClampedDistanceFromArray,
     calculateDistanceFromArray,
-    makeDraggable
+    makeDraggable,
+    getPickedObjectType
 } from '../lib/helper/helper.js';
 import Chart from "chart.js/auto";
 import dataPool from '../lib/data/DataPool.js';
 
 
 export default class MeasureModeBase {
+    /**
+     * Creates a new MeasureModeBase instance.
+     * @param {Viewer} viewer - The Cesium Viewer instance.
+     * @param {ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {Object} stateManager - The state manager instance.
+     * @param {Object} cesiumPkg - The Cesium package object.
+     */
     constructor(viewer, handler, stateManager, cesiumPkg) {
         this.viewer = viewer;
         this.handler = handler;
@@ -46,7 +55,7 @@ export default class MeasureModeBase {
         this.coords = {
             cache: [],                 // Temporary coordinates during operations
             groups: [],                // All measurement groups
-            groupCounter: 0,           // Counter for groups (or label numbering)
+            measureCounter: 0,           // Counter for groups (or label numbering)
             dragStartTop: null,        // Top position at drag start
             dragStartBottom: null,     // Bottom position at drag start
             dragStart: null,           // Initial position at drag start
@@ -129,7 +138,7 @@ export default class MeasureModeBase {
         this.coords = {
             cache: [],                              // Reset temporary coordinates
             groups: this.coords.groups,             // Preserve existing measurement groups
-            groupCounter: this.coords.groupCounter, // Preserve the current group counter
+            measureCounter: this.coords.measureCounter, // Preserve the current group counter
             dragStart: null,                        // Reset drag start position
             dragStartToCanvas: null,                // Reset drag start canvas coordinates
             dragStartTop: null,                     // Reset drag start top position
@@ -206,11 +215,8 @@ export default class MeasureModeBase {
                 group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart))
             );
             if (!group) return;
+            this.measure = group; // set the group as current measure
 
-            // Set status to pending 
-            group.status = "pending";
-            // Update to data pool
-            dataPool.updateOrAddMeasure({ ...group });
 
             if (isMultiDistance) { // if it is multi distance, multi distance clamped or profile distances mode
                 // Reset line color 
@@ -234,6 +240,12 @@ export default class MeasureModeBase {
                     showCustomNotification("you have exited add line mode", this.viewer.container);
                 }
             }
+
+            // Set status to pending 
+            group.status = "pending";
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
 
             // Set move event for dragging
             this.handler.setInputAction((movement) => {
@@ -379,6 +391,7 @@ export default class MeasureModeBase {
             // Find the group containing the dragged point
             const group = this.coords.groups.find(group => group.coordinates.some(cart => Cartesian3.equals(cart, this.coords.dragStart)))
             if (!group) return;     // Error handling: no group found
+            this.measure = group;   // set the group as current measure
 
             // Remove dragging point, dragging lines and dragging labels
             this.removeDragMovingPrimitives({ removePoint: true, removeLines: true, removeLabels: true });
@@ -501,12 +514,18 @@ export default class MeasureModeBase {
                 }
 
                 // update log records
-                this.updateMultiDistancesLogRecords && this.updateMultiDistancesLogRecords(distances, totalDistance);
+                // this.updateMultiDistancesLogRecords && this.updateMultiDistancesLogRecords(distances, totalDistance);
 
                 // Update selected line color
                 const lines = this.findLinesByPositions(group.coordinates, modeString);
                 this.interactivePrimitives.selectedLines = lines;
                 this.updateSelectedLineColor(group);
+
+                // update _records and status of the group
+                group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
+
+                // Update to data pool
+                dataPool.updateOrAddMeasure({ ...group });
             } else { // if distance mode
                 // Update the coordinate data
                 const positionIndex = group.coordinates.findIndex(cart =>
@@ -526,17 +545,19 @@ export default class MeasureModeBase {
                 }
 
                 // update _records and status of the group
-                group.status = "completed";
                 group._records = [distance];
-
-                // Update to data pool
-                dataPool.updateOrAddMeasure({ ...group });
             }
 
             // Handle Chart
             if (this.handleChartSpecific) {
                 this.handleChartSpecific(group.interpolatedPoints, group.coordinates);
             }
+
+            // Update group status 
+            group.status = "completed";
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...group });
 
             // Reset flag
             this.flags.isDragMode = false;
@@ -553,15 +574,9 @@ export default class MeasureModeBase {
      *********************/
     /**
      * Removes a point primitive and its associated lines and labels, then updates the measurement.
-     *
      * @param {PointPrimitive} pointPrimitive - The point primitive to remove.
      * @param {string} modeString - Measurement mode identifier.
      * @param {boolean} [isClamped=false] - Flag indicating whether measurements are clamped to terrain.
-     * @returns {Object|undefined} If successful, returns an object with:
-     *   - updatedGroup {Object}: The updated measurement group.
-     *   - removedPoint {PointPrimitive}: The removed point primitive.
-     *   - removedLinePrimitives {Primitive[]}: Array of removed line primitives.
-     *   - removedLabelPrimitives {LabelPrimitive[]}: Array of removed label primitives.
      */
     _removeActionByPoint(pointPrimitive, modeString, isClamped = false) {
         // Prompt the user for confirmation before removing the point
@@ -598,6 +613,7 @@ export default class MeasureModeBase {
             );
             // Exit if no matching group is found
             if (!group) return;
+            this.measure = group; // set the group as current measure
 
             // Identify neighboring positions to reconnect the remaining points, lines, and labels
             const neighbourPositions = this.findNeighbourPosition(pointPosition, group);
@@ -634,6 +650,9 @@ export default class MeasureModeBase {
                 group.interpolatedPoints = clampedPositions;
             }
 
+            // Update group records
+            group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
+
             // Handle chart-specific actions
             if (this.handleChartSpecific) {
                 // Update the selected group index
@@ -647,11 +666,6 @@ export default class MeasureModeBase {
 
             // Update the color of selected lines to indicate selection change
             this.updateSelectedLineColor(group);
-
-            // If the group still has more than one coordinate, update the log records
-            if (group.coordinates.length > 1) {
-                this.updateMultiDistancesLogRecords(distances, totalDistance);
-            }
 
             // If only one coordinate remains, perform additional cleanup
             if (group.coordinates.length === 1) {
@@ -678,6 +692,9 @@ export default class MeasureModeBase {
                     group.interpolatedPoints = [];
                 }
 
+                // clear group records
+                group._records = [];
+
                 // handle chart specific actions
                 if (this.handleChartSpecific) {
                     // update the selected group index
@@ -691,28 +708,18 @@ export default class MeasureModeBase {
 
                 // Log the removal of the line set
                 // this.logRecordsCallback(`${group.id} Removed`);
+                this.emitter.emit("selected:info", [{ line: `${group.id} Removed` }])
             }
 
-            return {
-                updatedGroup: group,
-                removedPoint: pointPrimitive,
-                removedLinePrimitives: linePrimitives,
-                removedLabelPrimitives: labelPrimitives,
-            }
+            // Update to dataPool
+            dataPool.updateOrAddMeasure({ ...group });
         }
     }
 
     /**
      * Removes an entire line set and its associated primitives based on a line primitive.
-     *
      * @param {Primitive} linePrimitive - The line primitive identifying the line set.
      * @param {string} modeString - Mode identifier.
-     * @returns {Object} Returns an object with:
-     *   - updatedGroup {Object}: The modified group with cleared coordinates.
-     *   - removedPoints {PointPrimitive[]}: Array of removed point primitives.
-     *   - removedLinePrimitives {Primitive[]}: Array of removed line primitives.
-     *   - removedLabelPrimitives {LabelPrimitive[]}: Array of removed label primitives.
-     * @throws {Error} If no group data is found for the primitive position.
      */
     _removeLineSetByPrimitive(linePrimitive, modeString) {
         const primitivePosition = linePrimitive.positions[0];
@@ -721,7 +728,8 @@ export default class MeasureModeBase {
         const group = this.coords.groups.find(group =>
             group.coordinates.some(cart => Cartesian3.equals(cart, primitivePosition))
         );
-        if (!group) throw new Error("No group data found");
+        if (!group) return;
+        this.measure = group; // set the group as current measure
 
         // Confirm removal with the user
         if (!confirm(`Do you want to remove the ENTIRE line set ${group.id}?`)) return;
@@ -750,6 +758,9 @@ export default class MeasureModeBase {
         // Remove the group coordinates from the coords.groups array
         group.coordinates = [];
 
+        // Remove the group records
+        group._records = [];
+
         // handle chart specific actions
         if (this.handleChartSpecific) {
             // update the selected group index
@@ -761,15 +772,11 @@ export default class MeasureModeBase {
         // reset selected lines
         this.interactivePrimitives.selectedLines = [];
 
-        // Log the removal of the trail
-        // this.logRecordsCallback(`${group.id} Removed`);
+        // Update to dataPool
+        dataPool.updateOrAddMeasure({ ...group });
 
-        return {
-            updatedGroup: group,
-            removedPoints: pointPrimitives,
-            removedLinePrimitives: linePrimitives,
-            removedLabelPrimitives: labelPrimitives,
-        };
+        // emit log info to logTable 
+        this.emitter.emit("selected:info", [{ line: `${group.id} Removed` }])
     }
 
     /**
@@ -849,6 +856,7 @@ export default class MeasureModeBase {
             group.coordinates.some(cart => Cartesian3.equals(cart, pointPosition))
         );
         if (!group) return;
+        this.measure = group // set the group as current measure
 
         // Check if the clicked point is from the same group
         const isFromSameGroup = group.coordinates.some(cart =>
@@ -896,18 +904,78 @@ export default class MeasureModeBase {
             this.handleChartSpecific(group.interpolatedPoints, group.coordinates);
         }
 
-        // Update log records
-        this.updateMultiDistancesLogRecords(distances, totalDistance);
+        // Update the group status and records to completed
+        group.status = "pending";
+        group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
 
+        // if only one coordinate remains, perform additional cleanup
         if (group.coordinates.length === 0) {
             this.flags.isMeasurementComplete = true; // When removing the only point, consider the measure ended
             this.interactivePrimitives.selectedLines = [];
+
+            // Update group coordinates
+            group.coordinates = [];
+            // Update the group status and records to completed
+            group.status = "completed"
+            group._records = [];
         }
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...group });
     }
 
     /*********************
      * HIGHLIGHT FEATURE *
      *********************/
+    /**
+     * Highlights primitives when hovering with the mouse.
+     * @param {Object} pickedObject - The object picked by the raycast.
+     * @param {string} [modeString] - Optional: Mode identifier for the highlighting, if not defined then get all annotate primitives.
+     */
+    handleHoverHighlighting(pickedObject, modeString) {
+        // To determine the type of object picked
+        const pickedObjectType = modeString ?
+            getPickedObjectType(pickedObject, modeString) :
+            getPickedObjectType(pickedObject);
+
+        // reset highlighting
+        this.resetHighlighting();  // reset highlighting, need to reset before highlighting
+
+        const hoverColor = this.stateManager.getColorState("hover");
+
+        switch (pickedObjectType) {
+            case "line":
+                const line = pickedObject.primitive;
+
+                // handle chart line hovered: when hover line show tooltip on chart at moving point
+                this.handleChartLineHovered && this.handleChartLineHovered(line);
+
+                // highlight the line when hovering
+                if (line && line !== this.interactivePrimitives.addModeLine) {
+                    changeLineColor(line, hoverColor);
+                    this.interactivePrimitives.hoveredLine = line;
+                }
+                break;
+            case "point":  // highlight the point when hovering
+                const point = pickedObject.primitive;
+                if (point) {
+                    point.outlineColor = hoverColor;
+                    point.outlineWidth = 2;
+                    this.interactivePrimitives.hoveredPoint = point;
+                }
+                break;
+            case "label":   // highlight the label when hovering
+                const label = pickedObject.primitive;
+                if (label) {
+                    label.fillColor = hoverColor;
+                    this.interactivePrimitives.hoveredLabel = label;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
     /**
      * Resets the highlighting state of interactive primitives (lines, points, and labels).
      *
@@ -1749,7 +1817,8 @@ export default class MeasureModeBase {
             labelNumberIndex: 0,
             status: "pending",
             _records: [],
-            interpolationPoints: []
+            interpolatedPoints: [],
+            mapName: "cesium",
         };
     }
 }

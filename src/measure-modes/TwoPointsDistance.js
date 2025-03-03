@@ -2,6 +2,7 @@ import {
     Cartesian2,
     Cartesian3,
     defined,
+    ScreenSpaceEventHandler,
 } from "cesium";
 import {
     calculateDistance,
@@ -31,6 +32,8 @@ class TwoPointsDistance extends MeasureModeBase {
     constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
         super(viewer, handler, stateManager, cesiumPkg);
 
+        this.mode = "distance";
+
         // Set the event emitter
         this.emitter = emitter;
 
@@ -57,9 +60,11 @@ class TwoPointsDistance extends MeasureModeBase {
         this.interactivePrimitives = {
             movingPolylines: [],      // Array of moving polylines
             movingLabels: [],         // Array of moving labels
+
             dragPoint: null,          // Currently dragged point primitive
             dragPolylines: [],        // Array of dragging polylines
             dragLabels: [],           // Array of dragging labels
+
             hoveredPoint: null,       // Point that is currently hovered
             hoveredLine: null,        // Line that is currently hovered
             hoveredLabel: null        // Label that is currently hovered
@@ -127,7 +132,7 @@ class TwoPointsDistance extends MeasureModeBase {
 
             // Set values for the new measure
             this.measure.id = generateIdByTimestamp();
-            this.measure.mode = "distance";
+            this.measure.mode = this.mode;
             this.measure.labelNumberIndex = this.coords.measureCounter;
             this.measure.status = "pending";
 
@@ -136,7 +141,6 @@ class TwoPointsDistance extends MeasureModeBase {
             this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
             this.coords.measureCounter++;
         }
-
 
         // Check if the current coordinate is near any existing point (distance < 0.3)
         const isNearPoint = this.coords.groups
@@ -261,39 +265,7 @@ class TwoPointsDistance extends MeasureModeBase {
      * @param {*} pickedObject - The object picked from the scene.
      */
     handleHoverHighlighting(pickedObject) {
-        const pickedObjectType = getPickedObjectType(pickedObject, "distance");
-
-        // reset highlighting
-        super.resetHighlighting();
-
-        const hoverColor = this.stateManager.getColorState("hover");
-
-        switch (pickedObjectType) {
-            case "line":
-                const line = pickedObject.primitive;
-                if (line && line !== this.interactivePrimitives.addModeLine) {
-                    changeLineColor(line, hoverColor);
-                    this.interactivePrimitives.hoveredLine = line;
-                }
-                break;
-            case "point":  // highlight the point when hovering
-                const point = pickedObject.primitive;
-                if (point) {
-                    point.outlineColor = hoverColor;
-                    point.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = point;
-                }
-                break;
-            case "label":   // highlight the label when hovering
-                const label = pickedObject.primitive;
-                if (label) {
-                    label.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = label;
-                }
-                break;
-            default:
-                break;
-        }
+        super.handleHoverHighlighting(pickedObject, "distance");
     }
 
 

@@ -56,12 +56,10 @@ export function handleFireTrailRightClick() {
         const isNearPoint = this.coords.groups
             .flatMap(group => group.coordinates)
             .some(cart => Cesium.Cartesian3.distance(cart, this.coordinate) < 0.3);
-
         if (isNearPoint) return;
 
         // Create last point
-        const lastPoint = createPointPrimitive(this.coordinate, Cesium.Color.RED);
-        lastPoint.id = generateId(this.coordinate, "fire_trail_point");
+        const lastPoint = createPointPrimitive(this.coordinate, Cesium.Color.RED, "fire_trail_point");
         this.pointCollection.add(lastPoint);
 
         // Create last line
@@ -86,28 +84,14 @@ export function handleFireTrailRightClick() {
 
         // Create last label
         const group = this.coords.groups.find(g => g.coordinates.some(cart => Cesium.Cartesian3.equals(this.coordinate, cart)));
+        if (!group) return;
+        this.measure = group;
 
-        this.updateOrCreateLabels(group);
+        // Update or create labels for the group
+        const { distances, totalDistance, clampedPositions } = this.updateOrCreateLabels(group);
 
-        // Total distance label
-        const { distances, totalDistance } = calculateClampedDistanceFromArray(
-            this.coords.cache,
-            this.viewer.scene,
-            4
-        );
         // Create or update total label
         this.updateOrCreateTotalLabel(group, totalDistance);
-
-        // show notification the group id selected
-        showCustomNotification(`selected line: ${group.trailId}`, this.viewer.container);
-
-        // update log records for distance, total distance, and selected line
-        this.updateMultiDistancesLogRecords(distances, totalDistance);
-        this.logRecordsCallback(`${group.trailId} selected`);
-
-        // Set selectedGroup to current group's coordinates
-        // const currentGroup = this.coords.groups[this.coords.groups.length - 1];
-        this.coords.groupToSubmit = group
 
         // update selected line
         const lines = this.findLinesByPositions(group.coordinates);
@@ -117,6 +101,25 @@ export function handleFireTrailRightClick() {
                 this.changeLinePrimitiveColor(line, 'select');
             }
         });
+
+        // Update group interpolated points
+        group.interpolatedPoints = clampedPositions;
+
+        // Update this.measure status and records
+        group.status = "completed";
+        group._records = [{ distances: [...distances], totalDistance: [totalDistance] }];
+
+        // show notification the group id selected
+        showCustomNotification(`selected line: ${group.id}`, this.viewer.container);
+
+        // update log records for distance, total distance, and selected line
+        const logTable = this.stateManager.getElementState("logTable");
+        logTable & logTable._handleDataAdded({ ...this.measure });
+        // logTable & logTable._handleModeSelected([{ "line selected": group.id }]);
+
+        // Set selectedGroup to current group's coordinates
+        // const currentGroup = this.coords.groups[this.coords.groups.length - 1];
+        this.coords.groupToSubmit = group
 
         // set flags
         this.flags.isMeasurementComplete = true; // set to true to prevent further measurement

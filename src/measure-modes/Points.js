@@ -4,6 +4,7 @@ import {
     Cartesian2,
     defined,
     ScreenSpaceEventType,
+    ScreenSpaceEventHandler,
     SceneTransforms,
 } from "cesium";
 import {
@@ -20,25 +21,19 @@ import {
 import MeasureModeBase from "./MeasureModeBase.js";
 import dataPool from "../lib/data/DataPool.js";
 
-/**
- * @typedef {Object} Group
- * @property {string|number} id - Group identifier
- * @property {Cartesian3[]} coordinates - Array of position coordinates
- * @property {number} labelNumber - Label counter for the group
- */
-
-
 class Points extends MeasureModeBase {
     /**
      * Creates a new Points instance.
-     * @param {Cesium.Viewer} viewer - The Cesium Viewer instance.
-     * @param {Cesium.ScreenSpaceEventHandler} handler - The event handler for screen space.
+     * @param {Viewer} viewer - The Cesium Viewer instance.
+     * @param {ScreenSpaceEventHandler} handler - The event handler for screen space.
      * @param {Object} stateManager - The state manager holding various tool states.
-     * @param {Function} logRecordsCallback - The callback function to log records.
      * @param {Object} cesiumPkg - The Cesium package object.
+     * @param {EventEmitter} emitter - The event emitter instance.
      */
     constructor(viewer, handler, stateManager, cesiumPkg, emitter) {
         super(viewer, handler, stateManager, cesiumPkg);
+
+        this.mode = "bookmark";
 
         // Set the event emitter
         this.emitter = emitter;
@@ -154,7 +149,7 @@ class Points extends MeasureModeBase {
 
             // Set values for the new measure
             this.measure.id = generateIdByTimestamp();
-            this.measure.mode = "bookmark";
+            this.measure.mode = this.mode;
             this.measure.labelNumberIndex = this.coords.measureCounter;
             this.measure.status = "pending";
 
@@ -227,31 +222,7 @@ class Points extends MeasureModeBase {
      * @param {*} pickedObject - The object picked by the drillPick method.
      */
     handleHoverHighlighting(pickedObject) {
-        const pickedObjectType = getPickedObjectType(pickedObject, "bookmark");
-
-        super.resetHighlighting();
-
-        const hoverColor = this.stateManager.getColorState("hover");
-
-        switch (pickedObjectType) {
-            case "point":  // highlight the point when hovering
-                const pointPrimitive = pickedObject.primitive;
-                if (pointPrimitive) {
-                    pointPrimitive.outlineColor = hoverColor;
-                    pointPrimitive.outlineWidth = 2;
-                    this.interactivePrimitives.hoveredPoint = pointPrimitive;
-                }
-                break;
-            case "label":   // highlight the label when hovering
-                const labelPrimitive = pickedObject.primitive;
-                if (labelPrimitive) {
-                    labelPrimitive.fillColor = hoverColor;
-                    this.interactivePrimitives.hoveredLabel = labelPrimitive;
-                }
-                break;
-            default:
-                break;
-        }
+        super.handleHoverHighlighting(pickedObject, "bookmark");
     }
 
     /*****************

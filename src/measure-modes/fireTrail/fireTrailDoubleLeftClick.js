@@ -59,6 +59,9 @@ function setAddModeByLine(linePrimitive) {
     const group = this.coords.groups.find(group =>
         group.coordinates.some(cart => Cesium.Cartesian3.equals(cart, linePrimitive.positions[0]))
     );
+    if (!group) return; // error handling: exit if no group is found
+    this.measure = group; // set the group as the current measure
+
     const lines = this.findLinesByPositions(group.coordinates)
     this.interactivePrimitives.selectedLines = lines;
     this.updateSelectedLineColor(group);
@@ -72,6 +75,13 @@ function setAddModeByLine(linePrimitive) {
     if (this.interactivePrimitives.addModeLine) {
         this.flags.isAddMode = true;
         // Display a custom notification to inform the user
-        showCustomNotification(`Trail id ${group.trailId} have entered add line mode`, this.viewer.container);
+        showCustomNotification(`Trail id ${group.id} have entered add line mode`, this.viewer.container);
+
+        // Update log table for the current selected line
+        const logTable = this.stateManager.getElementState("logTable");
+        logTable && logTable._handleModeSelected([{ "line selected": group.id }]);
+
+        // Update group status
+        group.status = "pending";
     }
 }
