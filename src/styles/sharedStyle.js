@@ -72,7 +72,6 @@ sharedStyleSheet.replaceSync(`
         scrollbar-color: #edffff rgba(38, 38, 38, 0) ;
         z-index: 2;
         overflow: scroll; 
-        user-select: text;
     }
     .help-box{
         max-height: 150px;

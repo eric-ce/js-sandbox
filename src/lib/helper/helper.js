@@ -1048,151 +1048,221 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
     }
     return pointerOverlay;
 }
-
 /**
- * Makes an HTML element draggable within a specified container.
- * @param {HTMLElement} element - The HTML element to be made draggable.
- * @param {HTMLElement} container - The container within which the element can be dragged.
- * @param {function(number, number, DOMRect): void} [updatePositionCallback] - Callback function to update the position of the element.
- * @param {function(boolean): void} [onDragStateChange] - Optional callback function to notify when dragging starts or ends.
+ * Makes an HTML element draggable within a specified container using CSS transforms.
+ * @param {HTMLElement} element - The element to make draggable.
+ * @param {HTMLElement} container - The container element used as boundary.
+ * @param {function(boolean): void} [onDragStateChange] - Called when dragging starts/ends.
+ * @returns {function} Cleanup function.
  */
-export function makeDraggable(element, container, updatePositionCallback, onDragStateChange) {
-    let posInitialX = 0, posInitialY = 0;  // Initial cursor positions
-    let isDragging = false;  // Internal flag to track dragging state
-    let dragStarted = false; // Flag to indicate if dragging has started
-    const threshold = 5;  // Pixels to move before triggering a drag
+export function makeDraggable(element, container, onDragStateChange) {
+    let isDragging = false;
+    let dragStarted = false;
+    let startX = 0, startY = 0;
+    const threshold = 3;
 
-    // Function to emit drag state changes
-    const emitDragState = (newState) => {
-        if (isDragging !== newState) {
-            isDragging = newState;
-            if (typeof onDragStateChange === 'function') {
-                onDragStateChange(isDragging);
+    // For tracking ResizeObserver calls
+    let resizeDebounceTimer = null;
+
+    // Initialize transform values
+    let currentX = 0, currentY = 0;
+
+    // Store initial element position relative to container
+    const initPositioning = () => {
+        if (!element || !container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+
+        // Calculate initial offsets (position where element should be without translation)
+        const initialLeft = elementRect.left - containerRect.left;
+        const initialTop = elementRect.top - containerRect.top;
+
+        element.dataset.initialLeft = initialLeft;
+        element.dataset.initialTop = initialTop;
+
+        // If element is positioned outside container's viewport, bring it inside
+        if (initialLeft < 0 || initialTop < 0 ||
+            initialLeft > containerRect.width - elementRect.width ||
+            initialTop > containerRect.height - elementRect.height) {
+
+            // Default to center if outside boundaries
+            const defaultX = (containerRect.width - elementRect.width) / 2;
+            const defaultY = (containerRect.height - elementRect.height) / 2;
+
+            // Apply initial positioning via transform
+            updateTransform(defaultX - initialLeft, defaultY - initialTop);
+
+            // Update current transform values
+            currentX = defaultX - initialLeft;
+            currentY = defaultY - initialTop;
+        }
+    };
+
+    // Initialize positioning when added to DOM (wait for proper rendering)
+    setTimeout(initPositioning, 50);
+
+    // Helper to clamp a value between min and max
+    const clamp = (val, min, max) => Math.max(min, Math.min(val, max));
+
+    // Update the element's transform
+    const updateTransform = (tx, ty) => {
+        if (!element) return;
+        element.style.transform = `translate(${tx}px, ${ty}px)`;
+    };
+
+    const onMouseMove = (e) => {
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+
+        if (!isDragging && (Math.abs(deltaX) > threshold || Math.abs(deltaY) > threshold)) {
+            isDragging = true;
+            dragStarted = true;
+            if (onDragStateChange) onDragStateChange(true);
+        }
+
+        if (isDragging) {
+            const containerRect = container.getBoundingClientRect();
+            const elementRect = element.getBoundingClientRect();
+
+            // Calculate new position
+            let newX = currentX + deltaX;
+            let newY = currentY + deltaY;
+
+            // Get initial position values
+            const initialLeft = parseFloat(element.dataset.initialLeft) || 0;
+            const initialTop = parseFloat(element.dataset.initialTop) || 0;
+
+            // Apply boundaries to keep element inside container
+            // The effective position = initial position + translation
+            const minX = -initialLeft;
+            const minY = -initialTop;
+            const maxX = containerRect.width - elementRect.width - initialLeft;
+            const maxY = containerRect.height - elementRect.height - initialTop;
+
+            newX = clamp(newX, minX, maxX);
+            newY = clamp(newY, minY, maxY);
+
+            updateTransform(newX, newY);
+        }
+    };
+
+    const onMouseUp = () => {
+        if (isDragging) {
+            // Store current transform values for next drag operation
+            const style = window.getComputedStyle(element);
+            const transform = style.transform;
+            if (transform && transform !== 'none') {
+                const matrix = transform.match(/matrix\((.+)\)/)?.[1]?.split(', ');
+                if (matrix && matrix.length >= 6) {
+                    currentX = parseFloat(matrix[4]);
+                    currentY = parseFloat(matrix[5]);
+                }
             }
+
+            isDragging = false;
+            if (onDragStateChange) onDragStateChange(false);
         }
+
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
     };
 
-    // Retrieves the bounding rectangle of the container
-    const fetchContainerRect = () => container.getBoundingClientRect();
-    let containerRect = fetchContainerRect();  // Initial dimensions of the container
-
-    // Updates the position of the draggable element
-    const updatePosition = (newTop, newLeft) => {
-        containerRect = fetchContainerRect();  // Refresh dimensions for dynamic changes
-
-        // Ensure the element remains within container bounds
-        newLeft = Math.max(0, Math.min(newLeft, containerRect.width - element.offsetWidth));
-        newTop = Math.max(0, Math.min(newTop, containerRect.height - element.offsetHeight));
-
-        // Apply the new position styles to the element
-        element.style.left = `${newLeft}px`;
-        element.style.top = `${newTop}px`;
-
-        // Call the callback function with new position and updated container dimensions
-        if (updatePositionCallback) {
-            updatePositionCallback(newTop, newLeft);
-        }
-    };
-
-    // Handles the mouse move event to update the element's position
-    const elementDrag = (event) => {
-        event.preventDefault();
-        const deltaX = Math.abs(posInitialX - event.clientX);
-        const deltaY = Math.abs(posInitialY - event.clientY);
-
-        if (!isDragging && (deltaX > threshold || deltaY > threshold)) {
-            emitDragState(true);
-            dragStarted = true;  // Indicate that dragging has started
-        }
-
-        if (isDragging) {
-            const deltaX = posInitialX - event.clientX;
-            const deltaY = posInitialY - event.clientY;
-
-            posInitialX = event.clientX;
-            posInitialY = event.clientY;
-
-            const newTop = element.offsetTop - deltaY;
-            const newLeft = element.offsetLeft - deltaX;
-            updatePosition(newTop, newLeft);
-        }
-    };
-
-    // Cleans up event listeners when dragging ends
-    const closeDragElement = () => {
-        document.onmouseup = null;
-        document.onmousemove = null;
-        if (isDragging) {
-            emitDragState(false);
-        }
-    };
-
-    // Prevent click event if dragging has occurred
-    const preventClickAfterDrag = (event) => {
-        if (dragStarted) {
-            event.stopPropagation();
-            event.preventDefault();
-            dragStarted = false;  // Reset the flag
-        }
-    };
-
-    // Initiates dragging
-    element.addEventListener('mousedown', (event) => {
-        // Avoid dragging when clicking on input elements to allow normal interaction
-        if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
+    const onMouseDown = (e) => {
+        // Skip for form elements
+        if (['input', 'textarea', 'select', 'button'].includes(e.target.tagName.toLowerCase())) {
             return;
         }
-        event.preventDefault();
-        posInitialX = event.clientX;
-        posInitialY = event.clientY;
-        dragStarted = false;  // Reset the flag
-        document.onmouseup = closeDragElement;
-        document.onmousemove = elementDrag;
-    });
 
-    // Attach the click event listener to prevent click after drag
-    element.addEventListener('click', preventClickAfterDrag, true);
+        e.preventDefault();
+        startX = e.clientX;
+        startY = e.clientY;
 
-    // Handle container resize using ResizeObserver
-    const handleResize = () => {
-        containerRect = fetchContainerRect();  // Refresh container dimensions
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
 
-        // Get current position of the element
-        let currentLeft = parseInt(element.style.left, 10) || 0;
-        let currentTop = parseInt(element.style.top, 10) || 0;
+    element.addEventListener('mousedown', onMouseDown);
 
-        // Adjust position if it's outside the container bounds
-        const adjustedLeft = Math.max(0, Math.min(currentLeft, containerRect.width - element.offsetWidth));
-        const adjustedTop = Math.max(0, Math.min(currentTop, containerRect.height - element.offsetHeight));
-
-        // Update the position only if it has changed
-        if (currentLeft !== adjustedLeft || currentTop !== adjustedTop) {
-            element.style.left = `${adjustedLeft}px`;
-            element.style.top = `${adjustedTop}px`;
-
-            // Call the updatePositionCallback with new position
-            if (updatePositionCallback) {
-                updatePositionCallback(adjustedTop, adjustedLeft);
-            }
+    // Prevent click events if drag occurred
+    const onClick = (e) => {
+        if (dragStarted) {
+            e.preventDefault();
+            e.stopPropagation();
+            dragStarted = false;
         }
     };
 
-    // Set up ResizeObserver on the container
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(container);
+    element.addEventListener('click', onClick, true);
 
-    // Clean up function to remove event listeners and observers when needed
-    const cleanup = () => {
-        resizeObserver.unobserve(container);
-        resizeObserver.disconnect();
-        element.removeEventListener('mousedown', this);
-        element.removeEventListener('click', preventClickAfterDrag, true);
-        document.onmouseup = null;
-        document.onmousemove = null;
+    // Handle container resizing with debouncing to avoid ResizeObserver loop errors
+    const handleResize = () => {
+        if (!element || !container) return;
+
+        // Cancel any pending calls
+        if (resizeDebounceTimer) {
+            cancelAnimationFrame(resizeDebounceTimer);
+        }
+
+        // Schedule a new call using requestAnimationFrame for smoother performance
+        resizeDebounceTimer = requestAnimationFrame(() => {
+            try {
+                const containerRect = container.getBoundingClientRect();
+                const elementRect = element.getBoundingClientRect();
+
+                // Get initial position values
+                const initialLeft = parseFloat(element.dataset.initialLeft) || 0;
+                const initialTop = parseFloat(element.dataset.initialTop) || 0;
+
+                // Recalculate boundaries
+                const minX = -initialLeft;
+                const minY = -initialTop;
+                const maxX = containerRect.width - elementRect.width - initialLeft;
+                const maxY = containerRect.height - elementRect.height - initialTop;
+
+                // Ensure element stays within boundaries after resize
+                currentX = clamp(currentX, minX, maxX);
+                currentY = clamp(currentY, minY, maxY);
+
+                updateTransform(currentX, currentY);
+                resizeDebounceTimer = null;
+            } catch (e) {
+                console.warn('Error in resize handler:', e);
+            }
+        });
     };
 
-    // Return the cleanup function optionally
-    return cleanup;
+    let resizeObserver = null;
+
+    // Create the observer with error handling
+    try {
+        resizeObserver = new ResizeObserver((entries) => {
+            handleResize();
+        });
+        resizeObserver.observe(container);
+    } catch (e) {
+        console.warn('ResizeObserver not supported or error occurred:', e);
+    }
+
+    // Add window resize event as a fallback
+    window.addEventListener('resize', handleResize);
+
+    // Return cleanup function
+    return () => {
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+        }
+
+        if (resizeDebounceTimer) {
+            cancelAnimationFrame(resizeDebounceTimer);
+        }
+
+        element.removeEventListener('mousedown', onMouseDown);
+        element.removeEventListener('click', onClick, true);
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('resize', handleResize);
+    };
 }
 
 export function showCustomNotification(message, viewerContainer) {

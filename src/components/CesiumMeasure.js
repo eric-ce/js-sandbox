@@ -546,42 +546,72 @@ export default class CesiumMeasure extends HTMLElement {
             (p.id.includes("moving") || p.id.includes("pending"))
         ).forEach(p => { this.pointCollection.remove(p) });
     }
-
-    /**
-     * toggle action for the tool button to show/hide measure modes
-     */
     toggleTools() {
+        // Clear any pending timeouts
+        if (this._toggleTimeouts && this._toggleTimeouts.length) {
+            this._toggleTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+            this._toggleTimeouts = [];
+        } else {
+            this._toggleTimeouts = [];
+        }
+
         const isExpanded = this.stateManager.getFlagState("isToolsExpanded");
         this.stateManager.setFlagState("isToolsExpanded", !isExpanded);
 
         // Find toolbarDiv
         const toolbarDiv = this.shadowRoot.querySelector(".measure-toolbar");
-        if (!toolbarDiv) return; // Error handling
-        // Get all modes buttons under toolbarDiv
+        if (!toolbarDiv) return;
+
+        // Find all button under toolbarDiv and filter out the main tool button
         const buttons = Array.from(toolbarDiv.querySelectorAll("button"));
-        // Buttons without the measure-tools
         const filterButtons = buttons.filter(button => !button.classList.contains("measure-tools"));
 
-        const delayStep = 50; // milliseconds delay per button
+        const toolbar = this.stateManager.getElementState("toolbar");
+        const delayStep = 50; // Delay per button
+
+        // Set toolbar classes immediately for smoother animation
+        if (!isExpanded) {
+            toolbar.classList.remove("collapsed");
+            toolbar.classList.add("expanded");
+        } else {
+            toolbar.classList.remove("expanded");
+            toolbar.classList.add("collapsed");
+        }
 
         if (!isExpanded) {
             // Expanding: show buttons from left to right.
             filterButtons.forEach((button, index) => {
-                setTimeout(() => {
+                const timeoutId = setTimeout(() => {
                     button.classList.remove("hidden");
                     button.classList.add("visible");
                 }, index * delayStep);
+                this._toggleTimeouts.push(timeoutId);
             });
         } else {
             // Collapsing: hide buttons from right to left.
-            const n = buttons.length;
+            const n = filterButtons.length;
             filterButtons.forEach((button, index) => {
-                setTimeout(() => {
+                const timeoutId = setTimeout(() => {
                     button.classList.remove("visible");
                     button.classList.add("hidden");
                 }, (n - index - 1) * delayStep);
+                this._toggleTimeouts.push(timeoutId);
             });
         }
+
+        // Add a safety timeout to ensure all buttons are in the correct final state
+        const finalTimeoutId = setTimeout(() => {
+            filterButtons.forEach(button => {
+                if (!isExpanded) {
+                    button.classList.remove("hidden");
+                    button.classList.add("visible");
+                } else {
+                    button.classList.remove("visible");
+                    button.classList.add("hidden");
+                }
+            });
+        }, filterButtons.length * delayStep + 50);
+        this._toggleTimeouts.push(finalTimeoutId);
     }
 
     /**
@@ -688,9 +718,8 @@ export default class CesiumMeasure extends HTMLElement {
         // Pass shared properties as needed
         helpTable.emitter = this.emitter;
         this.shadowRoot.appendChild(helpTable);
-        // Set the help table to the state manager
-        this.stateManager.setElementState("helpTable", helpTable);
 
+        makeDraggable(helpTable, this.viewer.container);
         return helpTable;
     }
 
@@ -702,6 +731,7 @@ export default class CesiumMeasure extends HTMLElement {
         // Set the log table to the state manager
         this.stateManager.setElementState("logTable", logTable);
 
+        makeDraggable(logTable, this.viewer.container);
         return logTable;
     }
 

@@ -8,12 +8,10 @@ export class HelpTable extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
 
-        this._cesiumStyle = null; // shared cesium style, to be set via property
-
-        // flags
+        // Flags
         this.helpVisible = false;
 
-        // help table messages of instructions 
+        // Instruction messages
         const multiDistancesInstructions = [
             "Left Click to start measure",
             "Left Click on label to edit",
@@ -24,8 +22,6 @@ export class HelpTable extends HTMLElement {
             "Middle Click on point to remove line segment",
             "Middle Click on line to remove line set",
         ];
-
-        // Define default instruction messages keyed by mode.
         this.modeMessages = {
             "default": [
                 "Left Click to start measure",
@@ -53,13 +49,12 @@ export class HelpTable extends HTMLElement {
             ],
             "Profile-Distances": [
                 ...multiDistancesInstructions,
-                "Left Click on first or last point to continue measure",
                 "Hover on chart to show point on the map",
                 "Hover on point to show on chart"
             ]
         };
 
-        // help table header
+        // Header text
         this.header = "How to use:";
 
         // UI elements
@@ -67,52 +62,83 @@ export class HelpTable extends HTMLElement {
         this.table = null;
         this.helpIconButton = null;
 
-        // cesium container
+        // Get the Cesium viewer container from the map-cesium web component.
         const mapCesium = document.querySelector("map-cesium");
         this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("cesiumContainer");
 
-        // create help table UI
+        // Initial position
+        this.position = {
+            initialX: 0,
+            initialY: 0
+        };
+
+        // Create UI elements
         this._createUI();
     }
 
-    // use Cesium style
     connectedCallback() {
-        // link cesium package default style
-        // this._cesiumStyle = document.createElement("link");
-        // this._cesiumStyle.rel = "stylesheet";
-        // this._cesiumStyle.href = `/Widgets/widgets.css`;
-        // this.shadowRoot.appendChild(this._cesiumStyle);
-
-        // Apply shared styles
+        // Apply shared styles.
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
-        // initialize the style for the web component
+        // Use transform-based positioning only. Remove any bottom/left settings.
         this.style.position = "absolute";
+        this.style.bottom = "auto";
+        this.style.left = "auto";
+
+        // Set the initial transform.
         this.updatePositions();
 
-        // observe for changes in the viewer container, to update the position of the help table
-        this.setupObservers();
+        // Set up observers to update the position when the container changes.
+        // this.setupObservers();
+
+        // Make the help table draggable within the Cesium container.
+        // if (this.viewerContainer) {
+        //     makeDraggable(
+        //         this,
+        //         this.viewerContainer,
+        //         (newTop, newLeft, containerRect) => {
+        //             // This callback is optional.
+        //             console.log("HelpTable moved to:", { newTop, newLeft });
+        //         },
+        //         (isDragging) => {
+        //             console.log("Dragging state changed:", isDragging);
+        //         }
+        //     );
+        // }
+        // makeDraggable(this, this.viewerContainer);
+    }
+
+    disconnectedCallback() {
+        if (this.resizeObserver) this.resizeObserver.disconnect();
+        if (this.mutationObserver) this.mutationObserver.disconnect();
     }
 
     updatePositions() {
-        const rect = this.viewerContainer.getBoundingClientRect();
-        this.style.bottom = rect ? (rect.height - 60) + "px" : "40px";
-        this.style.left = rect ? (rect.width - 267) + "px" : "0px";
+        if (!this.viewerContainer) return;
+        const containerRect = this.viewerContainer.getBoundingClientRect();
+
+        // Get help table's dimensions.
+        const helpTable = this.shadowRoot.querySelector(".help-box");
+        if (!helpTable) return;
+        const helpTableRect = helpTable.getBoundingClientRect();
+        const tx = containerRect.right - helpTableRect.width;
+        const ty = containerRect.top - 650;
+        // Set transform and store the initial offset in dataset.
+        this.style.transform = `translate(${tx}px, ${ty}px)`;
     }
 
     setupObservers() {
         const navigatorContainer = document.querySelector('.navigator-container');
         if (!navigatorContainer) return;
 
-        // Create a ResizeObserver to watch for dimension changes
+        // ResizeObserver to update position on dimension changes.
         this.resizeObserver = new ResizeObserver(() => {
             this.updatePositions();
         });
         this.resizeObserver.observe(navigatorContainer);
 
-        // Create a MutationObserver to watch for DOM changes
-        this.mutationObserver = new MutationObserver((mutations) => {
-            // You could filter mutations if needed
+        // MutationObserver to update position on DOM changes.
+        this.mutationObserver = new MutationObserver(() => {
             this.updatePositions();
         });
         this.mutationObserver.observe(navigatorContainer, {
@@ -122,104 +148,73 @@ export class HelpTable extends HTMLElement {
         });
     }
 
-    // Create the basic UI structure.
+    // Create the UI for the help table.
     _createUI() {
-        // Button that toggles the help box
+        // Create a button to toggle the help box.
         this.helpIconButton = document.createElement("button");
-        // set button style
         this.helpIconButton.className = "annotate-button animate-on-show visible";
         this.helpIconButton.style.position = "absolute";
-        // set the icon as button image
+
         this.helpIconButton.innerHTML = `<img src="${helpBoxIcon}" alt="help box icon" style="width: 30px; height: 30px;" aria-hidden="true">`;
-        // set aria attributes
         this.helpIconButton.setAttribute("type", "button");
         this.helpIconButton.setAttribute("aria-label", "Toggle help box for instructions");
         this.helpIconButton.setAttribute("aria-pressed", "false");
 
-        // Toggle the help box on click
         this.helpIconButton.addEventListener("click", () => {
             this.showHelpBox();
         });
-        // Append the button to the shadow DOM
         this.shadowRoot.appendChild(this.helpIconButton);
 
-        // Create the container (the help box)
+        // Create the help box container.
         this.helpBox = document.createElement("div");
         this.helpBox.className = "info-box help-box hidden";
         this.helpBox.style.position = "absolute";
+        // Remove conflicting bottom/left rules.
+        this.helpBox.style.bottom = "auto";
+        this.helpBox.style.left = "auto";
 
-        // this.helpBox.style.display = "none"; // hidden by default
-
-        // Add click handler to close help box when clicked
         this.helpBox.addEventListener("click", () => {
             this.hideHelpBox();
         });
 
-        // Create a table element for the instructions
+        // Create a table for the help instructions.
         this.table = document.createElement("table");
         this.table.style.display = "table";
         this.helpBox.appendChild(this.table);
-        // Append the container to the shadow DOM
+
         this.shadowRoot.appendChild(this.helpBox);
 
-        // const viewerContainer = document.getElementById("cesiumContainer");
-        // Make the help box draggable
-        makeDraggable(this.helpBox, this.viewerContainer, (newTop, newLeft) => {
-            this.helpBox.style.top = `${newTop}px`;
-            this.helpBox.style.left = `${newLeft}px`;
-        });
-        // Make the help icon draggable
-        makeDraggable(this.helpIconButton, this.viewerContainer, (newTop, newLeft) => {
-            this.helpIconButton.style.top = `${newTop}px`;
-            this.helpIconButton.style.left = `${newLeft}px`;
-        });
-
-        // Set the default content
+        // Set default content.
         this.updateContent("default");
     }
 
-    // Show the help box and hide the help icon
     showHelpBox() {
         this.helpVisible = true;
-        // this.helpBox.style.display = "block";
         this.helpBox.classList.add("visible");
         this.helpBox.classList.remove("hidden");
-        // this.helpIconButton.style.display = "none";
         this.helpIconButton.classList.add("hidden");
         this.helpIconButton.classList.remove("visible");
         this.helpIconButton.setAttribute("aria-pressed", "true");
     }
 
-    // Hide the help box and show the help icon
     hideHelpBox() {
         this.helpVisible = false;
-        // this.helpBox.style.display = "none";
-        // this.helpIconButton.style.display = "block";
         this.helpBox.classList.add("hidden");
         this.helpBox.classList.remove("visible");
         this.helpIconButton.classList.add("visible");
         this.helpIconButton.classList.remove("hidden");
         this.helpIconButton.setAttribute("aria-pressed", "false");
-
     }
 
-    /**
-     * Updates the table content based on the mode key.
-     * @param {string} modeKey - One of the keys from modeMessages.
-     */
     updateContent(modeKey) {
         const messages = this.modeMessages[modeKey] || this.modeMessages.default;
-        // Clear existing rows
         this.table.innerHTML = "";
-        // Add header row
         this.table.appendChild(this._createRow(this.header));
-        // Add a row for each message
         messages.forEach(msg => {
             this.table.appendChild(this._createRow(msg));
         });
     }
 
-    // Creates a new table row with a single cell containing the provided text.
     _createRow(text) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");

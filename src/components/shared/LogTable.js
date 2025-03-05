@@ -136,15 +136,15 @@ export class LogTable extends HTMLElement {
 
         // Make the logBox draggable.
         // (Assuming your makeDraggable function accepts the element and a container.)
-        makeDraggable(this.logBox, this.viewerContainer, (newTop, newLeft) => {
-            this.logBox.style.top = `${newTop}px`;
-            this.logBox.style.left = `${newLeft}px`;
-        });
+        // makeDraggable(this.logBox, this.viewerContainer, (newTop, newLeft) => {
+        //     this.logBox.style.top = `${newTop}px`;
+        //     this.logBox.style.left = `${newLeft}px`;
+        // });
         // Make the log icon draggable.
-        makeDraggable(this.logIconButton, this.viewerContainer, (newTop, newLeft) => {
-            this.logIconButton.style.top = `${newTop}px`;
-            this.logIconButton.style.left = `${newLeft}px`;
-        });
+        // makeDraggable(this.logIconButton, this.viewerContainer, (newTop, newLeft) => {
+        //     this.logIconButton.style.top = `${newTop}px`;
+        //     this.logIconButton.style.left = `${newLeft}px`;
+        // });
     }
 
     // Show the log box and hide the log icon

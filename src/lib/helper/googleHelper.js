@@ -116,7 +116,7 @@ export function createPolylines(map, positions, color = "#A52A2A") {
  *
  * @param {google.maps.marker.AdvancedMarkerElement|google.maps.Marker} marker - The marker to remove.
  */
-export function removeMarker(marker) {
+export function removePointMarker(marker) {
     if (!marker) return;
     marker.setMap(null);
 }
@@ -140,7 +140,7 @@ export function removePolyline(polyline) {
  * @param {number} [coord.height] - The height value (ignored).
  * @returns {Object} A Google Maps compatible coordinate object with lat/lng properties
  */
-function convertToGoogleCoord(coord) {
+export function convertToGoogleCoord(coord) {
     const { latitude, longitude } = coord;
     return { lat: latitude, lng: longitude }
 }
