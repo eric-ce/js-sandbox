@@ -11,12 +11,10 @@ export class LogTable extends HTMLElement {
         this._stateManager = null;  // shared state manager, to be set via property
         this._cesiumStyle = null;   // shared cesium style, to be set via property
 
-
         this.logBox = null; // container for the log table
         this.table = null;  // table element for the log entries
 
         const mapCesium = document.querySelector("map-cesium");
-
         this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("cesiumContainer");
 
         // create log table UI
@@ -53,44 +51,74 @@ export class LogTable extends HTMLElement {
      ************/
     // apply Cesium style when connected
     connectedCallback() {
+        // Apply shared styles.
+        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+
         // initialize the style for the web component
-        this.style.position = "absolute";
+        // this.style.position = "absolute";
         this.updatePositions();
 
         // observe for changes in the viewer container, to update the position of the log table
-        this.setupObservers();
+        // this.setupObservers();
     }
 
+    // Set its initial position when loaded
     updatePositions() {
         const rect = this.viewerContainer.getBoundingClientRect();
-        this.style.bottom = rect ? (rect.height - 260) + "px" : "40px";
-        this.style.left = rect ? (rect.width - 267) + "px" : "0px";
+        const container = this._logTableContainer.getBoundingClientRect();
+
+        if (!rect || !this._logTableContainer || rect.width === 0 || container.width === 0) console.error("invalid rect")
+
+        const x = (rect.width - container.width - 15) || 0;
+        const y = (rect.height - container.height) || 260;
+
+        this._logTableContainer.style.transform = `translate(${x}px, ${-y}px)`;
     }
 
-    setupObservers() {
-        const navigatorContainer = document.querySelector('.navigator-container');
-        if (!navigatorContainer) return;
+    // setupObservers() {
+    //     const navigatorContainer = document.querySelector('.navigator-container');
+    //     if (!navigatorContainer) return;
 
-        // Create a ResizeObserver to watch for dimension changes
-        this.resizeObserver = new ResizeObserver(() => {
-            this.updatePositions();
-        });
-        this.resizeObserver.observe(navigatorContainer);
+    //     // Create a ResizeObserver to watch for dimension changes
+    //     this.resizeObserver = new ResizeObserver(() => {
+    //         this.updatePositions();
+    //     });
+    //     this.resizeObserver.observe(navigatorContainer);
 
-        // Create a MutationObserver to watch for DOM changes
-        this.mutationObserver = new MutationObserver((mutations) => {
-            // You could filter mutations if needed
-            this.updatePositions();
-        });
-        this.mutationObserver.observe(navigatorContainer, {
-            childList: true,
-            attributes: true,
-            subtree: true
-        });
-    }
+    //     // Create a MutationObserver to watch for DOM changes
+    //     this.mutationObserver = new MutationObserver((mutations) => {
+    //         // You could filter mutations if needed
+    //         this.updatePositions();
+    //     });
+    //     this.mutationObserver.observe(navigatorContainer, {
+    //         childList: true,
+    //         attributes: true,
+    //         subtree: true
+    //     });
+    // }
 
     // Create the basic UI structure.
     _createUI() {
+        this._setupLogTableContainer();
+
+        this._setupLogTableIcon();
+
+        this._setupLogTable();
+    }
+
+    // Create the container to wrap the whole components
+    _setupLogTableContainer() {
+        this._logTableContainer = document.createElement("div");
+        this._logTableContainer.classList.add("log-table-container", "expended");
+        this._logTableContainer.style.position = "absolute";
+        this._logTableContainer.style.width = "250px";
+        this._logTableContainer.style.height = "250px";
+
+        this.shadowRoot.appendChild(this._logTableContainer);
+    }
+
+    // Create the button that toggles the log box
+    _setupLogTableIcon() {
         // Button that toggles the log box
         this.logIconButton = document.createElement("button");
         // set button style
@@ -104,11 +132,14 @@ export class LogTable extends HTMLElement {
         this.logIconButton.setAttribute("aria-pressed", "true");
         // Toggle the help box on click
         this.logIconButton.addEventListener("click", () => {
-            this.showLogBox();
+            this._showLogBox();
         });
         // Append the button to the shadow DOM
-        this.shadowRoot.appendChild(this.logIconButton);
+        this._logTableContainer.appendChild(this.logIconButton);
+    }
 
+    // Create the log box that contains the log table
+    _setupLogTable() {
         // Create container div for the log table.
         this.logBox = document.createElement("div");
         this.logBox.className = "info-box log-box log-box-expanded visible";
@@ -116,8 +147,11 @@ export class LogTable extends HTMLElement {
         this.logBox.style.position = "absolute";
         // Add click handler to close help box when clicked
         this.logBox.addEventListener("click", () => {
-            this.hideLogBox();
+            this._hideLogBox();
         });
+
+        // Append the container to the shadow DOM.
+        this._logTableContainer.appendChild(this.logBox);
 
         // Create the table element.
         this.table = document.createElement("table");
@@ -127,28 +161,10 @@ export class LogTable extends HTMLElement {
 
         // Append the table to the container.
         this.logBox.appendChild(this.table);
-
-        // Append the container to the shadow DOM.
-        this.shadowRoot.appendChild(this.logBox);
-
-        // Apply shared styles.
-        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-
-        // Make the logBox draggable.
-        // (Assuming your makeDraggable function accepts the element and a container.)
-        // makeDraggable(this.logBox, this.viewerContainer, (newTop, newLeft) => {
-        //     this.logBox.style.top = `${newTop}px`;
-        //     this.logBox.style.left = `${newLeft}px`;
-        // });
-        // Make the log icon draggable.
-        // makeDraggable(this.logIconButton, this.viewerContainer, (newTop, newLeft) => {
-        //     this.logIconButton.style.top = `${newTop}px`;
-        //     this.logIconButton.style.left = `${newLeft}px`;
-        // });
     }
 
     // Show the log box and hide the log icon
-    showLogBox() {
+    _showLogBox() {
         this.logVisible = true;
         this.logBox.classList.add("visible");
         this.logBox.classList.remove("hidden");
@@ -158,7 +174,7 @@ export class LogTable extends HTMLElement {
     }
 
     // Hide the log box and show the log icon
-    hideLogBox() {
+    _hideLogBox() {
         this.logVisible = false;
         this.logBox.classList.add("hidden");
         this.logBox.classList.remove("visible");

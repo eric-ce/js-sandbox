@@ -66,12 +66,6 @@ export class HelpTable extends HTMLElement {
         const mapCesium = document.querySelector("map-cesium");
         this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("cesiumContainer");
 
-        // Initial position
-        this.position = {
-            initialX: 0,
-            initialY: 0
-        };
-
         // Create UI elements
         this._createUI();
     }
@@ -79,11 +73,6 @@ export class HelpTable extends HTMLElement {
     connectedCallback() {
         // Apply shared styles.
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-
-        // Use transform-based positioning only. Remove any bottom/left settings.
-        this.style.position = "absolute";
-        this.style.bottom = "auto";
-        this.style.left = "auto";
 
         // Set the initial transform.
         this.updatePositions();
@@ -114,17 +103,14 @@ export class HelpTable extends HTMLElement {
     }
 
     updatePositions() {
-        if (!this.viewerContainer) return;
-        const containerRect = this.viewerContainer.getBoundingClientRect();
+        const rect = this.viewerContainer.getBoundingClientRect();
+        const container = this._helpTableContainer.getBoundingClientRect();
+        if (!rect || !this._helpTableContainer || rect.width === 0 || container.width === 0) console.error("invalid rect")
 
-        // Get help table's dimensions.
-        const helpTable = this.shadowRoot.querySelector(".help-box");
-        if (!helpTable) return;
-        const helpTableRect = helpTable.getBoundingClientRect();
-        const tx = containerRect.right - helpTableRect.width;
-        const ty = containerRect.top - 650;
-        // Set transform and store the initial offset in dataset.
-        this.style.transform = `translate(${tx}px, ${ty}px)`;
+        const x = (rect.width - container.width - 15) || 0;
+        const y = (rect.height - container.height) || 260;
+
+        this._helpTableContainer.style.transform = `translate(${x}px, ${-y}px)`;
     }
 
     setupObservers() {
@@ -150,6 +136,25 @@ export class HelpTable extends HTMLElement {
 
     // Create the UI for the help table.
     _createUI() {
+        this._helpTableContainer();
+
+        this._setupHelpIcon();
+
+        this._setupHelpBox();
+
+        // Set default content.
+        this.updateContent("default");
+    }
+    _helpTableContainer() {
+        this._helpTableContainer = document.createElement("div");
+        this._helpTableContainer.classList.add("help-table-container", "collapsed");
+        this._helpTableContainer.style.position = "absolute";
+        this._helpTableContainer.style.width = "auto";
+        this._helpTableContainer.style.height = "auto";
+        this.shadowRoot.appendChild(this._helpTableContainer);
+    }
+
+    _setupHelpIcon() {
         // Create a button to toggle the help box.
         this.helpIconButton = document.createElement("button");
         this.helpIconButton.className = "annotate-button animate-on-show visible";
@@ -161,34 +166,27 @@ export class HelpTable extends HTMLElement {
         this.helpIconButton.setAttribute("aria-pressed", "false");
 
         this.helpIconButton.addEventListener("click", () => {
-            this.showHelpBox();
+            this._showHelpBox();
         });
-        this.shadowRoot.appendChild(this.helpIconButton);
+        this._helpTableContainer.appendChild(this.helpIconButton);
+    }
 
+    _setupHelpBox() {
         // Create the help box container.
         this.helpBox = document.createElement("div");
         this.helpBox.className = "info-box help-box hidden";
-        this.helpBox.style.position = "absolute";
-        // Remove conflicting bottom/left rules.
-        this.helpBox.style.bottom = "auto";
-        this.helpBox.style.left = "auto";
-
+        this._helpTableContainer.appendChild(this.helpBox);
         this.helpBox.addEventListener("click", () => {
-            this.hideHelpBox();
+            this._hideHelpBox();
         });
 
         // Create a table for the help instructions.
         this.table = document.createElement("table");
         this.table.style.display = "table";
         this.helpBox.appendChild(this.table);
-
-        this.shadowRoot.appendChild(this.helpBox);
-
-        // Set default content.
-        this.updateContent("default");
     }
 
-    showHelpBox() {
+    _showHelpBox() {
         this.helpVisible = true;
         this.helpBox.classList.add("visible");
         this.helpBox.classList.remove("hidden");
@@ -197,7 +195,7 @@ export class HelpTable extends HTMLElement {
         this.helpIconButton.setAttribute("aria-pressed", "true");
     }
 
-    hideHelpBox() {
+    _hideHelpBox() {
         this.helpVisible = false;
         this.helpBox.classList.add("hidden");
         this.helpBox.classList.remove("visible");

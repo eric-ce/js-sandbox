@@ -35,6 +35,12 @@ export default class CesiumMeasure extends HTMLElement {
         this.handler = null;
         this._cesiumPkg = null;
 
+        // Button management properties
+        this._buttonContainer = null;
+        this._buttonFragment = null;
+        this._isToggling = false;
+        this._toggleTimeouts = [];
+
         this.pointCollection = null;
         this.labelCollection = null;
 
@@ -113,8 +119,7 @@ export default class CesiumMeasure extends HTMLElement {
         // this.shadowRoot.appendChild(this.cesiumStyle);
 
         // set the web component style
-        this.style.position = "relative";
-        // this.classList.add("cesium-measure");
+        // this.style.position = "absolute";
 
         // apply style for the web component
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
@@ -150,12 +155,9 @@ export default class CesiumMeasure extends HTMLElement {
         // this.button = null;
     }
 
-
-    /************
-     * FEATURES *
-     ************/
     /**
-     * Initializes the MeasureToolbox, setting up event handlers
+     * Initializes the MeasureToolbox, FireTrail, and FlyThrough components.
+     * Set handler and initialize basic setup for the measure toolbox.
      */
     async initialize() {
         // if screenSpaceEventHandler existed use it, if not create a new one
@@ -188,29 +190,42 @@ export default class CesiumMeasure extends HTMLElement {
         this.initialLine = this.viewer.scene.primitives.add(clampedLine);
 
         // initialize all the measure modes, including its UI, and event listeners
-        await this.initializeMeasureModes();
+        await this.initializeMeasureTools();
 
         // initialize fire trail mode
         const fireTrailUser = this.hasRole("fireTrail");
         if (fireTrailUser) {
-            await this.initializeFireTrail();
+            await this._initializeFireTrail();
         }
 
         // initialize fly through mode
         const flyThroughUser = this.hasRole("flyThrough");
         if (flyThroughUser) {
-            await this.initializeFlyThrough();
+            await this._initializeFlyThrough();
         }
     }
 
+    /*************************
+     * MEASURE TOOL FEATURES *
+     *************************/
     /**
      * Initialize all the measure modes
      */
-    async initializeMeasureModes() {
+    async initializeMeasureTools() {
+        const toolbar = this._setupToolbar();
+
         // setup tool button
-        this.setupToolButton();
-        // initialize style of pointerOverlay, the moving dot
-        this.setupPointerOverlay();
+        this._setupToolButton();
+
+        // setup pointerOverlay, the moving dot
+        this._setupPointerOverlay();
+
+        // Create button container that will hold all measure modes buttons
+        this._setupButtonContainer();
+
+        // Initialize toolbar state (collapsed)
+        this.stateManager.setFlagState("isToolsExpanded", false);
+        toolbar.classList.add("collapsed");
 
         // all measure modes
         const modes = [
@@ -333,58 +348,40 @@ export default class CesiumMeasure extends HTMLElement {
         // set measure modes 
         this.stateManager.setButtonState("measureModes", modes.map((mode) => mode.instance));
 
-        // create measure mode buttons
+        // Create buttons directly in the container (which is already in the fragment)
         allowedModes.forEach((mode) => {
             this.createMeasureModeButton(mode.instance, mode.name, mode.icon);
         });
 
-        // setup clear button
+        // setup clear button directly in the container
         this.setupClearButton();
 
         // setup button overlay
         this.setupButtonOverlay();
     }
 
-    /**
-     * Determine allowed modes based on user roles checking
-     * @param {Array} modes - All available measure modes
-     * @returns {Array} - Filtered allowed modes
-     */
-    getAllowedModes(modes) {
-        try {
-            const roles = this.app?.currentUser?.sessions?.navigator?.roles;
-            // error handling if roles are not available
-            if (!Array.isArray(roles)) {
-                console.warn("Roles information is unavailable or not an array.");
-                return modes; // Default to all modes if roles are not properly defined
-            }
-
-            return modes;
-        } catch (error) {
-            console.error("Error accessing user roles:", error);
-            return modes; // Default to all modes in case of error
-        }
-    }
-
-    /**
-     * Sets up measure tool button to control collapse/expand for buttons.
-     */
-    setupToolButton() {
+    _setupToolbar() {
         const toolbar = document.createElement("div");
         toolbar.setAttribute("role", "toolbar");
         toolbar.setAttribute("aria-label", "Measurement Tools");
         toolbar.classList.add("measure-toolbar");
-        // toolbar.style.display = "flex";
-        // toolbar.style.position = "absolute";
-        // toolbar.style.left = 45 * 4 + "px";
-        // toolbar.style.top = "-120px";
 
         this.shadowRoot.appendChild(toolbar);
 
-        // set state for the toolbar
+        // Set state for the toolbar
         this.stateManager.setElementState("toolbar", toolbar);
 
-        // initialize tool button to control collapse/expand for buttons
+        // Make toolbar draggable
+        makeDraggable(toolbar, this.viewer.container);
+
+        return toolbar;
+    }
+
+    /**
+     * Setup measure tool button to control collapse/expand for buttons.
+     */
+    _setupToolButton() {
+        // Initialize tool button to control collapse/expand for buttons
         const toolButton = document.createElement("button");
         toolButton.className = "measure-tools annotate-button visible animate-on-show";
         toolButton.innerHTML = `<img src="${toolIcon}" alt="tool" style="width: 30px; height: 30px;">`;
@@ -392,15 +389,135 @@ export default class CesiumMeasure extends HTMLElement {
             toolButton.classList.toggle("active");
             this.toggleTools();
         });
-        toolbar.appendChild(toolButton);
 
-        // make toolbar draggable
-        makeDraggable(toolbar, this.viewer.container);
+        const toolbar = this.stateManager.getElementState("toolbar");
+        toolbar && toolbar.appendChild(toolButton);
     }
 
     /**
-     * Creates a measurement mode button, setting up event listeners and 
-     * the help table (helpBox) and log table based on button interaction.
+     * Setup the button container for the toolbar to include all modes button.
+     */
+    _setupButtonContainer() {
+        // Create button container that will hold all measure modes buttons
+        this._buttonContainer = document.createElement('div');
+        this._buttonContainer.classList.add('toolbar-container');
+        this._buttonContainer.style.display = 'flex';
+
+        // Initialize a single fragment for all operations
+        this._buttonFragment = document.createDocumentFragment();
+        this._buttonFragment.appendChild(this._buttonContainer);
+    }
+
+    /**
+     * Toggles visibility of measurement tool buttons
+     */
+    toggleTools() {
+        // Prevent rapid toggling
+        if (this._isToggling) return;
+        this._isToggling = true;
+
+        // Clear any pending timeouts
+        if (this._toggleTimeouts && this._toggleTimeouts.length) {
+            this._toggleTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        }
+        this._toggleTimeouts = [];
+
+        const isExpanded = this.stateManager.getFlagState("isToolsExpanded");
+        this.stateManager.setFlagState("isToolsExpanded", !isExpanded);
+
+        // Find toolbar
+        const toolbar = this.stateManager.getElementState("toolbar");
+        if (!toolbar) {
+            this._isToggling = false;
+            return;
+        }
+
+        const delayStep = 40;
+        const animationDuration = 440;
+
+        if (isExpanded) {
+            // COLLAPSING: Animate buttons then move container to fragment
+            toolbar.classList.remove("expanded");
+            toolbar.classList.add("collapsed");
+
+            // Get buttons in container
+            const buttons = Array.from(this._buttonContainer.querySelectorAll("button"));
+            const n = buttons.length;
+
+            if (n === 0) {
+                this._isToggling = false;
+                return;
+            }
+
+            // Hide buttons one by one (right to left)
+            buttons.forEach((button, index) => {
+                const timeoutId = setTimeout(() => {
+                    // Hide button animation by css style
+                    button.classList.remove("visible");
+                    button.classList.add("hidden");
+
+                    // When last button is hidden, move container to fragment
+                    if (index === n - 1) {
+                        setTimeout(() => {
+                            // Move the container (with all buttons) to the DocumentFragment
+                            this._buttonFragment.appendChild(this._buttonContainer);
+                            this._isToggling = false;
+                        }, animationDuration);
+                    }
+                }, (n - index - 1) * delayStep);
+
+                this._toggleTimeouts.push(timeoutId);
+            });
+        } else {
+            // EXPANDING: Move container back to DOM then animate buttons
+            toolbar.classList.remove("collapsed");
+            toolbar.classList.add("expanded");
+
+            // Always move container from fragment to toolbar (first toggle or subsequent)
+            if (this._buttonContainer.parentNode !== toolbar) {
+                // Insert container after main button
+                const mainButton = toolbar.querySelector(".measure-tools");
+                if (mainButton && mainButton.nextSibling) {
+                    toolbar.insertBefore(this._buttonContainer, mainButton.nextSibling);
+                } else {
+                    toolbar.appendChild(this._buttonContainer);
+                }
+            }
+
+            // Get buttons in the container
+            const buttons = Array.from(this._buttonContainer.querySelectorAll("button"));
+            if (buttons.length === 0) {
+                this._isToggling = false;
+                return;
+            }
+
+            // Make sure all buttons start hidden
+            buttons.forEach(button => {
+                button.classList.remove("visible");
+                button.classList.add("hidden");
+            });
+
+            // Show buttons one by one (left to right)
+            buttons.forEach((button, index) => {
+                const timeoutId = setTimeout(() => {
+                    button.classList.remove("hidden");
+                    button.classList.add("visible");
+
+                    // Release toggle lock after last button animation
+                    if (index === buttons.length - 1) {
+                        setTimeout(() => {
+                            this._isToggling = false;
+                        }, animationDuration);
+                    }
+                }, index * delayStep);
+
+                this._toggleTimeouts.push(timeoutId);
+            });
+        }
+    }
+
+    /**
+     * Creates a measurement mode button
      * @param {Object} toolInstance - The instance of the measurement mode class.
      * @param {string} buttonText - The text to display on the button.
      * @param {string} icon - The image src to display on the button.
@@ -414,6 +531,7 @@ export default class CesiumMeasure extends HTMLElement {
         button.setAttribute("type", "button");
         button.setAttribute("aria-label", `${buttonText} Tool`);
         button.setAttribute("aria-pressed", "false");
+
 
         // Setup button click actions
         button.addEventListener("click", () => {
@@ -445,6 +563,8 @@ export default class CesiumMeasure extends HTMLElement {
 
             // Check if a help table exists; if not, create one.
             let helpTable = this.stateManager.getElementState("helpTable");
+            console.log("🚀 helpTable:", helpTable);
+
             if (!helpTable) {
                 helpTable = this._setupHelpTable();
             }
@@ -489,9 +609,9 @@ export default class CesiumMeasure extends HTMLElement {
             }
         });
 
-        // Append the button to the toolbar.
-        const toolbar = this.stateManager.getElementState("toolbar");
-        toolbar.appendChild(button);
+        // Always add to the button container (which is initially in the fragment)
+        this._buttonContainer.appendChild(button);
+
         toolInstance.button = button;
         return button;
     }
@@ -546,73 +666,8 @@ export default class CesiumMeasure extends HTMLElement {
             (p.id.includes("moving") || p.id.includes("pending"))
         ).forEach(p => { this.pointCollection.remove(p) });
     }
-    toggleTools() {
-        // Clear any pending timeouts
-        if (this._toggleTimeouts && this._toggleTimeouts.length) {
-            this._toggleTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-            this._toggleTimeouts = [];
-        } else {
-            this._toggleTimeouts = [];
-        }
 
-        const isExpanded = this.stateManager.getFlagState("isToolsExpanded");
-        this.stateManager.setFlagState("isToolsExpanded", !isExpanded);
 
-        // Find toolbarDiv
-        const toolbarDiv = this.shadowRoot.querySelector(".measure-toolbar");
-        if (!toolbarDiv) return;
-
-        // Find all button under toolbarDiv and filter out the main tool button
-        const buttons = Array.from(toolbarDiv.querySelectorAll("button"));
-        const filterButtons = buttons.filter(button => !button.classList.contains("measure-tools"));
-
-        const toolbar = this.stateManager.getElementState("toolbar");
-        const delayStep = 50; // Delay per button
-
-        // Set toolbar classes immediately for smoother animation
-        if (!isExpanded) {
-            toolbar.classList.remove("collapsed");
-            toolbar.classList.add("expanded");
-        } else {
-            toolbar.classList.remove("expanded");
-            toolbar.classList.add("collapsed");
-        }
-
-        if (!isExpanded) {
-            // Expanding: show buttons from left to right.
-            filterButtons.forEach((button, index) => {
-                const timeoutId = setTimeout(() => {
-                    button.classList.remove("hidden");
-                    button.classList.add("visible");
-                }, index * delayStep);
-                this._toggleTimeouts.push(timeoutId);
-            });
-        } else {
-            // Collapsing: hide buttons from right to left.
-            const n = filterButtons.length;
-            filterButtons.forEach((button, index) => {
-                const timeoutId = setTimeout(() => {
-                    button.classList.remove("visible");
-                    button.classList.add("hidden");
-                }, (n - index - 1) * delayStep);
-                this._toggleTimeouts.push(timeoutId);
-            });
-        }
-
-        // Add a safety timeout to ensure all buttons are in the correct final state
-        const finalTimeoutId = setTimeout(() => {
-            filterButtons.forEach(button => {
-                if (!isExpanded) {
-                    button.classList.remove("hidden");
-                    button.classList.add("visible");
-                } else {
-                    button.classList.remove("visible");
-                    button.classList.add("hidden");
-                }
-            });
-        }, filterButtons.length * delayStep + 50);
-        this._toggleTimeouts.push(finalTimeoutId);
-    }
 
     /**
      * Sets up the clear button.
@@ -621,108 +676,139 @@ export default class CesiumMeasure extends HTMLElement {
         const clearButton = document.createElement("button");
         clearButton.className = "clear-button annotate-button animate-on-show hidden";
         clearButton.innerHTML = `<img src="${clearIcon}" alt="clear" style="width: 30px; height: 30px;">`;
+        // add clear button to button container
+        this._buttonContainer.appendChild(clearButton);
+        // update state manager
         this.stateManager.setButtonState("clearButton", clearButton);
+        // add click event listener
+        clearButton.addEventListener("click", this._handleClearButtonClick.bind(this));
 
-        const toolbar = this.stateManager.getElementState("toolbar");
-        toolbar.appendChild(clearButton);
-
-        this.stateManager.getButtonState("clearButton").addEventListener("click", () => {
-            // check fireTrail mode to prevent switching/deactivation if there are unsubmitted lines
-            const activeButton = this.stateManager.getButtonState("activeButton");
-
-            if (activeButton && activeButton.classList.contains("fire-trail")) {
-                const fireTrailMode = this.shadowRoot.querySelector("fire-trail-mode");
-                const checkUnsubmittedLines = fireTrailMode.checkUnsubmittedLines();
-                if (checkUnsubmittedLines) {
-                    const confirmed = confirm("There is unsubmitted fireTrail, please confirm to clear all annotations.");
-                    if (!confirmed) {
-                        return; // Exit if the user cancels
-                    }
-                }
-            }
-
-            // remove line primitives by id
-            this.viewer.scene.primitives._primitives.filter(
-                (p) =>
-                    p.id &&
-                    p.id.startsWith("annotate") &&
-                    (p.id.includes("line") || p.id.includes("polygon"))
-            ).forEach((p) => this.viewer.scene.primitives.remove(p));
-
-            // remove point primitives from point collections
-            const pointCollections = this.viewer.scene.primitives._primitives.filter(
-                (p) =>
-                    p._pointPrimitives &&
-                    p._pointPrimitives.some(
-                        (point) =>
-                            point.id &&
-                            point.id.startsWith("annotate") &&
-                            point.id.includes("point")
-                    )
-            );
-            pointCollections &&
-                pointCollections.forEach((pointCollection) => pointCollection.removeAll());
-
-            // remove label primitives from label collections
-            const labelCollections = this.viewer.scene.primitives._primitives.filter(
-                (p) =>
-                    p._labels &&
-                    p._labels.some(
-                        (label) =>
-                            label.id &&
-                            label.id.startsWith("annotate") &&
-                            label.id.includes("label")
-                    )
-            );
-            labelCollections &&
-                labelCollections.forEach((labelCollection) => {
-                    labelCollection.removeAll();    // moving label was not remove, because same label cannot recreate and hence cause destroy error
-                });
-
-            // reset handler
-            removeInputActions(this.handler);
-
-            // reset pointerOverlay
-            this.stateManager.getOverlayState("pointer").style.display = "none";
-
-            // clear helpBox
-            const helpBox = this.stateManager.getElementState("helpBox");
-            helpBox && helpBox.style.display === "none";
-
-            // clear logBox
-            const logBox = this.stateManager.getElementState("logBox");
-            if (logBox) {
-                logBox.remove();
-                this.stateManager.setElementState("logBox", null);
-            }
-
-            // call reset value method in all measure modes
-            this.stateManager.getButtonState("measureModes").forEach((mode) => {
-                mode?.resetValue();
-                if (mode?.coords?.groups) {
-                    mode.coords.groups = [];
-                }
-            });
-
-            // reset active button
-            if (this.stateManager.getButtonState("activeButton")) {
-                this.stateManager.getButtonState("activeButton").classList.remove("active");
-                this.stateManager.setButtonState("activeButton", null);
-                this.stateManager.setButtonState("activeTool", null);
-            }
-        });
+        return clearButton;
     }
 
+    _handleClearButtonClick() {
+        // check fireTrail mode to prevent switching/deactivation if there are unsubmitted lines
+        const activeButton = this.stateManager.getButtonState("activeButton");
+
+        if (activeButton && activeButton.classList.contains("fire-trail")) {
+            const fireTrailMode = this.shadowRoot.querySelector("fire-trail-mode");
+            const checkUnsubmittedLines = fireTrailMode.checkUnsubmittedLines();
+            if (checkUnsubmittedLines) {
+                const confirmed = confirm("There is unsubmitted fireTrail, please confirm to clear all annotations.");
+                if (!confirmed) {
+                    return; // Exit if the user cancels
+                }
+            }
+        }
+
+        // remove line primitives by id
+        this.viewer.scene.primitives._primitives.filter(
+            (p) =>
+                p.id &&
+                p.id.startsWith("annotate") &&
+                (p.id.includes("line") || p.id.includes("polygon"))
+        ).forEach((p) => this.viewer.scene.primitives.remove(p));
+
+        // remove point primitives from point collections
+        const pointCollections = this.viewer.scene.primitives._primitives.filter(
+            (p) =>
+                p._pointPrimitives &&
+                p._pointPrimitives.some(
+                    (point) =>
+                        point.id &&
+                        point.id.startsWith("annotate") &&
+                        point.id.includes("point")
+                )
+        );
+        pointCollections &&
+            pointCollections.forEach((pointCollection) => pointCollection.removeAll());
+
+        // remove label primitives from label collections
+        const labelCollections = this.viewer.scene.primitives._primitives.filter(
+            (p) =>
+                p._labels &&
+                p._labels.some(
+                    (label) =>
+                        label.id &&
+                        label.id.startsWith("annotate") &&
+                        label.id.includes("label")
+                )
+        );
+        labelCollections &&
+            labelCollections.forEach((labelCollection) => {
+                labelCollection.removeAll();    // moving label was not remove, because same label cannot recreate and hence cause destroy error
+            });
+
+        // reset handler
+        removeInputActions(this.handler);
+
+        // reset pointerOverlay
+        this.stateManager.getOverlayState("pointer").style.display = "none";
+
+        // clear helpBox
+        const helpBox = this.stateManager.getElementState("helpBox");
+        helpBox && helpBox.style.display === "none";
+
+        // clear logBox
+        const logBox = this.stateManager.getElementState("logBox");
+        if (logBox) {
+            logBox.remove();
+            this.stateManager.setElementState("logBox", null);
+        }
+
+        // call reset value method in all measure modes
+        this.stateManager.getButtonState("measureModes").forEach((mode) => {
+            mode?.resetValue();
+            if (mode?.coords?.groups) {
+                mode.coords.groups = [];
+            }
+        });
+
+        // reset active button
+        if (this.stateManager.getButtonState("activeButton")) {
+            this.stateManager.getButtonState("activeButton").classList.remove("active");
+            this.stateManager.setButtonState("activeButton", null);
+            this.stateManager.setButtonState("activeTool", null);
+        }
+    }
+
+    /**
+      * Determine allowed modes based on user roles checking
+      * @param {Array} modes - All available measure modes
+      * @returns {Array} - Filtered allowed modes
+      */
+    getAllowedModes(modes) {
+        try {
+            const roles = this.app?.currentUser?.sessions?.navigator?.roles;
+            // error handling if roles are not available
+            if (!Array.isArray(roles)) {
+                console.warn("Roles information is unavailable or not an array.");
+                return modes; // Default to all modes if roles are not properly defined
+            }
+
+            return modes;
+        } catch (error) {
+            console.error("Error accessing user roles:", error);
+            return modes; // Default to all modes in case of error
+        }
+    }
+
+    /**
+     * Setup the help table to display the relevant description of usage
+     */
     _setupHelpTable() {
         const helpTable = document.createElement("help-table");
         // Pass shared properties as needed
         helpTable.emitter = this.emitter;
         this.shadowRoot.appendChild(helpTable);
-
-        makeDraggable(helpTable, this.viewer.container);
+        this.stateManager.setElementState("helpTable", helpTable);
+        // makeDraggable(helpTable, this.viewer.container);
         return helpTable;
     }
 
+    /**
+     * Setup the log table to display the log records of the measurement
+     */
     _setupLogTable() {
         const logTable = document.createElement("log-table");
         // Pass shared properties as needed
@@ -731,12 +817,15 @@ export default class CesiumMeasure extends HTMLElement {
         // Set the log table to the state manager
         this.stateManager.setElementState("logTable", logTable);
 
-        makeDraggable(logTable, this.viewer.container);
+        // const { logTableContainer } = logTable;
+        // if (logTableContainer) {
+        //     makeDraggable(logTableContainer, this.viewer.container);
+        // }
         return logTable;
     }
 
     /**
-     * Sets up the button overlay to display the description of the button when mouse hover.
+     * Setup the button overlay to display the description of the button when mouse hover.
      */
     setupButtonOverlay() {
         const buttonOverlay = document.createElement("div");
@@ -785,7 +874,7 @@ export default class CesiumMeasure extends HTMLElement {
     /**
      * Setup the moving yellow dot to show the pointer position at cesium viewer
      */
-    setupPointerOverlay() {
+    _setupPointerOverlay() {
         const pointer = document.createElement("div");
         pointer.className = "backdrop";
         pointer.style.cssText =
@@ -826,21 +915,10 @@ export default class CesiumMeasure extends HTMLElement {
         return roles.includes(role);
     }
 
-    /**
-     * Check if the user has the specified component
-     * @param {String} requestMode - Mode to check 
-     * @param {Array} modes - Array of modes
-     * @returns {Boolean} - True if the user has the component, false otherwise
-     */
-    hasComponent(requestMode, modes) {
-        if (modes.length === 0) return false;
-        return modes.some((m) => m.name === requestMode);
-    }
-
     // /***********************
     //  * FIRE TRAIL FEATURES *
     //  ***********************/
-    async initializeFireTrail() {
+    async _initializeFireTrail() {
         // fire trail is a web component
         const fireTrail = document.createElement("fire-trail-mode");
         // setter values for the fire trail
@@ -859,7 +937,7 @@ export default class CesiumMeasure extends HTMLElement {
     // /************************
     //  * FLY THROUGH FEATURES *
     //  ************************/
-    async initializeFlyThrough() {
+    async _initializeFlyThrough() {
         // const flyThrough = new FlyThrough(this.viewer, this.handler, this.stateManager, this.updateRecords.bind(this, "fly-through"), this.cesiumPkg);
         // return flyThrough;
         const flyThrough = document.createElement("fly-through-mode");
@@ -873,6 +951,20 @@ export default class CesiumMeasure extends HTMLElement {
         flyThrough.setupHelpTable = this._setupHelpTable.bind(this);
         // append the fly through to the measure toolbox
         return this.shadowRoot.appendChild(flyThrough);
+    }
+
+    /**********
+     * HELPER *
+     **********/
+    /**
+     * Check if the user has the specified component
+     * @param {String} requestMode - Mode to check 
+     * @param {Array} modes - Array of modes
+     * @returns {Boolean} - True if the user has the component, false otherwise
+     */
+    hasComponent(requestMode, modes) {
+        if (modes.length === 0) return false;
+        return modes.some((m) => m.name === requestMode);
     }
 }
 
