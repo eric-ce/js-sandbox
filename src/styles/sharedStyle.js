@@ -3,15 +3,16 @@ export const sharedStyleSheet = new CSSStyleSheet();
 sharedStyleSheet.replaceSync(`
     *{
         font-family: Roboto, sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
     }
     .measure-toolbar{ 
         position: absolute;
-        bottom: 120px;
-        left: 135px;
         display: flex;
     }
     .measure-toolbar button.active, 
-    .fire-trail-container button.active {
+    .fire-trail-toolbar button.active {
         color: #000;
         fill: #000;
         background: #adf;
@@ -19,7 +20,7 @@ sharedStyleSheet.replaceSync(`
         box-shadow: 0 0 8px #fff;
     }
     .measure-toolbar button:hover,
-    .fire-trail-container button:hover,
+    .fire-trail-toolbar button:hover,
     .fly-through-container button:hover{
         transform: scale(1.1);
     }
@@ -28,17 +29,17 @@ sharedStyleSheet.replaceSync(`
         justify-content: center;
         align-items: center;
     }
-    .fire-trail-container{
+    .fire-trail-toolbar{
         position: absolute;
-        bottom: 200px;
-        left: 135px;
+        // bottom: 200px;
+        // left: 135px;
         display: flex;
         flex-direction: row;
     }
     .fly-through-container{
         position: absolute;
-        bottom: 240px;
-        left: 135px; 
+        // bottom: 240px;
+        // left: 135px; 
         display: flex;
         flex-direction: column-reverse;
         height: fit-content;
@@ -64,6 +65,7 @@ sharedStyleSheet.replaceSync(`
     .log-box,
     .help-box{
         width: 250px;
+        max-width: 250px;
         max-height: 250px;
         background-color: rgba(38, 38, 38, 0.95);
         opacity: 0.95;

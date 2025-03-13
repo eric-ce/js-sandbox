@@ -2,7 +2,8 @@ import * as Cesium from "cesium";
 import {
     makeDraggable,
     removeInputActions,
-    showCustomNotification
+    showCustomNotification,
+    updateTranslatePosition
 } from "../../lib/helper/helper.js";
 import { handleRecordScreen, resumeOrPauseRecording } from "./recordScreen.js";
 import { createFlyPathPrimitives, editFlyPath, removePrimitives } from "./editFlyPath.js";
@@ -12,6 +13,8 @@ export class FlyThrough extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
+
+        this._mode = "flyThrough";
 
         // App variables
         this._app = null;
@@ -156,15 +159,35 @@ export class FlyThrough extends HTMLElement {
         this.cameraRotationInterval = null;
     }
 
-    connectedCallback() {
-        // apply shared style
-        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+    async connectedCallback() {
+        try {
+            // apply shared style
+            this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
-        if (this.viewer) {
+            // setup web component style
+            this.style.position = "absolute";
+            this.style.width = "180px";
+            this.style.height = "120px";
+
+            if (!this.viewer) return;
+
             this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
             this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
-            this.initialize();
+            // initialize the component
+            await this.initialize()
+
+            // Signal that component is ready after initialization
+            this.dispatchEvent(new CustomEvent('component-ready', {
+                bubbles: true,
+                composed: true,
+                detail: {
+                    element: this,
+                    mode: this.mode,
+                },
+            }));
+        } catch (error) {
+            console.error("Error initializing FlyThrough component:", error);
         }
     }
 
@@ -204,7 +227,11 @@ export class FlyThrough extends HTMLElement {
         this._cesiumPkg = cesiumPkg;
     }
 
-    initialize() {
+    get mode() {
+        return this._mode;
+    }
+
+    async initialize() {
         // if screenSpaceEventHandler existed use it, if not create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;
@@ -324,7 +351,6 @@ export class FlyThrough extends HTMLElement {
         this.flyThroughContainer = document.createElement("div");
         this.flyThroughContainer.classList.add("fly-through-container");
         this.shadowRoot.appendChild(this.flyThroughContainer);
-        makeDraggable(this.flyThroughContainer, this.viewer.container);
 
         // fly path container
         const flyPathContainer = document.createElement("div");

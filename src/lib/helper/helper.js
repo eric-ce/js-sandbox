@@ -1048,6 +1048,7 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
     }
     return pointerOverlay;
 }
+
 /**
  * Makes an HTML element draggable within a specified container using CSS transforms.
  * @param {HTMLElement} element - The element to make draggable.
@@ -1056,51 +1057,47 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
  * @returns {function} Cleanup function.
  */
 export function makeDraggable(element, container, onDragStateChange) {
+    if (!element || !container) return; // Exit early if element or container is not defined
+
     let isDragging = false;
     let dragStarted = false;
     let startX = 0, startY = 0;
-    const threshold = 3;
-
-    // For tracking ResizeObserver calls
+    const threshold = 5;
     let resizeDebounceTimer = null;
 
     // Initialize transform values
     let currentX = 0, currentY = 0;
 
-    // Store initial element position relative to container
+    // Store initial element position and set up correct positioning
     const initPositioning = () => {
-        if (!element || !container) return;
-
         const containerRect = container.getBoundingClientRect();
         const elementRect = element.getBoundingClientRect();
 
-        // Calculate initial offsets (position where element should be without translation)
-        const initialLeft = elementRect.left - containerRect.left;
-        const initialTop = elementRect.top - containerRect.top;
+        // Validate container and element rect
+        if (!containerRect || !elementRect ||
+            containerRect.width === 0 || containerRect.height === 0) return;
 
-        element.dataset.initialLeft = initialLeft;
-        element.dataset.initialTop = initialTop;
+        // Default positioning - this positions the element at the bottom left of the container
+        const defaultX = 0; // Left edge of container
+        const defaultY = 0; // Bottom edge of container (negative values move up)
 
-        // If element is positioned outside container's viewport, bring it inside
-        if (initialLeft < 0 || initialTop < 0 ||
-            initialLeft > containerRect.width - elementRect.width ||
-            initialTop > containerRect.height - elementRect.height) {
+        // Calculate offsets if element is already positioned
+        const style = window.getComputedStyle(element);
+        const transform = style.transform;
 
-            // Default to center if outside boundaries
-            const defaultX = (containerRect.width - elementRect.width) / 2;
-            const defaultY = (containerRect.height - elementRect.height) / 2;
-
-            // Apply initial positioning via transform
-            updateTransform(defaultX - initialLeft, defaultY - initialTop);
-
-            // Update current transform values
-            currentX = defaultX - initialLeft;
-            currentY = defaultY - initialTop;
+        if (transform && transform !== 'none') {
+            const matrix = transform.match(/matrix\((.+)\)/)?.[1]?.split(', ');
+            if (matrix && matrix.length >= 6) {
+                currentX = parseFloat(matrix[4]);
+                currentY = parseFloat(matrix[5]);
+            }
+        } else {
+            // Apply initial positioning if no transform exists
+            updateTransform(defaultX, defaultY);
+            currentX = defaultX;
+            currentY = defaultY;
         }
     };
-
-    // Initialize positioning when added to DOM (wait for proper rendering)
-    setTimeout(initPositioning, 50);
 
     // Helper to clamp a value between min and max
     const clamp = (val, min, max) => Math.max(min, Math.min(val, max));
@@ -1125,20 +1122,17 @@ export function makeDraggable(element, container, onDragStateChange) {
             const containerRect = container.getBoundingClientRect();
             const elementRect = element.getBoundingClientRect();
 
-            // Calculate new position
+            // Calculate new position with delta
             let newX = currentX + deltaX;
             let newY = currentY + deltaY;
 
-            // Get initial position values
-            const initialLeft = parseFloat(element.dataset.initialLeft) || 0;
-            const initialTop = parseFloat(element.dataset.initialTop) || 0;
-
             // Apply boundaries to keep element inside container
-            // The effective position = initial position + translation
-            const minX = -initialLeft;
-            const minY = -initialTop;
-            const maxX = containerRect.width - elementRect.width - initialLeft;
-            const maxY = containerRect.height - elementRect.height - initialTop;
+            // For X: 0 to containerWidth-elementWidth
+            // For Y: -(containerHeight-elementHeight) to 0 (negative values move up)
+            const minX = 0;
+            const maxX = containerRect.width - elementRect.width;
+            const minY = -(containerRect.height); // Negative value to move up to top
+            const maxY = 0 - elementRect.height; // Bottom of container
 
             newX = clamp(newX, minX, maxX);
             newY = clamp(newY, minY, maxY);
@@ -1169,11 +1163,6 @@ export function makeDraggable(element, container, onDragStateChange) {
     };
 
     const onMouseDown = (e) => {
-        // Skip for form elements
-        if (['input', 'textarea', 'select', 'button'].includes(e.target.tagName.toLowerCase())) {
-            return;
-        }
-
         e.preventDefault();
         startX = e.clientX;
         startY = e.clientY;
@@ -1195,30 +1184,24 @@ export function makeDraggable(element, container, onDragStateChange) {
 
     element.addEventListener('click', onClick, true);
 
-    // Handle container resizing with debouncing to avoid ResizeObserver loop errors
+    // Handle container resizing
     const handleResize = () => {
         if (!element || !container) return;
 
-        // Cancel any pending calls
         if (resizeDebounceTimer) {
             cancelAnimationFrame(resizeDebounceTimer);
         }
 
-        // Schedule a new call using requestAnimationFrame for smoother performance
         resizeDebounceTimer = requestAnimationFrame(() => {
             try {
                 const containerRect = container.getBoundingClientRect();
                 const elementRect = element.getBoundingClientRect();
 
-                // Get initial position values
-                const initialLeft = parseFloat(element.dataset.initialLeft) || 0;
-                const initialTop = parseFloat(element.dataset.initialTop) || 0;
-
                 // Recalculate boundaries
-                const minX = -initialLeft;
-                const minY = -initialTop;
-                const maxX = containerRect.width - elementRect.width - initialLeft;
-                const maxY = containerRect.height - elementRect.height - initialTop;
+                const minX = 0;
+                const maxX = containerRect.width - elementRect.width;
+                const minY = -(containerRect.height);
+                const maxY = 0 - elementRect.height;
 
                 // Ensure element stays within boundaries after resize
                 currentX = clamp(currentX, minX, maxX);
@@ -1234,9 +1217,8 @@ export function makeDraggable(element, container, onDragStateChange) {
 
     let resizeObserver = null;
 
-    // Create the observer with error handling
     try {
-        resizeObserver = new ResizeObserver((entries) => {
+        resizeObserver = new ResizeObserver(() => {
             handleResize();
         });
         resizeObserver.observe(container);
@@ -1244,8 +1226,10 @@ export function makeDraggable(element, container, onDragStateChange) {
         console.warn('ResizeObserver not supported or error occurred:', e);
     }
 
-    // Add window resize event as a fallback
     window.addEventListener('resize', handleResize);
+
+    // Initialize positioning
+    initPositioning();
 
     // Return cleanup function
     return () => {
@@ -1265,6 +1249,12 @@ export function makeDraggable(element, container, onDragStateChange) {
     };
 }
 
+/**
+ * Shows a custom notification message
+ * @param {string} message - The message to display in the notification
+ * @param {HTMLElement} viewerContainer - the cesium viewer container to append the notification
+ * @returns {HTMLElement} - The notification element
+ */
 export function showCustomNotification(message, viewerContainer) {
     // Create notification container
     const notification = document.createElement('div');
@@ -1311,4 +1301,78 @@ export function showCustomNotification(message, viewerContainer) {
 
     return notification;
 }
+
+// /**
+//  * Updates an element's position using CSS transform translate based on cesium container.
+//  * Automatically adjusts position when container dimensions change.
+//  *
+//  * @param {HTMLElement} element - The DOM element to reposition
+//  * @param {HTMLElement} viewerContainer - The container element (typically the viewer container)
+//  * @param {number} dx - The x-coordinate offset (horizontal position)
+//  * @param {number} dy - The y-coordinate offset (vertical position)
+//  * @returns {function} - Cleanup function to remove observers when no longer needed
+//  */
+// export function updateTranslatePosition(element, viewerContainer, x, y) {
+//     if (!element || !viewerContainer) return () => { };
+
+//     // Function to update position based on current rects
+//     const updatePosition = () => {
+//         const containerRect = viewerContainer.getBoundingClientRect();
+//         const elementRect = element.getBoundingClientRect();
+
+//         // Validate container and element rect
+//         if (!containerRect || !elementRect ||
+//             containerRect.width === 0 || elementRect.width === 0) return;
+
+//         // const x = Math.round(containerRect.left + dx);
+//         // const y = Math.round(-(elementRect.height + dy));
+
+//         // Set the element style translate position
+//         element.style.transform = `translate(${x}px, ${-y}px)`;
+//         element.style.position = 'absolute'; // Ensure absolute positioning
+//     };
+
+//     // Create debounce mechanism for resize events
+//     let debounceTimer = null;
+//     const handleResize = () => {
+//         if (debounceTimer) {
+//             cancelAnimationFrame(debounceTimer);
+//         }
+
+//         debounceTimer = requestAnimationFrame(() => {
+//             updatePosition();
+//             debounceTimer = null;
+//         });
+//     };
+
+//     // Set up ResizeObserver with error handling
+//     let resizeObserver = null;
+//     try {
+//         resizeObserver = new ResizeObserver(() => {
+//             handleResize();
+//         });
+//         resizeObserver.observe(viewerContainer);
+
+//         // Also observe the element itself in case its size changes
+//         resizeObserver.observe(element);
+//     } catch (e) {
+//         console.warn('ResizeObserver not supported or error occurred:', e);
+//         // Fallback to window resize event
+//         window.addEventListener('resize', handleResize);
+//     }
+
+//     // Do initial positioning
+//     updatePosition();
+
+//     // Return cleanup function
+//     return () => {
+//         if (resizeObserver) {
+//             resizeObserver.disconnect();
+//         }
+//         if (debounceTimer) {
+//             cancelAnimationFrame(debounceTimer);
+//         }
+//         window.removeEventListener('resize', handleResize);
+//     };
+// }
 

@@ -37,7 +37,7 @@ export default class CesiumMeasure extends HTMLElement {
 
         // Button management properties
         this._buttonContainer = null;
-        this._buttonFragment = null;
+        this._buttonFragment = document.createDocumentFragment();
         this._isToggling = false;
         this._toggleTimeouts = [];
 
@@ -46,12 +46,6 @@ export default class CesiumMeasure extends HTMLElement {
 
         // log variables
         this._records = [];
-
-        // Element style position variables
-        this.position = {
-            logBox: { top: "380px", left: "0px" },
-            helpBox: { top: "70px", left: "0px" },
-        };
 
         // state manager
         this._stateManager = null;
@@ -119,7 +113,8 @@ export default class CesiumMeasure extends HTMLElement {
         // this.shadowRoot.appendChild(this.cesiumStyle);
 
         // set the web component style
-        // this.style.position = "absolute";
+        // this.style.position = "relative";
+        // this.classList.add("cesium-measure");
 
         // apply style for the web component
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
@@ -205,9 +200,6 @@ export default class CesiumMeasure extends HTMLElement {
         }
     }
 
-    /*************************
-     * MEASURE TOOL FEATURES *
-     *************************/
     /**
      * Initialize all the measure modes
      */
@@ -365,6 +357,9 @@ export default class CesiumMeasure extends HTMLElement {
         toolbar.setAttribute("role", "toolbar");
         toolbar.setAttribute("aria-label", "Measurement Tools");
         toolbar.classList.add("measure-toolbar");
+        // set toolbar position
+        toolbar.style.position = "absolute";
+        toolbar.style.transform = `translate(${120}px, ${-160}px)`;
 
         this.shadowRoot.appendChild(toolbar);
 
@@ -389,9 +384,9 @@ export default class CesiumMeasure extends HTMLElement {
             toolButton.classList.toggle("active");
             this.toggleTools();
         });
-
         const toolbar = this.stateManager.getElementState("toolbar");
         toolbar && toolbar.appendChild(toolButton);
+        makeDraggable(toolbar, this.viewer.container)
     }
 
     /**
@@ -404,7 +399,6 @@ export default class CesiumMeasure extends HTMLElement {
         this._buttonContainer.style.display = 'flex';
 
         // Initialize a single fragment for all operations
-        this._buttonFragment = document.createDocumentFragment();
         this._buttonFragment.appendChild(this._buttonContainer);
     }
 
@@ -563,8 +557,6 @@ export default class CesiumMeasure extends HTMLElement {
 
             // Check if a help table exists; if not, create one.
             let helpTable = this.stateManager.getElementState("helpTable");
-            console.log("🚀 helpTable:", helpTable);
-
             if (!helpTable) {
                 helpTable = this._setupHelpTable();
             }
@@ -666,8 +658,6 @@ export default class CesiumMeasure extends HTMLElement {
             (p.id.includes("moving") || p.id.includes("pending"))
         ).forEach(p => { this.pointCollection.remove(p) });
     }
-
-
 
     /**
      * Sets up the clear button.
@@ -801,14 +791,14 @@ export default class CesiumMeasure extends HTMLElement {
         // Pass shared properties as needed
         helpTable.emitter = this.emitter;
         this.shadowRoot.appendChild(helpTable);
+        // Set the help table to the state manager
         this.stateManager.setElementState("helpTable", helpTable);
-        // makeDraggable(helpTable, this.viewer.container);
+
+        // make help table draggable
+        makeDraggable(helpTable._helpTableContainer, this.viewer.container);
         return helpTable;
     }
 
-    /**
-     * Setup the log table to display the log records of the measurement
-     */
     _setupLogTable() {
         const logTable = document.createElement("log-table");
         // Pass shared properties as needed
@@ -817,10 +807,7 @@ export default class CesiumMeasure extends HTMLElement {
         // Set the log table to the state manager
         this.stateManager.setElementState("logTable", logTable);
 
-        // const { logTableContainer } = logTable;
-        // if (logTableContainer) {
-        //     makeDraggable(logTableContainer, this.viewer.container);
-        // }
+        makeDraggable(logTable._logTableContainer, this.viewer.container);
         return logTable;
     }
 
@@ -921,6 +908,11 @@ export default class CesiumMeasure extends HTMLElement {
     async _initializeFireTrail() {
         // fire trail is a web component
         const fireTrail = document.createElement("fire-trail-mode");
+        // error handling: if fire trail or viewer is not available
+        if (!fireTrail || !this.viewer) {
+            throw new Error("Failed to create fly-through element or viewer failed.")
+        };
+
         // setter values for the fire trail
         fireTrail.viewer = this.viewer;
         fireTrail.app = this.app;
@@ -931,26 +923,73 @@ export default class CesiumMeasure extends HTMLElement {
         fireTrail.setupHelpTable = this._setupHelpTable.bind(this);
 
         // append the fire trail to the measure toolbox
-        return this.shadowRoot.appendChild(fireTrail);
+        this.shadowRoot.appendChild(fireTrail);
+
+        try {
+            // check if the component is ready
+            fireTrail.addEventListener('component-ready', (e) => {
+                if (!e.detail || e.detail?.mode !== "fireTrail") return; // error handling: if fire trail component is not ready
+                // set fire trail container position in the web component
+                // fireTrail.style.position = "absolute";
+                // fireTrail.style.transform = "translate(120px, -200px)";
+
+                // make fire trail container draggable
+                makeDraggable(fireTrail.fireTrailToolbar, this.viewer.container);
+            });
+        } catch (error) {
+            console.error("Failed to position", error);
+        }
+
+        return fireTrail;
+    } catch(error) {
+        console.error("Failed to initialize fire trail mode:", error);
+        return null;
     }
+
 
     // /************************
     //  * FLY THROUGH FEATURES *
     //  ************************/
     async _initializeFlyThrough() {
-        // const flyThrough = new FlyThrough(this.viewer, this.handler, this.stateManager, this.updateRecords.bind(this, "fly-through"), this.cesiumPkg);
-        // return flyThrough;
-        const flyThrough = document.createElement("fly-through-mode");
-        // setter values for the fly through
-        flyThrough.viewer = this.viewer;
-        flyThrough.app = this.app;
-        flyThrough.handler = this.handler;
-        flyThrough.stateManager = this.stateManager;
-        flyThrough.cesiumPkg = this.cesiumPkg;
-        flyThrough.setupLogTable = this._setupLogTable.bind(this);
-        flyThrough.setupHelpTable = this._setupHelpTable.bind(this);
-        // append the fly through to the measure toolbox
-        return this.shadowRoot.appendChild(flyThrough);
+        try {
+            const flyThrough = document.createElement("fly-through-mode");
+            // error handling: if flyThrough or viewer is not available
+            if (!flyThrough || !this.viewer) {
+                throw new Error("Failed to create fly-through element or viewer failed.")
+            };
+
+            // setter values for the fly through
+            flyThrough.viewer = this.viewer;
+            flyThrough.app = this.app || {};
+            flyThrough.handler = this.handler;
+            flyThrough.stateManager = this.stateManager;
+            flyThrough.cesiumPkg = this.cesiumPkg;
+            flyThrough.setupLogTable = this._setupLogTable.bind(this);
+            flyThrough.setupHelpTable = this._setupHelpTable.bind(this);
+
+            // append the fly through to the measure toolbox
+            this.shadowRoot.appendChild(flyThrough);
+
+            try {
+                // check if the component is ready
+                flyThrough.addEventListener('component-ready', (e) => {
+                    if (!e.detail || e.detail?.mode !== "flyThrough") return; // error handling: if fly through component is not ready
+                    // set fly through component position
+                    flyThrough.style.position = "absolute";
+                    flyThrough.style.transform = "translate(120px, -320px)";
+
+                    // make fly through draggable
+                    makeDraggable(flyThrough, this.viewer.container);
+                }, { once: true });
+            } catch (error) {
+                console.error("Failed to position", error);
+            }
+
+            return flyThrough;
+        } catch (error) {
+            console.error("Failed to initialize fly-through mode:", error);
+            return null;
+        }
     }
 
     /**********

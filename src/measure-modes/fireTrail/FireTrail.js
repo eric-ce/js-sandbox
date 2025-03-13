@@ -20,7 +20,6 @@ import {
     positionKey,
     showCustomNotification,
     createGroundPolylinePrimitive,
-    makeDraggable,
 } from "../../lib/helper/helper.js";
 import { sharedStyleSheet } from "../../styles/sharedStyle.js";
 import { multiDClampedIcon } from '../../assets/icons.js';
@@ -42,8 +41,6 @@ export class FireTrail extends HTMLElement {
         this._app = null;
 
         this._cesiumPkg = null;
-
-        // this._cesiumStyle = null;
 
         this.pointerOverlay = null;
 
@@ -101,13 +98,14 @@ export class FireTrail extends HTMLElement {
             hoveredLine: null,      // Hovered line primitive
         };
 
-        // buttons for fire trail mode
+        // UI elements
+        this.fireTrailToolbar = null;
         this.buttons = {
-            fireTrailContainer: null,
             fireTrailButton: null,
             labelButton: null,
             submitButton: null,
         }
+        this._buttonFragment = document.createDocumentFragment();
 
         // color for cesium primitives
         this.stateColors = {
@@ -143,23 +141,36 @@ export class FireTrail extends HTMLElement {
     }
 
 
-    connectedCallback() {
+    async connectedCallback() {
         // apply cesium style
         // link cesium package default style
         // this.cesiumStyle = document.createElement("link");
         // this.cesiumStyle.rel = "stylesheet";
         // this.cesiumStyle.href = `/Widgets/widgets.css`;
         // this.shadowRoot.appendChild(this.cesiumStyle);
+        try {
+            // apply shared style
+            this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
-        // apply shared style
-        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+            // initialize fire trail mode
+            if (this.viewer) {
+                this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
+                this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
 
-        // initialize fire trail mode
-        if (this.viewer) {
-            this.pointCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_point_collection"));
-            this.labelCollection = this.viewer.scene.primitives._primitives.find(p => p.id && p.id.startsWith("annotate_label_collection"));
+                await this.initialize();
 
-            this.initialize();
+                // dispatch event to notify the component is ready
+                this.dispatchEvent(new CustomEvent('component-ready', {
+                    bubbles: true,
+                    composed: true,
+                    detail: {
+                        element: this,
+                        mode: this.mode
+                    }
+                }))
+            }
+        } catch (e) {
+            console.log(e)
         }
     }
 
@@ -228,7 +239,7 @@ export class FireTrail extends HTMLElement {
     /***************
      * MAIN METHOD *
      ***************/
-    initialize() {
+    async initialize() {
         // if screenSpaceEventHandler existed use it, if not create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;
@@ -236,11 +247,168 @@ export class FireTrail extends HTMLElement {
             this.handler = new ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
 
-        // setup label button and submit buttons
-        this.setUpButtons();
+        // setup fire trail style
+        // this.style.position = "absolute";
+        // this.style.width = "135px";
+        // this.style.height = "40px";
+
+        // setup fireTrail button, label button, and submit buttons
+        this._createUI();
 
         // set the pointer overlay
         this.pointerOverlay = this.stateManager.getOverlayState("pointer");
+    }
+
+    _createUI() {
+        this._setupFireTrailToolbar();
+        this._setupButtons();
+    }
+
+    _setupFireTrailToolbar() {
+        // setup fire trail container
+        this.fireTrailToolbar = document.createElement("div");
+        this.fireTrailToolbar.classList.add("fire-trail-toolbar");
+
+        this.shadowRoot.appendChild(this.fireTrailToolbar);
+    }
+
+    _setupButtons() {
+        const createButton = (text, className, onClick) => {
+            const button = document.createElement("button");
+            button.innerHTML = text;
+
+            const styleList = [className, "annotate-button", "animate-on-show"];
+            button.classList.add(...styleList);
+
+            button.setAttribute("type", "button");
+            button.setAttribute("aria-label", `${className} Tool`);
+            button.setAttribute("aria-pressed", "false"); // For toggle behavior
+            button.addEventListener("click", onClick);
+            // button.style.position = "absolute";
+            return button;
+        };
+
+        // Create buttons (fireTrailButton is always visible)
+        const fireTrailImg = `<img src="${multiDClampedIcon}" alt="fire-trail" style="width: 30px; height: 30px;" aria-hidden="true">`;
+        this.buttons.fireTrailButton = createButton(fireTrailImg, "fire-trail", this.handleFireTrailToggle.bind(this));
+        this.buttons.fireTrailButton.classList.remove("hidden");
+        this.buttons.fireTrailButton.classList.add("visible");
+        this.fireTrailToolbar.appendChild(this.buttons.fireTrailButton);
+
+        // Create other buttons (initially in fragment)
+        this.buttons.labelButton = createButton("Show", "toggle-label-button", this.handleLabelToggle.bind(this));
+        this.buttons.submitButton = createButton("Submit", "submit-button", this.handleSubmit.bind(this));
+
+        // Store all buttons in fragment initially
+        this._buttonContainer = document.createElement("div");
+        this._buttonContainer.classList.add("fire-trail-buttons-container");
+        this._buttonContainer.style.display = "flex";
+        this._buttonContainer.appendChild(this.buttons.labelButton);
+        this._buttonContainer.appendChild(this.buttons.submitButton);
+        this._buttonFragment.appendChild(this._buttonContainer);
+
+        // Setup button overlay for tooltips
+        this.setupButtonOverlay();
+
+        // Toggle state management
+        this._isToggling = false;
+        this._toggleTimeouts = [];
+        // Enhanced toggle function to manage button animations
+        const toggleFireTrailButtons = () => {
+            // Prevent rapid toggling
+            if (this._isToggling) return;
+            this._isToggling = true;
+
+            // Clear any pending timeouts
+            if (this._toggleTimeouts.length) {
+                this._toggleTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+                this._toggleTimeouts = [];
+            }
+
+            const isActive = this.buttons.fireTrailButton.classList.contains('active');
+            const delayStep = 50; // milliseconds delay per button
+            const animationDuration = 300; // total animation time
+
+            if (isActive) {
+                // EXPANDING: Move container back to DOM then animate buttons
+
+                // Move container from fragment to toolbar
+                if (this._buttonContainer.parentNode !== this.fireTrailToolbar) {
+                    this.fireTrailToolbar.appendChild(this._buttonContainer);
+                }
+
+                // Get all buttons to show
+                const buttons = [this.buttons.labelButton, this.buttons.submitButton];
+
+                // Show buttons one by one with animation
+                buttons.forEach((button, index) => {
+                    const timeoutId = setTimeout(() => {
+                        button.classList.remove("hidden");
+                        button.classList.add("visible");
+
+                        // Update container size after each button appears
+                        // this._updateContainerSize();
+
+                        // Release lock after last button
+                        if (index === buttons.length - 1) {
+                            setTimeout(() => {
+                                this._isToggling = false;
+                            }, animationDuration);
+                        }
+                    }, index * delayStep);
+
+                    this._toggleTimeouts.push(timeoutId);
+                });
+            } else {
+                // COLLAPSING: Hide buttons then move to fragment
+
+                // Get all buttons to hide
+                const buttons = [this.buttons.labelButton, this.buttons.submitButton];
+                const n = buttons.length;
+
+                if (n === 0) {
+                    this._isToggling = false;
+                    return;
+                }
+
+                // Hide buttons right to left
+                buttons.forEach((button, index) => {
+                    const timeoutId = setTimeout(() => {
+                        button.classList.remove("visible");
+                        button.classList.add("hidden");
+
+                        // Update container size as buttons disappear
+                        // this._updateContainerSize();
+
+                        // When last button is hidden, move container to fragment
+                        if (index === n - 1) {
+                            setTimeout(() => {
+                                this._buttonFragment.appendChild(this._buttonContainer);
+                                this._isToggling = false;
+
+                                // Final size update after move to fragment
+                                // this._updateContainerSize();
+                            }, animationDuration);
+                        }
+                    }, (n - index - 1) * delayStep);
+
+                    this._toggleTimeouts.push(timeoutId);
+                });
+            }
+        };
+        // Observe class changes on fireTrailButton to trigger animations
+        this._classObserver = new MutationObserver((mutations) => {
+            mutations.forEach(mutation => {
+                if (mutation.attributeName === 'class') {
+                    toggleFireTrailButtons();
+                }
+            });
+        });
+
+        this._classObserver.observe(this.buttons.fireTrailButton, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
     }
 
 
@@ -641,81 +809,6 @@ export class FireTrail extends HTMLElement {
     /******************
      * OTHER FEATURES *
      ******************/
-    setUpButtons() {
-        const createButton = (text, className, onClick) => {
-            const button = document.createElement("button");
-            button.innerHTML = text;
-
-            const styleList = [className, "annotate-button", "animate-on-show"];
-            button.classList.add(...styleList);
-
-            button.setAttribute("type", "button");
-            button.setAttribute("aria-label", `${className} Tool`);
-            button.setAttribute("aria-pressed", "false"); // For toggle behavior
-            button.addEventListener("click", onClick);
-            // button.style.position = "absolute";
-            return button;
-        };
-
-        // setup fire trail container
-        this.fireTrailContainer = document.createElement("div");
-        this.fireTrailContainer.classList.add("fire-trail-container");
-        this.shadowRoot.appendChild(this.fireTrailContainer);
-        makeDraggable(this.fireTrailContainer, this.viewer.container);
-
-        // setup fire trail button
-        const fireTrailImg = `<img src="${multiDClampedIcon}" alt="fire-trail" style="width: 30px; height: 30px;" aria-hidden="true">`
-        this.buttons.fireTrailButton = createButton(fireTrailImg, "fire-trail", this.handleFireTrailToggle.bind(this));
-        this.buttons.fireTrailButton.classList.add("visible");
-        this.fireTrailContainer.appendChild(this.buttons.fireTrailButton);
-
-        // setup label button
-        this.buttons.labelButton = createButton("Show", "toggle-label-button", this.handleLabelToggle.bind(this));
-        // this.buttons.labelButton.style.display = "none"; // Initially hidden
-        this.buttons.labelButton.classList.add("hidden");
-        this.fireTrailContainer.appendChild(this.buttons.labelButton);
-
-        // setup submit button
-        this.buttons.submitButton = createButton("Submit", "submit-button", this.handleSubmit.bind(this));
-        // this.buttons.submitButton.style.display = "none";
-        this.buttons.submitButton.classList.add("hidden");
-        this.fireTrailContainer.appendChild(this.buttons.submitButton);
-
-        // setup button overlay
-        this.setupButtonOverlay();
-
-        // Function to toggle visibility of label and submit buttons
-        const toggleButtonVisibility = () => {
-            const delayStep = 50; // milliseconds delay per button0.8 seconds in milliseconds
-
-            const isActive = this.buttons.fireTrailButton.classList.contains('active');
-            const buttons = [this.buttons.submitButton, this.buttons.labelButton];
-            if (!isActive) {
-                buttons.forEach((button, index) => {
-                    setTimeout(() => {
-                        button.classList.remove("visible");
-                        button.classList.add("hidden");
-                    }, index * delayStep);
-                })
-            } else {
-                // Collapsing: hide buttons from right to left.
-                const n = buttons.length;
-                buttons.forEach((button, index) => {
-                    setTimeout(() => {
-                        button.classList.remove("hidden");
-                        button.classList.add("visible");
-                    }, (n - index - 1) * delayStep);
-                })
-            }
-        };
-
-        // Initial visibility check
-        // toggleButtonVisibility();
-        // Set up MutationObserver for class changes on fireTrailButton
-        this._classObserver = new MutationObserver(toggleButtonVisibility);
-        this._classObserver.observe(this.buttons.fireTrailButton, { attributes: true, attributeFilter: ['class'] });
-    }
-
     handleFireTrailToggle() {
         const activeButton = this.stateManager.getButtonState("activeButton")
         if (activeButton && activeButton === this.buttons.fireTrailButton) { // Deactivate Fire Trail
@@ -771,10 +864,15 @@ export class FireTrail extends HTMLElement {
             this.buttons.fireTrailButton.classList.remove("active");
             this.buttons.fireTrailButton.setAttribute("aria-pressed", "false");
 
-            // deactivate fireTrail then remove help box and help box toggle button
+            // deactivate fireTrail then remove help table
             const helpTable = this.stateManager.getElementState("helpTable");
             helpTable && helpTable.remove();
             this.stateManager.setElementState("helpTable", null);
+
+            // deactivate fireTrail then remove log table
+            const logTable = this.stateManager.getElementState("logTable");
+            logTable && logTable.remove();
+            this.stateManager.setElementState("logTable", null);
         }
     }
 
