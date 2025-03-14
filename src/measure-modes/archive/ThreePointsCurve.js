@@ -6,7 +6,7 @@ import {
     removeInputActions,
     editableLabel,
     updatePointerOverlay
-} from "../helper/helper.js";
+} from "../helper/cesiumHelper.js";
 
 /**
  * Represents a three-point curve measurement tool in Cesium.

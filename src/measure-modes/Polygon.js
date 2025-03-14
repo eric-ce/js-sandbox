@@ -18,7 +18,7 @@ import {
     formatArea,
     getPickedObjectType,
     generateIdByTimestamp,
-} from "../lib/helper/helper.js";
+} from "../lib/helper/cesiumHelper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 import dataPool from "../lib/data/DataPool.js";
 

@@ -2,7 +2,7 @@ import * as Cesium from "cesium";
 import {
     getPickedObjectType,
     positionKey,
-} from "../../lib/helper/helper.js";
+} from "../../lib/helper/cesiumHelper.js";
 
 /***********************
  * DOUBLE CLICK ACTION *

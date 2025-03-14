@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { convertToCartesian3, formatDistance } from "./helper.js";
+import { convertToCartesian3, formatDistance } from "./cesiumHelper.js";
 
 // Cesium entity
 /**

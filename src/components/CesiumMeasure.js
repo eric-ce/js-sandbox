@@ -6,19 +6,33 @@ import {
     Color,
     Viewer,
 } from "cesium";
-import { TwoPointsDistance } from "../measure-modes/TwoPointsDistance.js";
-import { Points } from "../measure-modes/Points.js";
-import { ThreePointsCurve } from "../measure-modes/ThreePointsCurve.js";
-import { Height } from "../measure-modes/Height.js";
-import { MultiDistance } from "../measure-modes/MultiDistance.js";
-import { MultiDistanceClamped } from "../measure-modes/MultiDistanceClamped.js";
-import { Polygon } from "../measure-modes/Polygon.js";
-import { Profile } from "../measure-modes/Profile.js";
-import { ProfileDistances } from "../measure-modes/ProfileDistances.js";
-import { Picker } from "../measure-modes/Picker.js";
-import { FireTrail } from "../measure-modes/fireTrail/FireTrail.js";
-import { FlyThrough } from "../measure-modes/flyThrough/FlyThrough.js";
-import { removeInputActions, makeDraggable, createGroundPolylinePrimitive } from "../lib/helper/helper.js";
+// import { TwoPointsDistance } from "../measure-modes/TwoPointsDistance.js";
+// import { Points } from "../measure-modes/Points.js";
+// import { ThreePointsCurve } from "../measure-modes/ThreePointsCurve.js";
+// import { Height } from "../measure-modes/Height.js";
+// import { MultiDistance } from "../measure-modes/MultiDistance.js";
+// import { MultiDistanceClamped } from "../measure-modes/MultiDistanceClamped.js";
+// import { Polygon } from "../measure-modes/Polygon.js";
+// import { Profile } from "../measure-modes/Profile.js";
+// import { ProfileDistances } from "../measure-modes/ProfileDistances.js";
+// import { Picker } from "../measure-modes/Picker.js";
+// import { FireTrail } from "../measure-modes/fireTrail/FireTrail.js";
+// import { FlyThrough } from "../measure-modes/flyThrough/FlyThrough.js";
+import {
+    TwoPointsDistance,
+    Points,
+    ThreePointsCurve,
+    Height,
+    MultiDistance,
+    MultiDistanceClamped,
+    Polygon,
+    Profile,
+    ProfileDistances,
+    Picker,
+    FireTrail,
+    FlyThrough
+} from "../measure-modes/index.js";
+import { removeInputActions, makeDraggable, createGroundPolylinePrimitive } from "../lib/helper/cesiumHelper.js";
 import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon } from '../assets/icons.js';
 import { sharedStyleSheet } from '../styles/sharedStyle.js';
 import { LogTable } from './shared/LogTable.js';
@@ -975,11 +989,11 @@ export default class CesiumMeasure extends HTMLElement {
                 flyThrough.addEventListener('component-ready', (e) => {
                     if (!e.detail || e.detail?.mode !== "flyThrough") return; // error handling: if fly through component is not ready
                     // set fly through component position
-                    flyThrough.style.position = "absolute";
-                    flyThrough.style.transform = "translate(120px, -320px)";
+                    // flyThrough.style.position = "absolute";
+                    // flyThrough.style.transform = "translate(120px, -320px)";
 
                     // make fly through draggable
-                    makeDraggable(flyThrough, this.viewer.container);
+                    makeDraggable(flyThrough.flyThroughToolbar, this.viewer.container);
                 }, { once: true });
             } catch (error) {
                 console.error("Failed to position", error);

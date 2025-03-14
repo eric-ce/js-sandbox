@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { createLineGeometryInstance, createLinePrimitive, createPointPrimitive, generateId, removeInputActions } from "../helper/helper.js";
+import { createLineGeometryInstance, createLinePrimitive, createPointPrimitive, generateId, removeInputActions } from "../helper/cesiumHelper.js";
 
 class FireTrack {
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {

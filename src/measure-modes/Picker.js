@@ -6,7 +6,7 @@ import {
     changeLineColor,
     getPickedObjectType,
     updatePointerOverlay
-} from "../lib/helper/helper.js";
+} from "../lib/helper/cesiumHelper.js";
 import MeasureModeBase from "./MeasureModeBase.js";
 
 class Picker extends MeasureModeBase {

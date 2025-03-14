@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { createPointPrimitive, generateId, removeInputActions } from "../helper/helper.js";
+import { createPointPrimitive, generateId, removeInputActions } from "../helper/cesiumHelper.js";
 
 class FlyThrough {
     constructor(viewer, handler, pointerOverlay, logRecordsCallback, cesiumPkg) {

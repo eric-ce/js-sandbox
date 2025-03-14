@@ -14,7 +14,7 @@ import {
     createGroundPolylinePrimitive,
     convertCartesianArrayToClamped,
     positionKey,
-} from "../../lib/helper/helper.js";
+} from "../../lib/helper/cesiumHelper.js";
 
 /***********************
  * LEFT CLICK FEATURES *

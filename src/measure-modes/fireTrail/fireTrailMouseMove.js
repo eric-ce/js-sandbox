@@ -7,7 +7,7 @@ import {
     calculateClampedDistance,
     getPickedObjectType,
     createGroundPolylinePrimitive,
-} from "../../lib/helper/helper.js";
+} from "../../lib/helper/cesiumHelper.js";
 
 /***********************
  * MOUSE MOVE FEATURES *

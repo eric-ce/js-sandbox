@@ -24,7 +24,7 @@ import {
     calculateDistanceFromArray,
     makeDraggable,
     getPickedObjectType
-} from '../lib/helper/helper.js';
+} from '../lib/helper/cesiumHelper.js';
 import Chart from "chart.js/auto";
 import dataPool from '../lib/data/DataPool.js';
 

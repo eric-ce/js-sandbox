@@ -6,7 +6,7 @@ import {
     removeInputActions,
     editableLabel,
     updatePointerOverlay
-} from "../helper/helper.js";
+} from "../helper/cesiumHelper.js";
 
 class Polygon {
     constructor(viewer, handler, pointerOverlay, logRecordsCallback) {

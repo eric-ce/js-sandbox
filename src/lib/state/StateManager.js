@@ -27,10 +27,10 @@ export class StateManager {
                 logTable: null,
                 toolbar: null,
             },
-            position: {
-                logBox: { top: "280px", right: "0px" },
-                helpBox: { top: "70px", right: "0px" },
-            },
+            // position: {
+            //     logBox: { top: "280px", right: "0px" },
+            //     helpBox: { top: "70px", right: "0px" },
+            // },
             overlay: {
                 pointer: null,
                 button: null,
@@ -49,8 +49,8 @@ export class StateManager {
                 polygonOutline: Color.YELLOW,
                 random: Color.fromRandom({ alpha: 1.0 }),
                 select: Color.BLUE,
-                submitted: Color.DARKGREEN
-            }
+                submitted: Color.DARKGREEN,
+            },
         };
     }
 
@@ -121,33 +121,33 @@ export class StateManager {
         }
     }
 
-    // POSITION STATE METHODS
-    getPositionState(key) {
-        if (key) {
-            if (key in this._state.position) {
-                return this._state.position[key];
-            } else {
-                console.warn(`Property '${key}' does not exist in position state.`);
-                return undefined;
-            }
-        }
-        return { ...this._state.position };
-    }
+    // // POSITION STATE METHODS
+    // getPositionState(key) {
+    //     if (key) {
+    //         if (key in this._state.position) {
+    //             return this._state.position[key];
+    //         } else {
+    //             console.warn(`Property '${key}' does not exist in position state.`);
+    //             return undefined;
+    //         }
+    //     }
+    //     return { ...this._state.position };
+    // }
 
-    setPositionState(key, value) {
-        if (key in this._state.position) {
-            if (typeof value === "object" && value !== null) {
-                this._state.position[key] = { ...value };
-                this.emitter.emit("stateChange", { section: "position", key, value });
-            } else {
-                console.warn(
-                    `Invalid value for ${key}: expected object, got ${typeof value}`
-                );
-            }
-        } else {
-            console.warn(`Property '${key}' does not exist in position state.`);
-        }
-    }
+    // setPositionState(key, value) {
+    //     if (key in this._state.position) {
+    //         if (typeof value === "object" && value !== null) {
+    //             this._state.position[key] = { ...value };
+    //             this.emitter.emit("stateChange", { section: "position", key, value });
+    //         } else {
+    //             console.warn(
+    //                 `Invalid value for ${key}: expected object, got ${typeof value}`
+    //             );
+    //         }
+    //     } else {
+    //         console.warn(`Property '${key}' does not exist in position state.`);
+    //     }
+    // }
 
     // OVERLAY STATE METHODS
     getOverlayState(key) {

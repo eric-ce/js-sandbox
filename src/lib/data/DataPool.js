@@ -1,5 +1,5 @@
 // src/lib/data/DataPool.js
-import { areCoordinatesEqual, cartesian3ToCartographicDegrees, convertToCartesian3, convertToCartographicDegrees } from "../helper/helper";
+import { areCoordinatesEqual, cartesian3ToCartographicDegrees, convertToCartesian3, convertToCartographicDegrees } from "../helper/cesiumHelper.js";
 
 /**
  * DataPool holds all measurement records in a unified structure.

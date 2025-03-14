@@ -6,7 +6,7 @@ import {
     calculateClampedDistanceFromArray,
     createGroundPolylinePrimitive,
     showCustomNotification,
-} from "../../lib/helper/helper.js";
+} from "../../lib/helper/cesiumHelper.js";
 
 /************************
  * RIGHT CLICK FEATURES *

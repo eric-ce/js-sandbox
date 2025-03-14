@@ -10,7 +10,7 @@ import {
     createGeometryInstance,
     createLinePrimitive,
     generateId,
-} from "../helper/helper.js";
+} from "../helper/cesiumHelper.js";
 
 
 /**

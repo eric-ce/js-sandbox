@@ -4,20 +4,16 @@ const HtmlWebpackHarddiskPlugin = require('html-webpack-harddisk-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const webpack = require('webpack');
 const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
-const TerserPlugin = require('terser-webpack-plugin');
-const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 const cesiumSource = "node_modules/cesium/Source";
 const cesiumWorkers = "node_modules/cesium/Build/Cesium/Workers";
-// const cesiumBaseUrl = "cesiumStatic";
-
 const leafletSource = "node_modules/leaflet/dist";
 
 module.exports = {
-    entry: ['./src/index.js'], // Your entry point
+    entry: './src/index.js', // No need for array with single entry point
     output: {
         filename: "[name].bundle.js",
-        path: path.resolve(__dirname, 'dist'), // Output directory
+        path: path.resolve(__dirname, 'dist'),
         clean: true,
         sourcePrefix: "",
     },
@@ -28,20 +24,20 @@ module.exports = {
                 use: ['style-loader', 'css-loader'],
             },
             {
+                // Use asset/resource instead of file-loader (Webpack 5)
                 test: /\.(png|gif|jpg|jpeg|svg|xml|json)$/i,
-                use: ['file-loader'],
+                type: 'asset/resource',
             },
         ]
     },
     plugins: [
         new HtmlWebpackPlugin({
-            template: './src/index.html', // Path to your HTML file
+            template: './src/index.html',
             alwaysWriteToDisk: true,
             inject: 'body',
         }),
         new HtmlWebpackHarddiskPlugin(),
         new webpack.HotModuleReplacementPlugin(),
-        // Copy Cesium Assets, Widgets, and Workers to a static directory
         new CopyWebpackPlugin({
             patterns: [
                 { from: path.join(cesiumWorkers), to: "Workers" },
@@ -53,13 +49,12 @@ module.exports = {
             ],
         }),
         new webpack.DefinePlugin({
-            // Define relative base path in cesium for loading assets
             CESIUM_BASE_URL: JSON.stringify(""),
         }),
         new NodePolyfillPlugin(),
     ],
     mode: 'development',
-    devtool: 'source-map', // Generate source maps for easier debugging
+    devtool: 'eval-source-map', // Faster rebuilds with good enough debugging
     resolve: {
         extensions: [".js", ".css"],
         modules: ["src", "node_modules"],
@@ -79,21 +74,57 @@ module.exports = {
         toUrlUndefined: true,
     },
     optimization: {
+        // Don't minimize for faster rebuilds in development
+        minimize: false,
+
+        // Still use code splitting for better caching and performance
         splitChunks: {
             chunks: 'all',
+            cacheGroups: {
+                // Separate cesium into its own chunk
+                cesium: {
+                    test: /[\\/]node_modules[\\/]cesium[\\/]/,
+                    name: 'cesium',
+                    chunks: 'all',
+                    priority: 10
+                },
+                // Group other node_modules together
+                vendors: {
+                    test: /[\\/]node_modules[\\/]/,
+                    name: 'vendors',
+                    chunks: 'all',
+                    priority: 5
+                },
+            },
         },
         runtimeChunk: 'single',
-        minimize: true,
-        // minimizer: [
-        //     new TerserPlugin({
-        //         terserOptions: {
-        //             compress: {
-        //                 drop_console: true,
-        //             },
-        //         },
-        //         extractComments: false, // Do not extract comments to a separate file
-        //     }),
-        //     new CssMinimizerPlugin(),
-        // ],
+
+        // These optimizations don't hurt build time much but help with development
+        concatenateModules: true,
+        usedExports: true,
+    },
+    // Add dev server for better development experience
+    devServer: {
+        static: {
+            directory: path.join(__dirname, 'dist'),
+        },
+        hot: true,
+        open: true,
+        compress: true,
+        historyApiFallback: true,
+        client: {
+            overlay: true,
+            progress: true,
+        },
+        // Disable host checking for easier network access
+        allowedHosts: 'all',
+    },
+    cache: {
+        type: 'filesystem', // Use filesystem caching for faster rebuilds
+    },
+    stats: {
+        colors: true,
+        assets: false,
+        modules: false,
     },
 };
