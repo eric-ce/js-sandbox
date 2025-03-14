@@ -83,10 +83,10 @@ export class HelpTable extends HTMLElement {
     _updatePositions() {
         const rect = this.viewerContainer.getBoundingClientRect();
         const container = this._helpTableContainer.getBoundingClientRect();
-
         if (!rect || !this._helpTableContainer || rect.width === 0 || container.width === 0) console.error("invalid rect")
 
-        const x = (rect.width - container.width) || 0;
+        // const x = (rect.width - container.width) || 0;
+        const x = rect.width - 250;
         const y = (rect.height - container.height) || 260;
 
         this._helpTableContainer.style.transform = `translate(${x}px, ${-y}px)`;

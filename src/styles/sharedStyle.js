@@ -21,7 +21,7 @@ sharedStyleSheet.replaceSync(`
     }
     .measure-toolbar button:hover,
     .fire-trail-toolbar button:hover,
-    .fly-through-container button:hover{
+    .fly-through-toolbar button:hover{
         transform: scale(1.1);
     }
     .measure-tools{
@@ -36,7 +36,7 @@ sharedStyleSheet.replaceSync(`
         display: flex;
         flex-direction: row;
     }
-    .fly-through-container{
+    .fly-through-toolbar{
         position: absolute;
         // bottom: 240px;
         // left: 135px; 

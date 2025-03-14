@@ -20,7 +20,7 @@ import {
     positionKey,
     showCustomNotification,
     createGroundPolylinePrimitive,
-} from "../../lib/helper/helper.js";
+} from "../../lib/helper/cesiumHelper.js";
 import { sharedStyleSheet } from "../../styles/sharedStyle.js";
 import { multiDClampedIcon } from '../../assets/icons.js';
 import { handleFireTrailLeftClick } from "./fireTrailLeftClick.js";
@@ -34,90 +34,93 @@ export class FireTrail extends HTMLElement {
         super();
         this.attachShadow({ mode: "open" });
 
-        // cesium variables
+        // Component identity
+        this.mode = "fireTrail";
+
+        // Cesium core references
         this._viewer = null;
         this._handler = null;
         this._cesiumPkg = null;
         this._app = null;
-
-        this._cesiumPkg = null;
-
+        this.pointCollection = null;
+        this.labelCollection = null;
         this.pointerOverlay = null;
 
-        // helpBox
+        // Utility callbacks
         this._setupHelpTable = null;
-
-        // logBox
         this._setupLogTable = null;
 
+        // Current coordinate
         this.coordinate = new Cartesian3();
 
-        // flags to control the state of the tool
+        // Current measure reference
+        this.measure = this._createDefaultMeasure();
+
+        // Flag states
         this.flags = {
+            isActive: false,
             isMeasurementComplete: false,
             isDragMode: false,
             isAddMode: false,
             isSubmitting: false,
             isShowLabels: false,
-            isReverse: false,
-            isActive: false,
+            isReverse: false
         };
 
-        // Coordinate management and related properties
+        // Coordinate management
         this.coords = {
-            cache: [],          // Stores temporary coordinates during operations
-            groups: [],         // Tracks all coordinates involved in operations e.g [{trailId:111, coordinates: [{cart1}, {cart2}]}},{...}]
-            measureCounter: 0,    // New counter for labelNumberIndex
+            cache: [],                // Temporary coordinates during operations
+            groups: [],               // All coordinate groups e.g [{trailId:111, coordinates: [{cart1}, {cart2}]}},{...}]
+            measureCounter: 0,        // Counter for labelNumberIndex
             _distanceRecords: [],
-            dragStart: null,    // Stores the initial position before a drag begins
-            dragStartToCanvas: null, // Store the drag start position to canvas in Cartesian2
-            groupToSubmit: null,  // Stores the group to submit
+            dragStart: null,          // Initial position before drag begins
+            dragStartToCanvas: null,  // Drag start position in Cartesian2
+            groupToSubmit: null       // Group to submit
         };
 
-        // Current Measure 
-        this.mode = "fireTrail";
-        this.measure = this._createDefaultMeasure();
-
+        // Submission tracking
         this.sentGroupKeys = new Set();
 
-        // Cesium primitives collections
-        this.pointCollection = null;
-        this.labelCollection = null;
-
-        // Interactive primitives for dynamic actions
+        // Interactive primitives tracking
         this.interactivePrimitives = {
-            movingPolylines: [],    // Array of moving polylines
-            movingLabels: [],       // Array of moving labels
-            dragPoint: null,        // Currently dragged point primitive
-            dragPolylines: [],      // Array of dragging polylines
-            dragLabels: [],         // Array of dragging labels
-            addModeLine: null,      // Selected line primitive in add mode
-            selectedLines: [],      // Array of selected line primitives
+            movingPolylines: [],    // Moving polylines
+            movingLabels: [],       // Moving labels
+            dragPoint: null,        // Dragged point primitive
+            dragPolylines: [],      // Dragging polylines
+            dragLabels: [],         // Dragging labels
+            addModeLine: null,      // Selected line in add mode
+            selectedLines: [],      // Selected line primitives
             hoveredPoint: null,     // Hovered point primitive
             hoveredLabel: null,     // Hovered label primitive
-            hoveredLine: null,      // Hovered line primitive
+            hoveredLine: null       // Hovered line primitive
         };
 
         // UI elements
         this.fireTrailToolbar = null;
+        this._buttonContainer = null;
         this.buttons = {
             fireTrailButton: null,
             labelButton: null,
-            submitButton: null,
-        }
+            submitButton: null
+        };
         this._buttonFragment = document.createDocumentFragment();
 
-        // color for cesium primitives
+        // Toggle animation state
+        this._isToggling = false;
+        this._toggleTimeouts = [];
+        this._classObserver = null;
+
+        // Primitive colors
         this.stateColors = {
+            default: Color.YELLOWGREEN,
             hover: Color.KHAKI,
             select: Color.BLUE,
-            default: Color.YELLOWGREEN,
             submitted: Color.DARKGREEN,
             add: Color.YELLOW,
-            layerColor: null,
-        }
+            layerColor: null
+        };
 
-        // cesium handler action
+        // Bind handlers to this instance
         this.handleFireTrailLeftClick = handleFireTrailLeftClick.bind(this);
         this.handleFireTrailMouseMove = handleFireTrailMouseMove.bind(this);
         this.handleFireTrailDoubleClick = handleFireTrailDoubleClick.bind(this);
@@ -125,19 +128,18 @@ export class FireTrail extends HTMLElement {
         this.handleFireTrailMiddleClick = handleFireTrailMiddleClick.bind(this);
 
         /**
-         * @typedef {function} ActionLoggerBound
-         * @param {*} payload - content to be sent
-         * @param {string} table - destination table
-         * @returns {*} The return value of the function
+         * Logger function for sending data to backend
+         * @param {string} table - Destination table
+         * @param {object} payload - Data to send
+         * @returns {Promise} Response from the action logger
          */
         this.actionLogger = async (table, payload) => {
-            //todo move edits of firebase to the firebase package
-            let options = {
+            const options = {
                 streamType: "core",
                 streamId: table
-            }
-            return await this.app.logAction("iot", payload, options)
-        }
+            };
+            return await this.app.logAction("iot", payload, options);
+        };
     }
 
 
@@ -268,6 +270,13 @@ export class FireTrail extends HTMLElement {
         // setup fire trail container
         this.fireTrailToolbar = document.createElement("div");
         this.fireTrailToolbar.classList.add("fire-trail-toolbar");
+
+        this.fireTrailToolbar.setAttribute("role", "fire-trail-toolbar");
+        this.fireTrailToolbar.setAttribute("aria-label", "Fire Trail Tools");
+        this.fireTrailToolbar.classList.add("fire-trail-toolbar");
+        // set  fireTrailToolbar position
+        this.fireTrailToolbar.style.position = "absolute";
+        this.fireTrailToolbar.style.transform = `translate(${120}px, ${-200}px)`;
 
         this.shadowRoot.appendChild(this.fireTrailToolbar);
     }
@@ -409,6 +418,73 @@ export class FireTrail extends HTMLElement {
             attributes: true,
             attributeFilter: ['class']
         });
+    }
+
+    handleFireTrailToggle() {
+        const activeButton = this.stateManager.getButtonState("activeButton")
+        if (activeButton && activeButton === this.buttons.fireTrailButton) { // Deactivate Fire Trail
+            this.flags.isActive = false
+        } else {
+            // Deactivate previously active button if it exists
+            if (activeButton) {
+                // remove active style
+                activeButton.classList.remove("active");
+                // set aria-pressed to false
+                activeButton.setAttribute("aria-pressed", "false");
+                // reset value of the active measure mode
+                const measureModes = this.stateManager.getButtonState("measureModes");
+                measureModes.forEach(mode => {
+                    if (activeButton === mode.button) {
+                        mode?.resetValue();
+                    }
+                })
+            }
+            // set fire trail button to active
+            this.flags.isActive = !this.flags.isActive;
+        }
+
+        if (this.flags.isActive) { // activate fire trail mode
+            this.setupInputActions();
+
+            this.buttons.fireTrailButton.classList.add("active");
+            this.buttons.fireTrailButton.setAttribute("aria-pressed", "true");
+
+            this.stateManager.setButtonState("activeButton", this.buttons.fireTrailButton);
+
+            // find or create help table
+            let helpTable = this.stateManager.getElementState("helpTable");
+            // if no help table then recreate it
+            if (!helpTable) {
+                helpTable = this._setupHelpTable();
+            }
+            // update help table content
+            helpTable.updateContent("fireTrail");
+
+            // find or create log table
+            let logTable = this.stateManager.getElementState("logTable");
+            // if no log table then recreate it
+            if (!logTable) {
+                logTable = this._setupLogTable();
+            }
+        } else { // deactivate fire trail mode
+            // remove existing input actions
+            removeInputActions(this.handler);
+            this.resetValue();
+            this.stateManager.setButtonState("activeButton", null);
+
+            this.buttons.fireTrailButton.classList.remove("active");
+            this.buttons.fireTrailButton.setAttribute("aria-pressed", "false");
+
+            // deactivate fireTrail then remove help table
+            const helpTable = this.stateManager.getElementState("helpTable");
+            helpTable && helpTable.remove();
+            this.stateManager.setElementState("helpTable", null);
+
+            // deactivate fireTrail then remove log table
+            const logTable = this.stateManager.getElementState("logTable");
+            logTable && logTable.remove();
+            this.stateManager.setElementState("logTable", null);
+        }
     }
 
 
@@ -809,73 +885,6 @@ export class FireTrail extends HTMLElement {
     /******************
      * OTHER FEATURES *
      ******************/
-    handleFireTrailToggle() {
-        const activeButton = this.stateManager.getButtonState("activeButton")
-        if (activeButton && activeButton === this.buttons.fireTrailButton) { // Deactivate Fire Trail
-            this.flags.isActive = false
-        } else {
-            // Deactivate previously active button if it exists
-            if (activeButton) {
-                // remove active style
-                activeButton.classList.remove("active");
-                // set aria-pressed to false
-                activeButton.setAttribute("aria-pressed", "false");
-                // reset value of the active measure mode
-                const measureModes = this.stateManager.getButtonState("measureModes");
-                measureModes.forEach(mode => {
-                    if (activeButton === mode.button) {
-                        mode?.resetValue();
-                    }
-                })
-            }
-            // set fire trail button to active
-            this.flags.isActive = !this.flags.isActive;
-        }
-
-        if (this.flags.isActive) { // activate fire trail mode
-            this.setupInputActions();
-
-            this.buttons.fireTrailButton.classList.add("active");
-            this.buttons.fireTrailButton.setAttribute("aria-pressed", "true");
-
-            this.stateManager.setButtonState("activeButton", this.buttons.fireTrailButton);
-
-            // find or create help table
-            let helpTable = this.stateManager.getElementState("helpTable");
-            // if no help table then recreate it
-            if (!helpTable) {
-                helpTable = this._setupHelpTable();
-            }
-            // update help table content
-            helpTable.updateContent("fireTrail");
-
-            // find or create log table
-            let logTable = this.stateManager.getElementState("logTable");
-            // if no log table then recreate it
-            if (!logTable) {
-                logTable = this._setupLogTable();
-            }
-        } else { // deactivate fire trail mode
-            // remove existing input actions
-            removeInputActions(this.handler);
-            this.resetValue();
-            this.stateManager.setButtonState("activeButton", null);
-
-            this.buttons.fireTrailButton.classList.remove("active");
-            this.buttons.fireTrailButton.setAttribute("aria-pressed", "false");
-
-            // deactivate fireTrail then remove help table
-            const helpTable = this.stateManager.getElementState("helpTable");
-            helpTable && helpTable.remove();
-            this.stateManager.setElementState("helpTable", null);
-
-            // deactivate fireTrail then remove log table
-            const logTable = this.stateManager.getElementState("logTable");
-            logTable && logTable.remove();
-            this.stateManager.setElementState("logTable", null);
-        }
-    }
-
     handleLabelToggle() {
         // Toggle the flag
         this.flags.isShowLabels = !this.flags.isShowLabels;

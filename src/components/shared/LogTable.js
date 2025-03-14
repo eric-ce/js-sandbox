@@ -64,7 +64,6 @@ export class LogTable extends HTMLElement {
     _updatePositions() {
         const rect = this.viewerContainer.getBoundingClientRect();
         const container = this._logTableContainer.getBoundingClientRect();
-
         if (!rect || !this._logTableContainer || rect.width === 0 || container.width === 0) console.error("invalid rect")
 
         const x = (rect.width - container.width) || 0;

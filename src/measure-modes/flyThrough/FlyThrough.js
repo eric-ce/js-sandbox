@@ -4,7 +4,7 @@ import {
     removeInputActions,
     showCustomNotification,
     updateTranslatePosition
-} from "../../lib/helper/helper.js";
+} from "../../lib/helper/cesiumHelper.js";
 import { handleRecordScreen, resumeOrPauseRecording } from "./recordScreen.js";
 import { createFlyPathPrimitives, editFlyPath, removePrimitives } from "./editFlyPath.js";
 import { sharedStyleSheet } from "../../styles/sharedStyle.js";
@@ -42,6 +42,9 @@ export class FlyThrough extends HTMLElement {
             isEditing: false,
         };
 
+        // UI elements
+        this.flyThroughToolbar = null;
+        this._buttonContainer = null;
         this.buttons = {
             recordScreenButton: null,
             replayButton: null,
@@ -51,6 +54,11 @@ export class FlyThrough extends HTMLElement {
             exportKmlButton: null,
             pauseResumeButton: null,
         };
+        this._buttonFragment = document.createDocumentFragment();
+        // Toggle animation state
+        this._isToggling = false;
+        this._toggleTimeouts = [];
+        this._classObserver = null;
 
         this.coords = {
             _flyRecords: [],    // [{positions: {x: 0, y: 0, z: 0}, hpr: {heading: 0, pitch: 0, roll: 0}}]; // fly-through data
@@ -165,9 +173,9 @@ export class FlyThrough extends HTMLElement {
             this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
             // setup web component style
-            this.style.position = "absolute";
-            this.style.width = "180px";
-            this.style.height = "120px";
+            // this.style.position = "absolute";
+            // this.style.width = "180px";
+            // this.style.height = "120px";
 
             if (!this.viewer) return;
 
@@ -239,13 +247,34 @@ export class FlyThrough extends HTMLElement {
             this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
         }
 
-        // setup buttons
-        this.setupButtons();
+        this._createUI();
+
+        // // setup buttons
+        // this.setupButtons();
 
         // setup pointer overlay
         this.pointerOverlay = this.stateManager.getOverlayState("pointer");
 
-        this.setupInputActions();
+        // this.setupInputActions();
+    }
+
+    _createUI() {
+        this._setupFlyThroughToolbar();
+        this.setupButtons();
+    }
+
+    _setupFlyThroughToolbar() {
+        this.flyThroughToolbar = document.createElement("div");
+        this.flyThroughToolbar.classList.add("fly-through-toolbar");
+
+        this.flyThroughToolbar.setAttribute("role", "fly-through-toolbar");
+        this.flyThroughToolbar.setAttribute("aria-label", "Fire Trail Tools");
+        this.flyThroughToolbar.classList.add("fly-through-toolbar");
+        // set  fireTrailToolbar position
+        this.flyThroughToolbar.style.position = "absolute";
+        this.flyThroughToolbar.style.transform = `translate(${120}px, ${-320}px)`;
+
+        this.shadowRoot.appendChild(this.flyThroughToolbar);
     }
 
     /**
@@ -347,15 +376,10 @@ export class FlyThrough extends HTMLElement {
             return buttons;
         }
 
-        // setup fly through container
-        this.flyThroughContainer = document.createElement("div");
-        this.flyThroughContainer.classList.add("fly-through-container");
-        this.shadowRoot.appendChild(this.flyThroughContainer);
-
         // fly path container
         const flyPathContainer = document.createElement("div");
         flyPathContainer.classList.add("fly-path-container");
-        this.flyThroughContainer.appendChild(flyPathContainer);
+        this.flyThroughToolbar.appendChild(flyPathContainer);
         // fly path buttons
         const flyPathButtonsConfig = buttonsConfig.filter(button => button.key === "fly" || button.key === "replay" || button.key === "editFlyPath" || button.key === "showFlyPath");
         const flyPathButtons = createButtons(flyPathButtonsConfig);
@@ -365,7 +389,7 @@ export class FlyThrough extends HTMLElement {
         // kml container
         const kmlContainer = document.createElement("div");
         kmlContainer.classList.add("kml-container");
-        this.flyThroughContainer.appendChild(kmlContainer);
+        this.flyThroughToolbar.appendChild(kmlContainer);
         // kml buttons
         const kmlButtonsConfig = buttonsConfig.filter(button => button.key === "importKml" || button.key === "exportKml");
         const kmlButtons = createButtons(kmlButtonsConfig);
@@ -374,7 +398,7 @@ export class FlyThrough extends HTMLElement {
         // screen recording container
         const screenRecordingContainer = document.createElement("div");
         screenRecordingContainer.classList.add("screen-recording-container");
-        this.flyThroughContainer.appendChild(screenRecordingContainer);
+        this.flyThroughToolbar.appendChild(screenRecordingContainer);
         // screen recording buttons
         const screenRecordingButtonsConfig = buttonsConfig.filter(button => button.key === "recordScreen" || button.key === "pauseResume");
         const screenRecordingButtons = createButtons(screenRecordingButtonsConfig);
