@@ -1,8 +1,10 @@
 
 import { StateManager } from "../lib/state/StateManager.js";
-import EventEmitter from "eventemitter3";
+// import EventEmitter from "eventemitter3";
+import sharedEmitter from "../lib/events/ShareEmitter.js";
 import { CesiumMeasure } from "./CesiumMeasure.js";
 import { GoogleMeasure } from "./GoogleMeasure.js";
+import { LeafletMeasure } from "./LeafletMeasure.js";
 import dataPool from "../lib/data/DataPool.js";
 
 export class MeasureToolbox {
@@ -15,7 +17,7 @@ export class MeasureToolbox {
         this._cesiumPkg = null;
 
         // event emitter: to sync measure data between different maps 
-        this.emitter = new EventEmitter();
+        this.emitter = sharedEmitter;
 
         // state manager
         this.stateManager = new StateManager(this.emitter);
@@ -30,7 +32,10 @@ export class MeasureToolbox {
         this._type = type;
 
         // google map
-        this._map = null;
+        this._googleMap = null;
+
+        // leaflet map
+        this._leafletMap = null;
     }
 
     /*********************
@@ -60,12 +65,22 @@ export class MeasureToolbox {
         this.initializeMeasureToolbox(this.type);
     }
 
-    get map() {
-        return this._map;
+    get googleMap() {
+        return this._googleMap;
     }
 
-    set map(map) {
-        this._map = map;
+    set googleMap(map) {
+        this._googleMap = map;
+
+        this.initializeMeasureToolbox(this.type);
+    }
+
+    get leafletMap() {
+        return this._leafletMap;
+    }
+
+    set leafletMap(map) {
+        this._leafletMap = map;
 
         this.initializeMeasureToolbox(this.type);
     }
@@ -82,13 +97,16 @@ export class MeasureToolbox {
         switch (mapType) {
             case 'map-cesium':
                 this.initializeCesiumMeasure(this.viewer, this.cesiumPkg);
-                break;
+                break;  // Add this break
+
             case 'map-google':
-                this.initializeGoogleMeasure(this.map);
-                break;
+                this.initializeGoogleMeasure(this.googleMap);
+                break;  // Add this break
+
             case 'map-leaflet':
-                this.initializeLeafletMeasure();
-                break;
+                this.initializeLeafletMeasure(this.leafletMap);
+                break;  // Add this break
+
             default:
                 console.error('Invalid map type');
                 break;
@@ -123,15 +141,23 @@ export class MeasureToolbox {
         this.googleMeasure.app = this.app;
         this.googleMeasure.emitter = this.emitter;
         this.googleMeasure.stateManager = this.stateManager;
-        // append cesium measure to map-cesium shadow root
+        // append google measure to map-cesium shadow root
         const mapGoogle = document.querySelector("map-google");
         if (!mapGoogle) return;
         mapGoogle.shadowRoot.appendChild(this.googleMeasure);
     }
 
     // Initialize leaflet measure
-    initializeLeafletMeasure() {
+    initializeLeafletMeasure(map) {
         // create html element for leaflet measure
         this.leafletMeasure = document.createElement("leaflet-measure");
+        this.leafletMeasure.map = map;
+        this.leafletMeasure.app = this.app;
+        this.leafletMeasure.emitter = this.emitter;
+        this.leafletMeasure.stateManager = this.stateManager;
+        // append google measure to map-cesium shadow root
+        const mapLeaflet = document.querySelector("map-leaflet");
+        if (!mapLeaflet) return;
+        mapLeaflet.shadowRoot.appendChild(this.leafletMeasure);
     }
 }

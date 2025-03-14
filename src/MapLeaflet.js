@@ -1,5 +1,6 @@
 import L from "leaflet";
-
+import { mapStyle } from "./styles/mapStyle";
+import { MeasureToolbox } from "./components/MeasureToolbox";
 export default class MapLeaflet extends HTMLElement {
     constructor() {
         super();
@@ -10,6 +11,20 @@ export default class MapLeaflet extends HTMLElement {
         this.type = "map-leaflet";
 
         this._isListening = true; // Flag to track if the listener is active
+
+        this.measureToolbox = null;
+
+        // mimic navigator app variable for user and user roles
+        this.app = {
+            log: ["testing"],
+            currentUser: {
+                sessions: {
+                    navigator: {
+                        roles: ["fireTrail", "developer", "tester", "flyThrough"]
+                    }
+                }
+            }
+        }
     }
 
     get mapEmitter() {
@@ -20,7 +35,14 @@ export default class MapLeaflet extends HTMLElement {
         this._mapEmitter = emitter;
     }
 
+    get map() {
+        return this._map;
+    }
+
     async connectedCallback() {
+        // Apply the map style
+        this.shadowRoot.adoptedStyleSheets = [mapStyle];
+
         // apply leaflet style due to shadow dom
         this.leafletStyle = document.createElement("link");
         this.leafletStyle.rel = "stylesheet";
@@ -33,7 +55,13 @@ export default class MapLeaflet extends HTMLElement {
         this.div.style.height = "100%";
         this.shadowRoot.appendChild(this.div);
 
-        await this._initialize();
+        try {
+            await this._initialize().then(() => {
+                this.measureToolbox = this.initializeMeasureToolbox();
+            })
+        } catch (error) {
+            console.error("Error initializing Leaflet Maps:", error);
+        }
     }
 
     async _initialize() {
@@ -105,6 +133,14 @@ export default class MapLeaflet extends HTMLElement {
             this._map.off('moveend', this._handleMapMove);
             this._isListening = false;
         }
+    }
+
+    initializeMeasureToolbox() {
+        if (!this.map) return; // Return if map is not initialized
+
+        const measureToolbox = new MeasureToolbox(this.app, this.type);
+        measureToolbox.leafletMap = this.map;
+        return measureToolbox;
     }
 }
 

@@ -1,17 +1,17 @@
-import { Loader } from '@googlemaps/js-api-loader';
-import { sharedStyleSheet } from '../styles/sharedStyle.js';
+import { Loader } from "@googlemaps/js-api-loader";
+import { sharedStyleSheet } from "../styles/sharedStyle.js";
 import {
     createPointMarker,
     createPointMarkers,
     createPolyline,
     createPolylines,
     removePointMarker,
-    removePolyline
-} from '../lib/helper/googleHelper.js';
+    removePolyline,
+} from "../lib/helper/googleHelper.js";
 export default class GoogleMeasure extends HTMLElement {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
+        this.attachShadow({ mode: "open" });
 
         this._stateManager = null;
         this._emitter = null;
@@ -19,20 +19,18 @@ export default class GoogleMeasure extends HTMLElement {
         // navigator app
         this._app = null;
 
-        this._data = []; // for testing 
+        this._data = [];
 
         this._map = null;
-
-        this.overlays = [111];
     }
 
     set app(app) {
-        this._app = app
-        this.log = app.log
+        this._app = app;
+        this.log = app.log;
     }
 
     get app() {
-        return this._app
+        return this._app;
     }
 
     get stateManager() {
@@ -67,17 +65,13 @@ export default class GoogleMeasure extends HTMLElement {
     }
 
     _initialize() {
-        console.log(this.map, this.emitter)
         if (!this.map || !this.emitter) {
             return;
         }
         // this._createUI();
         this.emitter.on("data:updated", (data) => {
-            console.log("🚀 data:", data);
-
             this._drawFromData(data);
-        })
-
+        });
     }
 
     // _createUI() {
@@ -95,12 +89,12 @@ export default class GoogleMeasure extends HTMLElement {
     // }
 
     /**
-      * Processes the updated data to add or update overlays on the map.
-      *
-      * @param {Object} data - The data object containing overlay information.
-      * @param {Array<{latitude: number, longitude: number}>} data.coordinates - Array of coordinate objects.
-      * @returns {void}
-      */
+     * Processes the updated data to add or update overlays on the map.
+     *
+     * @param {Object} data - The data object containing overlay information.
+     * @param {Array<{latitude: number, longitude: number}>} data.coordinates - Array of coordinate objects.
+     * @returns {void}
+     */
     _drawFromData(data) {
         // Ensure coordinates exist.
         if (!data.coordinates) return;
@@ -109,7 +103,7 @@ export default class GoogleMeasure extends HTMLElement {
         let polylines = [];
 
         // Find an existing record with the same id.
-        const existingMeasure = this._data.find(item => item.id === data.id);
+        const existingMeasure = this._data.find((item) => item.id === data.id);
 
         if (!existingMeasure) {
             // New data: create overlays using the class's wrapper methods.
@@ -120,26 +114,27 @@ export default class GoogleMeasure extends HTMLElement {
             this._data.push({ ...data, overlays: { markers, polylines } });
         } else {
             // Check if coordinates have changed.
-            const coordsEqual = existingMeasure.coordinates.length === data.coordinates.length &&
-                existingMeasure.coordinates.every((pos, i) =>
-                    pos.latitude === data.coordinates[i].latitude &&
-                    pos.longitude === data.coordinates[i].longitude
+            const coordsEqual =
+                existingMeasure.coordinates.length === data.coordinates.length &&
+                existingMeasure.coordinates.every(
+                    (pos, i) =>
+                        pos.latitude === data.coordinates[i].latitude &&
+                        pos.longitude === data.coordinates[i].longitude
                 );
 
             if (coordsEqual) return; // No changes, so exit.
 
             // Remove old overlays using the class's wrapper removal methods.
-            existingMeasure.overlays.markers?.forEach(marker => this._removePointMarker(marker));
-            existingMeasure.overlays.polylines?.forEach(line => this._removePolyline(line));
+            existingMeasure.overlays.markers?.forEach((marker) => this._removePointMarker(marker));
+            existingMeasure.overlays.polylines?.forEach((line) => this._removePolyline(line));
 
             // Create new overlays
             const markers = this._addPointMarkersFromArray(data.coordinates) || [];
             const polylines = this._addPolylinesFromArray(data.coordinates) || [];
 
             // Update the existing record with the new overlays.
-            const measureIndex = this._data.findIndex(item => item.id === data.id);
+            const measureIndex = this._data.findIndex((item) => item.id === data.id);
             this._data[measureIndex] = { ...data, overlays: { markers, polylines } };
-
         }
     }
 
@@ -168,4 +163,4 @@ export default class GoogleMeasure extends HTMLElement {
     }
 }
 
-customElements.define('google-measure', GoogleMeasure);
+customElements.define("google-measure", GoogleMeasure);

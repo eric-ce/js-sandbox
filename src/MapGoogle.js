@@ -72,9 +72,7 @@ export class MapGoogle extends HTMLElement {
         try {
             await this._loader.load();
             await this._initialize().then(() => {
-                const googleMeasure = this.shadowRoot.querySelector("google-measure");
-                this.measureToolbox = googleMeasure || this.initializeMeasureToolbox();
-
+                this.measureToolbox = this.initializeMeasureToolbox();
             })
 
         } catch (error) {
@@ -85,6 +83,7 @@ export class MapGoogle extends HTMLElement {
 
     async _initialize() {
         this.map = await this._createMap();
+
         // Optionally trigger a resize to ensure proper rendering
         setTimeout(() => {
             if (this._map) {
@@ -196,23 +195,12 @@ export class MapGoogle extends HTMLElement {
         }
     }
 
-    addMarker(lat, lng, title = "") {
-        if (this._map) {
-            return new google.maps.Marker({
-                position: { lat, lng },
-                map: this._map,
-                title
-            });
-        }
-        return null;
-    }
-
     // initialize measure toolbox for cesium
     initializeMeasureToolbox() {
         if (!this.map) return; // Return if map is not initialized
 
         const measureToolbox = new MeasureToolbox(this.app, this.type);
-        measureToolbox.map = this.map;
+        measureToolbox.googleMap = this.map;
         return measureToolbox;
     }
 
