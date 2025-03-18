@@ -116,7 +116,6 @@ export class MeasureToolbox {
     // Initialize cesium measure
     initializeCesiumMeasure(viewer, cesiumPkg) {
         if (!this.viewer || !this.cesiumPkg) return; // error handling: check if viewer and cesium package is available
-
         // create html element for cesium measure
         this.cesiumMeasure = document.createElement("cesium-measure");
 
@@ -135,6 +134,11 @@ export class MeasureToolbox {
 
     // Initialize google measure
     initializeGoogleMeasure(map) {
+        if (!map) return;
+
+        // If already exists and is in DOM, don't recreate
+        if (this.googleMeasure && this.googleMeasure.isConnected) return;
+
         // create html element for google measure
         this.googleMeasure = document.createElement("google-measure");
         this.googleMeasure.map = map;
@@ -149,8 +153,14 @@ export class MeasureToolbox {
 
     // Initialize leaflet measure
     initializeLeafletMeasure(map) {
+        if (!map) return;
+
+        // If already exists and is in DOM, don't recreate
+        if (this.leafletMeasure && this.leafletMeasure.isConnected) return;
+
         // create html element for leaflet measure
         this.leafletMeasure = document.createElement("leaflet-measure");
+
         this.leafletMeasure.map = map;
         this.leafletMeasure.app = this.app;
         this.leafletMeasure.emitter = this.emitter;
