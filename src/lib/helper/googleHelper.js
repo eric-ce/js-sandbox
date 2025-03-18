@@ -6,24 +6,38 @@
  * @param {google.maps.Map} map - The Google Map instance.
  * @param {{latitude: number, longitude: number}} position - The marker's position.
  * @param {string} [color="#FF0000"] - The color for the marker.
+ * @param {Object} [options={}] - Additional options for marker styling.
  * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
  */
-export function createPointMarker(map, position, color = "#FF0000") {
+export function createPointMarker(map, position, color = "#FF0000", options = {}) {
     if (!map) return;
     if (!position || !position.latitude || !position.longitude) return;
 
-    // Create a dot element for advanced marker content.
-    const dotElement = document.createElement("div");
-    dotElement.style.width = "10px"; // Adjust for visibility
-    dotElement.style.height = "10px";
-    dotElement.style.backgroundColor = color;
-    dotElement.style.borderRadius = "50%";
-    dotElement.style.position = "absolute";
-    dotElement.style.top = "50%";
-    dotElement.style.left = "50%";
-    dotElement.style.transform = "translate(-50%, -50%)";
+    let defaultOptions;
 
     if (map.mapId) {
+        defaultOptions = {
+            width: "10px",
+            height: "10px",
+            backgroundColor: color,
+            borderRadius: "50%",
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+        }
+
+        // Merge default options with user provided options
+        const markerOptions = { ...defaultOptions, ...options };
+
+        // Create a dot element for advanced marker content.
+        const dotElement = document.createElement("div");
+
+        // Apply all styles from markerOptions to the dotElement
+        Object.keys(markerOptions).forEach(key => {
+            dotElement.style[key] = markerOptions[key];
+        });
+
         // Use AdvancedMarkerElement for vector maps with custom styling.
         return new google.maps.marker.AdvancedMarkerElement({
             map,
@@ -32,6 +46,16 @@ export function createPointMarker(map, position, color = "#FF0000") {
             title: "Dot Marker",
         });
     } else {
+        defaultOptions = {
+            fillColor: color,
+            fillOpacity: 1,
+            strokeWeight: 0,
+            scale: 5, // Adjust the size as needed
+        }
+
+        // Merge default options with user provided options
+        const markerOptions = { ...defaultOptions, ...options };
+
         // Use the traditional Marker for raster maps (or when no mapId is provided).
         return new google.maps.Marker({
             map,
@@ -39,10 +63,7 @@ export function createPointMarker(map, position, color = "#FF0000") {
             title: "Dot Marker",
             icon: {
                 path: google.maps.SymbolPath.CIRCLE,
-                fillColor: color,
-                fillOpacity: 1,
-                strokeWeight: 0,
-                scale: 5, // Adjust the size as needed
+                ...markerOptions
             },
         });
     }
@@ -54,13 +75,14 @@ export function createPointMarker(map, position, color = "#FF0000") {
  * @param {google.maps.Map} map - The Google Map instance.
  * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
  * @param {string} [color="#FF0000"] - The color for the markers.
+ * @param {Object} [options={}] - Additional options for marker styling.
  * @returns {Array<google.maps.marker.AdvancedMarkerElement|google.maps.Marker>|undefined} An array of marker elements.
  */
-export function createPointMarkers(map, positions, color = "#FF0000") {
+export function createPointMarkers(map, positions, color = "#FF0000", options = {}) {
     if (!map) return;
     if (!positions || positions.length <= 0) return;
 
-    return positions.map((pos) => createPointMarker(map, pos, color));
+    return positions.map((pos) => createPointMarker(map, pos, color, options));
 }
 
 /**
@@ -69,20 +91,27 @@ export function createPointMarkers(map, positions, color = "#FF0000") {
  * @param {google.maps.Map} map - The Google Map instance.
  * @param {Array<{latitude: number, longitude: number}>} positions - Array containing exactly two position objects.
  * @param {string} [color="#A52A2A"] - Stroke color for the polyline.
+ * @param {Object} [options={}] - Additional options for polyline styling.
  * @returns {google.maps.Polyline|undefined} The created polyline if valid; otherwise, undefined.
  */
-export function createPolyline(map, positions, color = "#A52A2A") {
+export function createPolyline(map, positions, color = "#A52A2A", options = {}) {
     if (!map) return;
     if (!positions || positions.length !== 2) return;
 
     const linePositions = positions.map(pos => convertToGoogleCoord(pos));
 
-    const polyline = new google.maps.Polyline({
-        path: linePositions,
+    const defaultOptions = {
         strokeColor: color,
         strokeOpacity: 1.0,
         strokeWeight: 4,
+    }
+    // Merge default options with user provided options
+    const polylineOptions = { ...defaultOptions, ...options };
+
+    const polyline = new google.maps.Polyline({
         map,
+        path: linePositions,
+        ...polylineOptions
     });
 
     // Store original positions data on the polyline.
@@ -97,18 +126,57 @@ export function createPolyline(map, positions, color = "#A52A2A") {
  * @param {google.maps.Map} map - The Google Map instance.
  * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
  * @param {string} [color="#A52A2A"] - Stroke color for the polylines.
+ * @param {Object} [options={}] - Additional options for polyline styling.
  * @returns {Array<google.maps.Polyline>|undefined} An array of created polylines if valid; otherwise, undefined.
  */
-export function createPolylines(map, positions, color = "#A52A2A") {
+export function createPolylines(map, positions, color = "#A52A2A", options = {}) {
     if (!map) return;
     if (!positions || positions.length < 2) return;
 
     const polylines = [];
     for (let i = 0; i < positions.length - 1; i++) {
-        const polyline = createPolyline(map, [positions[i], positions[i + 1]], color);
+        const polyline = createPolyline(map, [positions[i], positions[i + 1]], color, options);
         polylines.push(polyline);
     }
     return polylines;
+}
+
+/**
+ * Creates a polygon on a Google Map
+ * @param {google.maps.Map} map - The Google Map instance
+ * @param {Array} positions - Array of lat/lng positions: [{lat: number, lng: number}, ...]
+ * @param {string} [color="#FF0000"] - The color for the polygon
+ * @param {Object} options - Additional options for polygon styling.
+ * @returns {google.maps.Polygon} - The created polygon instance
+ */
+export function createPolygon(map, positions, color = "#FF0000", options = {}) {
+    if (!map) return;
+    if (!positions || positions.length < 3) return;
+
+    const convertPositions = positions.map(pos => convertToGoogleCoord(pos));
+    if (!convertPositions) return;
+
+    // Default styling options
+    const defaultOptions = {
+        strokeColor: color,
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: color,
+        fillOpacity: 0.35,
+        editable: false
+    };
+
+    // Merge default options with user provided options
+    const polygonOptions = { ...defaultOptions, ...options };
+
+    // Create the polygon
+    const polygon = new google.maps.Polygon({
+        map: map,
+        paths: convertPositions,
+        ...polygonOptions
+    });
+
+    return polygon;
 }
 
 /**
@@ -131,6 +199,15 @@ export function removePolyline(polyline) {
     polyline.setMap(null);
 }
 
+/**
+ * Removes a polygon from the map
+ * 
+ * @param {google.maps.Polygon} polygon - The polygon to remove
+ */
+export function removePolygon(polygon) {
+    if (!polygon) return;
+    polygon.setMap(null);
+}
 
 /**
  * Converts a coordinate object with latitude/longitude properties to Google Maps LatLng format

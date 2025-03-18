@@ -1,17 +1,20 @@
 import {
     createCircleMarker,
     createCircleMarkers,
+    createPolygon,
     createPolyline,
     createPolylines,
     removeMarker,
+    removePolygon,
     removePolyline,
 } from "../lib/helper/leafletHelper.js";
 import { sharedStyleSheet } from "../styles/sharedStyle.js";
+import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
-export default class LeafLetMeasure extends HTMLElement {
+export default class LeafLetMeasure extends MeasureComponentBase {
     constructor() {
         super();
-        this.attachShadow({ mode: "open" });
+        // this.attachShadow({ mode: "open" });
 
         this._stateManager = null;
         this._emitter = null;
@@ -80,17 +83,26 @@ export default class LeafLetMeasure extends HTMLElement {
 
         let markers = [];
         let polylines = [];
+        let polygon = null;
 
         // Find an existing record with the same id.
         const existingMeasure = this._data.find((item) => item.id === data.id);
 
         if (!existingMeasure) {
-            // New data: create vectors using the class's wrapper methods.
-            markers = this._addCircleMarkersFromArray(data.coordinates) || [];
-            polylines = this._addPolyline(data.coordinates) || [];
+            // create new overlays based on the data mode.
+            switch (data.mode) {
+                case "polygon":
+                    polygon = this._addPolygon(data.coordinates);
+                    break;
+                default:
+                    // New data: create vectors using the class's wrapper methods.
+                    markers = this._addPointMarkersFromArray(data.coordinates) || [];
+                    polylines = this._addPolyline(data.coordinates) || [];
+                    break;
+            }
 
             // Store the new record along with its vectors.
-            this._data.push({ ...data, vectors: { markers, polylines } });
+            this._data.push({ ...data, vectors: { markers, polylines, polygon } });
         } else {
             // Check if coordinates have changed.
             const coordsEqual =
@@ -103,34 +115,55 @@ export default class LeafLetMeasure extends HTMLElement {
 
             if (coordsEqual) return; // No changes, so exit.
 
-            // Remove old vectors using the class's wrapper removal methods.
-            existingMeasure.vectors.markers?.forEach((marker) => this._removePointMarker(marker));
-            existingMeasure.vectors.polylines?.forEach((line) => this._removePolyline(line));
+            // Update the vectors based on the data mode.
+            switch (data.mode) {
+                case "polygon":
+                    // Remove old vectors
+                    if (existingMeasure.vectors.polygon) {
+                        this._removePolygon(existingMeasure.vectors.polygon);
+                    }
+                    existingMeasure.vectors.markers?.forEach((marker) => this._removePointMarker(marker));
 
-            // Create new vectors
-            markers = this._addCircleMarkersFromArray(data.coordinates) || [];
-            polylines = this._addPolylinesFromArray(data.coordinates) || [];
+                    // Create new vectors
+                    polygon = this._addPolygon(data.coordinates);
+                    markers = this._addPointMarkersFromArray(data.coordinates) || [];
+
+                    break;
+                default:
+                    // Remove old vectors using the class's wrapper removal methods.
+                    existingMeasure.vectors.markers?.forEach((marker) => this._removePointMarker(marker));
+                    existingMeasure.vectors.polylines?.forEach((line) => this._removePolyline(line));
+
+                    // Create new vectors
+                    markers = this._addPointMarkersFromArray(data.coordinates) || [];
+                    polylines = this._addPolylinesFromArray(data.coordinates) || [];
+                    break;
+            }
 
             // Update the existing record with the new vectors.
             const measureIndex = this._data.findIndex((item) => item.id === data.id);
-            this._data[measureIndex] = { ...data, vectors: { markers, polylines } };
+            this._data[measureIndex] = { ...data, vectors: { markers, polylines, polygon } };
         }
     }
 
-    _addCircleMarker(position, color = "#FF0000") {
-        return createCircleMarker(this.map, position, color);
+    _addPointMarker(position, color = "#FF0000", options = {}) {
+        return createCircleMarker(this.map, position, color, options);
     }
 
-    _addCircleMarkersFromArray(positions, color = "#FF0000") {
-        return createCircleMarkers(this.map, positions, color);
+    _addPointMarkersFromArray(positions, color = "#FF0000", options = {}) {
+        return createCircleMarkers(this.map, positions, color, options);
     }
 
-    _addPolyline(positions, color = "#A52A2A") {
-        return createPolyline(this.map, positions, color);
+    _addPolyline(positions, color = "#A52A2A", options = {}) {
+        return createPolyline(this.map, positions, color, options);
     }
 
-    _addPolylinesFromArray(positions, color = "#A52A2A") {
-        return createPolylines(this.map, positions, color);
+    _addPolylinesFromArray(positions, color = "#A52A2A", options = {}) {
+        return createPolylines(this.map, positions, color, options);
+    }
+
+    _addPolygon(positions, color = "#3388ff", options = {}) {
+        return createPolygon(this.map, positions, color, options);
     }
 
     _removePointMarker(marker) {
@@ -139,6 +172,10 @@ export default class LeafLetMeasure extends HTMLElement {
 
     _removePolyline(polyline) {
         removePolyline(polyline);
+    }
+
+    _removePolygon(polygon) {
+        removePolygon(polygon);
     }
 }
 

@@ -4,23 +4,28 @@
  * @param {L.Map} map - The Leaflet Map instance.
  * @param {{latitude: number, longitude: number}} position - The marker's position.
  * @param {string} [color="#FF0000"] - The color for the marker.
+ * @param {Object} [options={}] - Additional options for the circle marker.
  * @returns {L.CircleMarker|undefined} The created circle marker.
  */
-export function createCircleMarker(map, position, color = "#FF0000") {
+export function createCircleMarker(map, position, color = "#FF0000", options = {}) {
     if (!map) return;
     if (!position || !position.latitude || !position.longitude) return;
+
+    const defaultOptions = {
+        radius: 5,
+        fillColor: color,
+        color: color,
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.8
+    }
+    // Merge default options with user provided options
+    const circleMarkerOptions = { ...defaultOptions, ...options };
 
     // Create a circle marker (dot)
     const marker = L.circleMarker(
         [position.latitude, position.longitude],
-        {
-            radius: 5,
-            fillColor: color,
-            color: color,
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
-        }
+        { ...circleMarkerOptions }
     ).addTo(map);
 
     // Store the original position on the marker for reference
@@ -35,57 +40,14 @@ export function createCircleMarker(map, position, color = "#FF0000") {
  * @param {L.Map} map - The Leaflet Map instance.
  * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
  * @param {string} [color="#FF0000"] - The color for the markers.
+ * @param {Object} [options={}] - Additional options for the circle markers.
  * @returns {Array<L.CircleMarker>|undefined} An array of circle marker elements.
  */
-export function createCircleMarkers(map, positions, color = "#FF0000") {
+export function createCircleMarkers(map, positions, color = "#FF0000", options = {}) {
     if (!map) return;
     if (!positions || positions.length <= 0) return;
 
-    return positions.map((pos) => createCircleMarker(map, pos, color));
-}
-
-/**
- * Creates a standard marker with an icon on the provided map.
- *
- * @param {L.Map} map - The Leaflet Map instance.
- * @param {{latitude: number, longitude: number}} position - The marker's position.
- * @param {Object} [options] - Options for the marker
- * @param {string} [options.title] - Tooltip text for the marker
- * @param {L.Icon} [options.icon] - Custom icon for the marker
- * @returns {L.Marker|undefined} The created marker.
- */
-export function createMarker(map, position, options = {}) {
-    if (!map) return;
-    if (!position || !position.latitude || !position.longitude) return;
-
-    const marker = L.marker(
-        [position.latitude, position.longitude],
-        options
-    ).addTo(map);
-
-    // Store the original position on the marker for reference
-    marker.position = { ...position };
-
-    if (options.title) {
-        marker.bindTooltip(options.title);
-    }
-
-    return marker;
-}
-
-/**
- * Creates multiple standard markers on the provided map from an array of positions.
- *
- * @param {L.Map} map - The Leaflet Map instance.
- * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
- * @param {Object} [options] - Options for the markers
- * @returns {Array<L.Marker>|undefined} An array of marker elements.
- */
-export function createMarkers(map, positions, options = {}) {
-    if (!map) return;
-    if (!positions || positions.length <= 0) return;
-
-    return positions.map((pos) => createMarker(map, pos, options));
+    return positions.map((pos) => createCircleMarker(map, pos, color, options));
 }
 
 /**
@@ -93,20 +55,18 @@ export function createMarkers(map, positions, options = {}) {
  *
  * @param {L.Map} map - The Leaflet Map instance.
  * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
- * @param {Object} [options] - Options for the polyline
- * @param {string} [options.color="#A52A2A"] - Stroke color for the polyline.
- * @param {number} [options.weight=4] - Stroke width in pixels
- * @param {number} [options.opacity=1.0] - Stroke opacity
+ * @param {string} [color="#A52A2A"] - Stroke color for the polyline.
+ * @param {Object} [options={}] - Additional options for the polyline
  * @returns {L.Polyline|undefined} The created polyline if valid; otherwise, undefined.
  */
-export function createPolyline(map, positions, options = {}) {
+export function createPolyline(map, positions, color = "#A52A2A", options = {}) {
     if (!map) return;
     if (!positions || positions.length < 2) return;
 
     const linePositions = positions.map(pos => [pos.latitude, pos.longitude]);
 
     const defaultOptions = {
-        color: "#A52A2A",
+        color: color,
         weight: 4,
         opacity: 1.0,
         smoothFactor: 1
@@ -127,19 +87,55 @@ export function createPolyline(map, positions, options = {}) {
  *
  * @param {L.Map} map - The Leaflet Map instance.
  * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
- * @param {Object} [options] - Options for the polylines
+ * @param {string} [color="#A52A2A"] - Stroke color for the polylines.
+ * @param {Object} [options={}] - Additional options for the polylines
  * @returns {Array<L.Polyline>|undefined} An array of created polylines if valid; otherwise, undefined.
  */
-export function createPolylines(map, positions, options = {}) {
+export function createPolylines(map, positions, color, options = {}) {
     if (!map) return;
     if (!positions || positions.length < 2) return;
 
     const polylines = [];
     for (let i = 0; i < positions.length - 1; i++) {
-        const polyline = createPolyline(map, [positions[i], positions[i + 1]], options);
+        const polyline = createPolyline(map, [positions[i], positions[i + 1]], color, options);
         polylines.push(polyline);
     }
     return polylines;
+}
+
+/**
+ * Draws a polygon on a Leaflet map
+ * @param {L.Map} map - The Leaflet map instance
+ * @param {Array} positions - Array of lat/lng positions: [[lat, lng], [lat, lng], ...]
+ * @param {string} [color="#3388ff"] - The color for the polygon
+ * @param {Object} [options={}] - Optional styling options for the polygon
+ * @returns {L.Polygon} - The created polygon instance
+ */
+export function createPolygon(map, positions, color = "#3388ff", options = {}) {
+    if (!map) return;
+    if (!positions || positions.length < 3) return;
+
+    const polygonPositions = positions.map(pos => [pos.latitude, pos.longitude]);
+
+    // Default styling options
+    const defaultOptions = {
+        color: color,
+        weight: 3,
+        opacity: 0.8,
+        fillColor: color,
+        fillOpacity: 0.2
+    };
+
+    // Merge default options with user provided options
+    const polygonOptions = { ...defaultOptions, ...options };
+
+    // Create the polygon
+    const polygon = L.polygon(polygonPositions, polygonOptions);
+
+    // Add the polygon to the map
+    polygon.addTo(map);
+
+    return polygon;
 }
 
 /**
@@ -161,6 +157,17 @@ export function removePolyline(polyline) {
     if (!polyline) return;
     polyline.remove();
 }
+
+/**
+ * Removes a polygon from the map
+ * 
+ * @param {L.Polygon} polygon - The polygon to remove
+ */
+export function removePolygon(polygon) {
+    if (!polygon) return;
+    polygon.remove();
+}
+
 
 /**
  * Converts Leaflet LatLng to standard coordinate object format

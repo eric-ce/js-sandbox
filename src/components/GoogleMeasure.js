@@ -5,13 +5,16 @@ import {
     createPointMarkers,
     createPolyline,
     createPolylines,
+    createPolygon,
     removePointMarker,
     removePolyline,
+    removePolygon,
 } from "../lib/helper/googleHelper.js";
-export default class GoogleMeasure extends HTMLElement {
+import { MeasureComponentBase } from "./MeasureComponentBase.js";
+export default class GoogleMeasure extends MeasureComponentBase {
     constructor() {
         super();
-        this.attachShadow({ mode: "open" });
+        // this.attachShadow({ mode: "open" });
 
         this._stateManager = null;
         this._emitter = null;
@@ -101,17 +104,25 @@ export default class GoogleMeasure extends HTMLElement {
 
         let markers = [];
         let polylines = [];
+        let polygon = null;
 
         // Find an existing record with the same id.
         const existingMeasure = this._data.find((item) => item.id === data.id);
 
         if (!existingMeasure) {
-            // New data: create overlays using the class's wrapper methods.
-            markers = this._addPointMarkersFromArray(data.coordinates) || [];
-            polylines = this._addPolylinesFromArray(data.coordinates) || [];
+            // create new overlays based on the data mode.
+            switch (data.mode) {
+                case "polygon":
+                    polygon = this._addPolygon(data.coordinates);
+                    break;
+                default:
+                    markers = this._addPointMarkersFromArray(data.coordinates) || [];
+                    polylines = this._addPolylinesFromArray(data.coordinates) || [];
+                    break;
+            }
 
             // Store the new record along with its overlays.
-            this._data.push({ ...data, overlays: { markers, polylines } });
+            this._data.push({ ...data, overlays: { markers, polylines, polygon } });
         } else {
             // Check if coordinates have changed.
             const coordsEqual =
@@ -124,34 +135,55 @@ export default class GoogleMeasure extends HTMLElement {
 
             if (coordsEqual) return; // No changes, so exit.
 
-            // Remove old overlays using the class's wrapper removal methods.
-            existingMeasure.overlays.markers?.forEach((marker) => this._removePointMarker(marker));
-            existingMeasure.overlays.polylines?.forEach((line) => this._removePolyline(line));
+            // Update the overlays based on the data mode.
+            switch (data.mode) {
+                case "polygon":
+                    // Remove old overlays
+                    if (existingMeasure.overlays.polygon) {
+                        this._removePolygon(existingMeasure.overlays.polygon);
+                    }
+                    existingMeasure.overlays.markers?.forEach((marker) => this._removePointMarker(marker));
 
-            // Create new overlays
-            const markers = this._addPointMarkersFromArray(data.coordinates) || [];
-            const polylines = this._addPolylinesFromArray(data.coordinates) || [];
+                    // Create new overlays
+                    polygon = this._addPolygon(data.coordinates);
+                    markers = this._addPointMarkersFromArray(data.coordinates) || [];
+
+                    break;
+                default:
+                    // Remove old overlays using the class's wrapper removal methods.
+                    existingMeasure.overlays.markers?.forEach((marker) => this._removePointMarker(marker));
+                    existingMeasure.overlays.polylines?.forEach((line) => this._removePolyline(line));
+
+                    // Create new overlays
+                    markers = this._addPointMarkersFromArray(data.coordinates) || [];
+                    polylines = this._addPolylinesFromArray(data.coordinates) || [];
+                    break;
+            }
 
             // Update the existing record with the new overlays.
             const measureIndex = this._data.findIndex((item) => item.id === data.id);
-            this._data[measureIndex] = { ...data, overlays: { markers, polylines } };
+            this._data[measureIndex] = { ...data, overlays: { markers, polylines, polygon } };
         }
     }
 
-    _addPointMarker(position, color = "#FF0000") {
-        return createPointMarker(this.map, position, color);
+    _addPointMarker(position, color = "#FF0000", options = {}) {
+        return createPointMarker(this.map, position, color, options = {});
     }
 
-    _addPointMarkersFromArray(positions, color = "#FF0000") {
-        return createPointMarkers(this.map, positions, color);
+    _addPointMarkersFromArray(positions, color = "#FF0000", options = {}) {
+        return createPointMarkers(this.map, positions, color, options = {});
     }
 
-    _addPolyline(positions, color = "#A52A2A") {
-        return createPolyline(this.map, positions, color);
+    _addPolyline(positions, color = "#A52A2A", options = {}) {
+        return createPolyline(this.map, positions, color, options = {});
     }
 
-    _addPolylinesFromArray(positions, color = "#A52A2A") {
-        return createPolylines(this.map, positions, color);
+    _addPolylinesFromArray(positions, color = "#A52A2A", options = {}) {
+        return createPolylines(this.map, positions, color, options = {});
+    }
+
+    _addPolygon(positions, color = "#A52A2A", options = {}) {
+        return createPolygon(this.map, positions, color, options = {});
     }
 
     _removePointMarker(marker) {
@@ -160,6 +192,10 @@ export default class GoogleMeasure extends HTMLElement {
 
     _removePolyline(polyline) {
         removePolyline(polyline);
+    }
+
+    _removePolygon(polygon) {
+        removePolygon(polygon);
     }
 }
 
