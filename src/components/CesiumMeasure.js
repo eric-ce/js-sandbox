@@ -37,13 +37,12 @@ import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, 
 import { sharedStyleSheet } from '../styles/sharedStyle.js';
 import { LogTable } from './shared/LogTable.js';
 import { HelpTable } from './shared/HelpTable.js';
+import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
-// import { MeasureComponentBase } from "./MeasureComponentBase.js";
-
-export default class CesiumMeasure extends HTMLElement {
+export default class CesiumMeasure extends MeasureComponentBase {
     constructor() {
         super();
-        this.attachShadow({ mode: "open" });
+        // this.attachShadow({ mode: "open" });
         // cesium variables
         this._viewer = null;
         this.handler = null;
