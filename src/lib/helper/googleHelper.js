@@ -180,6 +180,148 @@ export function createPolygon(map, positions, color = "#FF0000", options = {}) {
 }
 
 /**
+ * Creates a label marker on the provided map at the given position.
+ * @param {google.maps.Map} map - The Google Map instance
+ * @param {Array} positions - Array of position objects
+ * @param {Number} text - The text to display in the label
+ * @param {Object} options - Optional configuration for the label marker
+ * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
+ */
+export function createLabelMarker(map, positions, text, options = {}) {
+    console.log("Creating label with text:", text);
+    if (!map || !positions || positions.length < 2 || text == null) return;
+
+    // Format positions and text
+    const formatGoogleCoords = positions.map(pos => convertToGoogleCoord(pos));
+    const formatText = text.toFixed(2) + "m";
+
+    const middlePos = calculateMiddlePos(formatGoogleCoords);
+
+    if (map.mapId) {
+        // AdvancedMarkerElement branch (vector maps)
+        const defaultOptions = {
+            color: "#000000",
+            backgroundColor: "white",
+            fontSize: "16px",
+            fontWeight: "normal",
+            borderColor: "#ccc",
+            padding: "5px",
+            borderRadius: "3px",
+            textAlign: "center",
+            border: "1px solid #ccc",
+            minWidth: "50px",
+            boxSizing: "border-box",
+            offset: { x: 0, y: -20 } // desired offset in pixels
+        };
+        const labelOptions = { ...defaultOptions, ...options };
+        const labelElement = document.createElement("div");
+
+        // Ensure absolute positioning for custom offsets
+        labelElement.style.position = "absolute";
+
+        // Apply style properties (skip non-CSS options)
+        Object.keys(labelOptions).forEach(key => {
+            if (!["title", "zIndex", "clickable", "offset"].includes(key)) {
+                labelElement.style[key] = labelOptions[key];
+            }
+        });
+
+        labelElement.textContent = formatText;
+
+        const markerOptions = {
+            map,
+            position: middlePos,
+            content: labelElement,
+            title: labelOptions.title || "Label Marker",
+            zIndex: labelOptions.zIndex || 1
+        };
+
+        // Use the anchor property to set the offset
+        if (labelOptions.offset) {
+            markerOptions.anchor = new google.maps.Point(labelOptions.offset.x, labelOptions.offset.y);
+        }
+
+        return new google.maps.marker.AdvancedMarkerElement(markerOptions);
+    } else {
+        // Traditional Marker branch (raster maps)
+        const defaultOptions = {
+            fontSize: "16px",
+            fontWeight: "bold",
+            color: "#000000",
+            labelOrigin: new google.maps.Point(0, -20),
+            labelInBackground: true,
+        };
+
+        const labelOptions = { ...defaultOptions, ...options };
+
+        const transparentImage =
+            'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+
+        return new google.maps.Marker({
+            map,
+            position: middlePos,
+            title: options.title || "Label Marker",
+            icon: {
+                url: transparentImage,
+                size: new google.maps.Size(1, 1),
+                origin: new google.maps.Point(0, 0),
+                anchor: new google.maps.Point(0, 0),
+                labelOrigin: new google.maps.Point(0, -20) // Set your Y offset here
+            },
+            label: {
+                text: formatText,
+                color: labelOptions.color,
+                fontWeight: labelOptions.fontWeight,
+                fontSize: labelOptions.fontSize,
+                className: "custom-marker-label"
+            },
+            clickable: labelOptions.clickable !== undefined ? labelOptions.clickable : false,
+            zIndex: labelOptions.zIndex || 1
+        });
+    }
+}
+
+
+/**
+ * Creates multiple label markers for an array of positions and texts.
+ * @param {*} map - The Google Map instance
+ * @param {Array} positions - Array of position objects
+ * @param {Array} textArray - Array of text labels to display
+ * @param {Object} options - Optional configuration for the label markers
+ * @returns {Array} - Array of created markers
+ */
+export function createLabelMarkers(map, positions, textArray, options = {}) {
+    // Validate input parameters
+    if (!map) return [];
+    if (!positions || positions.length < 2) return [];
+    if (!textArray || textArray.length === 0) return [];
+
+    console.log("Creating label markers with textArray:", textArray);
+
+    const labels = [];
+
+    // Create a label for each segment (between consecutive points)
+    // Make sure we don't go beyond array boundaries
+    // const numLabels = Math.min(textArray.length, positions.length - 1);
+
+    for (let i = 0; i < textArray.length; i++) {
+        // Create label for the segment between position i and i+1
+        const label = createLabelMarker(
+            map,
+            [positions[i], positions[i + 1]],
+            textArray[i],
+            options
+        );
+
+        if (label) {
+            labels.push(label);
+        }
+    }
+
+    return labels;
+}
+
+/**
  * Removes a marker from the map.
  *
  * @param {google.maps.marker.AdvancedMarkerElement|google.maps.Marker} marker - The marker to remove.
@@ -209,6 +351,11 @@ export function removePolygon(polygon) {
     polygon.setMap(null);
 }
 
+export function removeLabel(label) {
+    if (!label) return;
+    label.setMap(null);
+}
+
 /**
  * Converts a coordinate object with latitude/longitude properties to Google Maps LatLng format
  * @param {Object} coord - The coordinate object to convert
@@ -220,4 +367,40 @@ export function removePolygon(polygon) {
 export function convertToGoogleCoord(coord) {
     const { latitude, longitude } = coord;
     return { lat: latitude, lng: longitude }
+}
+
+/**
+ * Calculates the top middle position of a given set of positions.
+ * @param {Array<google.maps.LatLng>} positions - Array of Google Maps LatLng objects 
+ * @returns {google.maps.LatLng} - The top middle position
+ */
+function calculateTopMiddlePos(positions) {
+    const bounds = new google.maps.LatLngBounds();
+
+    positions.forEach(position => {
+        bounds.extend(position);
+    });
+
+    // Get the top middle position
+    const northeast = bounds.getNorthEast();
+    const topMiddle = new google.maps.LatLng(
+        northeast.lat(),
+        bounds.getCenter().lng()
+    );
+    return topMiddle;
+};
+
+/**
+ * Calculates the middle position of a given set of positions.
+ * @param {Array<google.maps.LatLng>} positions - Array of Google Maps LatLng objects 
+ * @returns {google.maps.LatLng} - The middle position
+ */
+function calculateMiddlePos(positions) {
+    const bounds = new google.maps.LatLngBounds();
+
+    positions.forEach(position => {
+        bounds.extend(position);
+    });
+
+    return bounds.getCenter();
 }

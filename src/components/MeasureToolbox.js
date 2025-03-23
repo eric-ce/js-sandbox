@@ -94,6 +94,8 @@ export class MeasureToolbox {
      ************/
     // Initialize toolbox, determines which map needs to initialize based on opened map
     initializeMeasureToolbox(mapType) {
+        if (!mapType) return;
+
         switch (mapType) {
             case 'map-cesium':
                 this.initializeCesiumMeasure(this.viewer, this.cesiumPkg);

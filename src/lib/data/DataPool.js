@@ -30,6 +30,10 @@ class DataPool {
         this._emitter = emitter;
     }
 
+    get data() {
+        return this._data;
+    }
+
     /**
      * Adds a new measurement record.
      * @param {Object} measure - A measurement record.
@@ -51,6 +55,7 @@ class DataPool {
         if (this.emitter) {
             // Emit the new data
             this.emitter.emit("data:updated", measure);
+            this.emitter.emit("data", this._data);
         }
     }
 
@@ -99,6 +104,7 @@ class DataPool {
 
         if (this.emitter) {
             this.emitter.emit("data:updated", this._data[measureIndex]);
+            this.emitter.emit("data", this._data);
         }
 
         return this._data[measureIndex];

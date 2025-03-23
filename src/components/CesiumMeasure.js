@@ -6,18 +6,6 @@ import {
     Color,
     Viewer,
 } from "cesium";
-// import { TwoPointsDistance } from "../measure-modes/TwoPointsDistance.js";
-// import { Points } from "../measure-modes/Points.js";
-// import { ThreePointsCurve } from "../measure-modes/ThreePointsCurve.js";
-// import { Height } from "../measure-modes/Height.js";
-// import { MultiDistance } from "../measure-modes/MultiDistance.js";
-// import { MultiDistanceClamped } from "../measure-modes/MultiDistanceClamped.js";
-// import { Polygon } from "../measure-modes/Polygon.js";
-// import { Profile } from "../measure-modes/Profile.js";
-// import { ProfileDistances } from "../measure-modes/ProfileDistances.js";
-// import { Picker } from "../measure-modes/Picker.js";
-// import { FireTrail } from "../measure-modes/fireTrail/FireTrail.js";
-// import { FlyThrough } from "../measure-modes/flyThrough/FlyThrough.js";
 import {
     TwoPointsDistance,
     Points,
