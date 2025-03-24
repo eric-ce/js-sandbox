@@ -185,6 +185,18 @@ export class MeasureComponentBase extends HTMLElement {
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
                 annotations.labels = [this._addLabel(data.coordinates, data._records[0])];
                 break;
+            case "multi_distances":
+            case "multi_distances_clamped":
+            case "profile_distances":
+                annotations.markers = this._addPointMarkersFromArray(data.coordinates);
+                annotations.polylines = this._addPolylinesFromArray(data.coordinates);
+                annotations.labels = this._addLabelsFromArray(data.coordinates, data._records[0]?.distances);
+                // add label for total distance
+                if (data.status === "completed") {
+                    const endCoords = data.coordinates[data.coordinates.length - 1];
+                    annotations.labels && annotations.labels.push(this._addLabel([endCoords, endCoords], data._records[0]?.totalDistance[0]));
+                }
+                break;
             default:
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
                 annotations.polylines = this._addPolylinesFromArray(data.coordinates);

@@ -7,6 +7,8 @@ import {
     removeMarker,
     removePolyline,
     removePolygon,
+    createLabelTooltip,
+    createLabelTooltips
 } from "../lib/helper/leafletHelper.js";
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
@@ -36,6 +38,14 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return createPolygon(this.map, positions, color, options);
     }
 
+    _addLabel(positions, value, options) {
+        return createLabelTooltip(this.map, positions, value, options);
+    }
+
+    _addLabelsFromArray(positions, valueArray, options) {
+        return createLabelTooltips(this.map, positions, valueArray, options);
+    }
+
     _removePointMarker(marker) {
         removeMarker(marker);
     }
@@ -46,6 +56,10 @@ export default class LeafletMeasure extends MeasureComponentBase {
 
     _removePolygon(polygon) {
         removePolygon(polygon);
+    }
+
+    _removeLabel(label) {
+        removeMarker(label);
     }
 }
 

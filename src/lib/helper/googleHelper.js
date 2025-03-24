@@ -187,13 +187,12 @@ export function createPolygon(map, positions, color = "#FF0000", options = {}) {
  * @param {Object} options - Optional configuration for the label marker
  * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
  */
-export function createLabelMarker(map, positions, text, options = {}) {
-    console.log("Creating label with text:", text);
-    if (!map || !positions || positions.length < 2 || text == null) return;
+export function createLabelMarker(map, positions, value, options = {}) {
+    if (!map || !positions || positions.length < 2 || !value) return;
 
     // Format positions and text
     const formatGoogleCoords = positions.map(pos => convertToGoogleCoord(pos));
-    const formatText = text.toFixed(2) + "m";
+    const formatText = value.toFixed(2) + "m";
 
     const middlePos = calculateMiddlePos(formatGoogleCoords);
 
@@ -286,36 +285,25 @@ export function createLabelMarker(map, positions, text, options = {}) {
  * Creates multiple label markers for an array of positions and texts.
  * @param {*} map - The Google Map instance
  * @param {Array} positions - Array of position objects
- * @param {Array} textArray - Array of text labels to display
+ * @param {Number[]} valueArray - Array of text labels to display
  * @param {Object} options - Optional configuration for the label markers
  * @returns {Array} - Array of created markers
  */
-export function createLabelMarkers(map, positions, textArray, options = {}) {
+export function createLabelMarkers(map, positions, valueArray, options = {}) {
+    console.log("🚀 valueArray:", valueArray);
+
     // Validate input parameters
-    if (!map) return [];
-    if (!positions || positions.length < 2) return [];
-    if (!textArray || textArray.length === 0) return [];
-
-    console.log("Creating label markers with textArray:", textArray);
-
+    if (!map || !positions || positions.length < 2 || !valueArray || valueArray.length < 1) return;
     const labels = [];
 
     // Create a label for each segment (between consecutive points)
     // Make sure we don't go beyond array boundaries
-    // const numLabels = Math.min(textArray.length, positions.length - 1);
+    // const numLabels = Math.min(valueArray.length, positions.length - 1);
 
-    for (let i = 0; i < textArray.length; i++) {
+    for (let i = 0; i < valueArray.length; i++) {
         // Create label for the segment between position i and i+1
-        const label = createLabelMarker(
-            map,
-            [positions[i], positions[i + 1]],
-            textArray[i],
-            options
-        );
-
-        if (label) {
-            labels.push(label);
-        }
+        const label = createLabelMarker(map, [positions[i], positions[i + 1]], valueArray[i], options);
+        label && labels.push(label);
     }
 
     return labels;

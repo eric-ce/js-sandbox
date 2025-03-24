@@ -139,6 +139,65 @@ export function createPolygon(map, positions, color = "#3388ff", options = {}) {
 }
 
 /**
+ * Creates a tooltip label on the map displaying the given value at the middle position between two coordinates.
+ * @param {L.Map} map - The Leaflet map instance.
+ * @param {Array} positions - An array containing two position objects with { latitude, longitude }.
+ * @param {number} value - The numerical value to display on the tooltip label.
+ * @param {Object} [options={}] - Optional tooltip options.
+ * @returns {L.Tooltip|undefined} The created tooltip label or undefined if parameters are invalid.
+ */
+export function createLabelTooltip(map, positions, value, options = {}) {
+    if (!map || !positions || positions.length < 2 || !value) return;
+
+    const leafletCoords = positions.map(pos => [pos.latitude, pos.longitude]);
+    const textContent = value.toFixed(2) + "m";
+    const middlePos = calculateMiddlePos(leafletCoords);
+
+    const defaultOptions = {
+        className: "leaflet-label-tooltip",
+        direction: "center",
+        permanent: true,
+        opacity: 0.8,
+        offset: [0, -20]
+    };
+
+    const tooltipOptions = { ...defaultOptions, ...options };
+
+    // Create a permanent tooltip at the middle position with just text.
+    const tooltip = L.tooltip(tooltipOptions)
+        .setContent(textContent)
+        .setLatLng(middlePos)
+        .addTo(map);
+
+    // Store original positions data on the tooltip
+    tooltip.positions = [...positions];
+
+    return tooltip;
+}
+
+/**
+ * Creates multiple tooltip labels on the map for each consecutive pair of positions using corresponding values.
+ * @param {L.Map} map - The Leaflet map instance.
+ * @param {Array} positions - An array of position objects with { latitude, longitude }.
+ * @param {Array<number>} valueArray - An array of values to display for each tooltip label.
+ * @param {Object} [options={}] - Optional tooltip options.
+ * @returns {Array<L.Tooltip>} An array of created tooltip labels.
+ */
+export function createLabelTooltips(map, positions, valueArray, options = {}) {
+    // Validate input parameters
+    if (!map || !positions || positions.length < 2 || !valueArray || valueArray.length < 1) return;
+
+    const tooltips = [];
+    // Loop until the second to last position to prevent an undefined reference.
+    for (let i = 0; i < positions.length - 1; i++) {
+        const tooltip = createLabelTooltip(map, [positions[i], positions[i + 1]], valueArray[i], options);
+        if (tooltip) tooltips.push(tooltip);
+    }
+
+    return tooltips;
+}
+
+/**
  * Removes a marker from the map.
  *
  * @param {L.Marker|L.CircleMarker} marker - The marker to remove.
@@ -168,6 +227,14 @@ export function removePolygon(polygon) {
     polygon.remove();
 }
 
+/**
+ * Remove a label from the map
+ * @param {L.Marker} label 
+ */
+export function removeLabel(label) {
+    if (!label) return;
+    label.remove();
+}
 
 /**
  * Converts Leaflet LatLng to standard coordinate object format
@@ -264,4 +331,13 @@ export function clearMapElements(map, preserveBaseLayers = true) {
             map.removeLayer(layer);
         }
     });
+}
+
+function calculateMiddlePos(positions) {
+    if (!positions || positions.length < 2) return;
+    // bounding box
+    const bounds = L.latLngBounds(positions);
+    const middlePos = bounds.getCenter();
+
+    return middlePos;
 }

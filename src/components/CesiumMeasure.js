@@ -397,7 +397,6 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Create button container that will hold all measure modes buttons
         this._buttonContainer = document.createElement('div');
         this._buttonContainer.classList.add('toolbar-container');
-        this._buttonContainer.style.display = 'flex';
 
         // Initialize a single fragment for all operations
         this._buttonFragment.appendChild(this._buttonContainer);

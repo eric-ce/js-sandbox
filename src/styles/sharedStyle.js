@@ -8,8 +8,8 @@ sharedStyleSheet.replaceSync(`
         box-sizing: border-box;
     }
     .measure-toolbar{ 
-        position: absolute;
         display: flex;
+        flex-direction: row;
     }
     .measure-toolbar button.active, 
     .fire-trail-toolbar button.active {
@@ -26,8 +26,14 @@ sharedStyleSheet.replaceSync(`
     }
     .measure-tools{
         display: flex;
+        flex-direction: row;
         justify-content: center;
         align-items: center;
+    }
+    .toolbar-container{
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
     }
     .fire-trail-toolbar{
         position: absolute;
@@ -102,6 +108,7 @@ sharedStyleSheet.replaceSync(`
     .annotate-button{
         opacity : 0.95;
         display: flex;
+        flex-direction: row;
         justify-content: center;
         align-items: center;
         background: rgba(38, 38, 38, 0.95);
@@ -130,6 +137,7 @@ sharedStyleSheet.replaceSync(`
     }
     .disabled-button{
         display: flex;
+        flex-direction: row;
         justify-content: center;
         align-items: center;
         background-color: #46808c;

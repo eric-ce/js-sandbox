@@ -19,11 +19,11 @@ export default class GoogleMeasure extends MeasureComponentBase {
         super();
     }
 
-    _addLabel(positions, text, options = {}) {
-        return createLabelMarker(this.map, positions, text, options);
+    _addLabel(positions, value, options = {}) {
+        return createLabelMarker(this.map, positions, value, options);
     }
-    _addLabelsFromArray(positions, textArray, options = {}) {
-        return createLabelMarkers(this.map, positions, textArray, options);
+    _addLabelsFromArray(positions, valueArray, options = {}) {
+        return createLabelMarkers(this.map, positions, valueArray, options);
     }
 
     _removeLabel(label) {
