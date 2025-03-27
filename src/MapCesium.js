@@ -112,7 +112,7 @@ export class MapCesium extends HTMLElement {
 
     _cesiumContainerSetup() {
         this.div = document.createElement("div");
-        this.div.id = "cesiumContainer";
+        this.div.id = "map-cesium-base";
         this.div.style.width = "100%";
         this.div.style.height = "100%";
         this.div.style.position = "relative";

@@ -19,7 +19,7 @@ export class LogTable extends HTMLElement {
 
         // Find the viewer container
         const mapCesium = document.querySelector("map-cesium");
-        this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("cesiumContainer");
+        this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("map-cesium-base");
 
         // create log table UI
         this._createUI();

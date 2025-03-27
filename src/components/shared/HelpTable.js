@@ -17,7 +17,7 @@ export class HelpTable extends HTMLElement {
 
         // Find the viewer container
         const mapCesium = document.querySelector("map-cesium");
-        this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("cesiumContainer");
+        this.viewerContainer = mapCesium && mapCesium.shadowRoot.getElementById("map-cesium-base");
 
         // Instruction messages
         const multiDistancesInstructions = [
