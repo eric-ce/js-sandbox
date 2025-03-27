@@ -22,7 +22,6 @@ import {
 } from "../measure-modes/index.js";
 import { removeInputActions, makeDraggable, createGroundPolylinePrimitive } from "../lib/helper/cesiumHelper.js";
 import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon } from '../assets/icons.js';
-import { sharedStyleSheet } from '../styles/sharedStyle.js';
 import { LogTable } from './shared/LogTable.js';
 import { HelpTable } from './shared/HelpTable.js';
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
@@ -102,30 +101,6 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return this._emitter;
     }
 
-
-    /**********************
-     * CONNECTED CALLBACK *
-     **********************/
-    async connectedCallback() {
-        // link cesium package default style
-        // this.cesiumStyle = document.createElement("link");
-        // this.cesiumStyle.rel = "stylesheet";
-        // this.cesiumStyle.href = `/Widgets/widgets.css`;
-        // this.shadowRoot.appendChild(this.cesiumStyle);
-
-        // set the web component style
-        // this.style.position = "relative";
-        // this.classList.add("cesium-measure");
-
-        // apply style for the web component
-        this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-
-        // add measure toolbox with measure modes
-        if (this.viewer && this.viewer instanceof Viewer) {
-            await this.initialize();
-        }
-    }
-
     disconnectedCallback() {    // clean up when the web component is removed from the DOM
         // Clean up Cesium handlers
         if (this.handler) {
@@ -155,7 +130,12 @@ export default class CesiumMeasure extends MeasureComponentBase {
      * Initializes the MeasureToolbox, FireTrail, and FlyThrough components.
      * Set handler and initialize basic setup for the measure toolbox.
      */
-    async initialize() {
+    async _initialize() {
+        // Validate viewer before proceeding
+        if (!(this.viewer && this.viewer instanceof Viewer)) {
+            return;
+        }
+
         // if screenSpaceEventHandler existed use it, if not create a new one
         if (this.viewer.screenSpaceEventHandler) {
             this.handler = this.viewer.screenSpaceEventHandler;

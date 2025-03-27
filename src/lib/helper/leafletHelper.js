@@ -146,11 +146,12 @@ export function createPolygon(map, positions, color = "#3388ff", options = {}) {
  * @param {Object} [options={}] - Optional tooltip options.
  * @returns {L.Tooltip|undefined} The created tooltip label or undefined if parameters are invalid.
  */
-export function createLabelTooltip(map, positions, value, options = {}) {
+export function createLabelTooltip(map, positions, value, unit = "meter", options = {}) {
     if (!map || !positions || positions.length < 2 || !value) return;
 
     const leafletCoords = positions.map(pos => [pos.latitude, pos.longitude]);
-    const textContent = value.toFixed(2) + "m";
+    const textContent = formatMeasurementValue(value, unit);
+
     const middlePos = calculateMiddlePos(leafletCoords);
 
     const defaultOptions = {
@@ -183,15 +184,15 @@ export function createLabelTooltip(map, positions, value, options = {}) {
  * @param {Object} [options={}] - Optional tooltip options.
  * @returns {Array<L.Tooltip>} An array of created tooltip labels.
  */
-export function createLabelTooltips(map, positions, valueArray, options = {}) {
+export function createLabelTooltips(map, positions, valueArray, unit = "meter", options = {}) {
     // Validate input parameters
     if (!map || !positions || positions.length < 2 || !valueArray || valueArray.length < 1) return;
-
     const tooltips = [];
+
     // Loop until the second to last position to prevent an undefined reference.
-    for (let i = 0; i < positions.length - 1; i++) {
-        const tooltip = createLabelTooltip(map, [positions[i], positions[i + 1]], valueArray[i], options);
-        if (tooltip) tooltips.push(tooltip);
+    for (let i = 0; i < valueArray.length; i++) {
+        const tooltip = createLabelTooltip(map, [positions[i], positions[i + 1]], valueArray[i], unit, options);
+        tooltip && tooltips.push(tooltip);
     }
 
     return tooltips;
@@ -340,4 +341,31 @@ function calculateMiddlePos(positions) {
     const middlePos = bounds.getCenter();
 
     return middlePos;
+}
+
+/**
+ * Formats a measurement value based on the provided unit.
+ *
+ * @param {number|string} value - The measurement value.
+ * @param {string} unit - The unit type ("meter" or "squareMeter").
+ * @returns {string} The formatted measurement string.
+ */
+function formatMeasurementValue(value, unit) {
+    if (typeof value === "string" && unit === "meter") {
+        return value;
+    }
+    if (typeof value === "number") {
+        const numValue = Number(value);
+        if (unit === "meter") {
+            return numValue >= 1000
+                ? (numValue / 1000).toFixed(2) + "km"
+                : numValue.toFixed(2) + "m";
+        }
+        if (unit === "squareMeter") {
+            return numValue >= 1000000
+                ? (numValue / 1000000).toFixed(2) + "km²"
+                : numValue.toFixed(2) + "m²";
+        }
+    }
+    return value.toString();
 }

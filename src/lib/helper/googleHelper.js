@@ -187,12 +187,12 @@ export function createPolygon(map, positions, color = "#FF0000", options = {}) {
  * @param {Object} options - Optional configuration for the label marker
  * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
  */
-export function createLabelMarker(map, positions, value, options = {}) {
+export function createLabelMarker(map, positions, value, unit = "meter", options = {}) {
     if (!map || !positions || positions.length < 2 || !value) return;
 
     // Format positions and text
     const formatGoogleCoords = positions.map(pos => convertToGoogleCoord(pos));
-    const formatText = value.toFixed(2) + "m";
+    const formattedText = formatMeasurementValue(value, unit);
 
     const middlePos = calculateMiddlePos(formatGoogleCoords);
 
@@ -225,7 +225,7 @@ export function createLabelMarker(map, positions, value, options = {}) {
             }
         });
 
-        labelElement.textContent = formatText;
+        labelElement.textContent = formattedText;
 
         const markerOptions = {
             map,
@@ -240,7 +240,12 @@ export function createLabelMarker(map, positions, value, options = {}) {
             markerOptions.anchor = new google.maps.Point(labelOptions.offset.x, labelOptions.offset.y);
         }
 
-        return new google.maps.marker.AdvancedMarkerElement(markerOptions);
+        const marker = new google.maps.marker.AdvancedMarkerElement(markerOptions);
+
+        // store original positions data on the label marker
+        marker.positions = [...positions];
+
+        return marker;
     } else {
         // Traditional Marker branch (raster maps)
         const defaultOptions = {
@@ -256,7 +261,7 @@ export function createLabelMarker(map, positions, value, options = {}) {
         const transparentImage =
             'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
-        return new google.maps.Marker({
+        const marker = new google.maps.Marker({
             map,
             position: middlePos,
             title: options.title || "Label Marker",
@@ -268,15 +273,20 @@ export function createLabelMarker(map, positions, value, options = {}) {
                 labelOrigin: new google.maps.Point(0, -20) // Set your Y offset here
             },
             label: {
-                text: formatText,
+                text: formattedText,
                 color: labelOptions.color,
                 fontWeight: labelOptions.fontWeight,
                 fontSize: labelOptions.fontSize,
                 className: "custom-marker-label"
             },
             clickable: labelOptions.clickable !== undefined ? labelOptions.clickable : false,
-            zIndex: labelOptions.zIndex || 1
+            zIndex: labelOptions.zIndex || 1,
         });
+
+        // store original positions data on the label marker
+        marker.positions = [...positions];
+
+        return marker;
     }
 }
 
@@ -289,20 +299,15 @@ export function createLabelMarker(map, positions, value, options = {}) {
  * @param {Object} options - Optional configuration for the label markers
  * @returns {Array} - Array of created markers
  */
-export function createLabelMarkers(map, positions, valueArray, options = {}) {
-    console.log("🚀 valueArray:", valueArray);
-
+export function createLabelMarkers(map, positions, valueArray, unit = "meter", options = {}) {
     // Validate input parameters
     if (!map || !positions || positions.length < 2 || !valueArray || valueArray.length < 1) return;
     const labels = [];
 
     // Create a label for each segment (between consecutive points)
-    // Make sure we don't go beyond array boundaries
-    // const numLabels = Math.min(valueArray.length, positions.length - 1);
-
     for (let i = 0; i < valueArray.length; i++) {
         // Create label for the segment between position i and i+1
-        const label = createLabelMarker(map, [positions[i], positions[i + 1]], valueArray[i], options);
+        const label = createLabelMarker(map, [positions[i], positions[i + 1]], valueArray[i], unit, options);
         label && labels.push(label);
     }
 
@@ -391,4 +396,31 @@ function calculateMiddlePos(positions) {
     });
 
     return bounds.getCenter();
+}
+
+/**
+ * Formats a measurement value based on the provided unit.
+ *
+ * @param {number|string} value - The measurement value.
+ * @param {string} unit - The unit type ("meter" or "squareMeter").
+ * @returns {string} The formatted measurement string.
+ */
+function formatMeasurementValue(value, unit) {
+    if (typeof value === "string" && unit === "meter") {
+        return value;
+    }
+    if (typeof value === "number") {
+        const numValue = Number(value);
+        if (unit === "meter") {
+            return numValue >= 1000
+                ? (numValue / 1000).toFixed(2) + "km"
+                : numValue.toFixed(2) + "m";
+        }
+        if (unit === "squareMeter") {
+            return numValue >= 1000000
+                ? (numValue / 1000000).toFixed(2) + "km²"
+                : numValue.toFixed(2) + "m²";
+        }
+    }
+    return value.toString();
 }

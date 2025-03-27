@@ -69,7 +69,7 @@ export class MeasureComponentBase extends HTMLElement {
         // Apply style for the web component
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
 
-        this._initialize();
+        await this._initialize();
     }
 
     disconnectedCallback() {
@@ -88,7 +88,7 @@ export class MeasureComponentBase extends HTMLElement {
         }
     }
 
-    _initialize() {
+    async _initialize() {
         // Early return with error message if dependencies aren't available
         if (!this.map) {
             console.warn(`${this.constructor.name}: Map is not available for initialization`);
@@ -146,9 +146,10 @@ export class MeasureComponentBase extends HTMLElement {
     * @returns {void}
     */
     _drawFromDataObject(data) {
-        // Validate input data
-        if (!data?.coordinates?.length) return;
+        // Check if coordinates property exists
+        if (!data?.coordinates) return;
 
+        const emptyAnnotations = { markers: [], polylines: [], polygon: null, labels: [] };
         const existingIndex = this._data.findIndex(item => item.id === data.id);
         const existingMeasure = existingIndex >= 0 ? this._data[existingIndex] : null;
 
@@ -160,11 +161,21 @@ export class MeasureComponentBase extends HTMLElement {
             labels: [],
         };
 
-        // Initialize records from data
-        // IMPORTANT: Always use data._records directly, don't create a separate variable
-        console.log(`Drawing data for ID ${data.id}, records:`, data._records);
+        // Remove Operation: If no coordinates, remove annotations and exit early
+        if (data.coordinates.length === 0) {
+            if (existingMeasure?.annotations) {
+                this._removeAnnotations(existingMeasure.annotations);
+            }
+            const updatedData = { ...data, annotations: emptyAnnotations };
+            if (existingIndex >= 0) {
+                this._data[existingIndex] = updatedData;
+            } else {
+                this._data.push(updatedData);
+            }
+            return;
+        }
 
-        // If data existing, check if coordinates changed
+        // Update Operation: If data existing, check if coordinates changed
         if (existingMeasure) {
             // const coordsEqual = this._areCoordinatesEqual(existingMeasure.coordinates, data.coordinates);
             const coordsEqual = data.coordinates.every((coord, index) => {
@@ -183,7 +194,11 @@ export class MeasureComponentBase extends HTMLElement {
             case "polygon":
                 annotations.polygon = this._addPolygon(data.coordinates);
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                annotations.labels = [this._addLabel(data.coordinates, data._records[0])];
+                annotations.labels = [this._addLabel(data.coordinates, data._records[0], "squareMeter")];
+                break;
+            case "bookmark":
+                annotations.markers = this._addPointMarkersFromArray(data.coordinates);
+                annotations.labels = [this._addLabel([data.coordinates[0], data.coordinates[0]], `Point ${data.labelNumberIndex + 1}`)];
                 break;
             case "multi_distances":
             case "multi_distances_clamped":
@@ -215,6 +230,7 @@ export class MeasureComponentBase extends HTMLElement {
             this._data.push({ ...data, annotations });
         }
     }
+
     /**
      * Checks if two coordinate objects are equal by comparing only latitude and longitude.
      * Height values are intentionally ignored in the comparison.
@@ -297,11 +313,11 @@ export class MeasureComponentBase extends HTMLElement {
     _addPolygon(positions, color, options) {
         throw new Error('_addPolygon must be implemented by subclass');
     }
-    _addLabel(positions, text, options) {
+    _addLabel(positions, text, unit, options) {
         throw new Error('_addLabel must be implemented by subclass');
     }
 
-    _addLabelsFromArray(positions, text, options) {
+    _addLabelsFromArray(positions, text, unit, options) {
         throw new Error('_addLabelsFromArray must be implemented by subclass');
     }
 

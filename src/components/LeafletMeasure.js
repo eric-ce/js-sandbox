@@ -38,12 +38,12 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return createPolygon(this.map, positions, color, options);
     }
 
-    _addLabel(positions, value, options) {
-        return createLabelTooltip(this.map, positions, value, options);
+    _addLabel(positions, value, unit, options) {
+        return createLabelTooltip(this.map, positions, value, unit, options);
     }
 
-    _addLabelsFromArray(positions, valueArray, options) {
-        return createLabelTooltips(this.map, positions, valueArray, options);
+    _addLabelsFromArray(positions, valueArray, unit, options) {
+        return createLabelTooltips(this.map, positions, valueArray, unit, options);
     }
 
     _removePointMarker(marker) {
