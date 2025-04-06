@@ -9,12 +9,14 @@ export class StateManager {
 
         // Initialize the state with your specified structure
         this._state = {
+            activeModeId: null,
             button: {
                 activeButton: null,
                 clearButton: null,
                 activeTool: null,
                 measureModes: [],
                 labelButton: null,
+                activeButtonElementRef: null,
             },
             flags: {
                 isMeasurementComplete: false,
@@ -52,6 +54,32 @@ export class StateManager {
                 submitted: Color.DARKGREEN,
             },
         };
+    }
+    // Active Mode Methods
+    /**
+     * Sets the currently active measurement mode ID.
+     * Emits an 'activeModeChanged' event via the internal emitter.
+     * @param {string | null} modeId - The identifier of the mode (e.g., 'distance', 'polygon') or null/'inactive'.
+     */
+    setActiveMode(modeId) {
+        const newModeId = (modeId === 'inactive' || !modeId) ? null : modeId; // Normalize 'inactive' to null
+        if (this._state.activeModeId !== newModeId) {
+            const oldModeId = this._state.activeModeId;
+            this._state.activeModeId = newModeId;
+            console.log(`StateManager: Active mode changed from '${oldModeId}' to '${newModeId}'`);
+            // Emit specific event that MeasureComponentBase will listen for
+            this.emitter.emit('activeModeChanged', newModeId, oldModeId);
+            // Emit generic state change as well
+            this.emitter.emit('stateChange', { section: 'state', key: 'activeModeId', value: newModeId, oldValue: oldModeId });
+        }
+    }
+
+    /**
+     * Gets the ID of the currently active measurement mode.
+     * @returns {string | null} The active mode ID or null if inactive.
+     */
+    getActiveMode() {
+        return this._state.activeModeId;
     }
 
     // FLAG STATE METHODS
@@ -190,6 +218,42 @@ export class StateManager {
             this.emitter.emit("stateChange", { section: "color", key, value });
         } else {
             console.warn(`Property '${key}' does not exist in color state.`);
+        }
+    }
+
+    // --- NEW: Event Listener Proxy Methods ---
+    /**
+     * Registers an event listener directly on the StateManager's emitter
+     * for specific state manager events (like 'activeModeChanged').
+     * @param {string} eventName - The name of the event (e.g., 'activeModeChanged').
+     * @param {Function} listener - The callback function.
+     */
+    on(eventName, listener) {
+        this.emitter.on(eventName, listener);
+    }
+
+    /**
+     * Removes an event listener directly from the StateManager's emitter.
+     * @param {string} eventName - The name of the event.
+     * @param {Function} listener - The callback function to remove.
+     */
+    off(eventName, listener) {
+        this.emitter.off(eventName, listener);
+    }
+    // --- End Event Listener Proxy Methods ---
+
+    /**
+     * Helper to update help text content if the helpTable element exists.
+     * @param {string} text - The text to display.
+     */
+    updateHelpContent(text) {
+        const helpTable = this.getElementState('helpTable');
+        // Check if helpTable has an updateContent method (duck typing)
+        if (helpTable && typeof helpTable.updateContent === 'function') {
+            helpTable.updateContent(text);
+        } else if (helpTable) {
+            // Fallback if no method exists, just set textContent
+            helpTable.textContent = text;
         }
     }
 }

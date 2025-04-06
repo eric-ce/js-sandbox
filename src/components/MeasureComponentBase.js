@@ -1,9 +1,29 @@
 /**
  * Base class for all measure components of cesium-measure, google-measure, and leaflet-measure.
+ * It handles UI creation, event handling, and data management for measurement tools.
  */
+
 import dataPool from "../lib/data/DataPool.js";
 import { sharedStyleSheet } from "../styles/sharedStyle.js";
-
+import {
+    toolIcon,
+    pickerIcon,
+    pointsIcon,
+    distanceIcon,
+    curveIcon,
+    heightIcon,
+    multiDImage,
+    multiDClampedIcon,
+    polygonIcon,
+    profileIcon,
+    profileDistancesIcon,
+    clearIcon,
+    helpBoxIcon,
+    logBoxIcon,
+} from "../assets/icons.js";
+import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
+import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
+import { TwoPointsDistanceGoogle } from "../measure-modes/google/TwoPointsDistanceGoogle.js";
 export class MeasureComponentBase extends HTMLElement {
     constructor() {
         super();
@@ -12,15 +32,32 @@ export class MeasureComponentBase extends HTMLElement {
         // Core component state
         this._isInitialized = false;
         this._data = [];
+        /** @type {'cesium' | 'google' | 'leaflet' | null} */
+        this._mapName = null; // Map name (e.g., 'cesium', 'google', 'leaflet')
 
-        // Dependencies
-        this._map = null;
+        // Dependencies (set via setters)
+        this._map = null; // The specific map instance (Viewer, google.maps.Map, etc.)
+        // this._cesiumPkg = null; // Only relevant for CesiumMeasure
         this._app = null;
         this._stateManager = null;
         this._emitter = null;
 
         // Event handler references for cleanup
         this._dataHandler = null;
+        this._modeChangeHandler = null; // For StateManager listener
+
+        /** @type {import('../lib/input/CesiumInputHandler').CesiumInputHandler | import('../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler | null} */
+        this.inputHandler = null; // Map-specific input handler instance
+        /** @type {object | null} */
+        this.activeModeInstance = null; // The active measurement mode logic instance
+        /** @type {string | null} */
+        this.activeModeId = null; // e.g., 'distance', 'height'
+        /** @type {HTMLElement | null} */
+        this.toolbar = null; // Reference to the toolbar UI element
+        /** @type {Object.<string, HTMLElement>} */
+        this.uiButtons = {}; // References to mode buttons { 'distance-cesium': buttonElement, ... }
+        // Store mode configurations available for this map type
+        this.availableModeConfigs = [];
     }
 
     // Getters and setters
@@ -61,15 +98,54 @@ export class MeasureComponentBase extends HTMLElement {
         this._map = map;
     }
 
-    get isInitialized() {
-        return this._isInitialized;
+    get mapName() {
+        return this._mapName;
     }
+
+    set mapName(mapName) {
+        if (this._mapName === mapName) return;
+        this._mapName = mapName;
+        // Re-initialize if mapName changes after connection and map is set
+        // if (this.isConnected && this.map) {
+        //     this._isInitialized = false; // Allow re-initialization
+        //     // Clean up previous state before re-initializing
+        //     this._deactivateCurrentMode();
+        //     this.inputHandler?.destroy();
+        //     this.inputHandler = null;
+        //     this.toolbar?.remove();
+        //     this.toolbar = null;
+        //     this.uiButtons = {};
+        //     // Remove listeners before re-adding
+        //     if (this._modeChangeHandler && this.stateManager) {
+        //         this.stateManager.off('activeModeChanged', this._modeChangeHandler);
+        //     }
+        //     if (this._dataHandler && this._emitter) {
+        //         this._emitter.off("data", this._dataHandler);
+        //     }
+        //     this._initialize();
+        // }
+    }
+
+    // get cesiumPkg() {
+    //     return this._cesiumPkg;
+    // }
+    // // Setter for cesiumPkg - specific subclasses like CesiumMeasure should call this
+    // set cesiumPkg(pkg) {
+    //     if (this._cesiumPkg === pkg) return;
+    //     this._cesiumPkg = pkg;
+    //     // If map is also ready, and we are Cesium, maybe re-init or check dependencies
+    //     if (this.isConnected && this.map && this.mapName === 'cesium') {
+    //         this._initialize();
+    //     }
+    // }
 
     async connectedCallback() {
         // Apply style for the web component
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-
-        await this._initialize();
+        // Initialization now depends on map and mapName being set
+        if (this.map && this.mapName && !this._isInitialized) {
+            await this._initialize();
+        }
     }
 
     disconnectedCallback() {
@@ -80,7 +156,7 @@ export class MeasureComponentBase extends HTMLElement {
 
         // Clean up map elements if needed
         if (this._data.length > 0) {
-            this._data.forEach(item => {
+            this._data.forEach((item) => {
                 if (item.annotations) {
                     this._removeAnnotations(item.annotations);
                 }
@@ -89,38 +165,423 @@ export class MeasureComponentBase extends HTMLElement {
     }
 
     async _initialize() {
-        // Early return with error message if dependencies aren't available
+        // Prevent re-initialization if already done
+        if (this._isInitialized) return;
+
+        // --- Dependency Checks ---
         if (!this.map) {
-            console.warn(`${this.constructor.name}: Map is not available for initialization`);
+            console.warn(`${this.constructor.name}: Map not set.`);
             return;
         }
-
+        if (!this.mapName) {
+            console.warn(`${this.constructor.name}: MapName not set.`);
+            return;
+        }
         if (!this.emitter) {
-            console.warn(`${this.constructor.name}: Event emitter is not available for initialization`);
+            console.warn(`${this.constructor.name}: Emitter not set.`);
+            return;
+        }
+        if (!this.stateManager) {
+            console.warn(`${this.constructor.name}: StateManager not set.`);
             return;
         }
 
-        // Initialize with existing data if available
-        if (dataPool?.data?.length > 0 && !this._isInitialized) {
+        // --- Create Input Handler ---
+        try {
+            // Destroy previous handler if any (e.g., if mapName changed)
+            this.inputHandler?.destroy();
+
+            switch (this.mapName) {
+                case "cesium":
+                    this.inputHandler = new CesiumInputHandler(this.map);
+                    break;
+                case "google":
+                    this.inputHandler = new GoogleMapsInputHandler(this.map);
+                    break;
+                case "leaflet":
+                    // this.inputHandler = new LeafletInputHandler(this.map);
+                    console.warn("LeafletInputHandler not yet implemented.");
+                    this.inputHandler = null; // Mark as unavailable
+                    break;
+                default:
+                    throw new Error(`Unsupported map type for Input Handler: ${this.mapName}`);
+            }
+            console.log(`${this.constructor.name}: Input handler created.`);
+        } catch (error) {
+            console.error(`${this.constructor.name}: Failed to create Input Handler:`, error);
+            return; // Cannot proceed without input handler
+        }
+
+        // --- Create UI ---
+        this._createUI(this.mapName); // Create the toolbar depends on the map type
+
+        // --- Setup Listeners ---
+        // Listen for data changes to draw persistent measurements
+        if (!this._dataHandler) {
+            const handleData = (data) => {
+                this._drawFromDataArray(data);
+            };
+            this.emitter.on("data", handleData);
+            this._dataHandler = handleData; // Store the handler reference for cleanup
+        }
+
+        // Listen for mode change requests from stateManager
+        // Ensure handler isn't added multiple times
+        if (!this._modeChangeHandler) {
+            const handleModeChange = (newModeId) => {
+                this._activateMode(newModeId, this.mapName);
+            };
+            // Use stateManager.on if added, otherwise fallback to emitter
+            if (typeof this.stateManager?.on === "function") {
+                this.stateManager.on("activeModeChanged", handleModeChange);
+            } else {
+                // Fallback: Listen on general emitter if stateManager doesn't proxy
+                // This requires careful event naming/filtering if emitter is shared widely
+                // this.emitter.on('stateManager:activeModeChanged', handleModeChange);
+                console.warn(
+                    "StateManager does not have 'on' method, cannot listen for 'activeModeChanged'. Mode activation might rely on direct calls."
+                );
+                // If direct calls are needed, the UI button click handlers would need
+                // to call this._activateMode directly instead of going via stateManager.
+            }
+            this._modeChangeHandler = handleModeChange;
+        }
+
+        // --- Draw Initial Data ---
+        if (dataPool?.data?.length > 0) {
             this._data = [...dataPool.data];
             this._drawFromDataArray(this._data);
-            this._isInitialized = true;
         }
 
-        // Set up event listener with proper cleanup
-        const handleData = (data) => {
-            this._drawFromDataArray(data);
-        };
-
-        this.emitter.on("data", handleData);
-
-        // Store the handler for potential cleanup in disconnectedCallback
-        this._dataHandler = handleData;
+        this._isInitialized = true;
     }
 
+    //TODO: create the UI
+    /**
+     * Creates the measurement toolbar and buttons within the shadow DOM.
+     * Uses lazy instantiation for mode classes.
+     * @param {'cesium' | 'google' | 'leaflet'} mapName - The type of the current map.
+     * @private
+     */
+    _createUI(mapName) {
+        if (this.toolbar) this.toolbar.remove(); // Clear existing
+        this.uiButtons = {};
+        this.availableModeConfigs = []; // Reset available modes
+
+        this.toolbar = document.createElement("div");
+        this.toolbar.setAttribute("role", "toolbar");
+        this.toolbar.setAttribute("aria-label", "Measurement Tools");
+        this.toolbar.classList.add("measure-toolbar");
+        // set toolbar position
+        this.toolbar.style.position = "absolute";
+        this.toolbar.style.transform = `translate(${120}px, ${-160}px)`;
+        this.toolbar.style.zIndex = 400;
+
+        // --- Define Mode Configurations ---
+        // Store CLASS definitions, not instances
+        const allModeConfigs = [
+            // Common Modes (potentially using specific classes TEMPORARILY)
+            {
+                id: 'bookmark',
+                name: 'Bookmark',
+                icon: pointsIcon,
+                mapAvailability: ['cesium', 'google', 'leaflet'],
+                getClass: (type) => {
+                    if (type === 'google') return BookmarkGoogle;
+                    if (type === 'cesium') return BookmarkCesium; // Use specific for now
+                    // if (type === 'leaflet') return BookmarkLeaflet;
+                    // FUTURE: return SharedBookmarkMode;
+                    return null;
+                }
+            },
+            {
+                id: "distance",
+                name: "Distance",
+                icon: distanceIcon,
+                mapAvailability: ["cesium", "google", "leaflet"], // Maps this mode works on
+                getClass: (type) => {
+                    // Function to get the correct class based on map type
+                    if (type === "google") return TwoPointsDistanceGoogle;
+                    if (type === "cesium") return TwoPointsDistanceCesium; // Use specific for now
+                    // if (type === 'leaflet') return TwoPointsDistanceLeaflet;
+                    // FUTURE: return SharedDistanceMode;
+                    return null;
+                },
+            },
+            {
+                id: 'multi_distance',
+                name: 'Multi Distance',
+                icon: multiDImage,
+                mapAvailability: ['cesium', 'google', 'leaflet'],
+                getClass: (type) => {
+                    if (type === 'google') return MultiDistanceGoogle;
+                    if (type === 'cesium') return MultiDistanceCesium; // Use specific for now
+                    // if (type === 'leaflet') return MultiDistanceLeaflet;
+                    // FUTURE: return SharedMultiDistanceMode;
+                    return null;
+                },
+            },
+            {
+                id: "polygon",
+                name: "Polygon",
+                icon: polygonIcon,
+                mapAvailability: ["cesium", "google", "leaflet"],
+                getClass: (type) => {
+                    // if (type === 'google') return PolygonGoogle;
+                    // if (type === 'cesium') return PolygonCesium;
+                    // if (type === 'leaflet') return PolygonLeaflet;
+                    // FUTURE: return SharedPolygonMode;
+                    return null; // Example: Polygon not implemented yet for Google/Cesium specific
+                },
+            },
+            // Cesium-Only Modes
+            {
+                id: "curve",
+                name: "Curve",
+                icon: curveIcon,
+                mapAvailability: ["cesium"],
+                getClass: (type) => {
+                    if (type === "cesium") return CurveCesium;
+                    return null;
+                },
+            },
+            // {
+            //     id: 'height',
+            //     name: 'Height',
+            //     icon: heightIcon,
+            //     mapAvailability: ['cesium'],
+            //     getClass: (type) => (type === 'cesium' ? HeightCesium : null)
+            // },
+            // {
+            //     id: 'profile',
+            //     name: 'Profile',
+            //     icon: profileIcon,
+            //     mapAvailability: ['cesium'],
+            //     getClass: (type) => (type === 'cesium' ? ProfileCesium : null)
+            // },
+            // {
+            //     id: 'profile_distances',
+            //     name: 'Profile Distances',
+            //     icon: profileDistanceIcon,
+            //     mapAvailability: ['cesium'],
+            //     getClass: (type) => {
+            //         if (type === 'google') return ProfileDistanceGoogle;
+            //         if (type === 'cesium') return ProfileDistanceCesium; // Use specific for now
+            //         // if (type === 'leaflet') return ProfileDistanceLeaflet;
+            //         // FUTURE: return SharedProfileDistanceMode;
+            //         return null;
+            //     }
+            // },
+            {
+                id: "curve",
+                name: "Curve",
+                icon: curveIcon,
+                mapAvailability: ["cesium"],
+                getClass: (type) => {
+                    if (type === "google") return CurveGoogle;
+                    if (type === "cesium") return CurveCesium; // Use specific for now
+                    // if (type === 'leaflet') return CurveLeaflet;
+                    // FUTURE: return SharedCurveMode;
+                    return null;
+                },
+            },
+            // Add other modes (Curve, MultiDistance, etc.) similarly
+        ];
+
+        // --- Filter modes available for the current map type ---
+        this.availableModeConfigs = allModeConfigs.filter((mode) =>
+            mode.mapAvailability.includes(mapName)
+        );
+
+        // --- Create Buttons ---
+        this.availableModeConfigs.forEach((modeConfig) => {
+            const btn = document.createElement("button");
+            const modeId = modeConfig.id; // Unique ID for the button
+
+            if (modeConfig.icon) {
+                btn.innerHTML = `<img src="${modeConfig.icon}" alt="${modeConfig.name}" style="width: 30px; height: 30px; display: block;">`; // Adjust size
+            } else {
+                btn.textContent = modeConfig.name.slice(0, 3); // Fallback text
+            }
+            btn.title = modeConfig.name; // Tooltip
+            btn.className = `annotate-button animate-on-show measure-button-${modeId}`;
+            btn.dataset.modeId = modeId; // Store mode ID for the handler
+
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation(); // Prevent map click through button
+                // When button is clicked, tell StateManager the desired mode ID
+                // check if the button is inactive if so activate it
+                if (btn.classList.contains("active")) {
+                    btn.classList.remove("active");
+                    btn.setAttribute("aria-pressed", "false");
+                }
+
+                // activate the mode
+                // set button class, setAttribute,
+                // When button is clicked, tell StateManager the desired mode ID
+                const currentMode = this.stateManager?.getActiveMode();
+                this.stateManager?.setActiveMode(currentMode === modeId ? "inactive" : modeId);
+            });
+
+            this.toolbar.appendChild(btn);
+            this.uiButtons[modeId] = btn; // Store reference by mode ID
+        });
+
+        // Append the toolbar to the shadow root
+        this.shadowRoot.appendChild(this.toolbar);
+    }
+    /**
+     * Activates a specific measurement mode based on ID and map type.
+     * Handles lazy instantiation.
+     * @param {string | null} modeId - The id of the mode to activate (e.g., 'distance').
+     * @param {string} mapType - 'cesium', 'google', or 'leaflet'.
+     * @private
+     */
+    _activateMode(modeId, mapType) {
+        // --- Pre-checks ---
+        if (!this.inputHandler) {
+            console.warn(
+                `${this.constructor.name}: Input handler not ready. Cannot activate mode.`
+            );
+            if (modeId && modeId !== "inactive") this.stateManager?.setActiveMode("inactive"); // Reset state
+            return;
+        }
+        // --- End Pre-checks ---
+
+        const currentActiveModeId = this.activeModeId;
+
+        // --- Deactivate existing mode ---
+        // Important: Check if the requested mode is different OR if it's 'inactive'
+        if (
+            this.activeModeInstance &&
+            (currentActiveModeId !== modeId || !modeId || modeId === "inactive")
+        ) {
+            this._deactivateCurrentMode();
+        }
+
+        // If the request was just to deactivate, or already handled toggle off, exit
+        if (!modeId || modeId === "inactive" || currentActiveModeId === modeId) {
+            // Update UI - ensure all buttons are inactive
+            Object.values(this.uiButtons).forEach((btn) => {
+                btn.classList.remove("active");
+            });
+            if (modeId !== "inactive") this.stateManager?.setActiveMode("inactive"); // Correct state if toggled off
+            return;
+        }
+        // --- End Deactivation ---
+
+        // --- Find Mode Configuration ---
+        // Use the stored available configs for this map instance
+        const config = this.availableModeConfigs.find((m) => m.id === modeId);
+
+        if (!config) {
+            console.warn(
+                `${this.constructor.name}: Mode "${modeId}" not found or not available for map type "${mapType}".`
+            );
+            this.stateManager?.setActiveMode("inactive");
+            return;
+        }
+
+        const ModeClass = config.getClass(mapType);
+        if (!ModeClass) {
+            console.warn(
+                `${this.constructor.name}: Mode class for "${modeId}" on "${mapType}" is not defined or supported yet.`
+            );
+            this.stateManager?.setActiveMode("inactive");
+            return;
+        }
+        // --- End Find Mode ---
+
+        // --- Instantiate and Activate New Mode ---
+        let args = [];
+        // --- Determine Arguments ---
+        // FUTURE GOAL: All shared modes take standard args
+        const standardArgs = [this.inputHandler, this, this.stateManager, this.emitter];
+
+        // TEMPORARY logic based on current specific classes:
+        if (ModeClass === TwoPointsDistanceGoogle) {
+            args = [...standardArgs]; // Google specific needs map
+        } else if (
+            ModeClass === TwoPointsDistanceCesium ||
+            ModeClass === Height ||
+            ModeClass === Profile ||
+            ModeClass === ThreePointsCurve /* Add other Cesium modes */
+        ) {
+            // Assuming original Cesium modes need viewer, handler, stateManager, pkg, emitter
+            // Pass the *real* Cesium handler for now if using original modes
+            const cesiumHandler =
+                this.inputHandler instanceof CesiumInputHandler
+                    ? this.inputHandler.handler
+                    : this.inputHandler; // Get original handler if needed
+            args = [this.map, cesiumHandler, this.stateManager, this._cesiumPkg, this.emitter];
+            console.warn(`Passing potentially specific args for ${ModeClass.name}`);
+        } else {
+            // Assume future shared modes use standard args
+            args = standardArgs;
+        }
+        // --- End Determine Arguments ---
+
+        this.activeModeId = modeId; // Store the ID
+        console.log(`${this.constructor.name}: Instantiating and activating ${ModeClass.name}`);
+        try {
+            this.activeModeInstance = new ModeClass(...args);
+            if (typeof this.activeModeInstance.activate !== "function") {
+                throw new Error(`Mode class ${ModeClass.name} does not have an activate method.`);
+            }
+            this.activeModeInstance.activate();
+
+            // Update UI Button State using classes
+            Object.entries(this.uiButtons).forEach(([_, btn]) => {
+                // Check dataset.modeId which should match the config ID
+                if (btn.dataset.modeId === modeId) {
+                    btn.classList.add("active"); // Add 'active' class
+                } else {
+                    btn.classList.remove("active");
+                }
+            });
+        } catch (error) {
+            console.error(`Error activating mode ${modeId} for ${mapType}:`, error);
+            this.activeModeInstance = null;
+            this.activeModeId = null;
+            this.stateManager?.setActiveMode("inactive"); // Reset on error
+            // Reset UI
+            Object.values(this.uiButtons).forEach((btn) => {
+                btn.classList.remove("active");
+            });
+        }
+        // --- End Activation ---
+    }
+
+    /** Deactivates the currently active mode instance. */
+    _deactivateCurrentMode = () => {
+        if (this.activeModeInstance) {
+            const modeName = this.activeModeId || "current";
+            console.log(`${this.constructor.name}: Deactivating mode instance: ${modeName}`);
+            try {
+                if (typeof this.activeModeInstance.deactivate === "function") {
+                    this.activeModeInstance.deactivate();
+                } else {
+                    console.warn(`Mode instance for ${modeName} doesn't have a deactivate method?`);
+                    // Fallback cleanup if needed? Usually deactivate handles internal cleanup.
+                }
+            } catch (error) {
+                console.error(`Error during deactivation of ${modeName}:`, error);
+            } finally {
+                // Ensure state is cleared even if deactivate fails
+                this.activeModeInstance = null;
+                this.activeModeId = null;
+                // Reset input handler cursor to default when no mode is active
+                this.inputHandler?.setCursor("default");
+            }
+        }
+    };
+
+    /******************************
+     * SYNC DRAWING DATA FOR MAPS *
+     ******************************/
     /**
      * Draws the measurement data on the map based on the data array of objects.
-     * @param {Array} data - The data array containing measurement data. 
+     * @param {Array} data - The data array containing measurement data.
      * @returns {void}
      */
     _drawFromDataArray(data) {
@@ -129,28 +590,30 @@ export class MeasureComponentBase extends HTMLElement {
 
         // For small datasets, process immediately
         if (data.length <= 20) {
-            data.forEach(item => this._drawFromDataObject(item));
+            data.forEach((item) => this._drawFromDataObject(item));
             return;
         }
 
         // For larger datasets, use batching
-        this._processBatches(data, item => this._drawFromDataObject(item));
+        this._processBatches(data, (item) => this._drawFromDataObject(item));
     }
 
     /**
-    * Draws the measurement data on the map based on the data object.
-    * @param {Object} data - The data object containing measurement data.
-    * @param {string} data.id - Unique identifier for the data object.
-    * @param {string} data.mode - Measurement mode
-    * @param {Array<{latitude: number, longitude: number}>} data.coordinates - Array of coordinate objects.
-    * @returns {void}
-    */
+     * Draws the measurement data on the map based on the data object.
+     * @param {Object} data - The data object containing measurement data.
+     * @param {string} data.id - Unique identifier for the data object.
+     * @param {string} data.mode - Measurement mode
+     * @param {Array<{latitude: number, longitude: number}>} data.coordinates - Array of coordinate objects.
+     * @returns {void}
+     */
     _drawFromDataObject(data) {
         // Check if coordinates property exists
         if (!data?.coordinates) return;
+        // check if drawing from the map don't sync for the same map
+        if (data.mapName === this.mapName) return;
 
         const emptyAnnotations = { markers: [], polylines: [], polygon: null, labels: [] };
-        const existingIndex = this._data.findIndex(item => item.id === data.id);
+        const existingIndex = this._data.findIndex((item) => item.id === data.id);
         const existingMeasure = existingIndex >= 0 ? this._data[existingIndex] : null;
 
         // Create empty annotations object
@@ -194,22 +657,38 @@ export class MeasureComponentBase extends HTMLElement {
             case "polygon":
                 annotations.polygon = this._addPolygon(data.coordinates);
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                annotations.labels = [this._addLabel(data.coordinates, data._records[0], "squareMeter")];
+                annotations.labels = [
+                    this._addLabel(data.coordinates, data._records[0], "squareMeter"),
+                ];
                 break;
             case "bookmark":
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                annotations.labels = [this._addLabel([data.coordinates[0], data.coordinates[0]], `Point ${data.labelNumberIndex + 1}`)];
+                annotations.labels = [
+                    this._addLabel(
+                        [data.coordinates[0], data.coordinates[0]],
+                        `Point ${data.labelNumberIndex + 1}`
+                    ),
+                ];
                 break;
             case "multi_distances":
             case "multi_distances_clamped":
             case "profile_distances":
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
                 annotations.polylines = this._addPolylinesFromArray(data.coordinates);
-                annotations.labels = this._addLabelsFromArray(data.coordinates, data._records[0]?.distances);
+                annotations.labels = this._addLabelsFromArray(
+                    data.coordinates,
+                    data._records[0]?.distances
+                );
                 // add label for total distance
                 if (data.status === "completed") {
                     const endCoords = data.coordinates[data.coordinates.length - 1];
-                    annotations.labels && annotations.labels.push(this._addLabel([endCoords, endCoords], data._records[0]?.totalDistance[0]));
+                    annotations.labels &&
+                        annotations.labels.push(
+                            this._addLabel(
+                                [endCoords, endCoords],
+                                data._records[0]?.totalDistance[0]
+                            )
+                        );
                 }
                 break;
             default:
@@ -241,8 +720,10 @@ export class MeasureComponentBase extends HTMLElement {
     _areCoordinatesEqual(coord1, coord2) {
         // Check if both coordinates have valid latitude and longitude
         if (!coord1 || !coord2) return false;
-        if (typeof coord1.latitude !== 'number' || typeof coord1.longitude !== 'number') return false;
-        if (typeof coord2.latitude !== 'number' || typeof coord2.longitude !== 'number') return false;
+        if (typeof coord1.latitude !== "number" || typeof coord1.longitude !== "number")
+            return false;
+        if (typeof coord2.latitude !== "number" || typeof coord2.longitude !== "number")
+            return false;
 
         // Compare only latitude and longitude, ignoring height
         return coord1.latitude === coord2.latitude && coord1.longitude === coord2.longitude;
@@ -279,6 +760,10 @@ export class MeasureComponentBase extends HTMLElement {
         processNextBatch();
     }
 
+    /********************************************************
+     *           VISUALIZATION OF MAP ANNOTATIONS           *
+     * REPLACED IN SUBCLASSES TO HANDLE SPECIFIC ANNOTATION *
+     ********************************************************/
     /**
      * Removes all annotations in the provided annotations object.
      * @private
@@ -287,53 +772,53 @@ export class MeasureComponentBase extends HTMLElement {
     _removeAnnotations(annotations) {
         if (!annotations) return;
 
-        annotations.markers?.forEach(marker => this._removePointMarker(marker));
-        annotations.polylines?.forEach(line => this._removePolyline(line));
+        annotations.markers?.forEach((marker) => this._removePointMarker(marker));
+        annotations.polylines?.forEach((line) => this._removePolyline(line));
         if (annotations.polygon) this._removePolygon(annotations.polygon);
-        annotations.labels?.forEach(label => this._removeLabel(label));
+        annotations.labels?.forEach((label) => this._removeLabel(label));
     }
 
     // Abstract methods that must be implemented by subclasses
     _addPointMarker(position, color, options) {
-        throw new Error('_addPointMarker must be implemented by subclass');
+        throw new Error("_addPointMarker must be implemented by subclass");
     }
 
     _addPointMarkersFromArray(positions, color, options) {
-        throw new Error('_addPointMarkersFromArray must be implemented by subclass');
+        throw new Error("_addPointMarkersFromArray must be implemented by subclass");
     }
 
     _addPolyline(positions, color, options) {
-        throw new Error('_addPolyline must be implemented by subclass');
+        throw new Error("_addPolyline must be implemented by subclass");
     }
 
     _addPolylinesFromArray(positions, color, options) {
-        throw new Error('_addPolylinesFromArray must be implemented by subclass');
+        throw new Error("_addPolylinesFromArray must be implemented by subclass");
     }
 
     _addPolygon(positions, color, options) {
-        throw new Error('_addPolygon must be implemented by subclass');
+        throw new Error("_addPolygon must be implemented by subclass");
     }
     _addLabel(positions, text, unit, options) {
-        throw new Error('_addLabel must be implemented by subclass');
+        throw new Error("_addLabel must be implemented by subclass");
     }
 
     _addLabelsFromArray(positions, text, unit, options) {
-        throw new Error('_addLabelsFromArray must be implemented by subclass');
+        throw new Error("_addLabelsFromArray must be implemented by subclass");
     }
 
     _removePointMarker(marker) {
-        throw new Error('_removePointMarker must be implemented by subclass');
+        throw new Error("_removePointMarker must be implemented by subclass");
     }
 
     _removePolyline(polyline) {
-        throw new Error('_removePolyline must be implemented by subclass');
+        throw new Error("_removePolyline must be implemented by subclass");
     }
 
     _removePolygon(polygon) {
-        throw new Error('_removePolygon must be implemented by subclass');
+        throw new Error("_removePolygon must be implemented by subclass");
     }
 
     _removeLabel(label) {
-        throw new Error('_removeLabel must be implemented by subclass');
+        throw new Error("_removeLabel must be implemented by subclass");
     }
 }

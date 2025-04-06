@@ -10,12 +10,27 @@
  * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
  */
 export function createPointMarker(map, position, color = "#FF0000", options = {}) {
-    if (!map) return;
-    if (!position || !position.latitude || !position.longitude) return;
+    // Validations for map and position
+    if (!map) {
+        console.error("createPointMarker: 'map' object is required.");
+        return;
+    }
+    if (!position) {
+        console.error("createPointMarker: 'position' object is required.");
+        return;
+    }
+
+    // Convert and validate the position
+    const googlePos = convertToGoogleCoord(position);
+    if (!googlePos) {
+        console.error("createPointMarker: Failed to create marker due to invalid or incomplete position object.", position);
+        return;
+    }
 
     let defaultOptions;
 
     if (map.mapId) {
+        // --- Logic for AdvancedMarkerElement (Vector Maps) ---
         defaultOptions = {
             width: "10px",
             height: "10px",
@@ -38,34 +53,46 @@ export function createPointMarker(map, position, color = "#FF0000", options = {}
             dotElement.style[key] = markerOptions[key];
         });
 
-        // Use AdvancedMarkerElement for vector maps with custom styling.
-        return new google.maps.marker.AdvancedMarkerElement({
-            map,
-            position: convertToGoogleCoord(position),
-            content: dotElement,
-            title: "Dot Marker",
-        });
+        // Create and return the Advanced Marker
+        try {
+            return new google.maps.marker.AdvancedMarkerElement({
+                map,
+                position: googlePos,
+                content: dotElement,
+                title: "Dot Marker", // Consider making this configurable via options
+            });
+        } catch (e) {
+            console.error("Failed to create AdvancedMarkerElement. Ensure the Google Maps Marker library is loaded.", e);
+            return; // Prevent further errors
+        }
     } else {
-        defaultOptions = {
+        // --- Logic for traditional Marker (Raster Maps or no mapId) ---
+        defaultOptions = {  // Default Icon options for the dot symbol
             fillColor: color,
             fillOpacity: 1,
-            strokeWeight: 0,
-            scale: 5, // Adjust the size as needed
+            strokeWeight: 0, // No border
+            scale: 5,        // Size of the circle
+        };
+
+        // Merge default icon options with user-provided options
+        const markerIconOptions = { ...defaultOptions, ...options };
+
+        // Create and return the traditional Marker
+        try {
+            return new google.maps.Marker({
+                map,
+                position: googlePos,
+                title: "Dot Marker", // Consider making this configurable via options
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE, // Use the built-in circle symbol
+                    ...markerIconOptions // Spread the merged options here
+                },
+                clickable: true, // Default, but can be overridden by options if needed
+            });
+        } catch (e) {
+            console.error("Failed to create Marker. Ensure the Google Maps API is loaded correctly.", e);
+            return; // Prevent further errors
         }
-
-        // Merge default options with user provided options
-        const markerOptions = { ...defaultOptions, ...options };
-
-        // Use the traditional Marker for raster maps (or when no mapId is provided).
-        return new google.maps.Marker({
-            map,
-            position: convertToGoogleCoord(position),
-            title: "Dot Marker",
-            icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                ...markerOptions
-            },
-        });
     }
 }
 
@@ -326,7 +353,6 @@ export function removePointMarker(marker) {
 
 /**
  * Removes a polyline from the map.
- *
  * @param {google.maps.Polyline} polyline - The polyline to remove.
  */
 export function removePolyline(polyline) {
@@ -336,7 +362,6 @@ export function removePolyline(polyline) {
 
 /**
  * Removes a polygon from the map
- * 
  * @param {google.maps.Polygon} polygon - The polygon to remove
  */
 export function removePolygon(polygon) {
@@ -344,22 +369,44 @@ export function removePolygon(polygon) {
     polygon.setMap(null);
 }
 
+/**
+ * Removes a label marker from the map.
+ * @param {google.maps.Marker} label  - The label marker to remove.
+ */
 export function removeLabel(label) {
     if (!label) return;
     label.setMap(null);
 }
 
 /**
- * Converts a coordinate object with latitude/longitude properties to Google Maps LatLng format
- * @param {Object} coord - The coordinate object to convert
- * @param {number} coord.latitude - The latitude value
- * @param {number} coord.longitude - The longitude value
- * @param {number} [coord.height] - The height value (ignored).
- * @returns {Object} A Google Maps compatible coordinate object with lat/lng properties
+ * Converts a coordinate object to the Google Maps {lat, lng} format.
+ * Accepts input formats {lat, lng} or {latitude, longitude}.
+ * 
+ * @param {object | null | undefined} coord - The coordinate object to convert.
+ * Expected formats: {lat: number, lng: number} or {latitude: number, longitude: number}.
+ * @returns {{lat: number, lng: number} | null} - The coordinate object in {lat, lng} format,
+ * or null if the input is invalid or cannot be converted.
  */
 export function convertToGoogleCoord(coord) {
-    const { latitude, longitude } = coord;
-    return { lat: latitude, lng: longitude }
+    // Handle null or undefined input object
+    if (coord === null || coord === undefined) {
+        // console.warn("convertToGoogleCoord: Input coordinate object is missing.");
+        return null;
+    }
+
+    // Extract lat and lng
+    const lat = coord.lat ?? coord.latitude;
+    const lng = coord.lng ?? coord.longitude;
+
+    // Validate lat and lng
+    if (lat === null || lat === undefined || lng === null || lng === undefined) {
+        // console.warn("convertToGoogleCoord: Could not extract valid {lat, lng} or {latitude, longitude} from input:", coord);
+        return null; // Indicate invalid or incomplete input
+    }
+
+    // Return the object guaranteed to be in {lat, lng} format
+    const googleCoord = { lat: lat, lng: lng };
+    return googleCoord;
 }
 
 /**
