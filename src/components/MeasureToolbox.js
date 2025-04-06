@@ -1,4 +1,7 @@
-
+/**
+ * Handle initialization of measure toolbox for different map types.
+ * It creates individual measure components or depends on the map type
+ */
 import { StateManager } from "../lib/state/StateManager.js";
 // import EventEmitter from "eventemitter3";
 import sharedEmitter from "../lib/events/ShareEmitter.js";
@@ -123,11 +126,12 @@ export class MeasureToolbox {
 
         // set properties for cesium measure
         this.cesiumMeasure.viewer = viewer;
+        this.cesiumMeasure.map = viewer;
         this.cesiumMeasure.cesiumPkg = cesiumPkg;
         this.cesiumMeasure.app = this.app;
         this.cesiumMeasure.emitter = this.emitter;
         this.cesiumMeasure.stateManager = this.stateManager;
-
+        this.cesiumMeasure.mapName = "cesium";
         // append cesium measure to map-cesium shadow root
         const mapCesium = document.querySelector("map-cesium");
         if (!mapCesium) return;
@@ -147,6 +151,7 @@ export class MeasureToolbox {
         this.googleMeasure.app = this.app;
         this.googleMeasure.emitter = this.emitter;
         this.googleMeasure.stateManager = this.stateManager;
+        this.googleMeasure.mapName = "google";
         // append google measure to map-cesium shadow root
         const mapGoogle = document.querySelector("map-google");
         if (!mapGoogle) return;
@@ -162,11 +167,11 @@ export class MeasureToolbox {
 
         // create html element for leaflet measure
         this.leafletMeasure = document.createElement("leaflet-measure");
-
         this.leafletMeasure.map = map;
         this.leafletMeasure.app = this.app;
         this.leafletMeasure.emitter = this.emitter;
         this.leafletMeasure.stateManager = this.stateManager;
+        this.leafletMeasure.mapName = "leaflet";
         // append google measure to map-cesium shadow root
         const mapLeaflet = document.querySelector("map-leaflet");
         if (!mapLeaflet) return;

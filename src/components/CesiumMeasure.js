@@ -791,10 +791,8 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return logTable;
     }
 
-    /**
-     * Setup the button overlay to display the description of the button when mouse hover.
-     */
     setupButtonOverlay() {
+        // Create overlay element 
         const buttonOverlay = document.createElement("div");
         buttonOverlay.className = "button-overlay";
         buttonOverlay.style.cssText =
@@ -802,41 +800,90 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this.viewer.container.appendChild(buttonOverlay);
         this.stateManager.setOverlayState("button", buttonOverlay);
 
-        // Store timeout ID
+        // Tooltip timeout setup 
         let tooltipTimeout;
-        const TOOLTIP_DELAY = 800; // 0.8 seconds in milliseconds
+        const TOOLTIP_DELAY = 800; // 0.8 seconds
 
-        this.shadowRoot.querySelectorAll(".annotate-button").forEach((button) => {
-            button.addEventListener("mouseover", (e) => {
-                // Clear any existing timeout
-                clearTimeout(tooltipTimeout);
+        // Flag to track listener attachment
+        let listenersAttached = false;
 
-                // Set new timeout
-                tooltipTimeout = setTimeout(() => {
-                    const cesiumRect = this.viewer.container.getBoundingClientRect();
-                    const buttonOverlay = this.stateManager.getOverlayState("button");
+        // Setup and start MutationObserver immediately
+        const observer = new MutationObserver((mutations, obs) => {
+            // Check if we've already done our work
+            if (listenersAttached) {
+                // This check is slightly redundant if disconnect works immediately,
+                // but provides extra safety against race conditions.
+                return;
+            }
 
-                    // set overlay to display
-                    buttonOverlay.style.opacity = "0.95";
+            // Query for the container on each callback execution
+            const toolbarContainer = this.shadowRoot.querySelector(".toolbar-container");
 
-                    // get description of the button
-                    const description = button.querySelector("img")?.alt.split("-").join(" ");
-                    buttonOverlay.innerHTML = `${description} mode`;
+            if (toolbarContainer) {
+                listenersAttached = true; // Set flag immediately
 
-                    // set position of the overlay
-                    buttonOverlay.style.left = e.pageX - cesiumRect.x + "px";
-                    buttonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
-                }, TOOLTIP_DELAY);
-            });
+                const annotateButtons = toolbarContainer.querySelectorAll(".annotate-button"); // Or ".measure-button"
 
-            button.addEventListener("mouseout", () => {
-                // set overlay to not display
-                clearTimeout(tooltipTimeout);
-                const buttonOverlay = this.stateManager.getOverlayState("button");
-                buttonOverlay.style.opacity = "0";
-            });
+                if (annotateButtons && annotateButtons.length > 0) {
+                    annotateButtons.forEach((button) => {
+                        // --- Attach Mouseover Listener ---
+                        button.addEventListener("mouseover", (e) => {
+                            clearTimeout(tooltipTimeout);
+                            tooltipTimeout = setTimeout(() => {
+                                const currentButtonOverlay = this.stateManager.getOverlayState("button");
+                                if (!currentButtonOverlay) return;
+                                const cesiumRect = this.viewer.container.getBoundingClientRect();
+                                currentButtonOverlay.style.opacity = "0.95";
+                                const img = button.querySelector("img");
+                                const description = img ? img.alt.split("-").join(" ") : "Action"; // Default text
+                                currentButtonOverlay.innerHTML = `${description} mode`;
+
+                                // Position Calculation (ensure values are valid)
+                                if (e.pageX && e.pageY && cesiumRect) {
+                                    currentButtonOverlay.style.left = e.pageX - cesiumRect.x + "px";
+                                    currentButtonOverlay.style.top = e.pageY - cesiumRect.y - 40 + "px";
+                                } else {
+                                    console.warn("Could not calculate overlay position.", { pageX: e.pageX, pageY: e.pageY, cesiumRect });
+                                    currentButtonOverlay.style.left = '10px'; // Fallback
+                                    currentButtonOverlay.style.top = '10px';  // Fallback
+                                }
+                            }, TOOLTIP_DELAY);
+                        });
+
+                        // --- Attach Mouseout Listener ---
+                        button.addEventListener("mouseout", () => {
+                            clearTimeout(tooltipTimeout);
+                            const currentButtonOverlay = this.stateManager.getOverlayState("button");
+                            if (currentButtonOverlay) {
+                                currentButtonOverlay.style.opacity = "0";
+                            }
+                        });
+
+                        // --- Optional: Attach Click Listener ---
+                        button.addEventListener("click", () => {
+                            clearTimeout(tooltipTimeout);
+                            const currentButtonOverlay = this.stateManager.getOverlayState("button");
+                            if (currentButtonOverlay) {
+                                currentButtonOverlay.style.opacity = "0";
+                            }
+                        });
+
+                    });
+                } else {
+                    console.log("Toolbar container found, but no buttons with class '.annotate-button' inside it.");
+                }
+
+                obs.disconnect();
+            }
         });
+
+        // Start observing the shadowRoot 
+        observer.observe(this.shadowRoot, { childList: true, subtree: true });
+
+        // Store observer reference if cleanup needed later (e.g., in disconnectedCallback)
+        this.toolbarObserver = observer;
     }
+
 
     /**
      * Setup the moving yellow dot to show the pointer position at cesium viewer

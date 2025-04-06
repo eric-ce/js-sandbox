@@ -117,13 +117,13 @@ export class MapGoogle extends HTMLElement {
         const mapOptions = {
             zoom: 18,
             center: { lat: -33.77, lng: 150.78 },
-            options: { gestureHandling: "greedy" },
+            options: { gestureHandling: 'greedy' },
             streetViewControl: false,
-            mapTypeId: "roadmap",
+            mapTypeId: "roadmap", //google.maps.MapTypeId.ROADMAP,
             mapTypeControlOptions: {
-                mapTypeIds: ["tile", "roadmap", "satellite", "hybrid", "terrain"],
+                mapTypeIds: ['tile', 'roadmap', 'satellite', 'hybrid', 'terrain'],
                 style: 2 //google.maps.MapTypeControlStyle.DROPDOWN_MENU
-            },
+            }
             // mapId: "c4e6833a187fa179"
         };
 

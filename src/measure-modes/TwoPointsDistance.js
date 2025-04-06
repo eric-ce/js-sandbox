@@ -44,6 +44,8 @@ class TwoPointsDistance extends MeasureModeBase {
             isShowLabels: true
         };
 
+        this.coordinate = null;
+
         // Coordinate management and related properties
         this.coords = {
             cache: [],                  // Stores temporary coordinates during operations
