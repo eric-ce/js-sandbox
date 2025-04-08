@@ -1,14 +1,26 @@
-import {
-    createPointMarker,
-    createPolyline,
-    createLabelMarker,
-    removePointMarker,
-    removePolyline,
-    removeLabel,
-} from '../../lib/helper/googleHelper.js';
+// import {
+//     createPointMarker,
+//     createPolyline,
+//     createLabelMarker,
+//     removePointMarker,
+//     removePolyline,
+//     removeLabel,
+// } from '../../lib/helper/googleHelper.js';
 
 import dataPool from "../../lib/data/DataPool.js";
 import { generateIdByTimestamp } from "../../lib/helper/cesiumHelper.js"; // Keep if generic enough
+
+/**
+ * @typedef MeasurementGroup
+ * @property {string} id - Unique identifier for the measurement
+ * @property {string} mode - Measurement mode (e.g., "distance")
+ * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
+ * @property {number} labelNumberIndex - Index used for sequential labeling
+ * @property {'pending'|'completed'} status - Current state of the measurement
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
+ * @property {string} mapName - Map provider name ("google")
+ */
 
 /**
  * Handles two-point distance measurement specifically for Google Maps.
@@ -21,7 +33,7 @@ export class TwoPointsDistanceGoogle {
      * @param {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} inputHandler - The Google Maps input handler instance.
      * @param {import('../../components/MeasureComponentBase').MeasureComponentBase} drawingHelper - The GoogleMeasure component instance (provides map).
      * @param {import('../../lib/state/StateManager').StateManager} stateManager - The state manager instance.
-     * @param {EventEmitter} emitter - The event emitter instance.
+     * @param {import('eventemitter3').EventEmitter} emitter - The event emitter instance.
      */
     constructor(inputHandler, drawingHelper, stateManager, emitter) {
         // --- Updated Constructor Arguments ---
@@ -45,9 +57,12 @@ export class TwoPointsDistanceGoogle {
         this.coords = {
             /** @type {Array<{lat: number, lng: number}>} */
             cache: [],                  // Stores temporary coordinates during operations
+            /** @type {MeasurementGroup[]} */
             groups: [],                 // Tracks all coordinates involved in operations
             measureCounter: 0,            // Counter for the number of groups
+            /** @type {Array<{lat: number, lng: number}>} */
             dragStart: null,            // Stores the initial position before a drag begins
+            /** @type {Array<{x: number, y: number}>} */
             dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
         };
 
@@ -78,15 +93,6 @@ export class TwoPointsDistanceGoogle {
 
         this.pointCollection = []; // Collection of point markers
         this.labelCollection = []; // Collection of labels
-
-        // NO LONGER NEEDED: Store listener handles for removal - handler manages this
-        // this.listeners = [];
-
-        console.log("TwoPointsDistanceGoogle mode created (Revised Args).");
-
-        // Store callback references for removal
-        this._boundHandleLeftClick = this.handleLeftClick.bind(this);
-        this._boundHandleMouseMove = this.handleMouseMove.bind(this);
     }
 
     /**
@@ -98,8 +104,8 @@ export class TwoPointsDistanceGoogle {
 
         // --- Use Input Handler ---
         // Pass the bound method reference directly
-        this.handler.on('leftClick', this._boundHandleLeftClick);
-        this.handler.on('mouseMove', this._boundHandleMouseMove);
+        this.handler.on('leftClick', (eventData) => this.handleLeftClick(eventData));
+        this.handler.on('mouseMove', (eventData) => this.handleMouseMove(eventData));
         // --- End Use Input Handler ---
 
         this.handler.setCursor('crosshair'); // Set cursor via handler
@@ -124,10 +130,10 @@ export class TwoPointsDistanceGoogle {
      * Handles left clicks, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
      */
-    handleLeftClick = async (eventData) => { // Use arrow fn for 'this'
+    handleLeftClick(eventData) { // Use arrow fn for 'this'
         // Use normalized mapPoint
         if (!eventData || !eventData.mapPoint) return;
-
+        console.log(this.pickedObject);
         if (this.flags.isMeasurementComplete) {
             this.flags.isMeasurementComplete = false;
             this.coords.cache = [];
@@ -182,7 +188,7 @@ export class TwoPointsDistanceGoogle {
      * Handles mouse move, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
      */
-    handleMouseMove = async (eventData) => { // Use arrow fn
+    handleMouseMove(eventData) { // Use arrow fn
         if (!eventData || !eventData.mapPoint) return;
 
         const coordinate = eventData.mapPoint; // Already {latitude, longitude}

@@ -30,9 +30,35 @@ export default class GoogleMeasure extends MeasureComponentBase {
         removeLabel(label);
     }
 
-    // Implementation of abstract methods from the base class
     _addPointMarker(position, color = "#FF0000", options = {}) {
-        return createPointMarker(this.map, position, color, options);
+        // console.log("GoogleMeasure._addPointMarker called with:", position, color, options);
+        if (!this.map || !position) return null;
+        try {
+            const marker = createPointMarker(this.map, position, color, options);
+            if (marker) {
+                // --- Add Click Listener ---
+                // Store dataId if provided in options
+                marker.__measureDataId = options.dataId;
+                google.maps.event.addListener(marker, 'click', (event) => {
+                    // Prevent map click listener from firing
+                    event.domEvent?.stopPropagation();
+                    // Prepare data for the event emission
+                    const clickInfo = {
+                        type: 'marker',
+                        graphic: marker, // The marker instance itself
+                        mapPoint: { lat: event.latLng.lat(), lng: event.latLng.lng() },
+                        dataId: marker.__measureDataId, // Include the associated data ID
+                        event: event // Original Google Maps event
+                    };
+                    this._notifyAnnotationClicked(clickInfo);
+                });
+                // --- End Add Click Listener ---
+            }
+            return marker;
+        } catch (error) {
+            console.error("GoogleMeasure: Error in _addPointMarker:", error);
+            return null;
+        }
     }
 
     _addPointMarkersFromArray(positions, color = "#FF0000", options = {}) {
@@ -61,6 +87,25 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
     _removePolygon(polygon) {
         removePolygon(polygon);
+    }
+
+    /**
+     * Emits an 'annotation:click' event when a managed graphic is clicked.
+     * @param {object} clickInfo - Details about the clicked annotation.
+     * @param {'marker'|'polyline'|'polygon'|'label'} clickInfo.type - The type of graphic clicked.
+     * @param {any} clickInfo.graphic - The map graphic object itself.
+     * @param {{lat: number, lng: number} | null} clickInfo.mapPoint - Click coordinates.
+     * @param {string | undefined} clickInfo.dataId - The ID of the associated measurement data.
+     * @param {google.maps.MapMouseEvent | google.maps.PolylineMouseEvent} clickInfo.event - The original event.
+     * @private
+     */
+    _notifyAnnotationClicked(clickInfo) {
+        if (!this.emitter) {
+            console.warn("GoogleMeasure: Emitter not available, cannot emit annotation:click event.");
+            return;
+        }
+        console.log(`GoogleMeasure: Emitting annotation:click`, clickInfo);
+        this.emitter.emit('annotation:click', clickInfo);
     }
 
 }
