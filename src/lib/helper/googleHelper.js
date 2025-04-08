@@ -209,8 +209,9 @@ export function createPolygon(map, positions, color = "#FF0000", options = {}) {
 /**
  * Creates a label marker on the provided map at the given position.
  * @param {google.maps.Map} map - The Google Map instance
- * @param {Array} positions - Array of position objects
- * @param {Number} text - The text to display in the label
+ * @param {{lat:number,lng:number}[]}} positions - Array of position objects
+ * @param {Number} value - The value to display on the label marker
+ * @param {string} unit - The unit of measurement (default is "meter")
  * @param {Object} options - Optional configuration for the label marker
  * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
  */
@@ -222,6 +223,8 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
     const formattedText = formatMeasurementValue(value, unit);
 
     const middlePos = calculateMiddlePos(formatGoogleCoords);
+
+    let marker;
 
     if (map.mapId) {
         // AdvancedMarkerElement branch (vector maps)
@@ -267,12 +270,7 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
             markerOptions.anchor = new google.maps.Point(labelOptions.offset.x, labelOptions.offset.y);
         }
 
-        const marker = new google.maps.marker.AdvancedMarkerElement(markerOptions);
-
-        // store original positions data on the label marker
-        marker.positions = [...positions];
-
-        return marker;
+        marker = new google.maps.marker.AdvancedMarkerElement(markerOptions);
     } else {
         // Traditional Marker branch (raster maps)
         const defaultOptions = {
@@ -288,7 +286,7 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
         const transparentImage =
             'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
-        const marker = new google.maps.Marker({
+        marker = new google.maps.Marker({
             map,
             position: middlePos,
             title: options.title || "Label Marker",
@@ -309,12 +307,13 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
             clickable: labelOptions.clickable !== undefined ? labelOptions.clickable : false,
             zIndex: labelOptions.zIndex || 1,
         });
-
-        // store original positions data on the label marker
-        marker.positions = [...positions];
-
-        return marker;
     }
+
+    if (!marker) console.error("createLabelMarker: Failed to create marker. Ensure the Google Maps API is loaded correctly.");
+    // store original positions data on the label marker
+    marker.positions = [...positions];
+
+    return marker;
 }
 
 
@@ -341,48 +340,22 @@ export function createLabelMarkers(map, positions, valueArray, unit = "meter", o
     return labels;
 }
 
-/**
- * Removes a marker from the map.
- *
- * @param {google.maps.marker.AdvancedMarkerElement|google.maps.Marker} marker - The marker to remove.
- */
-export function removePointMarker(marker) {
-    if (!marker) return;
-    marker.setMap(null);
-}
 
 /**
- * Removes a polyline from the map.
- * @param {google.maps.Polyline} polyline - The polyline to remove.
+ * Removes an overlay (marker, polygon, polyline, label) from the map.
+ * @param {google.maps.Marker|google.maps.Polygon|google.maps.Polyline} overlay - The overlay to remove
+ * @returns 
  */
-export function removePolyline(polyline) {
-    if (!polyline) return;
-    polyline.setMap(null);
-}
-
-/**
- * Removes a polygon from the map
- * @param {google.maps.Polygon} polygon - The polygon to remove
- */
-export function removePolygon(polygon) {
-    if (!polygon) return;
-    polygon.setMap(null);
-}
-
-/**
- * Removes a label marker from the map.
- * @param {google.maps.Marker} label  - The label marker to remove.
- */
-export function removeLabel(label) {
-    if (!label) return;
-    label.setMap(null);
+export function removeOverlay(overlay) {
+    if (!overlay) return;
+    overlay.setMap(null);
 }
 
 /**
  * Converts a coordinate object to the Google Maps {lat, lng} format.
  * Accepts input formats {lat, lng} or {latitude, longitude}.
  * 
- * @param {object | null | undefined} coord - The coordinate object to convert.
+ * @param {{latitude: number, longitude: number} | {lat: number, lng:number} | null | undefined} coord - The coordinate object to convert.
  * Expected formats: {lat: number, lng: number} or {latitude: number, longitude: number}.
  * @returns {{lat: number, lng: number} | null} - The coordinate object in {lat, lng} format,
  * or null if the input is invalid or cannot be converted.
@@ -435,7 +408,7 @@ function calculateTopMiddlePos(positions) {
  * @param {Array<google.maps.LatLng>} positions - Array of Google Maps LatLng objects 
  * @returns {google.maps.LatLng} - The middle position
  */
-function calculateMiddlePos(positions) {
+export function calculateMiddlePos(positions) {
     const bounds = new google.maps.LatLngBounds();
 
     positions.forEach(position => {
@@ -446,13 +419,28 @@ function calculateMiddlePos(positions) {
 }
 
 /**
+ * Calculates the distance in meters between two positions.
+ * @param {{latitude: number, longitude: number}|{lat:number, lng: number}} positionA 
+ * @param {{latitude: number, longitude: number}|{lat:number, lng: number}} positionB 
+ * @returns {number|null} - The distance in meters or null if invalid positions.
+ */
+export function calculateDistance(positionA, positionB) {
+    const googlePosA = convertToGoogleCoord(positionA);
+    const googlePosB = convertToGoogleCoord(positionB);
+    // validate the converted positions
+    if (!googlePosA || !googlePosB) return null; // Handle invalid positions
+
+    return google.maps.geometry.spherical.computeDistanceBetween(positionA, positionB) || null;
+}
+
+/**
  * Formats a measurement value based on the provided unit.
  *
  * @param {number|string} value - The measurement value.
- * @param {string} unit - The unit type ("meter" or "squareMeter").
+ * @param {"meter"|"squareMeter"} unit - The unit type ("meter" or "squareMeter").
  * @returns {string} The formatted measurement string.
  */
-function formatMeasurementValue(value, unit) {
+export function formatMeasurementValue(value, unit) {
     if (typeof value === "string" && unit === "meter") {
         return value;
     }
@@ -471,3 +459,47 @@ function formatMeasurementValue(value, unit) {
     }
     return value.toString();
 }
+
+
+
+/**********************
+ * DEPRECATED HELPERS *
+ *   TO BE REMOVED    *
+ **********************/
+
+/**
+ * Removes a marker from the map.
+ *
+ * @param {google.maps.marker.AdvancedMarkerElement|google.maps.Marker} marker - The marker to remove.
+ */
+// export function removePointMarker(marker) {
+//     if (!marker) return;
+//     marker.setMap(null);
+// }
+
+/**
+ * Removes a polyline from the map.
+ * @param {google.maps.Polyline} polyline - The polyline to remove.
+ */
+// export function removePolyline(polyline) {
+//     if (!polyline) return;
+//     polyline.setMap(null);
+// }
+
+/**
+ * Removes a polygon from the map
+ * @param {google.maps.Polygon} polygon - The polygon to remove
+ */
+// export function removePolygon(polygon) {
+//     if (!polygon) return;
+//     polygon.setMap(null);
+// }
+
+/**
+ * Removes a label marker from the map.
+ * @param {google.maps.Marker} label  - The label marker to remove.
+ */
+// export function removeLabel(label) {
+//     if (!label) return;
+//     label.setMap(null);
+// }

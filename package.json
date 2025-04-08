@@ -12,7 +12,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@turf/turf": "^7.0.0",
+    "@turf/turf": "^7.2.0",
     "copy-webpack-plugin": "^12.0.2",
     "css-loader": "^7.1.2",
     "css-minimizer-webpack-plugin": "^7.0.0",

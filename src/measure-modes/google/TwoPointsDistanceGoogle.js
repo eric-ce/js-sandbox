@@ -9,7 +9,8 @@
 
 import dataPool from "../../lib/data/DataPool.js";
 import { generateIdByTimestamp } from "../../lib/helper/cesiumHelper.js"; // Keep if generic enough
-
+import * as Turf from "@turf/turf";
+import { convertToGoogleCoord, calculateMiddlePos, calculateDistance, formatMeasurementValue, } from "../../lib/helper/googleHelper.js";
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -79,8 +80,8 @@ export class TwoPointsDistanceGoogle {
 
         // References to temporary Google Maps overlays
         this.interactiveAnnotations = {
-            movingLines: [],
-            movingLabels: [],
+            movingPolylines: [],    // Array of moving polylines
+            movingLabels: [],       // Array of moving labels
 
             dragPoint: null,          // Currently dragged point primitive
             dragPolylines: [],        // Array of dragging polylines
@@ -91,8 +92,9 @@ export class TwoPointsDistanceGoogle {
             hoveredLabel: null        // Label that is currently hovered
         };
 
-        this.pointCollection = []; // Collection of point markers
-        this.labelCollection = []; // Collection of labels
+        this.pointCollection = [];      // Collection of point markers
+        this.labelCollection = [];      // Collection of labels
+        this.polylineCollection = [];   // Collection of polylines
     }
 
     /**
@@ -106,6 +108,12 @@ export class TwoPointsDistanceGoogle {
         // Pass the bound method reference directly
         this.handler.on('leftClick', (eventData) => this.handleLeftClick(eventData));
         this.handler.on('mouseMove', (eventData) => this.handleMouseMove(eventData));
+        this.emitter.on('annotation:click', (eventData) => {
+            if (!eventData) return;
+            this.flags.isDragMode = true;
+            // add drag event logic here
+            console.log(this.flags.isDragMode);
+        });
         // --- End Use Input Handler ---
 
         this.handler.setCursor('crosshair'); // Set cursor via handler
@@ -130,10 +138,10 @@ export class TwoPointsDistanceGoogle {
      * Handles left clicks, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
      */
-    handleLeftClick(eventData) { // Use arrow fn for 'this'
+    handleLeftClick(eventData) {
         // Use normalized mapPoint
         if (!eventData || !eventData.mapPoint) return;
-        console.log(this.pickedObject);
+
         if (this.flags.isMeasurementComplete) {
             this.flags.isMeasurementComplete = false;
             this.coords.cache = [];
@@ -165,23 +173,38 @@ export class TwoPointsDistanceGoogle {
             this.coords.measureCounter++;
         }
 
-        // create a new point primitive
-        const position = this.coordinate; // Already {latitude, longitude}
-        if (!position) return; // Ensure position is valid
 
-        const point = this.drawingHelper._addPointMarker(position);
+        const point = this.drawingHelper._addPointMarker(this.coordinate);
         if (!point) return;
         this.pointCollection.push(point); // Store point reference
 
         // Update the this.coords cache and this.measure coordinates
-        this.coords.cache.push({ latitude: position.lat, longitude: position.lng, height: 0 });
+        this.coords.cache.push({ latitude: this.coordinate.lat, longitude: this.coordinate.lng, height: 0 });
 
         // Update to data pool
         dataPool.updateOrAddMeasure({ ...this.measure });
 
-        // if (this.points.length === 2) {
+        if (this.coords.cache.length === 2) {
+            // create line
+            const line = this.drawingHelper._addPolyline(this.coords.cache, "#A52A2A", { dataId: this.measure.id });
+            this.polylineCollection.push(line); // Store polyline reference
 
-        // }
+            // create label 
+            const googlePositions = this.coords.cache.map(pos => convertToGoogleCoord(pos));
+            const distance = calculateDistance(googlePositions[0], googlePositions[1]);
+            const label = this.drawingHelper._addLabel(googlePositions, distance, "meter");
+            this.labelCollection.push(label); // Store label reference
+
+            // Update this.measure
+            this.measure.status = "completed";
+
+            // Update to data pool
+            dataPool.updateOrAddMeasure({ ...this.measure });
+
+            // set flag that the measure has ended
+            this.flags.isMeasurementComplete = true;
+            this.coords.cache = [];
+        }
     };
 
     /**
@@ -191,31 +214,98 @@ export class TwoPointsDistanceGoogle {
     handleMouseMove(eventData) { // Use arrow fn
         if (!eventData || !eventData.mapPoint) return;
 
-        const coordinate = eventData.mapPoint; // Already {latitude, longitude}
-        if (!coordinate) return;
-        this.coordinate = coordinate; // Store for later use
+        const pos = eventData.mapPoint; // Already {latitude, longitude}
+        if (!pos) return;
+        this.coordinate = pos; // Store for later use
 
         const isMeasuring = this.coords.cache.length > 0 && !this.flags.isMeasurementComplete;
 
-        // switch (true) {
-        //     case isMeasuring:
-        //         if (this.coords.cache.length === 1) {
-        //             this.removeMovingAnnotations("test"); // Remove previous moving graphics
-        //             const movingLine = createPolyline(
-        //                 this.map,
-        //                 [this.points[0], cartesian], // Use generic format for helper
-        //                 this.stateManager.getColorState("move") || '#FFFF00', // Use generic color key
-        //             )
-        //             this.interactivePrimitives.movingPolylines.push(movingLine);
-        //         }
-        //         break;
-        //     default:
-        //         this.handleHoverHighlighting(pickedObject);
-        //         break;
-        // }
+        switch (true) {
+            case isMeasuring:
+                if (this.coords.cache.length === 1) {
+                    // convert to google coord
+                    const googlePositions = [convertToGoogleCoord(this.coords.cache[0]), this.coordinate];
+
+                    // validate googlePositions
+                    if (!googlePositions || googlePositions.length === 0 || googlePositions.some(pos => pos === null)) {
+                        console.error("Google positions are empty or invalid:", googlePositions);
+                        return;
+                    }
+
+                    // Remove existing moving lines and labels
+                    this._removeMovingAnnotations();
+
+                    // Moving line: update if existed, create if not existed, to save dom operations
+                    this._createOrUpdateMovingLine(googlePositions);
+
+                    // Moving label: update if existed, create if not existed, to save dom operations
+                    this._createOrUpdateMovingLabel(googlePositions);
+                }
+                break;
+            default:
+                this.handleHoverHighlighting();
+                break;
+        }
     };
 
-    handleHoverHighlighting(pickedObject) {
-        console.log("remove:", pickedObject);
+    /**
+     * Creates or update the moving line
+     * @param {{latitude: number, longitude: number}[]|{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
+     */
+    _createOrUpdateMovingLine(positions) {
+        if (this.interactiveAnnotations.movingPolylines && this.interactiveAnnotations.movingPolylines.length > 0) {
+            // update position of the line
+            const movingLine = this.interactiveAnnotations.movingPolylines[0];
+            movingLine.setPath(positions);
+            // TODO: update moving line id
+        } else {
+            // create new line
+            // TODO: set line id
+            const movingLine = this.drawingHelper._addPolyline(positions, "A52A2A", { clickable: false })
+            this.interactiveAnnotations.movingPolylines.push(movingLine);
+        }
+    }
+
+
+    _createOrUpdateMovingLabel(positions) {
+        // calculate distance
+        const distance = calculateDistance(positions[0], positions[1]);
+        const formattedText = formatMeasurementValue(distance, "meter"); // Format the distance value
+
+        if (this.interactiveAnnotations.movingLabels && this.interactiveAnnotations.movingLabels.length > 0) {
+            const movingLabel = this.interactiveAnnotations.movingLabels[0];
+            // calculate label position
+            const middlePos = calculateMiddlePos(positions);
+            // set label position
+            movingLabel.setPosition(middlePos);
+            // set label text
+            movingLabel.setLabel({ ...movingLabel.getLabel(), text: formattedText });
+
+            // TODO: update moving label id
+        } else {
+            // create new label
+            const movingLabel = this.drawingHelper._addLabel(positions, distance, "meter", { clickable: false });
+            this.interactiveAnnotations.movingLabels = [movingLabel];
+            // TODO: set labelid
+        }
+    }
+
+    _removeMovingAnnotations() {
+        if (this.interactiveAnnotations.movingPolylines && this.interactiveAnnotations.movingPolylines.length > 0) {
+            this.interactiveAnnotations.movingPolylines.forEach((line) => {
+                this.drawingHelper._removePolyline(line);
+            });
+            this.interactiveAnnotations.movingPolylines = [];
+        }
+
+        if (this.interactiveAnnotations.movingLabels && this.interactiveAnnotations.movingLabels.length > 0) {
+            this.interactiveAnnotations.movingLabels.forEach((label) => {
+                this.drawingHelper._removeLabel(label);
+            });
+            this.interactiveAnnotations.movingLabels = [];
+        }
+    }
+
+    handleHoverHighlighting() {
     }
 }
