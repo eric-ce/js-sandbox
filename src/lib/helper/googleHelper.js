@@ -22,12 +22,10 @@ export function createPointMarker(map, position, color = "#FF0000", options = {}
 
     // Convert and validate the position
     const googlePos = convertToGoogleCoord(position);
-    if (!googlePos) {
-        console.error("createPointMarker: Failed to create marker due to invalid or incomplete position object.", position);
-        return;
-    }
+    if (!googlePos) return;
 
     let defaultOptions;
+    let pointMarker;
 
     if (map.mapId) {
         // --- Logic for AdvancedMarkerElement (Vector Maps) ---
@@ -55,11 +53,11 @@ export function createPointMarker(map, position, color = "#FF0000", options = {}
 
         // Create and return the Advanced Marker
         try {
-            return new google.maps.marker.AdvancedMarkerElement({
+            pointMarker = new google.maps.marker.AdvancedMarkerElement({
                 map,
                 position: googlePos,
                 content: dotElement,
-                title: "Dot Marker", // Consider making this configurable via options
+                title: "Point Marker", // Consider making this configurable via options
             });
         } catch (e) {
             console.error("Failed to create AdvancedMarkerElement. Ensure the Google Maps Marker library is loaded.", e);
@@ -78,22 +76,29 @@ export function createPointMarker(map, position, color = "#FF0000", options = {}
         const markerIconOptions = { ...defaultOptions, ...options };
 
         // Create and return the traditional Marker
-        try {
-            return new google.maps.Marker({
-                map,
-                position: googlePos,
-                title: "Dot Marker", // Consider making this configurable via options
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE, // Use the built-in circle symbol
-                    ...markerIconOptions // Spread the merged options here
-                },
-                clickable: true, // Default, but can be overridden by options if needed
-            });
-        } catch (e) {
-            console.error("Failed to create Marker. Ensure the Google Maps API is loaded correctly.", e);
-            return; // Prevent further errors
-        }
+        pointMarker = new google.maps.Marker({
+            map,
+            position: googlePos,
+            title: "Point Marker", // Consider making this configurable via options
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE, // Use the built-in circle symbol
+                ...markerIconOptions // Spread the merged options here
+            },
+            clickable: true, // Default, but can be overridden by options if needed
+        });
     }
+
+    if (!pointMarker) {
+        console.error("createPointMarker: Failed to create marker. Ensure the Google Maps API is loaded correctly.");
+        return;
+    }
+
+    // Store original positions data on the marker.
+    pointMarker.positions = [position];
+    // Store default id 
+    pointMarker.id = "annotate_point";
+
+    return pointMarker;
 }
 
 /**
@@ -143,6 +148,8 @@ export function createPolyline(map, positions, color = "#A52A2A", options = {}) 
 
     // Store original positions data on the polyline.
     polyline.positions = [...positions];
+    // Store default id 
+    polyline.id = "annotate_line";
 
     return polyline;
 }

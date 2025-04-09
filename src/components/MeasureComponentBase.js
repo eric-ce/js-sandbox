@@ -24,6 +24,8 @@ import {
 import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { TwoPointsDistanceGoogle } from "../measure-modes/google/TwoPointsDistanceGoogle.js";
+import { MultiDistanceGoogle } from "../measure-modes/google/MultiDistanceGoogle.js";
+
 export class MeasureComponentBase extends HTMLElement {
     constructor() {
         super();
@@ -501,21 +503,23 @@ export class MeasureComponentBase extends HTMLElement {
         // TEMPORARY logic based on current specific classes:
         if (ModeClass === TwoPointsDistanceGoogle) {
             args = [...standardArgs]; // Google specific needs map
-        } else if (
-            ModeClass === TwoPointsDistanceCesium ||
-            ModeClass === Height ||
-            ModeClass === Profile ||
-            ModeClass === ThreePointsCurve /* Add other Cesium modes */
-        ) {
-            // Assuming original Cesium modes need viewer, handler, stateManager, pkg, emitter
-            // Pass the *real* Cesium handler for now if using original modes
-            const cesiumHandler =
-                this.inputHandler instanceof CesiumInputHandler
-                    ? this.inputHandler.handler
-                    : this.inputHandler; // Get original handler if needed
-            args = [this.map, cesiumHandler, this.stateManager, this._cesiumPkg, this.emitter];
-            console.warn(`Passing potentially specific args for ${ModeClass.name}`);
-        } else {
+        }
+        // else if (
+        //     ModeClass === TwoPointsDistanceCesium ||
+        //     ModeClass === Height ||
+        //     ModeClass === Profile ||
+        //     ModeClass === ThreePointsCurve /* Add other Cesium modes */
+        // ) {
+        //     // Assuming original Cesium modes need viewer, handler, stateManager, pkg, emitter
+        //     // Pass the *real* Cesium handler for now if using original modes
+        //     const cesiumHandler =
+        //         this.inputHandler instanceof CesiumInputHandler
+        //             ? this.inputHandler.handler
+        //             : this.inputHandler; // Get original handler if needed
+        //     args = [this.map, cesiumHandler, this.stateManager, this._cesiumPkg, this.emitter];
+        //     console.warn(`Passing potentially specific args for ${ModeClass.name}`);
+        // } 
+        else {
             // Assume future shared modes use standard args
             args = standardArgs;
         }

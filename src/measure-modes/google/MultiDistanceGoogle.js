@@ -28,7 +28,7 @@ import { convertToGoogleCoord, calculateMiddlePos, calculateDistance, formatMeas
  * Uses googleHelper functions for drawing temporary graphics.
  * Expects an IInputEventHandler and IDrawingHelper (but only uses map from drawingHelper for now).
  */
-export class TwoPointsDistanceGoogle {
+export class MultiDistanceGoogle {
     /**
      * Creates an instance of TwoPointsDistanceGoogle.
      * @param {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} inputHandler - The Google Maps input handler instance.
@@ -52,7 +52,7 @@ export class TwoPointsDistanceGoogle {
         this.emitter = emitter;
         // --- End Updated Args ---
 
-        this.mode = "distance"; // Use generic mode ID now
+        this.mode = "multi_distance"; // Use generic mode ID now
 
         // Coordinate management and related properties
         this.coords = {
@@ -126,11 +126,7 @@ export class TwoPointsDistanceGoogle {
         console.log(`Deactivating ${this.constructor.name} mode.`);
 
         // remove any pending annotations
-        this._removeMovingAnnotations();
-        this._removePendingAnnotations();
-
-        // Reset values to desired state
-        this._resetValues();
+        this._removePendingOrMovingAnnotations();
 
         // --- Use Input Handler to remove listeners ---
         // Pass the *same function references* used in activate()
@@ -183,8 +179,7 @@ export class TwoPointsDistanceGoogle {
 
         const point = this.drawingHelper._addPointMarker(this.coordinate);
         if (!point) return;
-        point.id = `annotate_distance_${this.measure.id}`;
-        point.status = "pending"; // Set status to pending
+        point.id = `annotate_distance_${this.measure.id}`
         this.pointCollection.push(point); // Store point reference
 
         // Update the this.coords cache and this.measure coordinates
@@ -194,20 +189,14 @@ export class TwoPointsDistanceGoogle {
         dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coords.cache.length === 2) {
-            // update pending annotations
-            this.pointCollection.forEach(point => point.status = "completed");
-            console.log(this.pointCollection)
             // create line
             const line = this.drawingHelper._addPolyline(this.coords.cache, "#A52A2A", { dataId: this.measure.id });
-            line.id = `annotate_distance_line_${this.measure.id}`; // Set ID for the line
             this.polylineCollection.push(line); // Store polyline reference
 
+            // create label 
             const googlePositions = this.coords.cache.map(pos => convertToGoogleCoord(pos));
             const distance = calculateDistance(googlePositions[0], googlePositions[1]);
-
-            // create label 
             const label = this.drawingHelper._addLabel(googlePositions, distance, "meter");
-            label.id = `annotate_distance_label_${this.measure.id}`; // Set ID for the label
             this.labelCollection.push(label); // Store label reference
 
             // Update this.measure
@@ -248,7 +237,7 @@ export class TwoPointsDistanceGoogle {
                     }
 
                     // Remove existing moving lines and labels
-                    this._removeMovingAnnotations();
+                    // this._removeMovingAnnotations();
 
                     // Moving line: update if existed, create if not existed, to save dom operations
                     this._createOrUpdateMovingLine(googlePositions);
@@ -265,29 +254,23 @@ export class TwoPointsDistanceGoogle {
 
     /**
      * Creates or update the moving line
-     * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
+     * @param {{latitude: number, longitude: number}[]|{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
      */
     _createOrUpdateMovingLine(positions) {
         if (this.interactiveAnnotations.movingPolylines && this.interactiveAnnotations.movingPolylines.length > 0) {
             // update position of the line
             const movingLine = this.interactiveAnnotations.movingPolylines[0];
             movingLine.setPath(positions);
-            // update custom positions attribute
-            movingLine.positions = [...positions];
+            // TODO: update moving line id
         } else {
             // create new line
+            // TODO: set line id
             const movingLine = this.drawingHelper._addPolyline(positions, "A52A2A", { clickable: false })
-            movingLine.id = `annotate_distance_line_${this.measure.id}`; // Set ID for the moving line
-            movingLine.status = "moving"; // Set status to moving
             this.interactiveAnnotations.movingPolylines.push(movingLine);
         }
     }
 
-    /**
-     * Create or update the moving label.
-     * If the label exists, update its position and text, else create a new one.
-     * @param {{lat:number,lng:number}[]} positions - Array of positions to create or update the label.
-     */
+
     _createOrUpdateMovingLabel(positions) {
         // calculate distance
         const distance = calculateDistance(positions[0], positions[1]);
@@ -301,40 +284,33 @@ export class TwoPointsDistanceGoogle {
             movingLabel.setPosition(middlePos);
             // set label text
             movingLabel.setLabel({ ...movingLabel.getLabel(), text: formattedText });
+
+            // TODO: update moving label id
         } else {
             // create new label
             const movingLabel = this.drawingHelper._addLabel(positions, distance, "meter", { clickable: false });
-            movingLabel.id = `annotate_distance_label_${this.measure.id}`; // Set ID for the moving label
-            movingLabel.status = "moving"; // Set status to moving
-            this.interactiveAnnotations.movingLabels = [movingLabel]; // Store moving label reference
+            this.interactiveAnnotations.movingLabels = [movingLabel];
+            // TODO: set labelid
         }
     }
 
-    /**
-     * Removes pending annotations from the map.
-     */
-    _removePendingAnnotations() {
+    _removePendingOrMovingAnnotations() {
         // Remove pending annotations
-        const pendingPoints = this.pointCollection.filter(point => point.status === "pending");
+        const pendingPoints = this.pointCollection.filter(point => point.id.includes("pending"));
         if (pendingPoints && pendingPoints.length > 0) {
             pendingPoints.forEach(point => this.drawingHelper._removePointMarker(point));
         }
 
-        const pendingLines = this.polylineCollection.filter(line => line.status === "pending");
+        const pendingLines = this.polylineCollection.filter(line => line.id.includes("pending"));
         if (pendingLines && pendingLines.length > 0) {
             pendingLines.forEach(line => this.drawingHelper._removePolyline(line));
         }
 
-        const pendingLabels = this.labelCollection.filter(label => label.status === "pending");
+        const pendingLabels = this.labelCollection.filter(label => label.id.includes("pending"));
         if (pendingLabels && pendingLabels.length > 0) {
             pendingLabels.forEach(label => this.drawingHelper._removeLabel(label));
         }
-    }
 
-    /**
-     * Removes moving annotations from the map.
-     */
-    _removeMovingAnnotations() {
         // Remove moving annotations
         if (this.interactiveAnnotations.movingPolylines && this.interactiveAnnotations.movingPolylines.length > 0) {
             this.interactiveAnnotations.movingPolylines.forEach((line) => {
@@ -352,55 +328,5 @@ export class TwoPointsDistanceGoogle {
     }
 
     handleHoverHighlighting() {
-    }
-
-    _resetValues() {
-        this.coordinate = null; // Reset coordinate
-
-        this.coords = {
-            cache: [],                              // Reset temporary coordinates
-            groups: this.coords.groups,             // Preserve existing measurement groups
-            measureCounter: this.coords.measureCounter, // Preserve the current group counter
-            dragStart: null,                        // Reset drag start position
-            dragStartToCanvas: null,                // Reset drag start canvas coordinates
-            dragStartTop: null,                     // Reset drag start top position
-            dragStartBottom: null,                  // Reset drag start bottom position
-            _records: this.coords._records,         // Preserve existing measurement records
-            selectedGroupIndex: this.coords.selectedGroupIndex,     // Preserve the value of this.coords.selectedGroupIndex
-        }
-        this.measure = {
-            id: null,
-            mode: "",
-            coordinates: [],
-            labelNumberIndex: 0,
-            status: "pending",
-            _records: [],
-            interpolatedPoints: [],
-            mapName: "cesium",
-        };
-
-        this.interactivePrimitives = {
-            movingPoint: null,                        // Reset moving point primitive
-            movingPoints: [],                         // Reset array of moving points
-            movingPolylines: [],                      // Reset moving polyline primitives
-            movingLabels: [],                         // Reset moving label primitives
-            movingPolygon: null,                      // Reset moving polygon primitive
-            movingPolygonOutline: null,               // Reset moving polygon outline primitive
-
-            dragPoint: null,                          // Reset currently dragged point primitive
-            dragPoints: [],                           // Reset array of dragged points
-            dragPolylines: [],                        // Reset dragging polyline primitives
-            dragLabels: [],                           // Reset dragging label primitives
-            dragPolygon: null,                        // Reset dragged polygon primitive
-            dragPolygonOutline: null,                 // Reset dragged polygon outline primitive
-
-            hoveredPoint: null,                       // Reset hovered point
-            hoveredLabel: null,                       // Reset hovered label
-            hoveredLine: null,                        // Reset hovered line
-
-            selectedLines: this.interactivePrimitives.selectedLines, // Preserve currently selected lines
-            addModeLine: null,                        // Reset add mode line primitive
-            chartHoveredPoint: null                   // Reset chart hovered point
-        };
     }
 }
