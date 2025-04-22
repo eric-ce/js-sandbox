@@ -1,5 +1,3 @@
-// src/lib/input/GoogleMapsInputHandler.js
-
 /**
  * Provides a consistent interface for handling user input events on a Google Map,
  * implementing the IInputEventHandler contract.
@@ -21,7 +19,8 @@ export class GoogleMapsInputHandler /* implements IInputEventHandler */ {
 
     /**
      * Maps a generic event type string to a Google Maps event name.
-     * @param {string} typeString - e.g., 'leftClick', 'mouseMove'
+     * Note: 'middleclick' maps to 'mouseup', requiring the callback to check event.button.
+     * @param {string} typeString - e.g., 'leftClick', 'mouseMove', 'middleclick'
      * @returns {string | null} The corresponding Google Maps event name or null.
      * @private
      */
@@ -30,9 +29,10 @@ export class GoogleMapsInputHandler /* implements IInputEventHandler */ {
             case 'leftclick': return 'click';
             case 'mousemove': return 'mousemove';
             case 'rightclick': return 'rightclick';
-            case 'leftdoubleclick': return 'dblclick';
-            case 'leftdown': return 'mousedown'; // Note: Google Maps uses standard DOM event names here
-            case 'leftup': return 'mouseup';
+            // case 'leftdoubleclick': return 'dblclick';
+            // case 'leftdown': return 'mousedown';
+            // case 'leftup': return 'mouseup';
+            // case 'middleclick': return 'mouseup'; // Map 'middleclick' to 'mouseup'
             // Add 'dragstart', 'drag', 'dragend' if needed (usually on markers/shapes)
             default:
                 console.warn(`GoogleMapsInputHandler: Unsupported event type string: ${typeString}`);
@@ -42,7 +42,7 @@ export class GoogleMapsInputHandler /* implements IInputEventHandler */ {
 
     /**
      * Attaches an event listener to the Google Map.
-     * @param {string} eventType - e.g., 'leftClick', 'mouseMove'.
+     * @param {string} eventType - e.g., 'leftClick', 'mouseMove', 'middleclick'.
      * @param {(eventData: NormalizedEventData) => void} callback - Function to call.
      */
     on(eventType, callback) {
@@ -69,8 +69,20 @@ export class GoogleMapsInputHandler /* implements IInputEventHandler */ {
             const eventData = {
                 mapPoint: latLng ? { lat: latLng.lat(), lng: latLng.lng() } : null,
                 screenPoint: pixel ? { x: pixel.x, y: pixel.y } : { x: NaN, y: NaN }, // Provide fallback
-                domEvent: event.domEvent // Pass original DOM event
+                domEvent: event.domEvent // Pass original DOM event - CRUCIAL for button check
             };
+
+            // --- IMPORTANT ---
+            // If the original eventType was 'middleclick', the callback MUST check eventData.domEvent.button
+            if (eventType.toLowerCase() === 'middleclick') {
+                if (eventData.domEvent?.button !== 1) {
+                    return; // Not actually a middle button event, so don't call the user's callback
+                }
+                // Optional: Prevent default middle-click behavior (like autoscroll/panning)
+                eventData.domEvent?.preventDefault();
+            }
+            // --- END IMPORTANT ---
+
 
             // Call the original callback
             try {
@@ -85,12 +97,12 @@ export class GoogleMapsInputHandler /* implements IInputEventHandler */ {
 
         // Store the reference using the original callback as the key
         listenersForType.set(callback, listenerRef);
-        console.log(`GoogleMapsInputHandler: Attached listener for ${eventType}`);
+        console.log(`GoogleMapsInputHandler: Attached listener for ${eventType} (maps to ${googleEventType})`);
     }
 
     /**
      * Removes a specific event listener.
-     * @param {string} eventType - e.g., 'leftClick'.
+     * @param {string} eventType - e.g., 'leftClick', 'middleclick'.
      * @param {Function} callback - The specific callback function to remove.
      */
     off(eventType, callback) {

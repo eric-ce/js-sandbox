@@ -6,6 +6,9 @@
 import dataPool from "../lib/data/DataPool.js";
 import { sharedStyleSheet } from "../styles/sharedStyle.js";
 import {
+    BlendOption,
+} from "cesium";
+import {
     toolIcon,
     pickerIcon,
     pointsIcon,
@@ -22,10 +25,9 @@ import {
     logBoxIcon,
 } from "../assets/icons.js";
 import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
+import { CesiumDragHandler, GoogleDragHandler } from "../lib/interaction/index.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
-import { TwoPointsDistanceGoogle } from "../measure-modes/google/TwoPointsDistanceGoogle.js";
-import { MultiDistanceGoogle } from "../measure-modes/google/MultiDistanceGoogle.js";
-
+import { TwoPointsDistanceCesium, TwoPointsDistanceGoogle, MultiDistanceGoogle } from "../measure-modes/index.js";
 export class MeasureComponentBase extends HTMLElement {
     constructor() {
         super();
@@ -39,27 +41,31 @@ export class MeasureComponentBase extends HTMLElement {
 
         // Dependencies (set via setters)
         this._map = null; // The specific map instance (Viewer, google.maps.Map, etc.)
-        // this._cesiumPkg = null; // Only relevant for CesiumMeasure
+        this._cesiumPkg = null; // Only relevant for CesiumMeasure
         this._app = null;
         this._stateManager = null;
         this._emitter = null;
 
         // Event handler references for cleanup
         this._dataHandler = null;
-        this._modeChangeHandler = null; // For StateManager listener
 
+        // --- Local Active Mode Management ---
         /** @type {import('../lib/input/CesiumInputHandler').CesiumInputHandler | import('../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler | null} */
         this.inputHandler = null; // Map-specific input handler instance
         /** @type {object | null} */
         this.activeModeInstance = null; // The active measurement mode logic instance
         /** @type {string | null} */
         this.activeModeId = null; // e.g., 'distance', 'height'
+
         /** @type {HTMLElement | null} */
         this.toolbar = null; // Reference to the toolbar UI element
         /** @type {Object.<string, HTMLElement>} */
         this.uiButtons = {}; // References to mode buttons { 'distance-cesium': buttonElement, ... }
         // Store mode configurations available for this map type
         this.availableModeConfigs = [];
+
+        this.pointCollection = null; // Cesium PointPrimitiveCollection
+        this.labelCollection = null; // Cesium LabelCollection
     }
 
     // Getters and setters
@@ -128,18 +134,18 @@ export class MeasureComponentBase extends HTMLElement {
         // }
     }
 
-    // get cesiumPkg() {
-    //     return this._cesiumPkg;
-    // }
-    // // Setter for cesiumPkg - specific subclasses like CesiumMeasure should call this
-    // set cesiumPkg(pkg) {
-    //     if (this._cesiumPkg === pkg) return;
-    //     this._cesiumPkg = pkg;
-    //     // If map is also ready, and we are Cesium, maybe re-init or check dependencies
-    //     if (this.isConnected && this.map && this.mapName === 'cesium') {
-    //         this._initialize();
-    //     }
-    // }
+    get cesiumPkg() {
+        return this._cesiumPkg;
+    }
+
+    set cesiumPkg(pkg) {
+        if (this._cesiumPkg === pkg) return; // Avoid re-setting if same instance
+        this._cesiumPkg = pkg;
+        // Initialize Cesium collection from Cesium package
+        this._initializeCesiumCollections();
+    }
+
+
 
     async connectedCallback() {
         // Apply style for the web component
@@ -151,12 +157,23 @@ export class MeasureComponentBase extends HTMLElement {
     }
 
     disconnectedCallback() {
+        console.log(`${this.constructor.name}: Disconnecting...`);
         // Clean up event listeners
         if (this._dataHandler && this._emitter) {
             this._emitter.off("data", this._dataHandler);
+            this._dataHandler = null;
         }
 
-        // Clean up map elements if needed
+        // Deactivate current mode and destroy input handler
+        this._deactivateCurrentMode();
+        this.inputHandler?.destroy();
+        this.inputHandler = null;
+
+        this.toolbar = null;
+        this.uiButtons = {};
+        this.availableModeConfigs = [];
+
+        // Clean up map annotations
         if (this._data.length > 0) {
             this._data.forEach((item) => {
                 if (item.annotations) {
@@ -164,6 +181,8 @@ export class MeasureComponentBase extends HTMLElement {
                 }
             });
         }
+        this._isInitialized = false;
+        console.log(`${this.constructor.name}: Disconnected cleanup complete.`);
     }
 
     async _initialize() {
@@ -214,39 +233,45 @@ export class MeasureComponentBase extends HTMLElement {
             return; // Cannot proceed without input handler
         }
 
+        // --- *** Create Interaction Handlers *** ---
+        try {
+            this.dragHandler?.destroy(); // Destroy previous if any
+            // this.highlightHandler?.destroy();
+
+            switch (this.mapName) {
+                case "cesium":
+                    // Pass dependencies needed by CesiumDragHandler
+                    this.dragHandler = new CesiumDragHandler(this.map, this.inputHandler, this.emitter);
+                    // this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    break;
+                case "google":
+                    // Pass dependencies needed by GoogleDragHandler
+                    this.dragHandler = new GoogleDragHandler(this.map, this.inputHandler, this.emitter);
+                    // this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    break;
+                // case "leaflet": // Add Leaflet handlers later
+                default:
+                    console.warn(`Drag/Highlight handlers not implemented for ${this.mapName}`);
+                    this.dragHandler = null;
+                    this.highlightHandler = null;
+            }
+            console.log(`${this.constructor.name}: Interaction handlers created (or skipped).`);
+        } catch (error) {
+            console.error(`${this.constructor.name}: Failed to create Interaction Handlers:`, error);
+            // Continue without drag/highlight? Or return? Depends on requirements.
+            this.dragHandler = null;
+            this.highlightHandler = null;
+        }
+
         // --- Create UI ---
         this._createUI(this.mapName); // Create the toolbar depends on the map type
 
         // --- Setup Listeners ---
         // Listen for data changes to draw persistent measurements
         if (!this._dataHandler) {
-            const handleData = (data) => {
-                this._drawFromDataArray(data);
-            };
+            const handleData = (data) => { this._drawFromDataArray(data); };
             this.emitter.on("data", handleData);
             this._dataHandler = handleData; // Store the handler reference for cleanup
-        }
-
-        // Listen for mode change requests from stateManager
-        // Ensure handler isn't added multiple times
-        if (!this._modeChangeHandler) {
-            const handleModeChange = (newModeId) => {
-                this._activateMode(newModeId, this.mapName);
-            };
-            // Use stateManager.on if added, otherwise fallback to emitter
-            if (typeof this.stateManager?.on === "function") {
-                this.stateManager.on("activeModeChanged", handleModeChange);
-            } else {
-                // Fallback: Listen on general emitter if stateManager doesn't proxy
-                // This requires careful event naming/filtering if emitter is shared widely
-                // this.emitter.on('stateManager:activeModeChanged', handleModeChange);
-                console.warn(
-                    "StateManager does not have 'on' method, cannot listen for 'activeModeChanged'. Mode activation might rely on direct calls."
-                );
-                // If direct calls are needed, the UI button click handlers would need
-                // to call this._activateMode directly instead of going via stateManager.
-            }
-            this._modeChangeHandler = handleModeChange;
         }
 
         // --- Draw Initial Data ---
@@ -254,6 +279,9 @@ export class MeasureComponentBase extends HTMLElement {
             this._data = [...dataPool.data];
             this._drawFromDataArray(this._data);
         }
+
+        // --- Call map-specific initialization hook ---
+        this._initializeMapSpecifics(); // Allow derived classes to add setup
 
         this._isInitialized = true;
     }
@@ -282,7 +310,18 @@ export class MeasureComponentBase extends HTMLElement {
         // --- Define Mode Configurations ---
         // Store CLASS definitions, not instances
         const allModeConfigs = [
-            // Common Modes (potentially using specific classes TEMPORARILY)
+            {
+                id: "picker",
+                name: "Picker",
+                icon: pickerIcon,
+                mapAvailability: ["cesium", "google", "leaflet"], // Maps this mode works on
+                getClass: (type) => {
+                    // Function to get the correct class based on map type
+                    if (type === "google") return PickerGoogle;
+                    if (type === "cesium") return PickerCesium;
+                    if (type === "leaflet") return PickerLeaflet;
+                }
+            },
             {
                 id: 'bookmark',
                 name: 'Bookmark',
@@ -291,8 +330,7 @@ export class MeasureComponentBase extends HTMLElement {
                 getClass: (type) => {
                     if (type === 'google') return BookmarkGoogle;
                     if (type === 'cesium') return BookmarkCesium; // Use specific for now
-                    // if (type === 'leaflet') return BookmarkLeaflet;
-                    // FUTURE: return SharedBookmarkMode;
+                    if (type === 'leaflet') return BookmarkLeaflet;
                     return null;
                 }
             },
@@ -305,10 +343,16 @@ export class MeasureComponentBase extends HTMLElement {
                     // Function to get the correct class based on map type
                     if (type === "google") return TwoPointsDistanceGoogle;
                     if (type === "cesium") return TwoPointsDistanceCesium; // Use specific for now
-                    // if (type === 'leaflet') return TwoPointsDistanceLeaflet;
-                    // FUTURE: return SharedDistanceMode;
+                    if (type === 'leaflet') return TwoPointsDistanceLeaflet;
                     return null;
                 },
+            },
+            {
+                id: "curve",
+                name: "Curve",
+                icon: curveIcon,
+                mapAvailability: ["cesium"],
+                getClass: (type) => (type === 'cesium' ? CurveCesium : null)
             },
             {
                 id: 'multi_distance',
@@ -318,10 +362,16 @@ export class MeasureComponentBase extends HTMLElement {
                 getClass: (type) => {
                     if (type === 'google') return MultiDistanceGoogle;
                     if (type === 'cesium') return MultiDistanceCesium; // Use specific for now
-                    // if (type === 'leaflet') return MultiDistanceLeaflet;
-                    // FUTURE: return SharedMultiDistanceMode;
+                    if (type === 'leaflet') return MultiDistanceLeaflet;
                     return null;
                 },
+            },
+            {
+                id: "multi_distances_clamped",
+                name: "Multi Distances Clamped",
+                icon: multiDClampedIcon,
+                mapAvailability: ["cesium"],
+                getClass: (type) => (type === 'cesium' ? MultiDistanceClampedCesium : null)
             },
             {
                 id: "polygon",
@@ -329,71 +379,38 @@ export class MeasureComponentBase extends HTMLElement {
                 icon: polygonIcon,
                 mapAvailability: ["cesium", "google", "leaflet"],
                 getClass: (type) => {
-                    // if (type === 'google') return PolygonGoogle;
-                    // if (type === 'cesium') return PolygonCesium;
-                    // if (type === 'leaflet') return PolygonLeaflet;
-                    // FUTURE: return SharedPolygonMode;
+                    if (type === 'google') return PolygonGoogle;
+                    if (type === 'cesium') return PolygonCesium;
+                    if (type === 'leaflet') return PolygonLeaflet;
                     return null; // Example: Polygon not implemented yet for Google/Cesium specific
                 },
             },
-            // Cesium-Only Modes
             {
-                id: "curve",
-                name: "Curve",
-                icon: curveIcon,
-                mapAvailability: ["cesium"],
-                getClass: (type) => {
-                    if (type === "cesium") return CurveCesium;
-                    return null;
-                },
+                id: 'height',
+                name: 'Height',
+                icon: heightIcon,
+                mapAvailability: ['cesium'],
+                getClass: (type) => (type === 'cesium' ? HeightCesium : null)
             },
-            // {
-            //     id: 'height',
-            //     name: 'Height',
-            //     icon: heightIcon,
-            //     mapAvailability: ['cesium'],
-            //     getClass: (type) => (type === 'cesium' ? HeightCesium : null)
-            // },
-            // {
-            //     id: 'profile',
-            //     name: 'Profile',
-            //     icon: profileIcon,
-            //     mapAvailability: ['cesium'],
-            //     getClass: (type) => (type === 'cesium' ? ProfileCesium : null)
-            // },
-            // {
-            //     id: 'profile_distances',
-            //     name: 'Profile Distances',
-            //     icon: profileDistanceIcon,
-            //     mapAvailability: ['cesium'],
-            //     getClass: (type) => {
-            //         if (type === 'google') return ProfileDistanceGoogle;
-            //         if (type === 'cesium') return ProfileDistanceCesium; // Use specific for now
-            //         // if (type === 'leaflet') return ProfileDistanceLeaflet;
-            //         // FUTURE: return SharedProfileDistanceMode;
-            //         return null;
-            //     }
-            // },
             {
-                id: "curve",
-                name: "Curve",
-                icon: curveIcon,
-                mapAvailability: ["cesium"],
-                getClass: (type) => {
-                    if (type === "google") return CurveGoogle;
-                    if (type === "cesium") return CurveCesium; // Use specific for now
-                    // if (type === 'leaflet') return CurveLeaflet;
-                    // FUTURE: return SharedCurveMode;
-                    return null;
-                },
+                id: 'profile',
+                name: 'Profile',
+                icon: profileIcon,
+                mapAvailability: ['cesium'],
+                getClass: (type) => (type === 'cesium' ? ProfileCesium : null)
+            },
+            {
+                id: 'profile_distances',
+                name: 'Profile Distances',
+                icon: profileDistancesIcon,
+                mapAvailability: ['cesium'],
+                getClass: (type) => (type === 'cesium' ? ProfileDistanceCesium : null)
             },
             // Add other modes (Curve, MultiDistance, etc.) similarly
         ];
 
         // --- Filter modes available for the current map type ---
-        this.availableModeConfigs = allModeConfigs.filter((mode) =>
-            mode.mapAvailability.includes(mapName)
-        );
+        this.availableModeConfigs = allModeConfigs.filter(m => m.mapAvailability.includes(mapName));
 
         // --- Create Buttons ---
         this.availableModeConfigs.forEach((modeConfig) => {
@@ -419,10 +436,7 @@ export class MeasureComponentBase extends HTMLElement {
                 }
 
                 // activate the mode
-                // set button class, setAttribute,
-                // When button is clicked, tell StateManager the desired mode ID
-                const currentMode = this.stateManager?.getActiveMode();
-                this.stateManager?.setActiveMode(currentMode === modeId ? "inactive" : modeId);
+                this._handleModeButtonClick(modeId);
             });
 
             this.toolbar.appendChild(btn);
@@ -432,6 +446,27 @@ export class MeasureComponentBase extends HTMLElement {
         // Append the toolbar to the shadow root
         this.shadowRoot.appendChild(this.toolbar);
     }
+
+    /**
+     * Handles clicks on the mode buttons within this component's toolbar.
+     * Determines whether to activate a new mode or deactivate the current one.
+     * @param {string} clickedModeId - The ID of the mode button that was clicked.
+     * @private
+     */
+    _handleModeButtonClick(clickedModeId) {
+        console.log(`${this.constructor.name}: Button clicked for mode '${clickedModeId}'`);
+        const currentModeId = this.activeModeId;
+
+        if (currentModeId === clickedModeId) {
+            // Clicked the already active button - deactivate
+            this._activateMode(null, this.mapName); // Pass null to deactivate
+        } else {
+            // Clicked a new button - activate the new mode
+            // _activateMode will handle deactivating the old one first
+            this._activateMode(clickedModeId, this.mapName);
+        }
+    }
+
     /**
      * Activates a specific measurement mode based on ID and map type.
      * Handles lazy instantiation.
@@ -441,11 +476,8 @@ export class MeasureComponentBase extends HTMLElement {
      */
     _activateMode(modeId, mapType) {
         // --- Pre-checks ---
-        if (!this.inputHandler) {
-            console.warn(
-                `${this.constructor.name}: Input handler not ready. Cannot activate mode.`
-            );
-            if (modeId && modeId !== "inactive") this.stateManager?.setActiveMode("inactive"); // Reset state
+        if (!this.inputHandler && modeId) { // Don't check if deactivating (modeId is null)
+            console.warn(`${this.constructor.name}: Input handler not ready. Cannot activate mode '${modeId}'.`);
             return;
         }
         // --- End Pre-checks ---
@@ -453,34 +485,29 @@ export class MeasureComponentBase extends HTMLElement {
         const currentActiveModeId = this.activeModeId;
 
         // --- Deactivate existing mode ---
-        // Important: Check if the requested mode is different OR if it's 'inactive'
-        if (
-            this.activeModeInstance &&
-            (currentActiveModeId !== modeId || !modeId || modeId === "inactive")
-        ) {
+        if (this.activeModeInstance && (currentActiveModeId !== modeId || !modeId)) {
             this._deactivateCurrentMode();
         }
 
-        // If the request was just to deactivate, or already handled toggle off, exit
-        if (!modeId || modeId === "inactive" || currentActiveModeId === modeId) {
-            // Update UI - ensure all buttons are inactive
-            Object.values(this.uiButtons).forEach((btn) => {
-                btn.classList.remove("active");
-            });
-            if (modeId !== "inactive") this.stateManager?.setActiveMode("inactive"); // Correct state if toggled off
+        // If the request was just to deactivate, exit now
+        if (!modeId || modeId === "inactive") {
+            // Ensure all buttons are visually inactive
+            Object.values(this.uiButtons).forEach((btn) => { btn.classList.remove("active"); });
+            return;
+        }
+
+        // Prevent activating the same mode again if it's already active
+        if (currentActiveModeId === modeId) {
             return;
         }
         // --- End Deactivation ---
 
         // --- Find Mode Configuration ---
-        // Use the stored available configs for this map instance
         const config = this.availableModeConfigs.find((m) => m.id === modeId);
-
         if (!config) {
             console.warn(
                 `${this.constructor.name}: Mode "${modeId}" not found or not available for map type "${mapType}".`
             );
-            this.stateManager?.setActiveMode("inactive");
             return;
         }
 
@@ -489,7 +516,6 @@ export class MeasureComponentBase extends HTMLElement {
             console.warn(
                 `${this.constructor.name}: Mode class for "${modeId}" on "${mapType}" is not defined or supported yet.`
             );
-            this.stateManager?.setActiveMode("inactive");
             return;
         }
         // --- End Find Mode ---
@@ -498,33 +524,25 @@ export class MeasureComponentBase extends HTMLElement {
         let args = [];
         // --- Determine Arguments ---
         // FUTURE GOAL: All shared modes take standard args
-        const standardArgs = [this.inputHandler, this, this.stateManager, this.emitter];
+        // Define standard arguments including interaction handlers
+        const standardArgs = [
+            this.inputHandler,     // IInputEventHandler
+            this.dragHandler,      // IDragHandler | null
+            this.highlightHandler, // IHighlightHandler | null
+            this,                  // IDrawingHelper (this component)
+            this.stateManager,     // StateManager
+            this.emitter           // EventEmitter
+        ];
 
         // TEMPORARY logic based on current specific classes:
-        if (ModeClass === TwoPointsDistanceGoogle) {
-            args = [...standardArgs]; // Google specific needs map
-        }
-        // else if (
-        //     ModeClass === TwoPointsDistanceCesium ||
-        //     ModeClass === Height ||
-        //     ModeClass === Profile ||
-        //     ModeClass === ThreePointsCurve /* Add other Cesium modes */
-        // ) {
-        //     // Assuming original Cesium modes need viewer, handler, stateManager, pkg, emitter
-        //     // Pass the *real* Cesium handler for now if using original modes
-        //     const cesiumHandler =
-        //         this.inputHandler instanceof CesiumInputHandler
-        //             ? this.inputHandler.handler
-        //             : this.inputHandler; // Get original handler if needed
-        //     args = [this.map, cesiumHandler, this.stateManager, this._cesiumPkg, this.emitter];
-        //     console.warn(`Passing potentially specific args for ${ModeClass.name}`);
-        // } 
-        else {
-            // Assume future shared modes use standard args
+        if (ModeClass.name.includes("Cesium")) {
+            args = [...standardArgs, this._cesiumPkg]; // Cesium specific needs cesium package
+        } else {
             args = standardArgs;
         }
         // --- End Determine Arguments ---
 
+        // --- Activate the Mode ---
         this.activeModeId = modeId; // Store the ID
         console.log(`${this.constructor.name}: Instantiating and activating ${ModeClass.name}`);
         try {
@@ -547,7 +565,6 @@ export class MeasureComponentBase extends HTMLElement {
             console.error(`Error activating mode ${modeId} for ${mapType}:`, error);
             this.activeModeInstance = null;
             this.activeModeId = null;
-            this.stateManager?.setActiveMode("inactive"); // Reset on error
             // Reset UI
             Object.values(this.uiButtons).forEach((btn) => {
                 btn.classList.remove("active");
@@ -564,9 +581,6 @@ export class MeasureComponentBase extends HTMLElement {
             try {
                 if (typeof this.activeModeInstance.deactivate === "function") {
                     this.activeModeInstance.deactivate();
-                } else {
-                    console.warn(`Mode instance for ${modeName} doesn't have a deactivate method?`);
-                    // Fallback cleanup if needed? Usually deactivate handles internal cleanup.
                 }
             } catch (error) {
                 console.error(`Error during deactivation of ${modeName}:`, error);
@@ -579,6 +593,11 @@ export class MeasureComponentBase extends HTMLElement {
             }
         }
     };
+
+    _initializeMapSpecifics() {
+        // Base implementation does nothing, intended for override
+        console.log(`${this.constructor.name}: Base _initializeMapSpecifics called.`);
+    }
 
     /******************************
      * SYNC DRAWING DATA FOR MAPS *

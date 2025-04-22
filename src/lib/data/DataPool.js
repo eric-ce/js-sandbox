@@ -1,6 +1,8 @@
-// src/lib/data/DataPool.js
-import { areCoordinatesEqual, cartesian3ToCartographicDegrees, convertToCartesian3, convertToCartographicDegrees } from "../helper/cesiumHelper.js";
-
+// import { areCoordinatesEqual, convertToCartesian3, convertToCartographicDegrees } from "../helper/cesiumHelper.js";
+// import { convertToCartographicDegrees } from "../helper/googleHelper.js";
+import * as cesiumHelper from "../helper/cesiumHelper.js";
+import * as googleHelper from "../helper/googleHelper.js";
+import { convertToUniversalCoordinate } from "../helper/helper.js";
 /**
  * DataPool holds all measurement records in a unified structure.
  * Each record follows a structure similar to:
@@ -118,7 +120,7 @@ class DataPool {
      */
     updateMeasureByPosition(position, newData) {
         const groupIndex = this._data.findIndex(group =>
-            group.coordinates.some(coord => areCoordinatesEqual(coord, position))
+            group.coordinates.some(coord => cesiumHelper.areCoordinatesEqual(coord, position))
         );
         if (groupIndex === -1) {
             console.warn("No measurement found containing the provided position.");
@@ -140,7 +142,7 @@ class DataPool {
      */
     getMeasureByPosition(position) {
         return this._data.find(group =>
-            group.coordinates.some(coord => areCoordinatesEqual(coord, position))
+            group.coordinates.some(coord => cesiumHelper.areCoordinatesEqual(coord, position))
         );
     }
 
@@ -160,7 +162,7 @@ class DataPool {
                 console.log(measure)
                 return {
                     ...measure,
-                    coordinates: measure.coordinates.map(coord => convertToCartesian3(coord))
+                    coordinates: measure.coordinates.map(coord => cesiumHelper.convertToCartesian3(coord))
                 }
             });
         }
@@ -170,7 +172,7 @@ class DataPool {
             return this._data.map(measure => {
                 return {
                     ...measure,
-                    coordinates: measure.coordinates.map(coord => convertToCartographicDegrees(coord))
+                    coordinates: measure.coordinates.map(coord => cesiumHelper.convertToCartographicDegrees(coord))
                 }
             });
 
@@ -181,7 +183,7 @@ class DataPool {
             return this._data.map(measure => {
                 return {
                     ...measure,
-                    coordinates: measure.coordinates.map(coord => convertToCartographicDegrees(coord))
+                    coordinates: measure.coordinates.map(coord => cesiumHelper.convertToCartographicDegrees(coord))
                 }
             });
         }
@@ -199,7 +201,15 @@ class DataPool {
      * @returns {Array} An array of cartographicDegrees.
      */
     _coordToCartographicDegrees(coordsArray) {
-        return coordsArray.map(coord => convertToCartographicDegrees(coord));
+        if (!Array.isArray(coordsArray)) {
+            console.warn("DataPool: Input to _coordToCartographicDegrees must be an array.");
+            return [];
+        }
+
+        return coordsArray.map(coord => {
+            if (!coord) return null; // Skip null/undefined coordinates
+            return convertToUniversalCoordinate(coord); // Convert to universal coordinate
+        }).filter(Boolean);
     }
 }
 

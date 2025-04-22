@@ -125,13 +125,12 @@ export class MeasureToolbox {
         this.cesiumMeasure = document.createElement("cesium-measure");
 
         // set properties for cesium measure
-        this.cesiumMeasure.viewer = viewer;
         this.cesiumMeasure.map = viewer;
+        this.cesiumMeasure.mapName = "cesium";
         this.cesiumMeasure.cesiumPkg = cesiumPkg;
         this.cesiumMeasure.app = this.app;
         this.cesiumMeasure.emitter = this.emitter;
         this.cesiumMeasure.stateManager = this.stateManager;
-        this.cesiumMeasure.mapName = "cesium";
         // append cesium measure to map-cesium shadow root
         const mapCesium = document.querySelector("map-cesium");
         if (!mapCesium) return;
@@ -148,10 +147,10 @@ export class MeasureToolbox {
         // create html element for google measure
         this.googleMeasure = document.createElement("google-measure");
         this.googleMeasure.map = map;
+        this.googleMeasure.mapName = "google";
         this.googleMeasure.app = this.app;
         this.googleMeasure.emitter = this.emitter;
         this.googleMeasure.stateManager = this.stateManager;
-        this.googleMeasure.mapName = "google";
         // append google measure to map-cesium shadow root
         const mapGoogle = document.querySelector("map-google");
         if (!mapGoogle) return;
@@ -168,10 +167,10 @@ export class MeasureToolbox {
         // create html element for leaflet measure
         this.leafletMeasure = document.createElement("leaflet-measure");
         this.leafletMeasure.map = map;
+        this.leafletMeasure.mapName = "leaflet";
         this.leafletMeasure.app = this.app;
         this.leafletMeasure.emitter = this.emitter;
         this.leafletMeasure.stateManager = this.stateManager;
-        this.leafletMeasure.mapName = "leaflet";
         // append google measure to map-cesium shadow root
         const mapLeaflet = document.querySelector("map-leaflet");
         if (!mapLeaflet) return;

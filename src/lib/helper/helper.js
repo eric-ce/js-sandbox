@@ -1,3 +1,5 @@
+import { Cartesian3, Cartographic, Math } from "cesium";
+
 export function generateIdByTimestamp() {
     return new Date().getTime();
 }
@@ -255,4 +257,107 @@ export function showCustomNotification(message, viewerContainer) {
     }, 3000);
 
     return notification;
+}
+
+
+/**
+ * Convert coordinate that used in cesium, google or leaflet map to universal coordinate (degrees).
+ * @param {object | Array<number>} coordinate - Input coordinate in various formats:
+ *   - Cesium Cartesian3 ({x, y, z})
+ *   - Cesium Cartographic-like ({latitude, longitude, height?}) - assumes degrees
+ *   - Google LatLng-like ({lat, lon} or {lat, lng}) - assumes degrees
+ *   - Leaflet LatLng-like ([lat, lon]) - assumes degrees
+ * @returns {{latitude: number, longitude: number, height: number} | null} Cartographic degrees coordinate or null if conversion fails.
+ */
+export function convertToUniversalCoordinate(coordinate) {
+    if (!coordinate) {
+        return null; // Handle null or undefined input
+    }
+
+    // Case 1: Array [lat, lon] (Leaflet-like) - Assuming degrees
+    if (Array.isArray(coordinate) && coordinate.length === 2 &&
+        typeof coordinate[0] === 'number' && typeof coordinate[1] === 'number') {
+        const [lat, lon] = coordinate;
+        return { latitude: lat, longitude: lon, height: 0 };
+    }
+
+    // Ensure coordinate is an object for subsequent checks
+    if (typeof coordinate !== 'object' || coordinate === null) {
+        return null;
+    }
+
+    // Case 2: Object { lat, lon/lng } (Google-like) - Assuming degrees
+    const lonProp = coordinate.hasOwnProperty('lon') ? 'lon' : (coordinate.hasOwnProperty('lng') ? 'lng' : null);
+    if (coordinate.hasOwnProperty('lat') && typeof coordinate.lat === 'number' &&
+        lonProp && typeof coordinate[lonProp] === 'number') {
+        return { latitude: coordinate.lat, longitude: coordinate[lonProp], height: 0 };
+    }
+
+    // Case 3: Object { latitude, longitude, height? } (Cartographic-like) - Assuming degrees
+    if (coordinate.hasOwnProperty('latitude') && typeof coordinate.latitude === 'number' &&
+        coordinate.hasOwnProperty('longitude') && typeof coordinate.longitude === 'number') {
+        const height = (coordinate.hasOwnProperty('height') && typeof coordinate.height === 'number') ? coordinate.height : 0;
+        return { latitude: coordinate.latitude, longitude: coordinate.longitude, height: height };
+    }
+
+    // Case 4: Object { x, y, z } (Cesium Cartesian3-like)
+    if (coordinate.hasOwnProperty('x') && typeof coordinate.x === 'number' &&
+        coordinate.hasOwnProperty('y') && typeof coordinate.y === 'number' &&
+        coordinate.hasOwnProperty('z') && typeof coordinate.z === 'number') {
+        try {
+            // Ensure it's a valid Cartesian3 structure for conversion
+            const cartesian = new Cartesian3(coordinate.x, coordinate.y, coordinate.z);
+            const cartographic = Cartographic.fromCartesian(cartesian);
+            if (!cartographic) { // Conversion might return undefined
+                console.warn("convertToUniversalCoordinate: Cesium conversion failed for", coordinate);
+                return null;
+            }
+            return {
+                latitude: Math.toDegrees(cartographic.latitude),
+                longitude: Math.toDegrees(cartographic.longitude),
+                height: cartographic.height
+            };
+        } catch (error) {
+            console.error("convertToUniversalCoordinate: Error converting Cartesian-like coordinate:", error);
+            return null; // Handle potential errors during Cesium conversion
+        }
+    }
+
+    // If none of the formats match
+    console.warn("convertToUniversalCoordinate: Unknown or invalid coordinate format provided.", coordinate);
+    return null;
+}
+
+/**
+ * Compares two coordinates from potentially different map formats (Cesium, Google, Leaflet)
+ * by converting them to a universal format first. Always compares latitude, longitude, and height.
+ * @param {object | Array<number>} coordinate1 - The first coordinate in any supported map format.
+ * @param {object | Array<number>} coordinate2 - The second coordinate in any supported map format.
+ * @param {object} [options={}] - Optional settings for comparison.
+ * @param {number} [options.epsilon=1e-10] - Tolerance for latitude/longitude comparison.
+ * @param {number} [options.heightEpsilon=1e-6] - Tolerance for height comparison.
+ * @returns {boolean} True if the coordinates represent the same location within tolerance.
+ */
+export function areCoordinatesEqual(coordinate1, coordinate2, options = {}) {
+    // Handle null or undefined input
+    if (!coordinate1 || !coordinate2) return false;
+
+    // Convert both coordinates to the universal format
+    const cartographicDegrees1 = convertToUniversalCoordinate(coordinate1);
+    const cartographicDegrees2 = convertToUniversalCoordinate(coordinate2);
+
+    // Handle conversion failure
+    if (!cartographicDegrees1 || !cartographicDegrees2) return false;
+
+    // Determine the epsilon values to use, applying defaults if not provided
+    const epsilon = options.epsilon ?? 1e-10; // Use nullish coalescing for cleaner default assignment
+    const heightEpsilon = options.heightEpsilon ?? 1e-6;
+
+    // Compare latitude, longitude, and height within the specified tolerances
+    const latEqual = Math.abs(cartographicDegrees1.latitude - cartographicDegrees2.latitude) < epsilon;
+    const lonEqual = Math.abs(cartographicDegrees1.longitude - cartographicDegrees2.longitude) < epsilon; // Corrected comparison
+    // Use ?? 0 to handle cases where height might be undefined/null after conversion, defaulting to 0
+    const heightEqual = Math.abs((cartographicDegrees1.height ?? 0) - (cartographicDegrees2.height ?? 0)) < heightEpsilon;
+
+    return latEqual && lonEqual && heightEqual;
 }

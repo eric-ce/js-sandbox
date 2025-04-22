@@ -1,16 +1,9 @@
-// import {
-//     createPointMarker,
-//     createPolyline,
-//     createLabelMarker,
-//     removePointMarker,
-//     removePolyline,
-//     removeLabel,
-// } from '../../lib/helper/googleHelper.js';
-
+import { color } from "chart.js/helpers";
 import dataPool from "../../lib/data/DataPool.js";
 import { generateIdByTimestamp } from "../../lib/helper/cesiumHelper.js"; // Keep if generic enough
-import * as Turf from "@turf/turf";
 import { convertToGoogleCoord, calculateMiddlePos, calculateDistance, formatMeasurementValue, } from "../../lib/helper/googleHelper.js";
+import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
+
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -18,17 +11,17 @@ import { convertToGoogleCoord, calculateMiddlePos, calculateDistance, formatMeas
  * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
  * @property {number} labelNumberIndex - Index used for sequential labeling
  * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {string} mapName - Map provider name ("google")
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
  */
 
 /**
  * Handles two-point distance measurement specifically for Google Maps.
  * Uses googleHelper functions for drawing temporary graphics.
  * Expects an IInputEventHandler and IDrawingHelper (but only uses map from drawingHelper for now).
- */
-export class TwoPointsDistanceGoogle {
+*/
+export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
     /**
      * Creates an instance of TwoPointsDistanceGoogle.
      * @param {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} inputHandler - The Google Maps input handler instance.
@@ -36,8 +29,8 @@ export class TwoPointsDistanceGoogle {
      * @param {import('../../lib/state/StateManager').StateManager} stateManager - The state manager instance.
      * @param {import('eventemitter3').EventEmitter} emitter - The event emitter instance.
      */
-    constructor(inputHandler, drawingHelper, stateManager, emitter) {
-        // --- Updated Constructor Arguments ---
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
+        // Validate input parameters
         if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
             throw new Error("TwoPointsDistanceGoogle requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
@@ -45,12 +38,16 @@ export class TwoPointsDistanceGoogle {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
+        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter)
+
+        // Updated Constructor Arguments
         this.handler = inputHandler; // Use the passed Input Handler abstraction
         this.drawingHelper = drawingHelper; // The GoogleMeasure instance
         this.map = drawingHelper.map;      // Get map reference from drawing helper
         this.stateManager = stateManager;
         this.emitter = emitter;
-        // --- End Updated Args ---
+        this.dragHandler = dragHandler; // Use the passed Drag Handler abstraction
+        this.highlightHandler = highlightHandler; // Use the passed Highlight Handler abstraction
 
         this.mode = "distance"; // Use generic mode ID now
 
@@ -61,9 +58,9 @@ export class TwoPointsDistanceGoogle {
             /** @type {MeasurementGroup[]} */
             groups: [],                 // Tracks all coordinates involved in operations
             measureCounter: 0,            // Counter for the number of groups
-            /** @type {Array<{lat: number, lng: number}>} */
+            /** @type {{lat: number, lng: number}} */
             dragStart: null,            // Stores the initial position before a drag begins
-            /** @type {Array<{x: number, y: number}>} */
+            /** @type {{x: number, y: number}} */
             dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
         };
 
@@ -98,54 +95,10 @@ export class TwoPointsDistanceGoogle {
     }
 
     /**
-     * Activates the mode: attaches listeners via inputHandler, resets state.
-     */
-    activate() {
-        console.log(`Activating ${this.constructor.name} mode.`);
-        this.flags.isMeasurementComplete = false;
-
-        // --- Use Input Handler ---
-        // Pass the bound method reference directly
-        this.handler.on('leftClick', (eventData) => this.handleLeftClick(eventData));
-        this.handler.on('mouseMove', (eventData) => this.handleMouseMove(eventData));
-        this.emitter.on('annotation:click', (eventData) => {
-            if (!eventData) return;
-            this.flags.isDragMode = true;
-            // add drag event logic here
-            console.log(this.flags.isDragMode);
-        });
-        // --- End Use Input Handler ---
-
-        this.handler.setCursor('crosshair'); // Set cursor via handler
-    }
-
-    /**
-     * Deactivates the mode: removes listeners via inputHandler and temporary graphics.
-     */
-    deactivate() {
-        console.log(`Deactivating ${this.constructor.name} mode.`);
-
-        // remove any pending annotations
-        this._removeMovingAnnotations();
-        this._removePendingAnnotations();
-
-        // Reset values to desired state
-        this._resetValues();
-
-        // --- Use Input Handler to remove listeners ---
-        // Pass the *same function references* used in activate()
-        this.handler.off('leftClick', this.handleLeftClick);
-        this.handler.off('mouseMove', this.handleMouseMove);
-        // --- End Use Input Handler ---
-
-        this.handler.setCursor('default'); // Reset cursor via handler
-    }
-
-    /**
      * Handles left clicks, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
      */
-    handleLeftClick(eventData) {
+    handleLeftClick = async (eventData) => {
         // Use normalized mapPoint
         if (!eventData || !eventData.mapPoint) return;
 
@@ -157,22 +110,14 @@ export class TwoPointsDistanceGoogle {
         // Initiate cache if it is empty, start a new group and assign cache to it
         if (this.coords.cache.length === 0) {
             // Reset for a new measure using the default structure
-            this.measure = {
-                id: null,
-                mode: "",
-                coordinates: [],
-                labelNumberIndex: 0,
-                status: "pending",
-                _records: [],
-                interpolatedPoints: [],
-                mapName: "google",
-            };
+            this.measure = this._createDefaultMeasure(); // Create a new measure object
 
             // Set values for the new measure
             this.measure.id = generateIdByTimestamp();
             this.measure.mode = this.mode;
             this.measure.labelNumberIndex = this.coords.measureCounter;
             this.measure.status = "pending";
+            this.measure.mapName = "google";
 
             // Establish data relation
             this.coords.groups.push(this.measure);
@@ -180,15 +125,43 @@ export class TwoPointsDistanceGoogle {
             this.coords.measureCounter++;
         }
 
+        const markerOptions = {
+            // Add any specific marker options here if needed
+            // Pass the mousedown listener
+            listeners: {
+                mousedown: (marker, event) => {
+                    // Check if drag handler exists and is active
+                    if (this.dragHandler && this.flags.isActive) {
+                        // Prevent map drag, default behavior
+                        event.domEvent?.stopPropagation();
+                        event.domEvent?.preventDefault();
 
-        const point = this.drawingHelper._addPointMarker(this.coordinate);
+                        // Tell the drag handler to start dragging this specific marker
+                        this.dragHandler._handleDragStart(marker, event);
+                    }
+                },
+                // --- ADD MOUSEUP LISTENER HERE ---
+                mouseup: (marker, event) => { // 'event' here is google.maps.MapMouseEvent
+                    // Check if a drag sequence was potentially active
+                    if (this.dragHandler && this.dragHandler.isDragging) {
+                        event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
+                        event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
+
+                        // Directly call the drag handler's end method
+                        this.dragHandler._handleDragEnd(event);
+                    }
+                }
+            }
+        };
+
+        const point = this.drawingHelper._addPointMarker(this.coordinate, { color: "#FF0000", ...markerOptions });
         if (!point) return;
-        point.id = `annotate_distance_${this.measure.id}`;
+        point.id = `annotate_distance_point_${this.measure.id}`;
         point.status = "pending"; // Set status to pending
         this.pointCollection.push(point); // Store point reference
 
         // Update the this.coords cache and this.measure coordinates
-        this.coords.cache.push({ latitude: this.coordinate.lat, longitude: this.coordinate.lng, height: 0 });
+        this.coords.cache.push(this.coordinate);
 
         // Update to data pool
         dataPool.updateOrAddMeasure({ ...this.measure });
@@ -196,21 +169,29 @@ export class TwoPointsDistanceGoogle {
         if (this.coords.cache.length === 2) {
             // update pending annotations
             this.pointCollection.forEach(point => point.status = "completed");
-            console.log(this.pointCollection)
+
+            // Remove existing moving lines and labels
+            this._removeMovingAnnotations();
+
             // create line
-            const line = this.drawingHelper._addPolyline(this.coords.cache, "#A52A2A", { dataId: this.measure.id });
-            line.id = `annotate_distance_line_${this.measure.id}`; // Set ID for the line
-            this.polylineCollection.push(line); // Store polyline reference
+            const line = this.drawingHelper._addPolyline(this.coords.cache, "#A52A2A");
+            if (line) {
+                line.id = `annotate_distance_line_${this.measure.id}`; // Set ID for the line
+                this.polylineCollection.push(line); // Store polyline reference
+            }
 
             const googlePositions = this.coords.cache.map(pos => convertToGoogleCoord(pos));
             const distance = calculateDistance(googlePositions[0], googlePositions[1]);
 
             // create label 
             const label = this.drawingHelper._addLabel(googlePositions, distance, "meter");
-            label.id = `annotate_distance_label_${this.measure.id}`; // Set ID for the label
-            this.labelCollection.push(label); // Store label reference
+            if (label) {
+                label.id = `annotate_distance_label_${this.measure.id}`; // Set ID for the label
+                this.labelCollection.push(label); // Store label reference
+            }
 
             // Update this.measure
+            this.measure._records.push(distance);
             this.measure.status = "completed";
 
             // Update to data pool
@@ -220,13 +201,14 @@ export class TwoPointsDistanceGoogle {
             this.flags.isMeasurementComplete = true;
             this.coords.cache = [];
         }
+
     };
 
     /**
      * Handles mouse move, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
      */
-    handleMouseMove(eventData) { // Use arrow fn
+    handleMouseMove = async (eventData) => { // Use arrow fn
         if (!eventData || !eventData.mapPoint) return;
 
         const pos = eventData.mapPoint; // Already {latitude, longitude}
@@ -247,9 +229,6 @@ export class TwoPointsDistanceGoogle {
                         return;
                     }
 
-                    // Remove existing moving lines and labels
-                    this._removeMovingAnnotations();
-
                     // Moving line: update if existed, create if not existed, to save dom operations
                     this._createOrUpdateMovingLine(googlePositions);
 
@@ -258,7 +237,7 @@ export class TwoPointsDistanceGoogle {
                 }
                 break;
             default:
-                this.handleHoverHighlighting();
+                // this.handleHoverHighlighting();
                 break;
         }
     };
@@ -277,6 +256,7 @@ export class TwoPointsDistanceGoogle {
         } else {
             // create new line
             const movingLine = this.drawingHelper._addPolyline(positions, "A52A2A", { clickable: false })
+            if (!movingLine) return;
             movingLine.id = `annotate_distance_line_${this.measure.id}`; // Set ID for the moving line
             movingLine.status = "moving"; // Set status to moving
             this.interactiveAnnotations.movingPolylines.push(movingLine);
@@ -297,6 +277,8 @@ export class TwoPointsDistanceGoogle {
             const movingLabel = this.interactiveAnnotations.movingLabels[0];
             // calculate label position
             const middlePos = calculateMiddlePos(positions);
+            console.log("🚀 middlePos:", middlePos);
+
             // set label position
             movingLabel.setPosition(middlePos);
             // set label text
@@ -304,6 +286,7 @@ export class TwoPointsDistanceGoogle {
         } else {
             // create new label
             const movingLabel = this.drawingHelper._addLabel(positions, distance, "meter", { clickable: false });
+            if (!movingLabel) return;
             movingLabel.id = `annotate_distance_label_${this.measure.id}`; // Set ID for the moving label
             movingLabel.status = "moving"; // Set status to moving
             this.interactiveAnnotations.movingLabels = [movingLabel]; // Store moving label reference
@@ -351,56 +334,5 @@ export class TwoPointsDistanceGoogle {
         }
     }
 
-    handleHoverHighlighting() {
-    }
 
-    _resetValues() {
-        this.coordinate = null; // Reset coordinate
-
-        this.coords = {
-            cache: [],                              // Reset temporary coordinates
-            groups: this.coords.groups,             // Preserve existing measurement groups
-            measureCounter: this.coords.measureCounter, // Preserve the current group counter
-            dragStart: null,                        // Reset drag start position
-            dragStartToCanvas: null,                // Reset drag start canvas coordinates
-            dragStartTop: null,                     // Reset drag start top position
-            dragStartBottom: null,                  // Reset drag start bottom position
-            _records: this.coords._records,         // Preserve existing measurement records
-            selectedGroupIndex: this.coords.selectedGroupIndex,     // Preserve the value of this.coords.selectedGroupIndex
-        }
-        this.measure = {
-            id: null,
-            mode: "",
-            coordinates: [],
-            labelNumberIndex: 0,
-            status: "pending",
-            _records: [],
-            interpolatedPoints: [],
-            mapName: "cesium",
-        };
-
-        this.interactivePrimitives = {
-            movingPoint: null,                        // Reset moving point primitive
-            movingPoints: [],                         // Reset array of moving points
-            movingPolylines: [],                      // Reset moving polyline primitives
-            movingLabels: [],                         // Reset moving label primitives
-            movingPolygon: null,                      // Reset moving polygon primitive
-            movingPolygonOutline: null,               // Reset moving polygon outline primitive
-
-            dragPoint: null,                          // Reset currently dragged point primitive
-            dragPoints: [],                           // Reset array of dragged points
-            dragPolylines: [],                        // Reset dragging polyline primitives
-            dragLabels: [],                           // Reset dragging label primitives
-            dragPolygon: null,                        // Reset dragged polygon primitive
-            dragPolygonOutline: null,                 // Reset dragged polygon outline primitive
-
-            hoveredPoint: null,                       // Reset hovered point
-            hoveredLabel: null,                       // Reset hovered label
-            hoveredLine: null,                        // Reset hovered line
-
-            selectedLines: this.interactivePrimitives.selectedLines, // Preserve currently selected lines
-            addModeLine: null,                        // Reset add mode line primitive
-            chartHoveredPoint: null                   // Reset chart hovered point
-        };
-    }
 }

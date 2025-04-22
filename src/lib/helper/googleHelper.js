@@ -4,12 +4,11 @@
  * otherwise, it returns a standard Marker.
  *
  * @param {google.maps.Map} map - The Google Map instance.
- * @param {{latitude: number, longitude: number}} position - The marker's position.
- * @param {string} [color="#FF0000"] - The color for the marker.
+ * @param {{latitude: number, longitude: number}| {lat: number, lng: number}} position - The marker's position.
  * @param {Object} [options={}] - Additional options for marker styling.
  * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
  */
-export function createPointMarker(map, position, color = "#FF0000", options = {}) {
+export function createPointMarker(map, position, options = {}) {
     // Validations for map and position
     if (!map) {
         console.error("createPointMarker: 'map' object is required.");
@@ -32,7 +31,7 @@ export function createPointMarker(map, position, color = "#FF0000", options = {}
         defaultOptions = {
             width: "10px",
             height: "10px",
-            backgroundColor: color,
+            backgroundColor: options.color || "#FF0000",
             borderRadius: "50%",
             position: "absolute",
             top: "50%",
@@ -66,7 +65,7 @@ export function createPointMarker(map, position, color = "#FF0000", options = {}
     } else {
         // --- Logic for traditional Marker (Raster Maps or no mapId) ---
         defaultOptions = {  // Default Icon options for the dot symbol
-            fillColor: color,
+            fillColor: options.color || "#FF0000",
             fillOpacity: 1,
             strokeWeight: 0, // No border
             scale: 5,        // Size of the circle
@@ -110,11 +109,11 @@ export function createPointMarker(map, position, color = "#FF0000", options = {}
  * @param {Object} [options={}] - Additional options for marker styling.
  * @returns {Array<google.maps.marker.AdvancedMarkerElement|google.maps.Marker>|undefined} An array of marker elements.
  */
-export function createPointMarkers(map, positions, color = "#FF0000", options = {}) {
+export function createPointMarkers(map, positions, options = {}) {
     if (!map) return;
     if (!positions || positions.length <= 0) return;
 
-    return positions.map((pos) => createPointMarker(map, pos, color, options));
+    return positions.map((pos) => createPointMarker(map, pos, options));
 }
 
 /**
@@ -359,34 +358,118 @@ export function removeOverlay(overlay) {
 }
 
 /**
- * Converts a coordinate object to the Google Maps {lat, lng} format.
- * Accepts input formats {lat, lng} or {latitude, longitude}.
- * 
- * @param {{latitude: number, longitude: number} | {lat: number, lng:number} | null | undefined} coord - The coordinate object to convert.
- * Expected formats: {lat: number, lng: number} or {latitude: number, longitude: number}.
- * @returns {{lat: number, lng: number} | null} - The coordinate object in {lat, lng} format,
- * or null if the input is invalid or cannot be converted.
+ * Converts a coordinate object to {lat, lng} format.
+ * @param {{latitude: number, longitude: number} | {lat: number, lng:number}} coord - The coordinate object to convert.
+ * @returns {{lat: number, lng: number} | null} - The converted coordinate in {lat, lng} format or null if invalid.
  */
 export function convertToGoogleCoord(coord) {
-    // Handle null or undefined input object
-    if (coord === null || coord === undefined) {
-        // console.warn("convertToGoogleCoord: Input coordinate object is missing.");
+    if (!coord) return null;
+
+    // try direct props first
+    let lat = coord.lat;
+    // if not available, try latitude prop
+    if (!Number.isFinite(lat)) lat = coord.latitude;
+
+    // try direct props first
+    let lng = coord.lng;
+    // if not available, try longitude prop
+    if (!Number.isFinite(lng)) {
+        lng = coord.longitude
+    };
+
+    // Return if both lat and lng are finite numbers
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { lat, lng };
+    }
+
+    // fallback converter - convert to googleLatLng first
+    const googleLatLng = convertToLatLng(coord);
+    if (googleLatLng) {
+        const googleLat = googleLatLng.lat();
+        const googleLng = googleLatLng.lng();
+        if (Number.isFinite(googleLat) && Number.isFinite(googleLng)) {
+            return { lat: googleLat, lng: googleLng };
+        }
+    }
+
+    // If all attempts fail, log a warning and return null
+    console.warn("Invalid coordinate format:", coord);
+    return null;
+}
+
+/**
+ * Convert various coord formats to a google.maps.LatLng.
+ * @param {google.maps.LatLng|object} coord - The coordinate to convert.
+ * @returns {google.maps.LatLng|null} - The converted LatLng object or null if invalid.
+ */
+export function convertToLatLng(coord) {
+    if (!coord || typeof coord !== 'object') {
+        console.warn("Cannot convert invalid coordinate input:", coord);
         return null;
     }
 
-    // Extract lat and lng
-    const lat = coord.lat ?? coord.latitude;
-    const lng = coord.lng ?? coord.longitude;
-
-    // Validate lat and lng
-    if (lat === null || lat === undefined || lng === null || lng === undefined) {
-        // console.warn("convertToGoogleCoord: Could not extract valid {lat, lng} or {latitude, longitude} from input:", coord);
-        return null; // Indicate invalid or incomplete input
+    // Case 1: Already a LatLng instance?
+    if (typeof coord.lat === 'function' && typeof coord.lng === 'function') {
+        const latVal = coord.lat();
+        const lngVal = coord.lng();
+        if (Number.isFinite(latVal) && Number.isFinite(lngVal)) {
+            return coord;
+        }
+        console.warn("Invalid LatLng instance provided:", coord);
+        return null;
     }
 
-    // Return the object guaranteed to be in {lat, lng} format
-    const googleCoord = { lat: lat, lng: lng };
-    return googleCoord;
+    // Case 2: Plain object → extract numeric lat & lng
+    let lat = coord.latitude;
+    if (!Number.isFinite(lat)) {
+        lat = coord.lat;
+        if (!Number.isFinite(lat)) {
+            console.warn("Latitude missing or invalid in coordinate object:", coord);
+            return null;
+        }
+    }
+
+    let lng = coord.longitude;
+    if (!Number.isFinite(lng)) {
+        lng = coord.lng;
+        if (!Number.isFinite(lng)) {
+            lng = coord.lon;
+            if (!Number.isFinite(lng)) {
+                console.warn("Longitude missing or invalid in coordinate object:", coord);
+                return null;
+            }
+        }
+    }
+
+    // Construct LatLng
+    try {
+        return new google.maps.LatLng(lat, lng);
+    } catch (err) {
+        console.error("Error creating google.maps.LatLng:", err, coord);
+        return null;
+    }
+}
+
+/**
+ * Converts a coordinate object to a CartographicDegrees format object.
+ * @param {google.maps.LatLng | {lat: number, lng: number} | {latitude: number, longitude: number, height: number}} coord 
+ * @returns {latitude: number, longitude: number, height: number} | null
+ */
+export function convertToCartographicDegrees(coord) {
+    // Validate input
+    if (!coord) return null;
+
+    // Convert to google.maps.LatLng
+    const googleLatLng = convertToLatLng(coord);
+    if (!googleLatLng) return null;
+
+    // Error handling for invalid lat/lng values
+    if (!googleLatLng) {
+        return null;
+    }
+
+    // return the object in {latitude, longitude, height} format
+    return { latitude: googleLatLng.lat(), longitude: googleLatLng.lng(), height: 0 };
 }
 
 /**
@@ -412,17 +495,25 @@ function calculateTopMiddlePos(positions) {
 
 /**
  * Calculates the middle position of a given set of positions.
- * @param {Array<google.maps.LatLng>} positions - Array of Google Maps LatLng objects 
+ * @param {google.maps.LatLng[]| {lat: number, lng: number}[] | {latitude: number, longitude: number, height: number}[]} positions - Array of Google Maps LatLng objects 
  * @returns {google.maps.LatLng} - The middle position
  */
 export function calculateMiddlePos(positions) {
+    const googleLatLngArray = positions.map(position => convertToLatLng(position));
+    // Create the bounds
     const bounds = new google.maps.LatLngBounds();
 
-    positions.forEach(position => {
+    // Extend the bounds to include all positions
+    googleLatLngArray.forEach(position => {
         bounds.extend(position);
     });
 
-    return bounds.getCenter();
+    if (!bounds) return null; // Handle empty bounds
+
+    // Get the center of the bounds
+    const centerLatLng = bounds.getCenter(); // google.maps.LatLng
+    // Convert to {lat, lng} format
+    return { lat: centerLatLng.lat(), lng: centerLatLng.lng() };
 }
 
 /**
@@ -431,13 +522,14 @@ export function calculateMiddlePos(positions) {
  * @param {{latitude: number, longitude: number}|{lat:number, lng: number}} positionB 
  * @returns {number|null} - The distance in meters or null if invalid positions.
  */
-export function calculateDistance(positionA, positionB) {
-    const googlePosA = convertToGoogleCoord(positionA);
-    const googlePosB = convertToGoogleCoord(positionB);
-    // validate the converted positions
-    if (!googlePosA || !googlePosB) return null; // Handle invalid positions
+export function calculateDistance(coord1, coord2) {
+    if (!coord1 || !coord2) return null;
+    const googleLatLng1 = convertToLatLng(coord1);
+    const googleLatLng2 = convertToLatLng(coord2);
 
-    return google.maps.geometry.spherical.computeDistanceBetween(positionA, positionB) || null;
+    if (!googleLatLng1 || !googleLatLng2) return null; // Handle invalid positions
+
+    return google.maps.geometry.spherical.computeDistanceBetween(googleLatLng1, googleLatLng2) || null;
 }
 
 /**
@@ -464,7 +556,7 @@ export function formatMeasurementValue(value, unit) {
                 : numValue.toFixed(2) + "m²";
         }
     }
-    return value.toString();
+    return value ? value.toString() : "";
 }
 
 

@@ -1,18 +1,17 @@
 import {
     ScreenSpaceEventHandler,
     ScreenSpaceEventType,
-    Viewer
+    defined,
 } from "cesium";
 
-
 /**
- * Provides a consistent interface for handling user input events on a Cesium map,
- * similar to ScreenSpaceEventHandler but normalizing event data.
+ * Provide event listener for handling user input events on a Cesium map, like leftClick, mouseMove, etc.
+ * Using Cesium.ScreenSpaceEventHandler to manage events
  */
 export class CesiumInputHandler /* implements IInputEventHandler */ {
     /**
      * Creates an instance of CesiumInputHandler.
-     * @param {Viewer} viewer - The Cesium viewer instance.
+     * @param {import('cesium').Viewer} viewer - The Cesium viewer instance.
      */
     constructor(viewer) {
         if (!viewer || !viewer.scene || !viewer.scene.canvas) {
@@ -34,13 +33,13 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
      */
     _getEventType(typeString) {
         switch (typeString?.toLowerCase()) {
-            case 'leftClick': return ScreenSpaceEventType.LEFT_CLICK;
-            case 'mouseMove': return ScreenSpaceEventType.MOUSE_MOVE;
-            case 'rightClick': return ScreenSpaceEventType.RIGHT_CLICK;
-            case 'leftDoubleClick': return ScreenSpaceEventType.LEFT_DOUBLE_CLICK;
-            case 'leftDown': return ScreenSpaceEventType.LEFT_DOWN;
-            case 'leftUp': return ScreenSpaceEventType.LEFT_UP;
-            case 'middleClick': return ScreenSpaceEventType.MIDDLE_CLICK;
+            case 'leftclick': return ScreenSpaceEventType.LEFT_CLICK;
+            case 'mousemove': return ScreenSpaceEventType.MOUSE_MOVE;
+            case 'rightclick': return ScreenSpaceEventType.RIGHT_CLICK;
+            case 'leftdoubleclick': return ScreenSpaceEventType.LEFT_DOUBLE_CLICK;
+            case 'leftdown': return ScreenSpaceEventType.LEFT_DOWN;
+            case 'leftup': return ScreenSpaceEventType.LEFT_UP;
+            case 'middleclick': return ScreenSpaceEventType.MIDDLE_CLICK;
             // Add other types (MIDDLE_CLICK, PINCH_MOVE, etc.) as needed
             default:
                 console.warn(`CesiumInputHandler: Unsupported event type string: ${typeString}`);
@@ -55,7 +54,8 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
      */
     on(eventType, callback) {
         const cesiumEventType = this._getEventType(eventType);
-        if (!cesiumEventType || typeof callback !== 'function') return;
+
+        if (cesiumEventType === null || typeof callback !== 'function') return;
 
         // Ensure map exists for this type
         if (!this.activeListeners.has(eventType)) {
@@ -74,16 +74,20 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
             const handlerAction = (movement) => {
                 // Get screen position (Cesium provides 'position' for clicks, 'endPosition' for moves)
                 const screenPos = movement.position ?? movement.endPosition;
+
                 if (!screenPos) return;
 
-                const mapPoint = screenToLatLng(this.viewer, screenPos);
+                const mapPoint = this.viewer.scene.pickPosition(screenPos) || null;
+                if (!defined(mapPoint)) return;
 
                 // Prepare normalized event data
                 const eventData = {
                     mapPoint: mapPoint, // May be null if pick failed
                     screenPoint: { x: screenPos.x, y: screenPos.y },
                     // Cesium movement object doesn't directly expose the DOM event
-                    domEvent: undefined
+                    domEvent: undefined,
+                    // Result from scene.pick()
+                    pickedFeature: this.viewer.scene.drillPick(screenPos, 3, 1, 1) || null
                 };
 
                 // Call all registered callbacks for this event type
