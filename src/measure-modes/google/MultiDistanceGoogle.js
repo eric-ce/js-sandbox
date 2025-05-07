@@ -9,8 +9,7 @@
 
 import dataPool from "../../lib/data/DataPool.js";
 import { generateIdByTimestamp } from "../../lib/helper/cesiumHelper.js"; // Keep if generic enough
-import * as Turf from "@turf/turf";
-import { convertToGoogleCoord, calculateMiddlePos, calculateDistance, formatMeasurementValue, } from "../../lib/helper/googleHelper.js";
+import { convertToconvertToLatLng, calculateMiddlePos, calculateDistance, formatMeasurementValue, } from "../../lib/helper/googleHelper.js";
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -194,7 +193,7 @@ export class MultiDistanceGoogle {
             this.polylineCollection.push(line); // Store polyline reference
 
             // create label 
-            const googlePositions = this.coords.cache.map(pos => convertToGoogleCoord(pos));
+            const googlePositions = this.coords.cache.map(pos => convertToconvertToLatLng(pos));
             const distance = calculateDistance(googlePositions[0], googlePositions[1]);
             const label = this.drawingHelper._addLabel(googlePositions, distance, "meter");
             this.labelCollection.push(label); // Store label reference
@@ -228,7 +227,7 @@ export class MultiDistanceGoogle {
             case isMeasuring:
                 if (this.coords.cache.length === 1) {
                     // convert to google coord
-                    const googlePositions = [convertToGoogleCoord(this.coords.cache[0]), this.coordinate];
+                    const googlePositions = [convertToconvertToLatLng(this.coords.cache[0]), this.coordinate];
 
                     // validate googlePositions
                     if (!googlePositions || googlePositions.length === 0 || googlePositions.some(pos => pos === null)) {

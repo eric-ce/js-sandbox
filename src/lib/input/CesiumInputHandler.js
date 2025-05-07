@@ -8,7 +8,16 @@ import {
  * Provide event listener for handling user input events on a Cesium map, like leftClick, mouseMove, etc.
  * Using Cesium.ScreenSpaceEventHandler to manage events
  */
-export class CesiumInputHandler /* implements IInputEventHandler */ {
+export class CesiumInputHandler {
+    /** @type {import('cesium').Viewer} */
+    viewer; // Reference to the Cesium viewer instance
+    /** @type {import('cesium').Scene} */
+    scene; // Reference to the Cesium scene
+    /** @type {import('cesium').ScreenSpaceEventHandler} */
+    handler; // ScreenSpaceEventHandler instance for managing input events
+    /** @type {Map<string, Map<Function, Function>>} */
+    listenerRegistry; // Map to store active event listeners, keyed by event type string
+
     /**
      * Creates an instance of CesiumInputHandler.
      * @param {import('cesium').Viewer} viewer - The Cesium viewer instance.
@@ -22,7 +31,7 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
         // Create a dedicated handler instance to avoid conflicts and ensure proper cleanup.
         this.handler = new ScreenSpaceEventHandler(this.scene.canvas);
         /** @type {Map<string, Map<Function, Function>>} */
-        this.activeListeners = new Map(); // Stores { eventTypeString: Map<originalCallback, handlerAction> }
+        this.listenerRegistry = new Map(); // Stores { eventTypeString: Map<originalCallback, handlerAction> }
         console.log("CesiumInputHandler created.");
     }
 
@@ -58,10 +67,10 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
         if (cesiumEventType === null || typeof callback !== 'function') return;
 
         // Ensure map exists for this type
-        if (!this.activeListeners.has(eventType)) {
-            this.activeListeners.set(eventType, new Map());
+        if (!this.listenerRegistry.has(eventType)) {
+            this.listenerRegistry.set(eventType, new Map());
         }
-        const listenersForType = this.activeListeners.get(eventType);
+        const listenersForType = this.listenerRegistry.get(eventType);
 
         // If this specific callback is already registered for this type, do nothing
         if (listenersForType.has(callback)) {
@@ -91,7 +100,7 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
                 };
 
                 // Call all registered callbacks for this event type
-                const currentListeners = this.activeListeners.get(eventType);
+                const currentListeners = this.listenerRegistry.get(eventType);
                 if (currentListeners) {
                     currentListeners.forEach((registeredCallback) => {
                         try {
@@ -121,7 +130,7 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
         const cesiumEventType = this._getEventType(eventType);
         if (!cesiumEventType || typeof callback !== 'function') return;
 
-        const listenersForType = this.activeListeners.get(eventType);
+        const listenersForType = this.listenerRegistry.get(eventType);
         if (listenersForType && listenersForType.has(callback)) {
             listenersForType.delete(callback); // Remove the specific callback mapping
             console.log(`CesiumInputHandler: Removed listener callback for ${eventType}`);
@@ -129,7 +138,7 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
             // If there are NO other listeners remaining for this Cesium Event Type, remove the underlying Cesium action
             if (listenersForType.size === 0) {
                 this.handler.removeInputAction(cesiumEventType);
-                this.activeListeners.delete(eventType); // Clean up the outer map too
+                this.listenerRegistry.delete(eventType); // Clean up the outer map too
                 console.log(`CesiumInputHandler: Removed last listener and Cesium action for ${eventType}`);
             }
         }
@@ -154,7 +163,7 @@ export class CesiumInputHandler /* implements IInputEventHandler */ {
             console.log("CesiumInputHandler: ScreenSpaceEventHandler destroyed.");
         }
         this.handler = null;
-        this.activeListeners.clear();
+        this.listenerRegistry.clear();
         // Reset cursor
         try { // Canvas might be gone if viewer was destroyed elsewhere
             this.setCursor('default');

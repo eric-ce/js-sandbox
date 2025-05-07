@@ -1,3 +1,91 @@
+import { LatLng } from "@googlemaps/js-api-loader";
+
+/***********
+ * OVERLAY *
+ ***********/
+/**
+ * Finds Google Maps overlays associated with a specific geographic position
+ * by checking a custom 'positions' property stored on the overlays.
+ * Searches through points, labels, polylines, and polygons.
+ *
+ * @param {google.maps.LatLng | {latitude: number, longitude: number} | {lat:number,lng:number} | {lat:number, lon:number}} position - The position to search for.
+ * @param {Array<google.maps.Marker|google.maps.marker.AdvancedMarkerElement>} pointCollection - Array of point markers.
+ * @param {Array<google.maps.Marker|google.maps.marker.AdvancedMarkerElement>} labelCollection - Array of label markers.
+ * @param {Array<google.maps.Polyline>} polylineCollection - Array of polylines.
+ * @param {Array<google.maps.Polygon>} polygonCollection - Array of polygons.
+ * @returns {{pointMarker: (google.maps.Marker|google.maps.marker.AdvancedMarkerElement|undefined), labelMarker: (google.maps.Marker|google.maps.marker.AdvancedMarkerElement|undefined), polylines: google.maps.Polyline[], polygons: google.maps.Polygon[]}} An object containing the found overlays.
+ */
+export function getOverlayByPosition(
+    position,
+    pointCollection,
+    labelCollection,
+    polylineCollection,
+    polygonCollection
+) {
+    let foundPointMarker = undefined;
+    let foundLabelMarkers = [];
+    let foundPolylines = [];
+    let foundPolygons = [];
+
+    // Convert the input position for reliable comparison
+    // const searchLatLng = convertToLatLng(position);
+    if (!position) {
+        console.warn("getOverlayByPosition: Invalid input position provided.");
+        return { pointMarker: undefined, labelMarker: [], polylines: [], polygons: [] };
+    }
+
+    // --- Find Point Marker ---
+    // Checks if the search position matches any coordinate in the marker's 'positions' property.
+    if (Array.isArray(pointCollection)) {
+        for (const marker of pointCollection) {
+            // Check the custom 'positions' property
+            if (marker && Array.isArray(marker.positions) && marker.positions.some(p => areCoordinatesEqual(p, position))) {
+                foundPointMarker = marker;
+                break; // Found the point marker associated with this position
+            }
+        }
+    }
+
+    // --- Find Label Marker ---
+    // Checks if the search position matches any coordinate in the label's 'positions' property.
+    if (Array.isArray(labelCollection)) {
+        foundLabelMarkers = labelCollection.filter(label =>
+            label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))
+        );
+        // for (const label of labelCollection) {
+        //     // Check the custom 'positions' property
+        //     if (label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))) {
+        //         foundLabelMarker = label;
+        //         // Assuming a point matches at most one label directly for drag purposes.
+        //         break;
+        //     }
+        // }
+    }
+
+    // --- Find Polylines ---
+    // Checks if the search position matches any coordinate in the polyline's 'positions' property.
+    if (Array.isArray(polylineCollection)) {
+        foundPolylines = polylineCollection.filter(polyline =>
+            polyline && Array.isArray(polyline.positions) && polyline.positions.some(p => areCoordinatesEqual(p, position))
+        );
+    }
+
+    // --- Find Polygons ---
+    // Checks if the search position matches any coordinate in the polygon's 'positions' property.
+    if (Array.isArray(polygonCollection)) {
+        foundPolygons = polygonCollection.filter(polygon =>
+            polygon && Array.isArray(polygon.positions) && polygon.positions.some(p => areCoordinatesEqual(p, position))
+        );
+    }
+
+    return {
+        pointMarker: foundPointMarker,
+        labelMarkers: foundLabelMarkers,
+        polylines: foundPolylines,
+        polygons: foundPolygons
+    };
+}
+
 /**
  * Creates a point marker on the provided map at the given position.
  * For vector maps (with a mapId), it returns an AdvancedMarkerElement;
@@ -9,26 +97,41 @@
  * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
  */
 export function createPointMarker(map, position, options = {}) {
-    // Validations for map and position
-    if (!map) {
-        console.error("createPointMarker: 'map' object is required.");
-        return;
-    }
-    if (!position) {
-        console.error("createPointMarker: 'position' object is required.");
-        return;
+    // -- Validate input params --
+    if (!map || !position) {
+        console.error("createPointMarker: Invalid map or position provided.");
+        return null;
     }
 
-    // Convert and validate the position
-    const googlePos = convertToGoogleCoord(position);
-    if (!googlePos) return;
+    // -- Convert position to {lat, lng} format --
+    const googlePos = convertToLatLng(position);
+    if (!googlePos) {
+        console.error("createPointMarker: Invalid position format.", position);
+        return;
+    }
 
-    let defaultOptions;
-    let pointMarker;
+    const {
+        advancedMarker = {},
+        advancedMarkerStyle = {},
+        marker = {},
+        markerStyle = {},
+        id = "annotate_point",
+        color = "#FF0000", // Default color if not provided
+        outlineColor = "#FF0000",
+        opacity = 1.0,
+        weight = 0, // No border by default
+        scale = 5,  // Default size of the circle
+        zIndex = 1, // Default zIndex
+        clickable = true, // Default clickable
+        title = "Point Marker",
+    } = options;
 
+    // -- Create the point marker --
+    let pointInstance;
+    // Case 1: AdvancedMarkerElement (Vector Maps)
     if (map.mapId) {
         // --- Logic for AdvancedMarkerElement (Vector Maps) ---
-        defaultOptions = {
+        const advancedMarkerStyleOptions = {
             width: "10px",
             height: "10px",
             backgroundColor: options.color || "#FF0000",
@@ -37,83 +140,91 @@ export function createPointMarker(map, position, options = {}) {
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
+            ...advancedMarkerStyle
         }
 
         // Merge default options with user provided options
-        const markerOptions = { ...defaultOptions, ...options };
+        const markerOptions = { ...advancedMarkerStyleOptions, ...options };
 
         // Create a dot element for advanced marker content.
         const dotElement = document.createElement("div");
 
         // Apply all styles from markerOptions to the dotElement
         Object.keys(markerOptions).forEach(key => {
-            dotElement.style[key] = markerOptions[key];
+            dotElement.style[key] = advancedMarkerStyleOptions[key];
         });
 
         // Create and return the Advanced Marker
         try {
-            pointMarker = new google.maps.marker.AdvancedMarkerElement({
+            pointInstance = new google.maps.marker.AdvancedMarkerElement({
                 map,
                 position: googlePos,
                 content: dotElement,
-                title: "Point Marker", // Consider making this configurable via options
+                title,
+                zIndex,
+                ...advancedMarker,
             });
         } catch (e) {
             console.error("Failed to create AdvancedMarkerElement. Ensure the Google Maps Marker library is loaded.", e);
             return; // Prevent further errors
         }
-    } else {
+    }
+    // Case 2: Traditional Marker (Raster Maps or no mapId)
+    else {
         // --- Logic for traditional Marker (Raster Maps or no mapId) ---
-        defaultOptions = {  // Default Icon options for the dot symbol
-            fillColor: options.color || "#FF0000",
-            fillOpacity: 1,
-            strokeWeight: 0, // No border
-            scale: 5,        // Size of the circle
+        const markerStyleOptions = {  // Default Icon options for the dot symbol
+            fillColor: color,
+            fillOpacity: opacity,
+            strokeColor: outlineColor,
+            strokeWeight: weight,
+            scale,
+            ...markerStyle
         };
 
-        // Merge default icon options with user-provided options
-        const markerIconOptions = { ...defaultOptions, ...options };
-
         // Create and return the traditional Marker
-        pointMarker = new google.maps.Marker({
+        pointInstance = new google.maps.Marker({
             map,
             position: googlePos,
-            title: "Point Marker", // Consider making this configurable via options
+            title,
             icon: {
                 path: google.maps.SymbolPath.CIRCLE, // Use the built-in circle symbol
-                ...markerIconOptions // Spread the merged options here
+                ...markerStyleOptions,
             },
-            clickable: true, // Default, but can be overridden by options if needed
+            clickable, // Default true, but can be overridden by options if needed
+            ...marker
         });
     }
 
-    if (!pointMarker) {
+    if (!pointInstance) {
         console.error("createPointMarker: Failed to create marker. Ensure the Google Maps API is loaded correctly.");
         return;
     }
 
+    // -- Store custom meta data --
     // Store original positions data on the marker.
-    pointMarker.positions = [position];
+    pointInstance.positions = [{ ...position }];
     // Store default id 
-    pointMarker.id = "annotate_point";
+    pointInstance.id = id;
 
-    return pointMarker;
+    return pointInstance;
 }
 
 /**
  * Creates multiple point markers on the provided map from an array of positions.
  *
  * @param {google.maps.Map} map - The Google Map instance.
- * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
- * @param {string} [color="#FF0000"] - The color for the markers.
+ * @param {{latitude: number, longitude: number}[]} positions - Array of position objects.
  * @param {Object} [options={}] - Additional options for marker styling.
- * @returns {Array<google.maps.marker.AdvancedMarkerElement|google.maps.Marker>|undefined} An array of marker elements.
+ * @returns {google.maps.marker.AdvancedMarkerElement[]|google.maps.Marker[]} An array of marker elements.
  */
 export function createPointMarkers(map, positions, options = {}) {
-    if (!map) return;
-    if (!positions || positions.length <= 0) return;
+    if (!map || !Array.isArray(positions) || positions.length === 0) {
+        return [];
+    }
 
-    return positions.map((pos) => createPointMarker(map, pos, options));
+    return positions
+        .map((pos) => createPointMarker(map, pos, options))
+        .filter(Boolean);
 }
 
 /**
@@ -125,32 +236,56 @@ export function createPointMarkers(map, positions, options = {}) {
  * @param {Object} [options={}] - Additional options for polyline styling.
  * @returns {google.maps.Polyline|undefined} The created polyline if valid; otherwise, undefined.
  */
-export function createPolyline(map, positions, color = "#A52A2A", options = {}) {
-    if (!map) return;
-    if (!positions || positions.length !== 2) return;
+export function createPolyline(map, positions, options = {}) {
+    // -- Validate input params --
+    if (!map || !Array.isArray(positions) || positions.length !== 2) return;
 
-    const linePositions = positions.map(pos => convertToGoogleCoord(pos));
+    // -- Convert positions to {lat, lng} format -- 
+    const linePositions = positions
+        .map(pos => convertToLatLng(pos))
+        .filter(Boolean); // Filter out invalid positions
 
-    const defaultOptions = {
-        strokeColor: color,
-        strokeOpacity: 1.0,
-        strokeWeight: 4,
+    // Error handling for linePositions
+    if (linePositions.length < 2) {
+        console.error("createPolyline: Invalid positions provided. Ensure exactly two positions are provided.");
+        return null;
     }
-    // Merge default options with user provided options
-    const polylineOptions = { ...defaultOptions, ...options };
 
-    const polyline = new google.maps.Polyline({
+    // -- Create the polyline --
+    const {
+        color = "#ADFF2F",
+        opacity = 1.0,
+        weight = 4,
+        zIndex = 1,
+        clickable = false,
+        title = "Polyline",
+        id = "annotate_line",
+        ...rest
+    } = options;
+
+    // Default styling options
+    const polylineOptions = {
+        strokeColor: color,
+        strokeOpacity: opacity,
+        strokeWeight: weight,
+        ...rest,
+    }
+
+    // Create polyline
+    const polylineInstance = new google.maps.Polyline({
         map,
         path: linePositions,
-        ...polylineOptions
+        zIndex,
+        title,
+        clickable,
+        ...polylineOptions,
     });
 
-    // Store original positions data on the polyline.
-    polyline.positions = [...positions];
-    // Store default id 
-    polyline.id = "annotate_line";
+    // -- Store custom meta data --
+    polylineInstance.positions = positions.map(pos => ({ ...pos }));    // Store positions data
+    polylineInstance.id = id // Store custom id 
 
-    return polyline;
+    return polylineInstance;
 }
 
 /**
@@ -162,52 +297,93 @@ export function createPolyline(map, positions, color = "#A52A2A", options = {}) 
  * @param {Object} [options={}] - Additional options for polyline styling.
  * @returns {Array<google.maps.Polyline>|undefined} An array of created polylines if valid; otherwise, undefined.
  */
-export function createPolylines(map, positions, color = "#A52A2A", options = {}) {
-    if (!map) return;
-    if (!positions || positions.length < 2) return;
+export function createPolylines(map, positions, options = {}) {
+    // -- Validate input params --
+    if (!map || !Array.isArray(positions) || positions.length < 2) {
+        console.error("createPolylines: Invalid positions provided. Ensure at least two positions are provided.");
+        return [];
+    }
 
+    // -- Create polylines --
     const polylines = [];
     for (let i = 0; i < positions.length - 1; i++) {
-        const polyline = createPolyline(map, [positions[i], positions[i + 1]], color, options);
-        polylines.push(polyline);
+        const polyline = createPolyline(map, [positions[i], positions[i + 1]], options);
+        polyline && polylines.push(polyline);
     }
+
     return polylines;
 }
 
 /**
  * Creates a polygon on a Google Map
  * @param {google.maps.Map} map - The Google Map instance
- * @param {Array} positions - Array of lat/lng positions: [{lat: number, lng: number}, ...]
- * @param {string} [color="#FF0000"] - The color for the polygon
+ * @param {{lat:number, lng: number}[] | {latitude: number, longitude: number, height: number}[]} positions - Array of coordinates
  * @param {Object} options - Additional options for polygon styling.
- * @returns {google.maps.Polygon} - The created polygon instance
+ * @returns {google.maps.Polygon | null} - The created polygon instance or null if invalid.
  */
-export function createPolygon(map, positions, color = "#FF0000", options = {}) {
-    if (!map) return;
-    if (!positions || positions.length < 3) return;
-
-    const convertPositions = positions.map(pos => convertToGoogleCoord(pos));
-    if (!convertPositions) return;
-
-    // Default styling options
-    const defaultOptions = {
-        strokeColor: color,
-        strokeOpacity: 0.8,
-        strokeWeight: 2,
-        fillColor: color,
-        fillOpacity: 0.35,
-        editable: false
+export function createPolygon(map, positions, options = {}) {
+    // -- Validate input params --
+    if (!map || !Array.isArray(positions) || positions.length < 3) { // A polygon requires at least 3 points
+        console.error("createPolygon: Invalid positions provided. Ensure at least three positions are provided.");
+        return null;
     };
 
-    // Merge default options with user provided options
-    const polygonOptions = { ...defaultOptions, ...options };
+    // -- Positions conversion --
+    // convert positions to {lat, lng} format
+    const polygonPositions = positions
+        .map(pos => convertToLatLng(pos))
+        .filter(Boolean); // Filter out invalid positions;
 
-    // Create the polygon
+    // Error handling for polygonPositions, if less than 3 points
+    if (polygonPositions.length < 3) {
+        console.error("createPolygon: Invalid positions provided. Ensure at least three positions are provided.");
+        return null;
+    }
+
+    // -- Create The Polygon --
+    // Options for polygon
+    const {
+        polygonStyle = {},
+        editable = false,
+        clickable = false,
+        id = "annotate_polygon",
+        color = "#FF0000", // Default color if not provided
+        fillColor = "#FF0000",
+        opacity = 0.35,
+        weight = 2,
+        zIndex = 1,
+        title = "Polygon",
+        ...rest     // Captures any other properties from options
+    } = options;
+
+    // Styling options with default values
+    const polygonStyleOptions = {
+        strokeColor: color, // Default if options.color is undefined
+        strokeOpacity: 0.8,
+        strokeWeight: weight,
+        fillColor,
+        fillOpacity: opacity,
+        zIndex,
+        ...polygonStyle
+    }
+    // Create polygon
     const polygon = new google.maps.Polygon({
-        map: map,
-        paths: convertPositions,
-        ...polygonOptions
+        map,
+        paths: polygonPositions,
+        title,
+        editable,
+        clickable,
+        ...polygonStyleOptions,
+        ...rest
     });
+
+    if (!polygon) {
+        console.error("createPolygon: Failed to create polygon. Ensure the Google Maps API is loaded correctly.");
+        return null;
+    }
+    // -- Handle Metadata -- 
+    polygon.positions = positions.map(pos => ({ ...pos })); // Store original positions data on the polygon.
+    polygon.id = id; // Store id on the polygon.
 
     return polygon;
 }
@@ -222,23 +398,34 @@ export function createPolygon(map, positions, color = "#FF0000", options = {}) {
  * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
  */
 export function createLabelMarker(map, positions, value, unit = "meter", options = {}) {
+    // -- Validate input params --
     if (!map || !positions || positions.length < 2 || !value) return;
 
-    // Format positions and text
-    const formatGoogleCoords = positions.map(pos => convertToGoogleCoord(pos));
-    const formattedText = formatMeasurementValue(value, unit);
+    // -- Prepare label value --
+    const formattedText = formatMeasurementValue(value, unit); // Format the value based on the unit
+    const middlePos = calculateMiddlePos(positions);    // Calculate the middle position of the two points
 
-    const middlePos = calculateMiddlePos(formatGoogleCoords);
+    const {
+        advancedMarker = {},
+        advancedMarkerStyle = {},
+        marker = {},
+        markerStyle = {},
+        color = "#000000",
+        backgroundColor = "ffffff",
+        id = "annotate_label",
+        zIndex = 1,
+        title = "Label Marker",
+        clickable = true,
+    } = options;
 
-    let marker;
+    let markerInstance;
 
+    // Case1: AdvancedMarkerElement (Vector Maps)
     if (map.mapId) {
         // AdvancedMarkerElement branch (vector maps)
-        const defaultOptions = {
-            color: "#000000",
-            backgroundColor: "white",
+        const advancedMarkerStyleOptions = {
             fontSize: "16px",
-            fontWeight: "normal",
+            fontWeight: "bold",
             borderColor: "#ccc",
             padding: "5px",
             borderRadius: "3px",
@@ -246,16 +433,19 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
             border: "1px solid #ccc",
             minWidth: "50px",
             boxSizing: "border-box",
-            offset: { x: 0, y: -20 } // desired offset in pixels
+            offset: { x: 0, y: -20 }, // desired offset in pixels
+            color,
+            backgroundColor,
+            ...advancedMarkerStyle
         };
-        const labelOptions = { ...defaultOptions, ...options };
+
         const labelElement = document.createElement("div");
 
         // Ensure absolute positioning for custom offsets
         labelElement.style.position = "absolute";
 
         // Apply style properties (skip non-CSS options)
-        Object.keys(labelOptions).forEach(key => {
+        Object.keys(advancedMarkerStyleOptions).forEach(key => {
             if (!["title", "zIndex", "clickable", "offset"].includes(key)) {
                 labelElement.style[key] = labelOptions[key];
             }
@@ -263,39 +453,49 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
 
         labelElement.textContent = formattedText;
 
-        const markerOptions = {
+        const advancedMarkerOptions = {
             map,
             position: middlePos,
             content: labelElement,
-            title: labelOptions.title || "Label Marker",
-            zIndex: labelOptions.zIndex || 1
+            title,
+            zIndex,
+            ...advancedMarker
         };
 
         // Use the anchor property to set the offset
-        if (labelOptions.offset) {
-            markerOptions.anchor = new google.maps.Point(labelOptions.offset.x, labelOptions.offset.y);
+        if (advancedMarkerStyleOptions.offset) {
+            markerOptions.anchor = new google.maps.Point(advancedMarkerStyleOptions.offset.x, advancedMarkerStyleOptions.offset.y);
         }
 
-        marker = new google.maps.marker.AdvancedMarkerElement(markerOptions);
-    } else {
-        // Traditional Marker branch (raster maps)
-        const defaultOptions = {
+        markerInstance = new google.maps.marker.AdvancedMarkerElement(advancedMarkerOptions);
+    }
+    // Case2: Traditional Marker (Raster Maps or no mapId)
+    else {
+        // style options
+        const markerStyleOptions = {
             fontSize: "16px",
             fontWeight: "bold",
-            color: "#000000",
-            labelOrigin: new google.maps.Point(0, -20),
+            // labelOrigin: new google.maps.Point(0, -20),
             labelInBackground: true,
+            color,
+            ...markerStyle,
         };
+        // marker options
+        const markerOptions = {
+            title,
+            clickable,
+            zIndex,
+            ...marker
+        }
 
-        const labelOptions = { ...defaultOptions, ...options };
-
+        // Create a transparent image for the marker icon in order to make offsets
         const transparentImage =
             'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
-        marker = new google.maps.Marker({
+        // Create the marker
+        markerInstance = new google.maps.Marker({
             map,
             position: middlePos,
-            title: options.title || "Label Marker",
             icon: {
                 url: transparentImage,
                 size: new google.maps.Size(1, 1),
@@ -305,21 +505,24 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
             },
             label: {
                 text: formattedText,
-                color: labelOptions.color,
-                fontWeight: labelOptions.fontWeight,
-                fontSize: labelOptions.fontSize,
-                className: "custom-marker-label"
+                className: "custom-marker-label",
+                ...markerStyleOptions
             },
-            clickable: labelOptions.clickable !== undefined ? labelOptions.clickable : false,
-            zIndex: labelOptions.zIndex || 1,
+            ...markerOptions
         });
     }
 
-    if (!marker) console.error("createLabelMarker: Failed to create marker. Ensure the Google Maps API is loaded correctly.");
-    // store original positions data on the label marker
-    marker.positions = [...positions];
+    // Validate label marker
+    if (!markerInstance) {
+        console.error("createLabelMarker: Failed to create marker. Ensure the Google Maps API is loaded correctly.");
+        return null;
+    }
 
-    return marker;
+    // -- Store custom meta data --
+    markerInstance.positions = positions.map(pos => ({ ...pos }));  // Store original positions data on the marker.
+    markerInstance.id = id // Store default id
+
+    return markerInstance;
 }
 
 
@@ -332,10 +535,11 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
  * @returns {Array} - Array of created markers
  */
 export function createLabelMarkers(map, positions, valueArray, unit = "meter", options = {}) {
-    // Validate input parameters
-    if (!map || !positions || positions.length < 2 || !valueArray || valueArray.length < 1) return;
+    // -- Validate input params --
+    if (!map || !Array.isArray(positions) || positions.length < 2 || !Array.isArray(valueArray) || valueArray.length < 1) return;
     const labels = [];
 
+    // -- Create label markers --
     // Create a label for each segment (between consecutive points)
     for (let i = 0; i < valueArray.length; i++) {
         // Create label for the segment between position i and i+1
@@ -357,43 +561,69 @@ export function removeOverlay(overlay) {
     overlay.setMap(null);
 }
 
+
+
+/**************
+ * COORDINATE *
+ **************/
+/**
+ * Compare two coordinates for equality, handling various input formats.
+ * @param {google.maps.LatLng | {latitude: number, longitude: number} | {lat:number,lng:number} | {lat:number, lon:number}} coord1
+ * @param {google.maps.LatLng | {latitude: number, longitude: number} | {lat:number,lng:number} | {lat:number, lon:number}} coord2
+ * @returns {boolean} - Returns true if the coordinates are equal after conversion, false otherwise.
+ */
+export function areCoordinatesEqual(coord1, coord2) {
+    // Validate coord1 and coord2
+    if (!coord1 || !coord2) {
+        // console.warn("areCoordinatesEqual: Invalid coordinates provided for comparison."); // Use warn instead of error for potentially recoverable issues
+        return false;
+    }
+
+    const latLng1 = convertToGoogleCoord(coord1);
+    const latLng2 = convertToGoogleCoord(coord2);
+
+    // Only compare if both conversions were successful and resulted in valid LatLng objects
+    if (latLng1 && latLng2) {
+        // Use the built-in equals method for robust comparison (handles floating point nuances)
+        return latLng1.equals(latLng2);
+    }
+
+    // If either conversion failed, consider them not equal
+    return false;
+}
+
 /**
  * Converts a coordinate object to {lat, lng} format.
- * @param {{latitude: number, longitude: number} | {lat: number, lng:number}} coord - The coordinate object to convert.
+ * @param {{latitude: number, longitude: number} | {lat: number, lng:number} | {lat: function, lng: function}} coord - The coordinate object to convert.
  * @returns {{lat: number, lng: number} | null} - The converted coordinate in {lat, lng} format or null if invalid.
  */
-export function convertToGoogleCoord(coord) {
-    if (!coord) return null;
+export function convertToLatLng(position) {
+    if (!position || typeof position !== 'object') {
+        console.warn("Cannot convert invalid position input:", position);
+        return null;
+    }
 
-    // try direct props first
-    let lat = coord.lat;
-    // if not available, try latitude prop
-    if (!Number.isFinite(lat)) lat = coord.latitude;
+    if (Number.isFinite(position.lat) && Number.isFinite(position.lng)) {
+        return { lat: position.lat, lng: position.lng };
+    }
+    // Case 1: {lat: function, lng: function} format
+    if (typeof position.lat === 'function' && typeof position.lng === 'function') {
+        const lat = position.lat();
+        const lng = position.lng();
+        return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    }
+    // Case 2:{lat: number, lng: number} or {latitude: number, longitude: number} format
+    const lat =
+        [position.lat, position.latitude].find(Number.isFinite);
+    const lng =
+        [position.lng, position.lon, position.longitude].find(Number.isFinite);
 
-    // try direct props first
-    let lng = coord.lng;
-    // if not available, try longitude prop
-    if (!Number.isFinite(lng)) {
-        lng = coord.longitude
-    };
-
-    // Return if both lat and lng are finite numbers
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
         return { lat, lng };
     }
 
-    // fallback converter - convert to googleLatLng first
-    const googleLatLng = convertToLatLng(coord);
-    if (googleLatLng) {
-        const googleLat = googleLatLng.lat();
-        const googleLng = googleLatLng.lng();
-        if (Number.isFinite(googleLat) && Number.isFinite(googleLng)) {
-            return { lat: googleLat, lng: googleLng };
-        }
-    }
-
-    // If all attempts fail, log a warning and return null
-    console.warn("Invalid coordinate format:", coord);
+    // fallback for unknown formats
+    console.warn('Invalid position input:', position);
     return null;
 }
 
@@ -402,52 +632,40 @@ export function convertToGoogleCoord(coord) {
  * @param {google.maps.LatLng|object} coord - The coordinate to convert.
  * @returns {google.maps.LatLng|null} - The converted LatLng object or null if invalid.
  */
-export function convertToLatLng(coord) {
-    if (!coord || typeof coord !== 'object') {
-        console.warn("Cannot convert invalid coordinate input:", coord);
-        return null;
+export function convertToGoogleCoord(coord) {
+    // if (!coord || typeof coord !== 'object') {
+    //     console.warn("Cannot convert invalid coordinate input:", coord);
+    //     return null;
+    // }
+
+    // // Case 1: {lat: function, lng: function} format
+    // if (typeof coord.lat === 'function' && typeof coord.lng === 'function') {
+    //     const lat = coord.lat();
+    //     const lng = coord.lng();
+    //     return Number.isFinite(lat) && Number.isFinite(lng)
+    //         ? new google.maps.LatLng(lat, lng)
+    //         : (console.warn('Getter returned non-numeric values:', coord), null);
+    // }
+
+    // // Case 2: plain object with numbers
+    // const lat =
+    //     [coord.lat, coord.latitude].find(Number.isFinite);
+    // const lng =
+    //     [coord.lng, coord.lon, coord.longitude].find(Number.isFinite);
+
+    // if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    //     return new google.maps.LatLng(lat, lng);
+    // }
+
+    if (coord instanceof google.maps.LatLng) { return coord; }
+
+    const latLng = convertToLatLng(coord);
+
+    if (latLng) {
+        return new google.maps.LatLng(latLng.lat, latLng.lng);
     }
 
-    // Case 1: Already a LatLng instance?
-    if (typeof coord.lat === 'function' && typeof coord.lng === 'function') {
-        const latVal = coord.lat();
-        const lngVal = coord.lng();
-        if (Number.isFinite(latVal) && Number.isFinite(lngVal)) {
-            return coord;
-        }
-        console.warn("Invalid LatLng instance provided:", coord);
-        return null;
-    }
-
-    // Case 2: Plain object → extract numeric lat & lng
-    let lat = coord.latitude;
-    if (!Number.isFinite(lat)) {
-        lat = coord.lat;
-        if (!Number.isFinite(lat)) {
-            console.warn("Latitude missing or invalid in coordinate object:", coord);
-            return null;
-        }
-    }
-
-    let lng = coord.longitude;
-    if (!Number.isFinite(lng)) {
-        lng = coord.lng;
-        if (!Number.isFinite(lng)) {
-            lng = coord.lon;
-            if (!Number.isFinite(lng)) {
-                console.warn("Longitude missing or invalid in coordinate object:", coord);
-                return null;
-            }
-        }
-    }
-
-    // Construct LatLng
-    try {
-        return new google.maps.LatLng(lat, lng);
-    } catch (err) {
-        console.error("Error creating google.maps.LatLng:", err, coord);
-        return null;
-    }
+    return null;
 }
 
 /**
@@ -460,8 +678,7 @@ export function convertToCartographicDegrees(coord) {
     if (!coord) return null;
 
     // Convert to google.maps.LatLng
-    const googleLatLng = convertToLatLng(coord);
-    if (!googleLatLng) return null;
+    const googleLatLng = convertToGoogleCoord(coord);
 
     // Error handling for invalid lat/lng values
     if (!googleLatLng) {
@@ -490,7 +707,7 @@ function calculateTopMiddlePos(positions) {
         northeast.lat(),
         bounds.getCenter().lng()
     );
-    return topMiddle;
+    return topMiddle || null; // Handle empty bounds
 };
 
 /**
@@ -499,12 +716,17 @@ function calculateTopMiddlePos(positions) {
  * @returns {google.maps.LatLng} - The middle position
  */
 export function calculateMiddlePos(positions) {
-    const googleLatLngArray = positions.map(position => convertToLatLng(position));
+    const googleCoordsArray = positions
+        .map(position => convertToGoogleCoord(position))
+        .filter(Boolean); // Filter out invalid positions
+
+    if (googleCoordsArray.length < 2) return null; // Handle invalid number of position, needs at least 2 positions
+
     // Create the bounds
     const bounds = new google.maps.LatLngBounds();
 
     // Extend the bounds to include all positions
-    googleLatLngArray.forEach(position => {
+    googleCoordsArray.forEach(position => {
         bounds.extend(position);
     });
 
@@ -512,24 +734,77 @@ export function calculateMiddlePos(positions) {
 
     // Get the center of the bounds
     const centerLatLng = bounds.getCenter(); // google.maps.LatLng
+
+    if (!centerLatLng.lat() || !centerLatLng.lng()) {
+        return null; // Handle empty center
+    }
+
     // Convert to {lat, lng} format
     return { lat: centerLatLng.lat(), lng: centerLatLng.lng() };
 }
 
+
+
+/***********
+ * MEASURE *
+ ***********/
 /**
  * Calculates the distance in meters between two positions.
  * @param {{latitude: number, longitude: number}|{lat:number, lng: number}} positionA 
  * @param {{latitude: number, longitude: number}|{lat:number, lng: number}} positionB 
  * @returns {number|null} - The distance in meters or null if invalid positions.
  */
-export function calculateDistance(coord1, coord2) {
-    if (!coord1 || !coord2) return null;
-    const googleLatLng1 = convertToLatLng(coord1);
-    const googleLatLng2 = convertToLatLng(coord2);
+export function calculateDistance(pos1, pos2) {
+    // -- Validate Google Maps API --
+    if (!google?.maps?.geometry?.spherical) {
+        console.error("calculateDistance: Google Maps geometry library (spherical) not loaded.");
+        return null;
+    }
 
-    if (!googleLatLng1 || !googleLatLng2) return null; // Handle invalid positions
+    // -- Validate input params --
+    if (!pos1 || !pos2) return null;
 
-    return google.maps.geometry.spherical.computeDistanceBetween(googleLatLng1, googleLatLng2) || null;
+    // -- Convert positions -- 
+    const googleCoord1 = convertToGoogleCoord(pos1);
+    const googleCoord2 = convertToGoogleCoord(pos2);
+
+    if (!googleCoord1 || !googleCoord2) return null; // Handle invalid positions
+
+    // -- Calculate distance --
+    const distance = google.maps.geometry.spherical.computeDistanceBetween(googleCoord1, googleCoord2);
+
+    return distance ?? null;    // distance could be 0 
+}
+
+/**
+ * Calculates the area by an array of positions.
+ * @param {{latitude: number, longitude: number}[]|{lat:number, lng: number}[]} positions - Array of positions
+ * @returns {number|null} - The area in square meters or null if invalid positions.
+ */
+export function calculateArea(positions) {
+    // -- Validate Google Maps API --
+    if (!google?.maps?.geometry?.spherical) {
+        console.error("calculatePolygonArea: Google Maps geometry library (spherical) not loaded.");
+        return null;
+    }
+
+    // -- Validate input params --
+    if (!Array.isArray(positions) || positions.length < 3) {
+        console.error("calculatePolygonArea: Invalid input. Requires an array of at least 3 positions.");
+        return null;
+    }
+
+    const googleCoordsArray = positions
+        .map(pos => convertToGoogleCoord(pos))
+        .filter(Boolean); // Filter out invalid positions
+
+    if (googleCoordsArray.length < 3) {
+        console.error("calculatePolygonArea: Not enough valid positions after conversion. Requires at least 3.");
+        return null;
+    }
+    const area = google.maps.geometry.spherical.computeArea(googleCoordsArray);
+
+    return area ?? null; // Handle empty area
 }
 
 /**

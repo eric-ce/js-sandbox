@@ -1,8 +1,10 @@
 /**
  * Provides a consistent interface for handling user input events on a Google Map,
- * implementing the IInputEventHandler contract.
  */
-export class GoogleMapsInputHandler /* implements IInputEventHandler */ {
+export class GoogleMapsInputHandler {
+    map; // Reference to the Google Maps map instance
+    listenerRegistry; // Map to store active event listeners, keyed by event type string
+
     /**
      * Creates an instance of GoogleMapsInputHandler.
      * @param {google.maps.Map} map - The Google Maps map instance.
@@ -14,7 +16,7 @@ export class GoogleMapsInputHandler /* implements IInputEventHandler */ {
         this.map = map;
         /** @type {Map<string, Map<Function, google.maps.MapsEventListener>>} */
         this.listenerRegistry = new Map(); // Stores {eventTypeString: Map<originalCallback, MapsEventListenerRef>}
-        console.log("GoogleMapsInputHandler created.");
+        // console.log("GoogleMapsInputHandler created.");
     }
 
     /**

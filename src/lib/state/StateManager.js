@@ -38,20 +38,19 @@ export class StateManager {
                 button: null,
             },
             color: {
-                add: Color.YELLOW,
-                default: Color.YELLOWGREEN,
-                hover: Color.KHAKI,
-                hoverChatPoint: Color.ALICEBLUE,
-                layerColor: null,
-                line: Color.YELLOWGREEN,
-                lineCacheColor: null,
-                move: Color.YELLOW,
-                pointColor: Color.RED,
-                polygon: Color.GREEN.withAlpha(0.8),
-                polygonOutline: Color.YELLOW,
-                random: Color.fromRandom({ alpha: 1.0 }),
-                select: Color.BLUE,
-                submitted: Color.DARKGREEN,
+                add: "rgba(255, 255, 0, 1)",        // Cesium.Color.YELLOW
+                // default: "rgba(154, 205, 50, 1)",   // Cesium.Color.YELLOWGREEN
+                hover: "rgba(240, 230, 140, 1)",   // Cesium.Color.KHAKI
+                hoverChatPoint: "rgba(240, 248, 255, 1)", // Cesium.Color.ALICEBLUE
+                // layerColor: null,
+                line: "rgba(154, 205, 50, 1)",      // Cesium.Color.YELLOWGREEN
+                // lineCacheColor: null,
+                move: "rgba(255, 255, 0, 1)",        // Cesium.Color.YELLOW
+                pointColor: "rgba(255, 0, 0, 1)",     // Cesium.Color.RED
+                polygon: "rgba(0, 128, 0, 0.8)",    // Cesium.Color.GREEN.withAlpha(0.8)
+                polygonOutline: "rgba(255, 255, 0, 1)", // Cesium.Color.YELLOW
+                select: "rgba(0, 0, 255, 1)",       // Cesium.Color.BLUE
+                submitted: "rgba(0, 100, 0, 1)",      // Cesium.Color.DARKGREEN
             },
         };
     }

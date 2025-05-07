@@ -1,13 +1,5 @@
-/**
- * Base class for all measure components of cesium-measure, google-measure, and leaflet-measure.
- * It handles UI creation, event handling, and data management for measurement tools.
- */
-
 import dataPool from "../lib/data/DataPool.js";
 import { sharedStyleSheet } from "../styles/sharedStyle.js";
-import {
-    BlendOption,
-} from "cesium";
 import {
     toolIcon,
     pickerIcon,
@@ -25,133 +17,158 @@ import {
     logBoxIcon,
 } from "../assets/icons.js";
 import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
-import { CesiumDragHandler, GoogleDragHandler } from "../lib/interaction/index.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
-import { TwoPointsDistanceCesium, TwoPointsDistanceGoogle, MultiDistanceGoogle } from "../measure-modes/index.js";
+import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
+import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, LeafletDragHandler } from "../lib/interaction/index.js";
+import { TwoPointsDistanceCesium, PolygonCesium, TwoPointsDistanceGoogle, PolygonGoogle, TwoPointsDistanceLeaflet, PolygonLeaflet } from "../measure-modes/index.js";
+
+
+/**
+ * @typedef MeasurementGroup
+ * @property {{labels: [], markers: [], polygon: object, polylines: []}} annotations
+ * @property {string} id - Unique identifier for the measurement
+ * @property {string} mode - Measurement mode (e.g., "distance")
+ * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
+ * @property {number} labelNumberIndex - Index used for sequential labeling
+ * @property {'pending'|'completed'} status - Current state of the measurement
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ */
+
+/** @typedef {import('../lib/data/DataPool.js').DataPool} DataPool */
+/** @typedef {import('../lib/input/CesiumInputHandler.js').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../lib/input/GoogleMapsInputHandler.js').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../lib/interaction/CesiumDragHandler.js').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../lib/interaction/GoogleDragHandler.js').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../lib/interaction/CesiumHighlightHandler.js').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../lib/interaction/GoogleHighlightHandler.js').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../lib/interaction/LeafletDragHandler.js').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../lib/interaction/LeafletHighlightHandler.js').LeafletHighlightHandler} LeafletHighlightHandler */
+
+/**
+ * Base class for all measure components of cesium-measure, google-measure, and leaflet-measure.
+ * It handles UI creation, event handling, and data management for measurement tools.
+ */
 export class MeasureComponentBase extends HTMLElement {
+    // --- Private Fields ---
+    /** @type {boolean} */
+    #isInitialized = false;
+    /** @type {MeasurementGroup[]} */
+    #data = []; // Internal data, not for sharing with other components
+    /** @type {'cesium' | 'google' | 'leaflet' | null} */
+    #mapName = null;
+    /** @type {import('cesium').Viewer | google.maps.Map| leaftlet.map| null| undefined} */
+    #map = null; // The specific map instance (Viewer, google.maps.Map, etc.)
+    /** @type {Object} */
+    #cesiumPkg = null; // Only relevant for CesiumMeasure
+    /** @type {Object} */
+    #app = null;
+    /** @type {import('../lib/state/StateManager').StateManager | null} */
+    #stateManager = null;
+    /** @type {import('../lib/events/EventEmitter').EventEmitter | null} */
+    #emitter = null;
+    /** @type {import('../lib/data/DataPool').DataPool | null} */
+    #dataHandler = null; // Reference to the bound data listener
+
+    // --- Public Fields ---
+    log = console; // Default logger, overridden by app setter
+
+    /** @type {CesiumInputHandler | GoogleMapsInputHandler | null} */
+    inputHandler = null;
+    /** @type {CesiumDragHandler | GoogleDragHandler | null} */
+    dragHandler = null;
+    /** @type {CesiumHighlightHandler | GoogleHighlightHandler | null} */ // Replace 'any' with specific type if available
+    highlightHandler = null;
+
+    /** @type {object | null} */
+    activeModeInstance = null;
+    /** @type {string | null} */
+    activeModeId = null;
+
+    /** @type {HTMLElement | null} */
+    toolbar = null;
+    /** @type {{string: HTMLElement}} */
+    uiButtons = {};
+    /** @type {Array<object>} */ // Consider a more specific type for mode configs
+    availableModeConfigs = [];
+
+    /** @type {{ [modeId: string]: object }} */
+    #modeInstances = {}; // Pool to store instantiated modes
+
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
-
-        // Core component state
-        this._isInitialized = false;
-        this._data = [];
-        /** @type {'cesium' | 'google' | 'leaflet' | null} */
-        this._mapName = null; // Map name (e.g., 'cesium', 'google', 'leaflet')
-
-        // Dependencies (set via setters)
-        this._map = null; // The specific map instance (Viewer, google.maps.Map, etc.)
-        this._cesiumPkg = null; // Only relevant for CesiumMeasure
-        this._app = null;
-        this._stateManager = null;
-        this._emitter = null;
-
-        // Event handler references for cleanup
-        this._dataHandler = null;
-
-        // --- Local Active Mode Management ---
-        /** @type {import('../lib/input/CesiumInputHandler').CesiumInputHandler | import('../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler | null} */
-        this.inputHandler = null; // Map-specific input handler instance
-        /** @type {object | null} */
-        this.activeModeInstance = null; // The active measurement mode logic instance
-        /** @type {string | null} */
-        this.activeModeId = null; // e.g., 'distance', 'height'
-
-        /** @type {HTMLElement | null} */
-        this.toolbar = null; // Reference to the toolbar UI element
-        /** @type {Object.<string, HTMLElement>} */
-        this.uiButtons = {}; // References to mode buttons { 'distance-cesium': buttonElement, ... }
-        // Store mode configurations available for this map type
-        this.availableModeConfigs = [];
-
-        this.pointCollection = null; // Cesium PointPrimitiveCollection
-        this.labelCollection = null; // Cesium LabelCollection
     }
 
-    // Getters and setters
+    /***********************
+     * GETTERS AND SETTERS *
+     ***********************/
     get app() {
-        return this._app;
+        return this.#app;
     }
 
     set app(app) {
-        this._app = app;
+        this.#app = app;
         this.log = app.log;
     }
 
     get stateManager() {
-        return this._stateManager;
+        return this.#stateManager;
     }
 
-    set stateManager(stateManager) {
-        this._stateManager = stateManager;
+    set stateManager(manager) {
+        this.#stateManager = manager;
     }
 
     get data() {
-        return this._data;
+        return this.#data;
     }
 
     get emitter() {
-        return this._emitter;
+        return this.#emitter;
     }
 
     set emitter(emitter) {
-        this._emitter = emitter;
+        this.#emitter = emitter;
     }
 
     get map() {
-        return this._map;
+        return this.#map;
     }
 
     set map(map) {
-        this._map = map;
+        this.#map = map;
     }
 
     get mapName() {
-        return this._mapName;
+        return this.#mapName;
     }
 
-    set mapName(mapName) {
-        if (this._mapName === mapName) return;
-        this._mapName = mapName;
-        // Re-initialize if mapName changes after connection and map is set
-        // if (this.isConnected && this.map) {
-        //     this._isInitialized = false; // Allow re-initialization
-        //     // Clean up previous state before re-initializing
-        //     this._deactivateCurrentMode();
-        //     this.inputHandler?.destroy();
-        //     this.inputHandler = null;
-        //     this.toolbar?.remove();
-        //     this.toolbar = null;
-        //     this.uiButtons = {};
-        //     // Remove listeners before re-adding
-        //     if (this._modeChangeHandler && this.stateManager) {
-        //         this.stateManager.off('activeModeChanged', this._modeChangeHandler);
-        //     }
-        //     if (this._dataHandler && this._emitter) {
-        //         this._emitter.off("data", this._dataHandler);
-        //     }
-        //     this._initialize();
-        // }
+    set mapName(name) {
+        if (this.#mapName === name) return;
+        this.#mapName = name;
     }
 
     get cesiumPkg() {
-        return this._cesiumPkg;
+        return this.#cesiumPkg;
     }
 
     set cesiumPkg(pkg) {
-        if (this._cesiumPkg === pkg) return; // Avoid re-setting if same instance
-        this._cesiumPkg = pkg;
+        if (this.#cesiumPkg === pkg) return; // Avoid re-setting if same instance
+        this.#cesiumPkg = pkg;
         // Initialize Cesium collection from Cesium package
         this._initializeCesiumCollections();
     }
 
-
-
+    /**********************************************
+     * CONNECTEDCALLBACK AND DISCONNECTEDCALLBACK *
+     **********************************************/
     async connectedCallback() {
         // Apply style for the web component
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
         // Initialization now depends on map and mapName being set
-        if (this.map && this.mapName && !this._isInitialized) {
+        if (this.map && this.mapName && !this.#isInitialized) {
             await this._initialize();
         }
     }
@@ -159,9 +176,9 @@ export class MeasureComponentBase extends HTMLElement {
     disconnectedCallback() {
         console.log(`${this.constructor.name}: Disconnecting...`);
         // Clean up event listeners
-        if (this._dataHandler && this._emitter) {
-            this._emitter.off("data", this._dataHandler);
-            this._dataHandler = null;
+        if (this.#dataHandler && this.emitter) {
+            this.emitter.off("data", this.#dataHandler);
+            this.#dataHandler = null;
         }
 
         // Deactivate current mode and destroy input handler
@@ -173,37 +190,30 @@ export class MeasureComponentBase extends HTMLElement {
         this.uiButtons = {};
         this.availableModeConfigs = [];
 
+        this.#modeInstances = {}; // Clear the instance pool
+
         // Clean up map annotations
-        if (this._data.length > 0) {
-            this._data.forEach((item) => {
+        if (this.#data.length > 0) {
+            this.#data.forEach((item) => {
                 if (item.annotations) {
                     this._removeAnnotations(item.annotations);
                 }
             });
         }
-        this._isInitialized = false;
+        this.#isInitialized = false;
         console.log(`${this.constructor.name}: Disconnected cleanup complete.`);
     }
 
+    /*****************
+     * OTHER METHODS *
+     *****************/
     async _initialize() {
         // Prevent re-initialization if already done
-        if (this._isInitialized) return;
+        if (this.#isInitialized) return;
 
         // --- Dependency Checks ---
-        if (!this.map) {
-            console.warn(`${this.constructor.name}: Map not set.`);
-            return;
-        }
-        if (!this.mapName) {
-            console.warn(`${this.constructor.name}: MapName not set.`);
-            return;
-        }
-        if (!this.emitter) {
-            console.warn(`${this.constructor.name}: Emitter not set.`);
-            return;
-        }
-        if (!this.stateManager) {
-            console.warn(`${this.constructor.name}: StateManager not set.`);
+        if (!this.map || !this.mapName || !this.emitter || !this.stateManager) {
+            this.log.error(`${this.constructor.name}: Initialization failed - missing dependencies.`);
             return;
         }
 
@@ -220,14 +230,12 @@ export class MeasureComponentBase extends HTMLElement {
                     this.inputHandler = new GoogleMapsInputHandler(this.map);
                     break;
                 case "leaflet":
-                    // this.inputHandler = new LeafletInputHandler(this.map);
-                    console.warn("LeafletInputHandler not yet implemented.");
-                    this.inputHandler = null; // Mark as unavailable
+                    this.inputHandler = new LeafletInputHandler(this.map);
                     break;
                 default:
                     throw new Error(`Unsupported map type for Input Handler: ${this.mapName}`);
             }
-            console.log(`${this.constructor.name}: Input handler created.`);
+            // console.log(`${this.constructor.name}: Input handler created.`);
         } catch (error) {
             console.error(`${this.constructor.name}: Failed to create Input Handler:`, error);
             return; // Cannot proceed without input handler
@@ -240,22 +248,23 @@ export class MeasureComponentBase extends HTMLElement {
 
             switch (this.mapName) {
                 case "cesium":
-                    // Pass dependencies needed by CesiumDragHandler
                     this.dragHandler = new CesiumDragHandler(this.map, this.inputHandler, this.emitter);
-                    // this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter);
                     break;
                 case "google":
-                    // Pass dependencies needed by GoogleDragHandler
                     this.dragHandler = new GoogleDragHandler(this.map, this.inputHandler, this.emitter);
                     // this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter);
                     break;
-                // case "leaflet": // Add Leaflet handlers later
+                case "leaflet": // Add Leaflet handlers later
+                    this.dragHandler = new LeafletDragHandler(this.map, this.inputHandler, this.emitter);
+                    // this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    break;
                 default:
                     console.warn(`Drag/Highlight handlers not implemented for ${this.mapName}`);
                     this.dragHandler = null;
                     this.highlightHandler = null;
             }
-            console.log(`${this.constructor.name}: Interaction handlers created (or skipped).`);
+            // console.log(`${this.constructor.name}: Interaction handlers created (or skipped).`);
         } catch (error) {
             console.error(`${this.constructor.name}: Failed to create Interaction Handlers:`, error);
             // Continue without drag/highlight? Or return? Depends on requirements.
@@ -268,32 +277,33 @@ export class MeasureComponentBase extends HTMLElement {
 
         // --- Setup Listeners ---
         // Listen for data changes to draw persistent measurements
-        if (!this._dataHandler) {
+        if (!this.#dataHandler) {
             const handleData = (data) => { this._drawFromDataArray(data); };
             this.emitter.on("data", handleData);
-            this._dataHandler = handleData; // Store the handler reference for cleanup
+            this.#dataHandler = handleData; // Store the handler reference for cleanup
         }
 
         // --- Draw Initial Data ---
         if (dataPool?.data?.length > 0) {
-            this._data = [...dataPool.data];
-            this._drawFromDataArray(this._data);
+            this.#data = [...dataPool.data];
+            this._drawFromDataArray(this.#data);
         }
 
         // --- Call map-specific initialization hook ---
         this._initializeMapSpecifics(); // Allow derived classes to add setup
 
-        this._isInitialized = true;
+        this.#isInitialized = true;
     }
 
-    //TODO: create the UI
+    // --- UI Creation and Mode Activation ---
     /**
-     * Creates the measurement toolbar and buttons within the shadow DOM.
+     * Creates the measurement toolbar and buttons.
      * Uses lazy instantiation for mode classes.
      * @param {'cesium' | 'google' | 'leaflet'} mapName - The type of the current map.
      * @private
      */
     _createUI(mapName) {
+        // Clear existing UI elements safely
         if (this.toolbar) this.toolbar.remove(); // Clear existing
         this.uiButtons = {};
         this.availableModeConfigs = []; // Reset available modes
@@ -425,6 +435,7 @@ export class MeasureComponentBase extends HTMLElement {
             btn.title = modeConfig.name; // Tooltip
             btn.className = `annotate-button animate-on-show measure-button-${modeId}`;
             btn.dataset.modeId = modeId; // Store mode ID for the handler
+            btn.setAttribute("aria-pressed", "false"); // Accessibility
 
             btn.addEventListener("click", (e) => {
                 e.stopPropagation(); // Prevent map click through button
@@ -454,16 +465,17 @@ export class MeasureComponentBase extends HTMLElement {
      * @private
      */
     _handleModeButtonClick(clickedModeId) {
-        console.log(`${this.constructor.name}: Button clicked for mode '${clickedModeId}'`);
+        // console.log(`${this.constructor.name}: Button clicked for mode '${clickedModeId}'`);
         const currentModeId = this.activeModeId;
 
         if (currentModeId === clickedModeId) {
             // Clicked the already active button - deactivate
-            this._activateMode(null, this.mapName); // Pass null to deactivate
+            // console.log(`Deactivating mode '${clickedModeId}' due to same button click.`);
+            this._activateMode(null); // Pass null to deactivate
         } else {
             // Clicked a new button - activate the new mode
-            // _activateMode will handle deactivating the old one first
-            this._activateMode(clickedModeId, this.mapName);
+            // console.log(`Requesting activation of mode '${clickedModeId}'. Current: '${currentModeId}'`);
+            this._activateMode(clickedModeId);
         }
     }
 
@@ -474,100 +486,120 @@ export class MeasureComponentBase extends HTMLElement {
      * @param {string} mapType - 'cesium', 'google', or 'leaflet'.
      * @private
      */
-    _activateMode(modeId, mapType) {
+    _activateMode(modeId) {
+        const mapType = this.#mapName;
+        // console.log(`_activateMode called with modeId: ${modeId}`); // Log entry
+
         // --- Pre-checks ---
-        if (!this.inputHandler && modeId) { // Don't check if deactivating (modeId is null)
-            console.warn(`${this.constructor.name}: Input handler not ready. Cannot activate mode '${modeId}'.`);
+        if (!mapType || (!this.inputHandler && modeId)) {
+            console.warn(`${this.constructor.name}: Input handler not ready or mapType missing. Cannot activate mode '${modeId}'.`);
             return;
         }
         // --- End Pre-checks ---
 
         const currentActiveModeId = this.activeModeId;
+        const currentActiveInstance = this.activeModeInstance; // Store ref before potentially changing
 
         // --- Deactivate existing mode ---
-        if (this.activeModeInstance && (currentActiveModeId !== modeId || !modeId)) {
-            this._deactivateCurrentMode();
+        // Deactivate if:
+        // 1. There IS an active instance AND
+        // 2. We are activating a DIFFERENT mode (modeId is different from currentActiveModeId) OR we are explicitly deactivating (modeId is null/falsy)
+        if (currentActiveInstance && (currentActiveModeId !== modeId || !modeId)) {
+            // console.log(`Calling _deactivateCurrentMode for mode '${currentActiveModeId}'.`);
+            this._deactivateCurrentMode(); // This now only calls deactivate() and clears component's active refs
         }
 
-        // If the request was just to deactivate, exit now
+        // If the request was just to deactivate, update UI and exit
         if (!modeId || modeId === "inactive") {
-            // Ensure all buttons are visually inactive
-            Object.values(this.uiButtons).forEach((btn) => { btn.classList.remove("active"); });
+            // console.log(`Exiting _activateMode as it was a deactivation request.`);
+            Object.values(this.uiButtons).forEach((btn) => {
+                btn.classList.remove("active");
+                btn.setAttribute("aria-pressed", "false");
+            });
             return;
         }
 
-        // Prevent activating the same mode again if it's already active
+        // Prevent activating the same mode again if it's already active (check ID)
         if (currentActiveModeId === modeId) {
-            return;
+            // console.log(`Mode '${modeId}' is already the active mode. Ensuring button state.`);
+            if (this.uiButtons[modeId]) {
+                this.uiButtons[modeId].classList.add("active");
+                this.uiButtons[modeId].setAttribute("aria-pressed", "true");
+            }
+            return; // Already active, do nothing more
         }
-        // --- End Deactivation ---
+        // --- End Deactivation Logic ---
+
 
         // --- Find Mode Configuration ---
         const config = this.availableModeConfigs.find((m) => m.id === modeId);
         if (!config) {
-            console.warn(
-                `${this.constructor.name}: Mode "${modeId}" not found or not available for map type "${mapType}".`
-            );
+            console.warn(`${this.constructor.name}: Mode config "${modeId}" not found or not available for map type "${mapType}".`);
             return;
         }
-
         const ModeClass = config.getClass(mapType);
         if (!ModeClass) {
-            console.warn(
-                `${this.constructor.name}: Mode class for "${modeId}" on "${mapType}" is not defined or supported yet.`
-            );
+            console.warn(`${this.constructor.name}: Mode class for "${modeId}" on "${mapType}" is not defined or supported yet.`);
             return;
         }
         // --- End Find Mode ---
 
-        // --- Instantiate and Activate New Mode ---
-        let args = [];
-        // --- Determine Arguments ---
-        // FUTURE GOAL: All shared modes take standard args
-        // Define standard arguments including interaction handlers
-        const standardArgs = [
-            this.inputHandler,     // IInputEventHandler
-            this.dragHandler,      // IDragHandler | null
-            this.highlightHandler, // IHighlightHandler | null
-            this,                  // IDrawingHelper (this component)
-            this.stateManager,     // StateManager
-            this.emitter           // EventEmitter
-        ];
 
-        // TEMPORARY logic based on current specific classes:
-        if (ModeClass.name.includes("Cesium")) {
-            args = [...standardArgs, this._cesiumPkg]; // Cesium specific needs cesium package
-        } else {
-            args = standardArgs;
-        }
-        // --- End Determine Arguments ---
-
-        // --- Activate the Mode ---
-        this.activeModeId = modeId; // Store the ID
-        console.log(`${this.constructor.name}: Instantiating and activating ${ModeClass.name}`);
+        // --- Instantiate (if needed) and Activate New Mode ---
         try {
-            this.activeModeInstance = new ModeClass(...args);
-            if (typeof this.activeModeInstance.activate !== "function") {
-                throw new Error(`Mode class ${ModeClass.name} does not have an activate method.`);
-            }
-            this.activeModeInstance.activate();
+            let instanceToActivate = this.#modeInstances[modeId]; // Check if instance exists in pool
 
-            // Update UI Button State using classes
-            Object.entries(this.uiButtons).forEach(([_, btn]) => {
-                // Check dataset.modeId which should match the config ID
-                if (btn.dataset.modeId === modeId) {
-                    btn.classList.add("active"); // Add 'active' class
+            if (!instanceToActivate) {
+                // Instance doesn't exist, create it
+                // console.log(`Instantiating new instance for mode '${modeId}'.`);
+                const standardArgs = [
+                    this.inputHandler, this.dragHandler, this.highlightHandler,
+                    this, this.stateManager, this.emitter
+                ];
+                let args = standardArgs;
+                if (ModeClass.name.includes("Cesium")) {
+                    if (!this.#cesiumPkg) throw new Error("Cesium package not available for Cesium mode.");
+                    args = [...standardArgs, this.#cesiumPkg];
+                }
+
+                instanceToActivate = new ModeClass(...args);
+                this.#modeInstances[modeId] = instanceToActivate; // Store the new instance in the pool
+            } else {
+                // console.log(`Reusing existing instance for mode '${modeId}'.`);
+            }
+
+            // --- Activate the Instance ---
+            if (typeof instanceToActivate.activate !== "function") {
+                throw new Error(`Mode instance for ${modeId} does not have an activate method.`);
+            }
+            // console.log(`Calling activate() on instance for mode '${modeId}'.`);
+            instanceToActivate.activate(); // Call activate on the (potentially reused) instance
+
+            // Update component's state to reflect the newly active mode
+            this.activeModeInstance = instanceToActivate;
+            this.activeModeId = modeId;
+            // console.log(`Mode '${modeId}' successfully activated. Component activeModeId set.`);
+
+            // Update UI Button State
+            Object.entries(this.uiButtons).forEach(([id, btn]) => {
+                if (id === modeId) {
+                    btn.classList.add("active");
+                    btn.setAttribute("aria-pressed", "true");
                 } else {
                     btn.classList.remove("active");
+                    btn.setAttribute("aria-pressed", "false");
                 }
             });
+
         } catch (error) {
             console.error(`Error activating mode ${modeId} for ${mapType}:`, error);
+            // Reset component state if activation failed
             this.activeModeInstance = null;
             this.activeModeId = null;
             // Reset UI
             Object.values(this.uiButtons).forEach((btn) => {
                 btn.classList.remove("active");
+                btn.setAttribute("aria-pressed", "false");
             });
         }
         // --- End Activation ---
@@ -575,29 +607,38 @@ export class MeasureComponentBase extends HTMLElement {
 
     /** Deactivates the currently active mode instance. */
     _deactivateCurrentMode = () => {
-        if (this.activeModeInstance) {
-            const modeName = this.activeModeId || "current";
-            console.log(`${this.constructor.name}: Deactivating mode instance: ${modeName}`);
+        const instance = this.activeModeInstance; // Get current instance
+        const modeId = this.activeModeId;
+
+        if (instance) {
+            console.log(`${this.constructor.name}: Deactivating mode instance: ${modeId}`);
             try {
-                if (typeof this.activeModeInstance.deactivate === "function") {
-                    this.activeModeInstance.deactivate();
+                if (typeof instance.deactivate === "function") {
+                    instance.deactivate(); // Call deactivate on the instance
+                } else {
+                    console.warn(`Instance for mode ${modeId} has no deactivate method.`);
                 }
             } catch (error) {
-                console.error(`Error during deactivation of ${modeName}:`, error);
+                console.error(`Error during deactivation of ${modeId}: `, error);
             } finally {
-                // Ensure state is cleared even if deactivate fails
+                // Clear the component's active references, but DO NOT destroy the instance
+                // It remains in the #modeInstances pool for reuse
                 this.activeModeInstance = null;
                 this.activeModeId = null;
+                // console.log(`Component activeModeInstance/Id cleared for ${modeId}. Instance remains in pool.`);
                 // Reset input handler cursor to default when no mode is active
                 this.inputHandler?.setCursor("default");
             }
+        } else {
+            console.log(`${this.constructor.name}: _deactivateCurrentMode called but no activeModeInstance found.`);
         }
     };
 
     _initializeMapSpecifics() {
         // Base implementation does nothing, intended for override
-        console.log(`${this.constructor.name}: Base _initializeMapSpecifics called.`);
+        // console.log(`${this.constructor.name}: Base _initializeMapSpecifics called.`);
     }
+
 
     /******************************
      * SYNC DRAWING DATA FOR MAPS *
@@ -612,7 +653,7 @@ export class MeasureComponentBase extends HTMLElement {
         if (!Array.isArray(data) || data.length === 0) return;
 
         // For small datasets, process immediately
-        if (data.length <= 20) {
+        if (data.length <= 30) {
             data.forEach((item) => this._drawFromDataObject(item));
             return;
         }
@@ -636,8 +677,8 @@ export class MeasureComponentBase extends HTMLElement {
         if (data.mapName === this.mapName) return;
 
         const emptyAnnotations = { markers: [], polylines: [], polygon: null, labels: [] };
-        const existingIndex = this._data.findIndex((item) => item.id === data.id);
-        const existingMeasure = existingIndex >= 0 ? this._data[existingIndex] : null;
+        const existingIndex = this.#data.findIndex((item) => item.id === data.id);
+        const existingMeasure = existingIndex >= 0 ? this.#data[existingIndex] : null;
 
         // Create empty annotations object
         const annotations = {
@@ -654,9 +695,9 @@ export class MeasureComponentBase extends HTMLElement {
             }
             const updatedData = { ...data, annotations: emptyAnnotations };
             if (existingIndex >= 0) {
-                this._data[existingIndex] = updatedData;
+                this.#data[existingIndex] = updatedData;
             } else {
-                this._data.push(updatedData);
+                this.#data.push(updatedData);
             }
             return;
         }
@@ -677,7 +718,7 @@ export class MeasureComponentBase extends HTMLElement {
 
         // Create new annotations based on the mode
         switch (data.mode) {
-            case "polygon":
+            case "area":
                 annotations.polygon = this._addPolygon(data.coordinates);
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
                 annotations.labels = [
@@ -717,7 +758,7 @@ export class MeasureComponentBase extends HTMLElement {
             default:
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
                 annotations.polylines = this._addPolylinesFromArray(data.coordinates);
-                annotations.labels = this._addLabelsFromArray(data.coordinates, data._records);
+                annotations.labels = this._addLabelsFromArray(data.coordinates, data._records, "meter");
                 break;
         }
 
@@ -726,13 +767,17 @@ export class MeasureComponentBase extends HTMLElement {
 
         if (existingIndex >= 0) {
             // Update existing data
-            this._data[existingIndex] = updatedData;
+            this.#data[existingIndex] = updatedData;
         } else {
             // Add new data
-            this._data.push({ ...data, annotations });
+            this.#data.push({ ...data, annotations });
         }
     }
 
+
+    /******************
+     * HELPER METHODS *
+     ******************/
     /**
      * Checks if two coordinate objects are equal by comparing only latitude and longitude.
      * Height values are intentionally ignored in the comparison.

@@ -10,86 +10,96 @@ import { GoogleMeasure } from "./GoogleMeasure.js";
 import { LeafletMeasure } from "./LeafletMeasure.js";
 import dataPool from "../lib/data/DataPool.js";
 
+
+
 export class MeasureToolbox {
+    // --- Private Fields ---
+    #app;
+    #viewer = null;
+    #cesiumPkg = null;
+    #type;
+    #googleMap = null;
+    #leafletMap = null;
+
+    // --- Public Fields ---
+    log;
+    emitter = sharedEmitter; // Initialized directly
+    stateManager;
+    cesiumMeasure = null;
+    googleMeasure = null;
+    leafletMeasure = null;
+
     constructor(app, type) {
-        this._app = app;
+        this.#app = app;
+        this.#type = type;
         this.log = app.log;
-
-        // cesium variables
-        this._viewer = null;
-        this._cesiumPkg = null;
-
-        // event emitter: to sync measure data between different maps 
-        this.emitter = sharedEmitter;
 
         // state manager
         this.stateManager = new StateManager(this.emitter);
 
-        // cesium measure
-        this.cesiumMeasure = null;
-
         // set emitter for data pool
         dataPool.emitter = this.emitter;
-
-        // the type of the map. e.g. map-cesium, map-google, map-leaflet
-        this._type = type;
-
-        // google map
-        this._googleMap = null;
-
-        // leaflet map
-        this._leafletMap = null;
     }
 
     /*********************
      * GETTER AND SETTER *
      *********************/
     get app() {
-        return this._app
+        // Access the private field
+        return this.#app;
     }
 
     get viewer() {
-        return this._viewer;
+        // Access the private field
+        return this.#viewer;
     }
 
     set viewer(viewer) {
-        this._viewer = viewer;
-
-        this.initializeMeasureToolbox(this.type);
+        // Set the private field
+        this.#viewer = viewer;
+        // Use the private field in the call
+        this.initializeMeasureToolbox(this.#type);
     }
 
     get cesiumPkg() {
-        return this._cesiumPkg;
+        // Access the private field
+        return this.#cesiumPkg;
     }
 
     set cesiumPkg(pkg) {
-        this._cesiumPkg = pkg;
-
-        this.initializeMeasureToolbox(this.type);
+        // Set the private field
+        this.#cesiumPkg = pkg;
+        // Use the private field in the call
+        this.initializeMeasureToolbox(this.#type);
     }
 
     get googleMap() {
-        return this._googleMap;
+        // Access the private field
+        return this.#googleMap;
     }
 
     set googleMap(map) {
-        this._googleMap = map;
-
-        this.initializeMeasureToolbox(this.type);
+        // Set the private field
+        this.#googleMap = map;
+        // Use the private field in the call
+        this.initializeMeasureToolbox(this.#type);
     }
 
     get leafletMap() {
-        return this._leafletMap;
+        // Access the private field
+        return this.#leafletMap;
     }
 
     set leafletMap(map) {
-        this._leafletMap = map;
-
-        this.initializeMeasureToolbox(this.type);
+        // Set the private field
+        this.#leafletMap = map;
+        // Use the private field in the call
+        this.initializeMeasureToolbox(this.#type);
     }
 
     get type() {
-        return this._type;
+        // Access the private field
+        return this.#type;
     }
 
     /************
@@ -101,77 +111,76 @@ export class MeasureToolbox {
 
         switch (mapType) {
             case 'map-cesium':
-                this.initializeCesiumMeasure(this.viewer, this.cesiumPkg);
+                this.initializeCesiumMeasure();
                 break;  // Add this break
 
             case 'map-google':
-                this.initializeGoogleMeasure(this.googleMap);
+                this.initializeGoogleMeasure();
                 break;  // Add this break
 
             case 'map-leaflet':
-                this.initializeLeafletMeasure(this.leafletMap);
+                this.initializeLeafletMeasure();
                 break;  // Add this break
 
             default:
-                console.error('Invalid map type');
+                console.error(`Invalid map type: ${this.#type}`);
                 break;
         }
     }
 
     // Initialize cesium measure
-    initializeCesiumMeasure(viewer, cesiumPkg) {
-        if (!this.viewer || !this.cesiumPkg) return; // error handling: check if viewer and cesium package is available
-        // create html element for cesium measure
-        this.cesiumMeasure = document.createElement("cesium-measure");
+    initializeCesiumMeasure() {
+        // Use getters which access private fields
+        if (!this.viewer || !this.cesiumPkg) return;
 
-        // set properties for cesium measure
-        this.cesiumMeasure.map = viewer;
+        // If already exists and is in DOM, don't recreate
+        if (this.cesiumMeasure && this.cesiumMeasure.isConnected) return;
+
+        this.cesiumMeasure = document.createElement("cesium-measure");
+        this.cesiumMeasure.map = this.viewer; // Use getter
         this.cesiumMeasure.mapName = "cesium";
-        this.cesiumMeasure.cesiumPkg = cesiumPkg;
-        this.cesiumMeasure.app = this.app;
+        this.cesiumMeasure.cesiumPkg = this.cesiumPkg; // Use getter
+        this.cesiumMeasure.app = this.app; // Use getter
         this.cesiumMeasure.emitter = this.emitter;
         this.cesiumMeasure.stateManager = this.stateManager;
-        // append cesium measure to map-cesium shadow root
+
         const mapCesium = document.querySelector("map-cesium");
         if (!mapCesium) return;
         mapCesium.shadowRoot.appendChild(this.cesiumMeasure);
     }
-
     // Initialize google measure
-    initializeGoogleMeasure(map) {
-        if (!map) return;
+    initializeGoogleMeasure() {
+        // Use getter
+        if (!this.googleMap) return;
 
-        // If already exists and is in DOM, don't recreate
         if (this.googleMeasure && this.googleMeasure.isConnected) return;
 
-        // create html element for google measure
         this.googleMeasure = document.createElement("google-measure");
-        this.googleMeasure.map = map;
+        this.googleMeasure.map = this.googleMap; // Use getter
         this.googleMeasure.mapName = "google";
-        this.googleMeasure.app = this.app;
+        this.googleMeasure.app = this.app; // Use getter
         this.googleMeasure.emitter = this.emitter;
         this.googleMeasure.stateManager = this.stateManager;
-        // append google measure to map-cesium shadow root
+
         const mapGoogle = document.querySelector("map-google");
         if (!mapGoogle) return;
         mapGoogle.shadowRoot.appendChild(this.googleMeasure);
     }
 
     // Initialize leaflet measure
-    initializeLeafletMeasure(map) {
-        if (!map) return;
+    initializeLeafletMeasure() {
+        // Use getter
+        if (!this.leafletMap) return;
 
-        // If already exists and is in DOM, don't recreate
         if (this.leafletMeasure && this.leafletMeasure.isConnected) return;
 
-        // create html element for leaflet measure
         this.leafletMeasure = document.createElement("leaflet-measure");
-        this.leafletMeasure.map = map;
+        this.leafletMeasure.map = this.leafletMap; // Use getter
         this.leafletMeasure.mapName = "leaflet";
-        this.leafletMeasure.app = this.app;
+        this.leafletMeasure.app = this.app; // Use getter
         this.leafletMeasure.emitter = this.emitter;
         this.leafletMeasure.stateManager = this.stateManager;
-        // append google measure to map-cesium shadow root
+
         const mapLeaflet = document.querySelector("map-leaflet");
         if (!mapLeaflet) return;
         mapLeaflet.shadowRoot.appendChild(this.leafletMeasure);

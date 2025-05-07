@@ -1,4 +1,4 @@
-import { Loader } from "@googlemaps/js-api-loader";
+// import { Loader } from "@googlemaps/js-api-loader";
 import {
     createPointMarker,
     createPointMarkers,
@@ -11,15 +11,44 @@ import {
 } from "../lib/helper/googleHelper.js";
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
+
+/**
+ * GoogleMeasure class for managing Google Maps measure components.
+ * This class extends the MeasureComponentBase and provides methods to add, remove, and manage map graphics such as points, polylines, polygons, and labels.
+ */
 export default class GoogleMeasure extends MeasureComponentBase {
+    /**@type {google.maps.Marker[]} */
+    #pointCollection = []; // Array to store points
+    /**@type {google.maps.Polyline[]} */
+    #polylineCollection = []; // Array to store lines
+    /**@type {google.maps.Marker[]} */
+    #labelCollection = []; // Array to store polygons
+    /**@type {google.maps.Polygon[]} */
+    #polygonCollection = []; // Array to store polygons
+
     constructor() {
         super();
+    }
+
+    get pointCollection() {
+        return this.#pointCollection;
+    }
+
+    get polylineCollection() {
+        return this.#polylineCollection;
+    }
+
+    get labelCollection() {
+        return this.#labelCollection;
+    }
+
+    get polygonCollection() {
+        return this.#polygonCollection;
     }
 
     /**
      * Adds a point marker to the map at the specified position.
      * @param {{lat:number,lng:number}} position - The position where the marker will be added
-     * @param {string} [color="#FF0000"] - The color of the marker (default is "#FF0000")
      * @param {object} [options={}] - Optional configuration for the marker
      * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|null} The created marker or null if an error occurs.
      */
@@ -53,6 +82,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
                 }
             }
 
+            // Store the point in the collection
+            point && this.#pointCollection.push(point);
+
             return point;
         } catch (error) {
             console.error("GoogleMeasure: Error in _addPointMarker:", error);
@@ -63,12 +95,18 @@ export default class GoogleMeasure extends MeasureComponentBase {
     /**
      * Adds multiple point markers to the map at the specified positions.
      * @param {{lat:number,lng:number}[]} positions 
-     * @param {string} [color="#FF0000"]
      * @param {object} [options={}] - Optional configuration for the marker
      * @returns {google.maps.marker.AdvancedMarkerElement[]|google.maps.Marker[]|null} The created marker or null if an error occurs.
      */
     _addPointMarkersFromArray(positions, options = {}) {
-        return createPointMarkers(this.map, positions, options);
+        if (!this.map || !Array.isArray(positions) || !positions.length === 0) return null;
+
+        // const points = createPointMarkers(this.map, positions, options);
+        const pointsArray = positions.map((pos) => {
+            return this._addPointMarker(pos, options);
+        }).filter(Boolean);
+
+        return pointsArray;
     }
 
     /**
@@ -78,19 +116,23 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @param {object} [options={}] - Optional configuration for the polyline
      * @returns {google.maps.Polyline|undefined} The created polyline.
      */
-    _addPolyline(positions, color = "#A52A2A", options = {}) {
-        return createPolyline(this.map, positions, color, options);
+    _addPolyline(positions, options = {}) {
+        // Create the polyline
+        const polyline = createPolyline(this.map, positions, options);
+        // Store the polyline in the collection
+        polyline && this.#polylineCollection.push(polyline);
+
+        return polyline;
     }
 
     /**
      * Adds multiple polylines to the map at the specified positions.
      * @param {{lat:number,lng:number}[]} positions - Array of position objects
-     * @param {string} [color="#A52A2A"] - The color of the polyline (default is "#A52A2A")
      * @param {object} [options={}] - Optional configuration for the polyline
      * @returns {google.maps.Polyline[]|undefined} The created polyline.
      */
-    _addPolylinesFromArray(positions, color = "#A52A2A", options = {}) {
-        return createPolylines(this.map, positions, color, options);
+    _addPolylinesFromArray(positions, options = {}) {
+        return createPolylines(this.map, positions, options);
     }
 
     /**
@@ -102,7 +144,13 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
      */
     _addLabel(positions, value, unit, options = {}) {
-        return createLabelMarker(this.map, positions, value, unit, options);
+        // Create the label
+        const label = createLabelMarker(this.map, positions, value, unit, options);
+
+        // Store the label in the collection
+        label && this.#labelCollection.push(label);
+
+        return label;
     }
 
     /**
@@ -120,12 +168,17 @@ export default class GoogleMeasure extends MeasureComponentBase {
     /**
      * Adds a polygon to the map at the specified positions.
      * @param {{lat:number,lng:number}[]} positions - Array of position objects
-     * @param {string} [color="#A52A2A"] color - The color of the polygon (default is "#A52A2A")
      * @param {object} [options={}] = - Optional configuration for the polygon
      * @returns {google.maps.Polygon|undefined} The created polygon.
      */
-    _addPolygon(positions, color = "#A52A2A", options = {}) {
-        return createPolygon(this.map, positions, color, options);
+    _addPolygon(positions, options = {}) {
+        // Create the polygon
+        const polygon = createPolygon(this.map, positions, options);
+
+        // Store the polygon in the collection
+        polygon && this.#polygonCollection.push(polygon);
+
+        return polygon;
     }
 
     /**
@@ -133,7 +186,14 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @param {google.maps.marker.AdvancedMarkerElement|google.maps.Marker} marker 
      */
     _removePointMarker(marker) {
+        // remove the overlay from the map
         removeOverlay(marker);
+
+        // remove the marker from the collection
+        const index = this.#pointCollection.indexOf(marker);
+        if (index > -1) {
+            this.#pointCollection.splice(index, 1);
+        }
     }
 
     /**
@@ -141,7 +201,14 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @param {google.maps.Polyline} polyline 
      */
     _removePolyline(polyline) {
+        // remove the overlay from the map
         removeOverlay(polyline);
+
+        // remove the polyline from the collection
+        const index = this.#polylineCollection.indexOf(polyline);
+        if (index > -1) {
+            this.#polylineCollection.splice(index, 1);
+        }
     }
 
     /**
@@ -149,7 +216,14 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @param {google.maps.marker.AdvancedMarkerElement|google.maps.Marker} label - The label marker(s) to remove
      */
     _removeLabel(label) {
+        // remove the overlay from the map
         removeOverlay(label);
+
+        // remove the label from the collection
+        const index = this.#labelCollection.indexOf(label);
+        if (index > -1) {
+            this.#labelCollection.splice(index, 1);
+        }
     }
 
     /**
@@ -157,27 +231,47 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @param {} polygon 
      */
     _removePolygon(polygon) {
+        // remove the overlay from the map
         removeOverlay(polygon);
-    }
 
-    /**
-     * Emits an 'annotation:click' event when a managed graphic is clicked.
-     * @param {object} clickInfo - Details about the clicked annotation.
-     * @param {'marker'|'polyline'|'polygon'|'label'} clickInfo.type - The type of graphic clicked.
-     * @param {any} clickInfo.graphic - The map graphic object itself.
-     * @param {{lat: number, lng: number} | null} clickInfo.mapPoint - Click coordinates.
-     * @param {string | undefined} clickInfo.dataId - The ID of the associated measurement data.
-     * @param {google.maps.MapMouseEvent | google.maps.PolylineMouseEvent} clickInfo.event - The original event.
-     */
-    _notifyAnnotationClicked(clickInfo) {
-        if (!this.emitter) {
-            console.warn("GoogleMeasure: Emitter not available, cannot emit annotation:click event.");
-            return;
+        // remove the polygon from the collection
+        const index = this.#polygonCollection.indexOf(polygon);
+        if (index > -1) {
+            this.#polygonCollection.splice(index, 1);
         }
-        console.log(`GoogleMeasure: Emitting annotation:click`, clickInfo);
-        this.emitter.emit('annotation:click', clickInfo);
     }
 
+    clearCollections() {
+        // Remove overlays from map
+        this.#pointCollection.forEach(p => removeOverlay(p));
+        this.#polylineCollection.forEach(p => removeOverlay(p));
+        this.#labelCollection.forEach(l => removeOverlay(l));
+        this.#polygonCollection.forEach(p => removeOverlay(p));
+
+        // Clear collections
+        this.#pointCollection = [];
+        this.#polylineCollection = [];
+        this.#labelCollection = [];
+        this.#polygonCollection = [];
+    }
+
+    // /**
+    //  * Emits an 'annotation:click' event when a managed graphic is clicked.
+    //  * @param {object} clickInfo - Details about the clicked annotation.
+    //  * @param {'marker'|'polyline'|'polygon'|'label'} clickInfo.type - The type of graphic clicked.
+    //  * @param {any} clickInfo.graphic - The map graphic object itself.
+    //  * @param {{lat: number, lng: number} | null} clickInfo.mapPoint - Click coordinates.
+    //  * @param {string | undefined} clickInfo.dataId - The ID of the associated measurement data.
+    //  * @param {google.maps.MapMouseEvent | google.maps.PolylineMouseEvent} clickInfo.event - The original event.
+    //  */
+    // _notifyAnnotationClicked(clickInfo) {
+    //     if (!this.emitter) {
+    //         console.warn("GoogleMeasure: Emitter not available, cannot emit annotation:click event.");
+    //         return;
+    //     }
+    //     console.log(`GoogleMeasure: Emitting annotation:click`, clickInfo);
+    //     this.emitter.emit('annotation:click', clickInfo);
+    // }
 }
 
 customElements.define("google-measure", GoogleMeasure);

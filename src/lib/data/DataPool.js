@@ -148,18 +148,17 @@ class DataPool {
 
     /**
      * Get the shallow copy of all measurement records in choose coords types.
-     * @param {String} coordType - The type of coordinates to return.
+     * @param {cartesian|cartographicDegrees|cartographic} coordType - The type of coordinates to return.
      * @returns {Array} Array of measurement records.
      */
     getAllMeasures(coordType) {
-        if (!coordType || typeof coordType !== "string") return;
+        if (!coordType || typeof coordType !== "string") return [];
 
-        if (!this._data || this._data.length === 0) return;
+        if (!this._data || this._data.length === 0) return [];
 
         // return the data, and its coordinates in cartesian3
         if (coordType === "cartesian") {
             return this._data.map(measure => {
-                console.log(measure)
                 return {
                     ...measure,
                     coordinates: measure.coordinates.map(coord => cesiumHelper.convertToCartesian3(coord))

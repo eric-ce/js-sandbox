@@ -9,7 +9,7 @@ export { TwoPointsDistanceCesium } from "./cesium/TwoPointsDistanceCesium.js";
 // export { Height } from "./Height.js";
 // export { MultiDistance } from "./MultiDistance.js";
 // export { MultiDistanceClamped } from "./MultiDistanceClamped.js";
-// export { Polygon } from "./Polygon.js";
+export { PolygonCesium } from "./cesium/PolygonCesium.js"
 // export { Profile } from "./Profile.js";
 // export { ProfileDistances } from "./ProfileDistances.js";
 // export { Picker } from "./Picker.js";
@@ -22,8 +22,11 @@ export { TwoPointsDistanceCesium } from "./cesium/TwoPointsDistanceCesium.js";
  * GOOGLE MEASURE MODES *
  ************************/
 export { TwoPointsDistanceGoogle } from "./google/TwoPointsDistanceGoogle.js";
-export { MultiDistanceGoogle } from "./google/MultiDistanceGoogle.js";
+// export { MultiDistanceGoogle } from "./google/MultiDistanceGoogle.js";
+export { PolygonGoogle } from "./google/PolygonGoogle.js";
 
 /*************************
  * LEAFLET MEASURE MODES *
  *************************/
+export { TwoPointsDistanceLeaflet } from "./leaflet/TwoPointsDistanceLeaflet.js";
+export { PolygonLeaflet } from "./leaflet/PolygonLeaflet.js";

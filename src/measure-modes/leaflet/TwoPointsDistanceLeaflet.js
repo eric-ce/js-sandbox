@@ -1,15 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { convertToLatLng, calculateMiddlePos, calculateDistance, formatMeasurementValue, areCoordinatesEqual, } from "../../lib/helper/googleHelper.js";
-import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
-
-/** @typedef {{lat: number, lng: number}} Coordinate*/
-
-/**
- * @typedef {{
- * polylines: google.maps.Polyline[],
- * labels: google.maps.OverlayView[]
- * }} InteractiveAnnotationsState
- */
+import { calculateDistance, calculateMiddlePos, formatMeasurementValue, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
+import { MeasureModeBase } from "../MeasureModeBase.js";
 
 /**
  * @typedef MeasurementGroup
@@ -23,57 +14,56 @@ import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
  * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
  */
 
-/** @typedef {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../../components/MeasureComponentBase').MeasureComponentBase} MeasureComponentBase */
-/** @typedef {import('../../lib/state/StateManager').StateManager} StateManager */
+// -- Dependencies types --
+/** @typedef {import('../../lib/data/DataPool.js').DataPool} DataPool */
+/** @typedef {import('../../lib/input/LeafletInputHandler.js').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/interaction/LeafletDragHandler.js').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.js').LeafletHighlightHandler} LeafletHighlightHandler */
 /** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/interaction/GoogleDragHandler.js').GoogleDragHandler} DragHandler */
-/** @typedef {import('../../lib/interaction/GoogleHighlightHandler.js').GoogleHighlightHandler} HighlightHandler */
+/** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
+/** @typedef {import('../../components/LeafletMeasure.js').LeafletMeasure} LeafletMeasure */
+
+/** @typedef {{domEvent:object, layer: object, leafletEvent: object, mapPoint: {lat: number, lng:number}, screenPoint: {x:number,y:number}, target: object }} EventDataState */
+/** @typedef {{polylines: L.polyline[], labels: L.tooltip[]}} InteractiveAnnotationsState */
+/** @typedef {{lat:number, lng:number}} Coordinate*/
 
 
-/**
- * Handles two-point distance measurement specifically for Google Map.
- * @extends MeasureModeGoogle
- */
-export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
-    /** @type {InteractiveAnnotationsState} */
-    #interactiveAnnotations = {
-        polylines: [], // Array to store polyline references
-        labels: [] // Array to store label references
-    }
+class TwoPointsDistanceLeaflet extends MeasureModeBase {
     /** @type {Coordinate} */
     #coordinate = null;
+    /** @type {InteractiveAnnotationsState} */
+    #interactiveAnnotations = {
+        polylines: [],
+        labels: []
+    };
     /** @type {MeasurementGroup} */
-    measure = null; // measure data used internally 
+    measure = null;
     /** @type {Coordinate[]} */
-    coordsCache = [];
+    coordCache = [];
 
     /**
-     * Creates an instance of TwoPointsDistanceGoogle.
-     * @param {GoogleMapsInputHandler} inputHandler
-     * @param {DragHandler} dragHandler
-     * @param {HighlightHandler} highlightHandler
-     * @param {MeasureComponentBase} drawingHelper
-     * @param {StateManager} stateManager
-     * @param {EventEmitter} emitter
+     * 
+     * @param {LeafletInputHandler} inputHandler 
+     * @param {LeafletDragHandler} dragHandler 
+     * @param {LeafletHighlightHandler} highlightHandler 
+     * @param {LeafletMeasure} drawingHelper 
+     * @param {StateManager} stateManager 
+     * @param {EventEmitter} emitter 
      */
     constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
         // Validate input parameters
         if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("TwoPointsDistanceGoogle requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
-        }
-        if (!google?.maps?.geometry?.spherical) {
-            throw new Error("Google Maps geometry library not loaded.");
+            throw new Error("TwoPointsDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
-        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter)
+        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
-        this.flags.isDragMode = false; // Initialize drag mode flag
+        this.flags.isDragMode = false;
 
         /** @type {MeasurementGroup} */
-        this.measure = this._createDefaultMeasure(); // Create a new measure object
+        this.measure = this._createDefaultMeasure();
     }
 
     /**********
@@ -83,17 +73,14 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         return this.#interactiveAnnotations;
     }
 
-    // get coordinate() {
-    //     return this.#coordinate;
-    // }
 
-
-    /******************
-     * EVENTS HANDLER *
-     ******************/
+    /*****************
+     * EVENT HANDLER *
+     *****************/
     /**
-     * Handles left clicks, using normalized event data.
-     * @param {NormalizedEventData} eventData - Normalized data from input handler.
+     * Handles left-click events on the map.
+     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @returns {Void}
      */
     handleLeftClick = async (eventData) => {
         // -- Validate input parameters and safety check --
@@ -134,7 +121,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                     }
                 },
                 // --- ADD MOUSEUP LISTENER HERE ---
-                mouseup: (event) => { // 'event' here is google.maps.MapMouseEvent
+                mouseup: (event) => {
                     // Check if a drag sequence was potentially active
                     if (this.dragHandler && this.dragHandler.isDragging) {
                         event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
@@ -164,11 +151,13 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         if (this.coordsCache.length === 2) {
             // update status pending annotations
-            this.pointCollection.forEach(point => {
-                if (point.id.includes(this.mode)) {
+            const pointsArray = this.pointCollection.getLayers();
+            pointsArray.forEach(point => {
+                if (point && point.id.includes(this.mode)) {
                     point.status = "completed"
                 }
             });
+
             // -- APPROACH 2: Update/ Reuse existing polyline and label --
             // -- Handle polyline --
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
@@ -197,34 +186,37 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             this.#interactiveAnnotations.labels = [];  // Clear moving labels
 
         }
-    };
+    }
 
     /**
-     * Handles mouse move, using normalized event data.
-     * @param {NormalizedEventData} eventData - Normalized data from input handler.
+     * Handles mouse move events on the map.
+     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @returns {Void}
      */
     handleMouseMove = async (eventData) => {
         if (!eventData || !eventData.mapPoint) return;
 
-        const pos = eventData.mapPoint; // Already {latitude, longitude}
+        // update coordinate
+        const pos = eventData.mapPoint;
         if (!pos) return;
         this.#coordinate = pos; // Store for later use
 
-        const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete;
+        // Handle different scenarios based on the state of the tool
+        // the condition to determine if it is measuring
+        const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete
 
         switch (true) {
             case isMeasuring:
                 if (this.coordsCache.length === 1) {
-                    // moving positions
-                    const positions = [convertToLatLng(this.coordsCache[0]), this.#coordinate];
+                    const positions = [this.coordsCache[0], pos];
 
-                    // validate positions
+                    // validate leaflet positions
                     if (!positions || positions.length === 0 || positions.some(pos => pos === null)) {
-                        console.error("Google positions are empty or invalid:", positions);
+                        console.error("Leaflet positions are empty or invalid:", positions);
                         return;
                     }
 
-                    // Moving line: update if existed, create if not existed
+                    // Moving line: remove if existed, create if not existed
                     this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
                         status: "moving",
                         color: this.stateManager.getColorState("move")
@@ -233,14 +225,16 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                     // Moving label: update if existed, create if not existed
                     this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
                         status: "moving",
+                        showBackground: false
                     });
                 }
                 break;
             default:
-                // this.handleHoverHighlighting();
+                // this.handleHoverHighlighting(pickedObjects[0]);
                 break;
         }
-    };
+    }
+
 
     /******************
      * EVENT HANDLING *
@@ -254,10 +248,19 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
     updateGraphicsOnDrag(measure) {
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
-            console.warn("GoogleDragHandler: Could not find other position for polyline update.");
+            console.warn("LeafletDragHandler: Could not find other position for polyline update.");
             return;
         }
-        const positions = [anchorPosition, this.dragHandler.coordinate];
+
+        const positions = [anchorPosition, this.dragHandler.coordinate]
+            .map(pos => convertToLatLng(pos)) // Convert each position
+            .filter(Boolean); // Remove any null results if conversion failed
+
+        // Check if we still have two valid points after filtering
+        if (positions.length < 2) {
+            console.warn("Failed to get two valid positions after conversion.");
+            return;
+        }
 
         // -- Handle polyline --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
@@ -282,7 +285,16 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             console.warn("GoogleDragHandler: Could not find other position for polyline update.");
             return;
         }
-        const positions = [anchorPosition, this.dragHandler.coordinate];
+
+        const positions = [anchorPosition, this.dragHandler.coordinate]
+            .map(pos => convertToLatLng(pos)) // Convert each position
+            .filter(Boolean); // Remove any null results if conversion failed
+
+        // Check if we still have two valid points after filtering
+        if (positions.length < 2) {
+            console.warn("Failed to get two valid positions after conversion.");
+            return;
+        }
 
         // -- Finalize Line Graphics --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
@@ -307,17 +319,18 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         return measure;
     }
 
+
     /**********
      * HELPER *
      **********/
     /**
-      * Creates a new polyline or updates an existing one based on positions.
-      * Manages the reference within the provided polylinesArray.
-      * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
-      * @param {google.maps.Polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified.
-      * @param {Object} [options={}] - Options for the line.
-      * @returns {google.maps.Polyline | null} The created or updated polyline instance, or null if failed.
-      */
+     * Creates a new polyline or updates an existing one based on positions.
+     * Manages the reference within the provided polylinesArray.
+     * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
+     * @param {L.polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified.
+     * @param {Object} [options={}] - Options for the line.
+     * @returns {L.polyline | null} The created or updated polyline instance, or null if failed.
+     */
     _createOrUpdateLine(positions, polylinesArray, options = {}) {
         // Validate positions input
         if (!Array.isArray(positions) || positions.length < 2 || !positions[0] || !positions[1]) {
@@ -350,8 +363,8 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             } else {
                 // -- Handle Polyline Visual Update --
                 // Assumes lineInstance is a valid Polyline if it exists
-                lineInstance.setPath(positions); // Update path of the line
-                lineInstance.setOptions({ strokeColor: color }); // Update color
+                lineInstance.setLatLngs(positions); // Update path of the line, requires L.latLng[]
+                lineInstance.setStyle({ color: color }); // Update color
             }
         }
         // --- Creation Block (if needed) ---
@@ -359,7 +372,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         if (!lineInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             lineInstance = this.drawingHelper._addPolyline(positions, {
                 color,
-                // Assumes this.measure.id is always available when creating
+                interactive: false,
                 id: `annotate_distance_line_${this.measure.id}`
             });
 
@@ -375,20 +388,20 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // --- Common Updates (for both existing and newly created) ---
         // -- Handle Metadata Update --
         lineInstance.status = status; // Set status
-        lineInstance.positions = positions.map(p => ({ ...p })); // Store a copy of positions
+        lineInstance.positions = positions.map(pos => ({ ...pos })); // Store a copy of positions
 
         return lineInstance; // Return the instance
     }
 
     /**
-      * Create or update the label (Google Maps Marker).
+      * Create or update the label.
       * If the label exists in labelsArray, update its position and text, else create a new one.
       * Manages the reference within the provided labelsArray.
       * @param {{lat:number,lng:number}[]} positions - Array of positions (expects 2) to calculate distance and middle point.
-      * @param {google.maps.Marker[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified.
+      * @param {L.tooltip[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified.
       * @param {Object} [options={}] - Options for the label.
       * @param {string|null} [options.status=null] - Status to set on the label instance.
-      * @return {{ distance: number, labelInstance: google.maps.Marker | null }} - The calculated distance and the created/updated label instance, or null if failed.
+      * @return {{ distance: number, labelInstance: L.tooltip | null }} - The calculated distance and the created/updated label instance, or null if failed.
       */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
         // Validate input
@@ -409,7 +422,8 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         if (!middlePos) {
             console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { distance, labelInstance: null }; // Return early if middle position is invalid
+            // Return distance but null instance if middle position calculation fails
+            return { distance, labelInstance: null };
         }
 
         let labelInstance = null;
@@ -418,34 +432,27 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         if (labelsArray.length > 0) {
             labelInstance = labelsArray[0]; // Get the reference from the array
 
-            // Check if the reference is a valid Google Maps Marker
+            // Check if the reference is a valid Tooltip instance
             if (!labelInstance) {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
                 // -- Handle Label Visual Update --
-                labelInstance.setPosition(middlePos); // update position
-                // Ensure getLabel() exists and returns an object before spreading
-                const currentLabelOptions = labelInstance.getLabel();
-                if (currentLabelOptions) {
-                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText }); // update text
-                } else {
-                    // Fallback if getLabel() is not as expected
-                    labelInstance.setLabel({ text: formattedText });
-                }
+                labelInstance.setLatLng(middlePos); // update position
+                labelInstance.setContent(formattedText); // update text
             }
         }
 
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
-                clickable: false, // Assuming labels aren't clickable by default
+                interactive: false,
                 id: `annotate_distance_label_${this.measure.id}`
             });
 
             if (!labelInstance) {
                 console.error("_createOrUpdateLabel: Failed to create new label instance.");
-                return { distance, labelInstance: null }; // Return area but null instance
+                return { distance, labelInstance: null }; // Return distance but null instance
             }
 
             // -- Handle References Update --
@@ -454,7 +461,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         if (!labelInstance) {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
-            return { area, labelInstance: null }; // Early exit if labelInstance is not valid
+            return { distance, labelInstance: null }; // Return distance but null instance
         }
 
         // -- Handle Metadata Update --
@@ -464,10 +471,6 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         return { distance, labelInstance }; // Return the newly created instance
     }
 
-
-    /*******************
-     * OVERRIDE METHOD *
-     *******************/
     /**
      * Resets values specific to the mode.
      */
@@ -476,9 +479,9 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Reset temporary coordinate cache
-        this.#coordinate = null;
-
-        this.coordsCache = []; // Clear cache
+        // Clear cache
+        this.coordsCache = [];
     }
 }
+
+export { TwoPointsDistanceLeaflet };

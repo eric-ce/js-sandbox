@@ -1,85 +1,101 @@
-import { areCoordinatesEqual, convertToUniversalCoordinate } from "../lib/helper/helper";
+/** @typedef {import('../lib/input/CesiumInputHandler.js').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../lib/interaction/CesiumDragHandler.js').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../lib/interaction/CesiumHighlightHandler.js').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
+/** @typedef {import('../lib/state/StateManager.js').StateManager} StateManager*/
+/** @typedef {import('../components/CesiumMeasure.js').CesiumMeasure} CesiumMeasure */
+/** @typedef {import('../lib/input/GoogleMapsInputHandler.js').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../lib/interaction/GoogleDragHandler.js').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../lib/interaction/GoogleHighlightHandler.js').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../components/GoogleMeasure.js').GoogleMeasure} GoogleMeasure */
+
+import { generateIdByTimestamp } from '../lib/helper/helper.js';
 
 /**
  * MeasureModeBase class is to share the common functionality between all mode based classes
  */
 class MeasureModeBase {
+    // -- Public Fields For Dependencies --
+    /** @type {string} Unique identifier for this measurement mode (e.g., "distance", "polygon"). */
+    mode;
+    /** @type {CesiumInputHandler | GoogleMapsInputHandler} The map input event handler abstraction. */
+    inputHandler;
+    /** @type {CesiumDragHandler | GoogleDragHandler | null} The drag handler abstraction (can be null). */
+    dragHandler;
+    /** @type {CesiumHighlightHandler | GoogleHighlightHandler | null} The highlight handler abstraction (can be null). */
+    highlightHandler;
+    /** @type {CesiumMeasure | GoogleMeasure} The map-specific drawing helper/manager component. */
+    drawingHelper;
+    /** @type {any} The map instance (e.g., Cesium.Viewer, google.maps.Map). */
+    map;
+    /** @type {StateManager} The application state manager. */
+    stateManager;
+    /** @type {EventEmitter} The event emitter instance. */
+    emitter;
+    /** @type {cesium | google | leaflet} The name of the map */
+    mapName;
+
+    // -- Public Fields For state and data --
+    /** @type {object} Flags to manage the state of the mode. */
+    flags = {
+        isActive: false,
+    };
+
+    // coords = {
+    //     groups: [], // Array to store measurement groups
+    //     measureCounter: 0, // Counter for labeling or indexing measurements
+    // }
+
+    /** @type {google.map.Marker[] | import('cesium').PointPrimitiveCollection}  */
+    pointCollection = []; // Array to store points
+    /** @type {google.map.Polyline[] | import('cesium').Primitive[]}  */
+    polylineCollection = []; // Array to store lines
+    /** @type {google.map.Polygon[] | import('cesium').Primitive[]}  */
+    polygonCollection = []; // Array to store polygons
+    /** @type {google.map.Marker[] | import('cesium').LabelCollection}  */
+    labelCollection = []; // Array to store polygons
+
     /**
      * 
      * @param {string} modeName - The unique identifier for this measurement mode (e.g., "distance", "area").
-     * @param {object} inputHandler - The map input event handler abstraction.
-     * @param {object | null} dragHandler - The drag handler abstraction (can be null if not used).
-     * @param {object | null} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {object} drawingHelper - The map-specific drawing helper/manager.
-     * @param {object} stateManager - The application state manager.
-     * @param {object} emitter - The event emitter instance.
+     * @param {CesiumInputHandler | GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
+     * @param {CesiumDragHandler | GoogleDragHandler | null} dragHandler - The drag handler abstraction (can be null if not used).
+     * @param {CesiumHighlightHandler | GoogleHighlightHandler | null} highlightHandler - The highlight handler abstraction (can be null if not used).
+     * @param {CesiumMeasure | GoogleMeasure} drawingHelper - The map-specific drawing helper/manager.
+     * @param {StateManager} stateManager - The application state manager.
+     * @param {EventEmitter} emitter - The event emitter instance.
      */
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
+        // -- Validate Dependencies --
         if (!modeName || typeof modeName !== 'string') {
             throw new Error("MeasureModeBase requires a valid modeName string.");
         }
         if (!inputHandler || !drawingHelper || !stateManager || !emitter) {
             throw new Error("MeasureModeBase requires inputHandler, drawingHelper, stateManager, and emitter.");
         }
+        if (!drawingHelper.map) {
+            throw new Error("MeasureModeBase requires drawingHelper to have a valid 'map' instance.");
+        }
+        if (typeof drawingHelper.mapName !== 'string') {
+            throw new Error("MeasureModeBase requires drawingHelper to have a valid 'mapName' string.");
+        }
 
-        // Initialize the mode name (e.g., "distance", "area")
-        this.mode = modeName;
-
-        // Common dependencies
+        // -- Assign Dependencies --
+        this.mode = modeName; // Initialize the mode name (e.g., "distance", "area")
         this.inputHandler = inputHandler;
-        this.dragHandler = dragHandler; // May be null
-        this.highlightHandler = highlightHandler; // May be null
+        this.dragHandler = dragHandler; // Can be null
+        this.highlightHandler = highlightHandler; // Can be null
         this.drawingHelper = drawingHelper;
-        this.map = drawingHelper.map; // Assuming drawingHelper always has a map reference
+        this.map = drawingHelper.map;
         this.stateManager = stateManager;
         this.emitter = emitter;
 
-        // Common flags (initialize with defaults)
-        this.flags = {
-            isActive: false, // Track if the mode is currently active
-            // isDrawing: false, // Track if actively placing points/drawing
-            isMeasurementComplete: false, // Track if the current measurement is finished
-            isDragMode: false, // Track if a drag operation is in progress
-            isShowLabels: true, // Common display flag
-            // Add other common flags as needed
-        };
+        this.mapName = drawingHelper.mapName; // Map name (e.g., "cesium", "google", "leaflet")
 
-        // Common coordinate/state storage
-        this.coordinate = null; // Last known coordinate from mouse move, often map-specific format
-        this.coords = {
-            cache: [], // Temporary storage for coordinates during an operation
-            groups: [], // Stores completed or ongoing MeasurementGroups managed by this instance
-            measureCounter: 0, // Counter for groups created by this instance
-            beforeDragPoint: null, // Stores the position before a drag operation starts
-            afterDragPoint: null, // Stores the position after a drag operation ends
-            // dragStart: null, // Map-specific coordinate format
-            // dragStartToCanvas: null, // {x, y} screen coordinates
-        };
-
-        // Current measurement being worked on
-        /** @type {MeasurementGroup | null} */
-        this.measure = null; // Initialize as null, created when needed
-
-        // Common structure for interactive graphics (subclasses populate with specific types)
-        this.interactivePrimitives = {
-            // Define common categories, even if empty initially
-            // movingPoints: [],
-            movingLines: [],
-            movingLabels: [],
-            // movingPolygons: [], // Example for area modes
-
-            dragPoint: null,
-            dragLines: [],
-            dragLabels: [],
-
-            hoveredPoint: null,
-            hoveredLine: null,
-            hoveredLabel: null,
-            selectedLines: [], // Example for multi-distance
-        };
-
-        // Bind methods to ensure 'this' context if needed, especially if passing directly as callbacks
-        // Arrow functions used later avoid this need for handlers like handleLeftClick
+        this.pointCollection = this.drawingHelper.pointCollection; // Array to store points
+        this.polylineCollection = this.drawingHelper.polylineCollection; // Array to store lines
+        this.polygonCollection = this.drawingHelper.polygonCollection; // Array to store polygons
+        this.labelCollection = this.drawingHelper.labelCollection; // Array to store polygons
     }
 
     /**
@@ -91,9 +107,6 @@ class MeasureModeBase {
 
         console.log(`Activating ${this.constructor.name} (mode: ${this.mode}).`);
         this.flags.isActive = true;
-        // this.flags.isDrawing = false; // Reset drawing state on activation
-        this.flags.isMeasurementComplete = false;
-        this.flags.isDragMode = false;
 
         // Reset values before attaching listeners
         this._resetValues();
@@ -106,9 +119,8 @@ class MeasureModeBase {
         this.inputHandler.on('leftdoubleclick', this.handleLeftDoubleClick); // Optional, if needed
         this.inputHandler.on('middleclick', this.handleMiddleClick);
 
-        // Activate drag handler if it exists, passing the mode instance
+        // Activate interaction handlers if they exist
         this.dragHandler?.activate(this);
-        // Activate highlight handler if it exists
         this.highlightHandler?.activate(this);
 
         // Set a default cursor (subclasses might override)
@@ -131,17 +143,18 @@ class MeasureModeBase {
         this.inputHandler.off('leftdoubleclick', this.handleLeftDoubleClick);
         this.inputHandler.off('middleclick', this.handleMiddleClick);
 
-        // Deactivate drag/highlight handlers
+        // Deactivate interaction handlers
         this.dragHandler?.deactivate();
         this.highlightHandler?.deactivate();
 
         // --- Cleanup ---
         // Call abstract methods for map-specific cleanup
-        this._removeMovingAnnotations();
-        this._removePendingAnnotations();
+        // this._removeMovingAnnotations();
+        // this._removePendingAnnotations();
 
         // Reset common state AFTER cleanup
         this._resetValues();
+
         this.flags.isActive = false; // Set inactive at the very end
 
         // Reset cursor
@@ -218,35 +231,11 @@ class MeasureModeBase {
      * Subclasses can override and call super._resetValues() to add specific resets.
      */
     _resetValues() {
-        this.coordinate = null; // Reset coordinate
+        this.resetValuesModeSpecific();
+    }
 
-        this.coords = {
-            cache: [],                              // Reset temporary coordinates
-            groups: this.coords.groups,             // Preserve existing measurement groups
-            measureCounter: this.coords.measureCounter, // Preserve the current group counter
-            dragStart: null,                        // Reset drag start position
-            dragStartToCanvas: null,                // Reset drag start canvas coordinates
-        };
-
-        this.measure = this._createDefaultMeasure(); // Reset measurement data
-
-        this.interactivePrimitives = {
-            movingPoint: null,                        // Reset moving point primitive
-            movingPoints: [],                         // Reset array of moving points
-            movingPolylines: [],                      // Reset moving polyline primitives
-            movingLabels: [],                         // Reset moving label primitives
-
-            dragPoint: null,                          // Reset currently dragged point primitive
-            dragPoints: [],                           // Reset array of dragged points
-            dragPolylines: [],                        // Reset dragging polyline primitives
-            dragLabels: [],                           // Reset dragging label primitives
-
-            hoveredPoint: null,                       // Reset hovered point
-            hoveredLabel: null,                       // Reset hovered label
-            hoveredLine: null,                        // Reset hovered line
-
-            selectedLines: this.interactivePrimitives.selectedLines, // Preserve currently selected lines
-        };
+    resetValuesModeSpecific() {
+        console.warn("resetValuesModeSpecific: needs to override this method in the subclass");
     }
 
     /**
@@ -255,39 +244,37 @@ class MeasureModeBase {
      */
     _createDefaultMeasure() {
         // Ensure drawingHelper and mapName are available
-        const mapName = this.drawingHelper?.mapName || 'unknown';
         return {
-            id: null, // Will be generated later
+            id: generateIdByTimestamp(),
             mode: this.mode,
             coordinates: [],
-            labelNumberIndex: this.coords.measureCounter, // Use counter for potential labeling
             status: "pending",
             _records: [],
             interpolatedPoints: [],
-            mapName: mapName,
+            mapName: this.mapName ?? "unknown",
         };
     }
 
-    /**
-     * Finds a measurement group managed by this instance that contains the given coordinate.
-     * Assumes coordinate is in the map-specific format used in `group.coordinates`.
-     * @param {object} coordinate - The map-specific coordinate to search for.
-     * @returns {MeasurementGroup | undefined} - The found group or undefined.
-     * @protected
-     */
-    _findMeasureByCoordinate(coordinate) {
-        if (!coordinate || !Array.isArray(this.coords?.groups)) {
-            return undefined;
-        }
-        return this.coords.groups.find(group =>
-            group.coordinates.some(cart => this._areCoordinatesEqual(cart, coordinate))
-        );
-    }
+    // /**
+    //  * Finds a measurement group managed by this instance that contains the given coordinate.
+    //  * Assumes coordinate is in the map-specific format used in `group.coordinates`.
+    //  * @param {object} coordinate - The map-specific coordinate to search for.
+    //  * @returns {MeasurementGroup | undefined} - The found group or undefined.
+    //  * @protected
+    //  */
+    // _findMeasureByCoordinate(coordinate) {
+    //     if (!coordinate || !Array.isArray(this.coords?.groups)) {
+    //         return undefined;
+    //     }
+    //     return this.coords.groups.find(group =>
+    //         group.coordinates.some(cart => this._areCoordinatesEqual(cart, coordinate))
+    //     );
+    // }
 
-    // Compares two coordinates to check if they are equal.
-    _areCoordinatesEqual(coordinate1, coordinate2) {
-        console.warn(`_areCoordinatesEqual not implemented in ${this.constructor.name}`);
-    }
+    // // Compares two coordinates to check if they are equal.
+    // _areCoordinatesEqual(coordinate1, coordinate2) {
+    //     console.warn(`_areCoordinatesEqual not implemented in ${this.constructor.name}`);
+    // }
 }
 
 export { MeasureModeBase };

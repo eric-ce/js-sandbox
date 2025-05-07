@@ -1,5 +1,17 @@
 import { MeasureModeBase } from "../MeasureModeBase.js";
-import { convertToLatLng } from "../../lib/helper/googleHelper.js";
+import { areCoordinatesEqual, convertToLatLng } from "../../lib/helper/googleHelper.js";
+import dataPool from "../../lib/data/DataPool.js";
+
+
+/** @typedef {import('../../lib/input/GoogleMapsInputHandler.js').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../../lib/interaction/GoogleDragHandler.js').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../../lib/interaction/GoogleHighlightHandler.js').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
+/** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
+/** @typedef {import('../../components/GoogleMeasure.js').GoogleMeasure} GoogleMeasure */
+
+/** @typedef {lat:number, lng:number | latitude: number, longitude: number, height: number} Coordinate */
+
 
 /**
  * Shared functionality between modes in Google Maps.
@@ -7,39 +19,45 @@ import { convertToLatLng } from "../../lib/helper/googleHelper.js";
  * Common shared helper function should be declared in `googleHelper.js`, This is mainly for logic override when needed.
  */
 class MeasureModeGoogle extends MeasureModeBase {
+    /**
+     * 
+     * @param {string} modeName - The name of the mode (e.g., "Point", "Line", "Polygon")
+     * @param {GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
+     * @param {GoogleDragHandler} dragHandler - The drag handler abstraction (can be null if not used).
+     * @param {GoogleHighlightHandler} highlightHandler - The highlight handler abstraction (can be null if not used).
+     * @param {GoogleMeasure} drawingHelper - The map-specific drawing helper/manager.
+     * @param {StateManager} stateManager - The application state manager.
+     * @param {EventEmitter} emitter - The event emitter instance.
+     */
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
-
-
-
     }
-
 
     /**
-     * Compare two coordinates for equality.
-     * @param {google.maps.LatLng | {latitude: number, longitude: number} | {lat:number,lng:number} | {lat:number, lon:number}} coord1 
-     * @param {google.maps.LatLng | {latitude: number, longitude: number} | {lat:number,lng:number} | {lat:number, lon:number}} coord2 
-     * @returns {boolean} - Returns true if the coordinates are equal, false otherwise
+     * Find and handle the measure data from dataPool
+     * @param {google.maps.LatLng | {latitude: number, longitude: number} | {lat:number,lng:number}} coordinate - The coordinate to find the measure data. 
+     * @returns {MeasurementGroup} - returns a cloned measure object with converted google coordinates
      */
-    _areCoordinatesEqual(coord1, coord2) {
-        // validate coord1 and coord2
-        if (!coord1 || !coord2) {
-            console.error("Invalid coordinates provided for comparison.");
-            return false;
-        }
+    _findMeasureByCoordinate(coordinate) {
+        if (!coordinate) return null;
 
-        const latLng1 = convertToLatLng(coord1);
-        const latLng2 = convertToLatLng(coord2);
+        // Convert input coordinate to lat lng object
+        const latLng = { ...convertToLatLng(coordinate) };
+        if (!latLng) return null;
 
-        // Only compare if both conversions were successful and resulted in valid LatLng objects
-        if (latLng1 && latLng2) {
-            return latLng1.equals(latLng2);
-        }
+        const data = dataPool.getAllMeasures("cartographicDegrees");
+        if (Array.isArray(data) && data.length === 0) return null;
 
-        // If either conversion failed, consider them not equal
-        return false;
+        const measure = data.find(measure => {
+            if (measure.mapName !== this.mapName) return false; // Check if the measure belongs to the current map
+            return measure.coordinates.some(coord => areCoordinatesEqual(coord, latLng));
+        })
+        if (!measure) return null;
+
+        const coordinates = measure.coordinates.map(coord => convertToLatLng(coord));
+
+        return { ...measure, coordinates }; // Return a new object with the coordinates converted to Google format
     }
-
 }
 
 export { MeasureModeGoogle };
