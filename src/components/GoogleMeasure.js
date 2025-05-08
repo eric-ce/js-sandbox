@@ -1,23 +1,25 @@
 // import { Loader } from "@googlemaps/js-api-loader";
 import {
     createPointMarker,
-    createPointMarkers,
     createPolyline,
-    createPolylines,
     createPolygon,
-    createLabelMarkers,
     createLabelMarker,
     removeOverlay
 } from "../lib/helper/googleHelper.js";
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
 
+/** @typedef {google.maps.Marker} Marker */
+/** @typedef {google.maps.Polyline} Polyline */
+/** @typedef {google.maps.Polygon} Polygon */
+/** @typedef {google.maps.marker.AdvancedMarkerElement} AdvancedMarkerElement */
+
 /**
  * GoogleMeasure class for managing Google Maps measure components.
  * This class extends the MeasureComponentBase and provides methods to add, remove, and manage map graphics such as points, polylines, polygons, and labels.
  */
 export default class GoogleMeasure extends MeasureComponentBase {
-    /**@type {google.maps.Marker[]} */
+    /**@type {Marker[]} */
     #pointCollection = []; // Array to store points
     /**@type {google.maps.Polyline[]} */
     #polylineCollection = []; // Array to store lines
@@ -96,10 +98,10 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * Adds multiple point markers to the map at the specified positions.
      * @param {{lat:number,lng:number}[]} positions 
      * @param {object} [options={}] - Optional configuration for the marker
-     * @returns {google.maps.marker.AdvancedMarkerElement[]|google.maps.Marker[]|null} The created marker or null if an error occurs.
+     * @returns {AdvancedMarkerElement[]|Marker[]|null} The created marker or null if an error occurs.
      */
     _addPointMarkersFromArray(positions, options = {}) {
-        if (!this.map || !Array.isArray(positions) || !positions.length === 0) return null;
+        if (!this.map || !Array.isArray(positions)) return null;
 
         // const points = createPointMarkers(this.map, positions, options);
         const pointsArray = positions.map((pos) => {
@@ -112,13 +114,16 @@ export default class GoogleMeasure extends MeasureComponentBase {
     /**
      * Adds a polyline to the map at the specified positions.
      * @param {{lat:number,lng:number}[]} positions - Array of position objects
-     * @param {string} [color="#A52A2A"] - The color of the polyline (default is "#A52A2A")
      * @param {object} [options={}] - Optional configuration for the polyline
-     * @returns {google.maps.Polyline|undefined} The created polyline.
+     * @returns {Polyline | null} The created polyline.
      */
     _addPolyline(positions, options = {}) {
+        if (!this.map || !Array.isArray(positions) || positions.length < 2) return null;
+
         // Create the polyline
         const polyline = createPolyline(this.map, positions, options);
+        if (!polyline) return null;
+
         // Store the polyline in the collection
         polyline && this.#polylineCollection.push(polyline);
 
@@ -129,10 +134,25 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * Adds multiple polylines to the map at the specified positions.
      * @param {{lat:number,lng:number}[]} positions - Array of position objects
      * @param {object} [options={}] - Optional configuration for the polyline
-     * @returns {google.maps.Polyline[]|undefined} The created polyline.
+     * @returns {Polyline[]|[]} The created polyline.
      */
     _addPolylinesFromArray(positions, options = {}) {
-        return createPolylines(this.map, positions, options);
+        if (!this.map || !Array.isArray(positions) || positions.length < 2) return [];
+
+
+        // Create the polylines instance
+        const addedPolylines = [];
+
+        // Iterate through the positions array, 2 positions as a pair
+        for (let i = 0; i < positions.length - 1; i += 2) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the polyline
+            const polyline = this._addPolyline(positionsPair, options);
+            if (polyline) {
+                addedPolylines.push(polyline);
+            }
+        }
+
+        return addedPolylines; // Return the array of successfully added polylines
     }
 
     /**
@@ -141,11 +161,14 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @param {number|string} value - The value to display on the label marker
      * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
      * @param {object} [options={}] - Optional configuration for the label marker
-     * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
+     * @returns {AdvancedMarkerElement | Marker | null} The created marker.
      */
     _addLabel(positions, value, unit, options = {}) {
+        if (!this.map || !Array.isArray(positions)) return null;
+
         // Create the label
         const label = createLabelMarker(this.map, positions, value, unit, options);
+        if (!label) return null;
 
         // Store the label in the collection
         label && this.#labelCollection.push(label);
@@ -159,21 +182,36 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @param {number[]|string[]} valueArray - Array of values to display on the label markers
      * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
      * @param {object} [options={}] - Optional configuration for the label markers
-     * @returns {google.maps.marker.AdvancedMarkerElement[]|google.maps.Marker[]|undefined} The created marker.
+     * @returns {AdvancedMarkerElement[] | Marker[] | []} The created marker.
      */
     _addLabelsFromArray(positions, valueArray, unit, options = {}) {
-        return createLabelMarkers(this.map, positions, valueArray, unit, options);
+        if (!this.map || !Array.isArray(positions)) return [];
+
+        // Create the label primitives
+        const addedLabels = [];
+        // Iterate through the positions array, 2 positions as a pair
+        for (let i = 0; i < positions.length - 1; i += 2) {
+            const label = this._addLabel([positions[i], positions[i + 1]], valueArray[i], unit, options);
+            if (label) {
+                addedLabels.push(label);
+            }
+        }
+
+        return addedLabels; // Return the array of successfully added labels
     }
 
     /**
      * Adds a polygon to the map at the specified positions.
      * @param {{lat:number,lng:number}[]} positions - Array of position objects
      * @param {object} [options={}] = - Optional configuration for the polygon
-     * @returns {google.maps.Polygon|undefined} The created polygon.
+     * @returns {Polygon|null} The created polygon.
      */
     _addPolygon(positions, options = {}) {
+        if (!this.map || !Array.isArray(positions) || positions.length < 3) return null;
+
         // Create the polygon
         const polygon = createPolygon(this.map, positions, options);
+        if (!polygon) return null;
 
         // Store the polygon in the collection
         polygon && this.#polygonCollection.push(polygon);
@@ -183,7 +221,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
     /**
      * Removes a point marker from the map.
-     * @param {google.maps.marker.AdvancedMarkerElement|google.maps.Marker} marker 
+     * @param {AdvancedMarkerElement|Marker} marker 
      */
     _removePointMarker(marker) {
         // remove the overlay from the map
@@ -198,7 +236,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
     /**
      * Removes a polyline from the map.
-     * @param {google.maps.Polyline} polyline 
+     * @param {Polyline} polyline 
      */
     _removePolyline(polyline) {
         // remove the overlay from the map
@@ -213,7 +251,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
     /**
      * Removes a label marker from the map.
-     * @param {google.maps.marker.AdvancedMarkerElement|google.maps.Marker} label - The label marker(s) to remove
+     * @param {AdvancedMarkerElement|Marker} label - The label marker(s) to remove
      */
     _removeLabel(label) {
         // remove the overlay from the map
@@ -228,7 +266,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
     /**
      * Removes a polygon from the map.
-     * @param {} polygon 
+     * @param {Polygon} polygon - The polygon to remove 
      */
     _removePolygon(polygon) {
         // remove the overlay from the map
@@ -241,6 +279,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
         }
     }
 
+    /**
+     * Clears all collections of points, polylines, labels, and polygons from the map.
+     */
     clearCollections() {
         // Remove overlays from map
         this.#pointCollection.forEach(p => removeOverlay(p));

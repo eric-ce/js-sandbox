@@ -49,8 +49,8 @@ export default class LeafletMeasure extends MeasureComponentBase {
     // Implementation of abstract methods from the base class
     _addPointMarker(position, options = {}) {
         // -- Validate dependencies --
-        if (!this.#pointCollection) {
-            console.warn("LeafletMeasure: Point collection not initialized.");
+        if (!this.map || !position) {
+            console.warn("LeafletMeasure: Failed to add point marker. Map or position is not defined.");
             return null;
         }
 
@@ -104,16 +104,13 @@ export default class LeafletMeasure extends MeasureComponentBase {
     }
 
     _addPointMarkersFromArray(positions, options = {}) {
-        if (!this.#pointCollection) {
+        if (!this.map || !Array.isArray(positions) || positions.length === 0) {
             console.warn("LeafletMeasure: Point collection not initialized for bulk add.");
             return []; // Return empty array on failure
         }
-        if (!Array.isArray(positions) || positions.length === 0) {
-            console.warn("LeafletMeasure: Invalid or empty positions array for _addPointMarkersFromArray.");
-            return [];
-        }
 
         const addedMarkers = [];
+
         positions.forEach(pos => {
             // Call the single marker method for each position
             // Pass the common options object
@@ -124,15 +121,17 @@ export default class LeafletMeasure extends MeasureComponentBase {
             // If _addPointMarker returns null, it's skipped
         });
 
+
         return addedMarkers; // Return the array of successfully added markers
     }
 
     _addPolyline(positions, options = {}) {
         // -- Validate dependencies --
-        if (!this.#polylineCollection || !Array.isArray(positions) || positions.length < 2) {
+        if (!this.map || !Array.isArray(positions) || positions.length < 2) {
             console.error("Invalid positions array for polyline:", positions);
             return null;
         }
+
         // Default options
         const {
             status = null,
@@ -150,30 +149,29 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return polyline;
     }
 
-    _addPolylinesFromArray(positionsArray, color = "#A52A2A", options = {}) {
-        if (!this.#polylineCollection) {
-            console.warn("LeafletMeasure: Polyline collection not initialized for bulk add.");
-            return []; // Return empty array on failure
-        }
-        if (!Array.isArray(positionsArray) || positionsArray.length === 0) {
+    _addPolylinesFromArray(positionsArray, options = {}) {
+        if (!this.map || !Array.isArray(positionsArray) || positionsArray.length === 0) {
             console.warn("LeafletMeasure: Invalid or empty positions array for _addPolylinesFromArray.");
             return [];
         }
 
+        // Create the polyline
         const addedPolylines = [];
-        positionsArray.forEach(positions => {
-            const polyline = this._addPolyline(positions, color, options);
+        // Iterate over the positions array in pairs, 2 positions as a pair
+        for (let i = 0; i < positionsArray.length - 1; i += 2) {
+            const positions = positionsArray.slice(i, i + 2); // Get two positions for the polyline
+            const polyline = this._addPolyline(positions, options);
             if (polyline) {
                 addedPolylines.push(polyline);
             }
-        });
+        }
 
         return addedPolylines;
     }
 
     _addPolygon(positions, options = {}) {
         // -- Validate dependencies --
-        if (!this.#polygonCollection || !Array.isArray(positions) || positions.length < 3) {
+        if (!this.map || !Array.isArray(positions) || positions.length < 3) {
             console.error("Invalid positions array for polygon:", positions);
             return null;
         }
@@ -196,7 +194,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
 
     _addLabel(positions, value, unit, options) {
         // -- Validate dependencies --
-        if (!this.#labelCollection) {
+        if (!this.map || !Array.isArray(positions) || positions.length === 0) {
             console.error("Label collection is not initialized.");
             return null;
         }
@@ -218,26 +216,22 @@ export default class LeafletMeasure extends MeasureComponentBase {
     }
 
     _addLabelsFromArray(positionsArray, valueArray, unit, options = {}) {
-        if (!this.#labelCollection) {
-            console.warn("LeafletMeasure: Label collection not initialized for bulk add.");
-            return [];
-        }
-        if (!Array.isArray(positionsArray) || !Array.isArray(valueArray) || positionsArray.length !== valueArray.length) {
+        if (!this.map || !Array.isArray(positionsArray) || !Array.isArray(valueArray)) {
             console.warn("LeafletMeasure: Invalid or mismatched positions/value arrays for _addLabelsFromArray.");
             return [];
         }
 
+        // Create the label
         const addedLabels = [];
-        for (let i = 0; i < positionsArray.length; i++) {
-            const pos = positionsArray[i];
-            const value = valueArray[i];
-            const label = this._addLabel(pos, value, unit, options);
+        // Iterate over the positions array in pairs, 2 positions as a pair
+        for (let i = 0; i < positionsArray.length - 1; i += 2) {
+            const label = this._addLabel([positionsArray[i], positionsArray[i + 1]], valueArray[i], unit, options);
             if (label) {
                 addedLabels.push(label);
             }
         }
 
-        return addedLabels;
+        return addedLabels; // Return the array of successfully added polylines
     }
 
     _removePointMarker(marker) {

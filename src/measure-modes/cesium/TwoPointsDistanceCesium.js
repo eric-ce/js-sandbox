@@ -22,7 +22,6 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
 // -- Data types -- 
 /** @typedef {{polylines: Primitive[], labels: Label[]}} InteractiveAnnotationsState */
-/** @typedef {{domEvent:object, mapPoint: Cartesian3, pickedFeature: any[], screenPoint: Cartesian2}} EventDataState */
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -33,6 +32,13 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
  * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
  * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
+ */
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {Cartesian3} mapPoint - The point on the map where the event occurred
+ * @property {any[]} pickedFeature - The feature that was picked at the event location
+ * @property {Cartesian2} screenPoint - The screen coordinates of the event
  */
 
 // -- Dependencies types --
@@ -115,7 +121,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
      ********************/
     /**
      * Handles left-click events on the map.
-     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
      * @returns {Void}
      */
     handleLeftClick = async (eventData) => {
@@ -246,7 +252,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
      ***********************/
     /**
      * Handles mouse move events on the map.
-     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
      * @returns {Void}
      */
     handleMouseMove = async (eventData) => {
@@ -270,7 +276,14 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         switch (true) {
             case isMeasuring:
                 if (this.coordsCache.length === 1) {
-                    const positions = [this.coordsCache[0], cartesian];
+                    const positions = [this.coordsCache[0], cartesian].filter(Boolean); // Filter out any undefined values
+
+                    // Validate cesium positions
+                    if (positions.length < 2) {
+                        console.error("Cesium positions are empty or invalid:", positions);
+                        return;
+                    }
+
                     // Moving line: remove if existed, create if not existed
                     this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
                         status: "moving",

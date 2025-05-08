@@ -2,15 +2,19 @@ import dataPool from "../../lib/data/DataPool.js";
 import { convertToLatLng, calculateMiddlePos, calculateDistance, formatMeasurementValue, areCoordinatesEqual, } from "../../lib/helper/googleHelper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
-/** @typedef {{lat: number, lng: number}} Coordinate*/
+/** @typedef {{lat: number, lng: number}} LatLng */
 
 /**
- * @typedef {{
- * polylines: google.maps.Polyline[],
- * labels: google.maps.OverlayView[]
- * }} InteractiveAnnotationsState
+ * @typedef InteractiveAnnotationsState
+ * @property {google.maps.Polyline[]} polylines
+ * @property {google.maps.OverlayView[]} labels
  */
-
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
+ * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
+ */
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -41,11 +45,11 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         polylines: [], // Array to store polyline references
         labels: [] // Array to store label references
     }
-    /** @type {Coordinate} */
+    /** @type {LatLng} */
     #coordinate = null;
     /** @type {MeasurementGroup} */
     measure = null; // measure data used internally 
-    /** @type {Coordinate[]} */
+    /** @type {LatLng[]} */
     coordsCache = [];
 
     /**
@@ -94,6 +98,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
     /**
      * Handles left clicks, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
+     * @returns {Promise<void>}
      */
     handleLeftClick = async (eventData) => {
         // -- Validate input parameters and safety check --
@@ -202,6 +207,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
     /**
      * Handles mouse move, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
+     * @returns {Promise<void>}
      */
     handleMouseMove = async (eventData) => {
         if (!eventData || !eventData.mapPoint) return;
@@ -216,7 +222,13 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             case isMeasuring:
                 if (this.coordsCache.length === 1) {
                     // moving positions
-                    const positions = [convertToLatLng(this.coordsCache[0]), this.#coordinate];
+                    const positions = [convertToLatLng(this.coordsCache[0]), this.#coordinate].filter(Boolean);
+
+                    // Validate google positions
+                    if (positions.length < 2) {
+                        console.error("Google positions are empty or invalid:", positions);
+                        return;
+                    }
 
                     // validate positions
                     if (!positions || positions.length === 0 || positions.some(pos => pos === null)) {

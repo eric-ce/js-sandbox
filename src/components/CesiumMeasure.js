@@ -3,7 +3,7 @@ import {
     BlendOption,
 } from "cesium";
 
-import { createPointPrimitive, createPolylinePrimitive, createPolylinePrimitivesFromArray, createPointPrimitivesFromArray, createLabelPrimitive, createLabelPrimitivesFromArray, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive } from "../lib/helper/cesiumHelper.js";
+import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive } from "../lib/helper/cesiumHelper.js";
 // import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon } from '../assets/icons.js';
 // import { LogTable } from './shared/LogTable.js';
 // import { HelpTable } from './shared/HelpTable.js';
@@ -22,6 +22,7 @@ import { MeasureComponentBase } from "./MeasureComponentBase.js";
 /**
  * CesiumMeasure class to provide measurement functionalities in Cesium.
  * Overrides methods from MeasureComponentBase to implement Cesium-specific features.
+ * @extends MeasureComponentBase
  */
 export default class CesiumMeasure extends MeasureComponentBase {
     // --- Private Fields ---
@@ -208,42 +209,25 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
     /**
      * Adds multiple polylines to the map at the specified positions.
-     * @param {Cartesian3[]} positionsArray - Array of positions where the polyline will be added
+     * @param {Cartesian3[]} positions - Array of positions where the polyline will be added
      * @param {object} options - Options for the polyline primitives
      * @returns {Primitive[]} The created polyline primitives or null if an error occurs.
      */
-    _addPolylinesFromArray(positionsArray, options = {}) {
+    _addPolylinesFromArray(positions, options = {}) {
         if (!this.cesiumPkg || !this.map || !this.stateManager) return null; // Ensure dependencies are available
 
         // Get the line positions, use clamp position if height is 0
-        const noHeight = positionsArray.some(pos => pos.height === 0);
-        const linePositions = noHeight ? this._getClampedPositions(positionsArray) : positionsArray;
+        const noHeight = positions.some(pos => pos.height === 0);
+        const linePositions = noHeight ? this._getClampedPositions(positions) : positions;
         if (!linePositions || linePositions.length < 2) return null;
 
-        // // Create the polyline primitives
-        // const polylinesArray = createPolylinePrimitivesFromArray(
-        //     this.cesiumPkg.Primitive,
-        //     linePositions,
-        //     {
-        //         // Ensure stateManager is available before accessing getColorState
-        //         color: this.stateManager ? this.stateManager.getColorState("line") : undefined, // Provide fallback or handle error
-        //         ...options
-        //     }
-        // );
-        // if (!Array.isArray(polylinesArray)) return null;
-        // const polylinePrimitives = polylinesArray.map(polyline => this.map.scene.primitives.add(polyline));
-        // return polylinePrimitives;
+        // Create the polyline primitives
         const addedPolylines = [];
-        // positionsArray.forEach(pos => {
-        //     const polyline = this._addPolyline(pos, options);
-        //     if (polyline) {
-        //         addedPolylines.push(polyline);
-        //     }
-        // })
-        // positionsArray is an array contains all coordinates so it needs to split for every 2 postions to create a polyline
-        for (let i = 0; i < positionsArray.length - 1; i += 2) {
-            const positions = positionsArray.slice(i, i + 2); // Get two positions for the polyline
-            const polyline = this._addPolyline(positions, options);
+
+        // Iterate through the positions array, 2 positions as a pair
+        for (let i = 0; i < positions.length - 1; i += 2) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the polyline
+            const polyline = this._addPolyline(positionsPair, options);
             if (polyline) {
                 addedPolylines.push(polyline);
             }
@@ -314,7 +298,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // Create the label primitives
         const addedLabels = [];
-
+        // Iterate through the positions array, 2 positions as a pair
         for (let i = 0; i < positionsArray.length - 1; i += 2) {
             const label = this._addLabel([positionsArray[i], positionsArray[i + 1]], valueArray[i], unit, options);
             if (label) {
@@ -322,7 +306,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
             }
         }
 
-        return addedLabels; // Return the array of successfully added polylines
+        return addedLabels; // Return the array of successfully added labels
     }
 
     /**

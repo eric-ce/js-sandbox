@@ -4,8 +4,17 @@ import { Color } from "cesium";
 
 /** @typedef {import('cesium').Primitive} Primitive */
 
-class CesiumHighlightHandler {
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {Cartesian3} mapPoint - The point on the map where the event occurred
+ * @property {any[]} pickedFeature - The feature that was picked at the event location
+ * @property {Cartesian2} screenPoint - The screen coordinates of the event
+ */
 
+
+
+class CesiumHighlightHandler {
     viewer;
     inputHandler;
     emitter;
@@ -70,12 +79,17 @@ class CesiumHighlightHandler {
 
     /**
      * Handle mouse move over to highlight and move out to unhighlight the primitive.
-     * @param {*} eventData - The event data from the input handler. 
-     * @returns {void} 
+     * @param {NormalizedEventData} eventData - The event data from the input handler. 
+     * @returns {Promise<void>}
      */
     handleMoveOverHightlight = async (eventData) => {
         // -- Validate dependencies --
-        if (!Array.isArray(eventData.pickedFeature) || eventData.pickedFeature.length === 0) return; // No picked feature, exit early
+        const { pickedFeature } = eventData;
+        if (!Array.isArray(pickedFeature)) return; // No picked feature, exit early
+        if (pickedFeature.length === 0) {
+            // reset highlighting
+            this._resetAllHighlights();
+        }
 
         // -- Conditions to PREVENT highlight --
         if (this.activeModeInstance.flags.isDragMode ||
@@ -84,12 +98,10 @@ class CesiumHighlightHandler {
         ) return;
 
         // -- Picked object -- 
-        const pickedObject = eventData.pickedFeature[0];
+        const pickedObject = pickedFeature[0];
 
         const newHoveredPrimitive = pickedObject?.primitive;
-        if (!newHoveredPrimitive) return; // No primitive, exit early
-
-        const newHoveredObjectType = newHoveredPrimitive ? getPickedObjectType(pickedObject, this.activeModeInstance.mode) : null;
+        const newHoveredObjectType = getPickedObjectType(pickedObject, this.activeModeInstance.mode);
 
         const oldHoveredPrimitive = this.currentlyHoveredPrimitive;
         const oldHoveredObjectType = this.currentHoverType;
@@ -120,6 +132,11 @@ class CesiumHighlightHandler {
         }
     }
 
+    /**
+     * Handle left click to select to highlight the primitive
+     * @param {NormalizedEventData} eventData - The event data from the input handler.
+     * @returns {Promise<void>}
+     */
     handleClickToSelect = (eventData) => {
         // -- Conditions to PREVENT highlight --
         if (this.activeModeInstance.flags.isDragMode ||
@@ -133,8 +150,13 @@ class CesiumHighlightHandler {
         // If a hovered item is clicked, it should become selected, and hover style might be overridden by select style.
         console.log("handleClickToSelect - To be implemented");
     }
-
-    // --- Helper to ensure original style is stored ---
+    /**
+     * Ensure the original style of the primitive is stored in the map.
+     * Helper method
+     * @param {Primitive} primitive 
+     * @param {"label"|"point"|"line"|"polygon"} primitiveType 
+     * @returns 
+     */
     _ensureOriginalStyleStored(primitive, primitiveType) {
         if (!primitive || this.originalStylesMap.has(primitive)) {
             return;

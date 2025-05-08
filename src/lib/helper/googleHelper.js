@@ -238,7 +238,7 @@ export function createPointMarkers(map, positions, options = {}) {
  */
 export function createPolyline(map, positions, options = {}) {
     // -- Validate input params --
-    if (!map || !Array.isArray(positions) || positions.length !== 2) return;
+    if (!map || !Array.isArray(positions) || positions.length !== 2) return null;
 
     // -- Convert positions to {lat, lng} format -- 
     const linePositions = positions
@@ -280,6 +280,8 @@ export function createPolyline(map, positions, options = {}) {
         clickable,
         ...polylineOptions,
     });
+
+    if (!polylineInstance) return null; // Handle error if polyline creation fails
 
     // -- Store custom meta data --
     polylineInstance.positions = positions.map(pos => ({ ...pos }));    // Store positions data

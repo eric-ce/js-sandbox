@@ -377,7 +377,6 @@ export function createPointPrimitive(coordinate, options = {}) {
     const {
         pixelSize = 10,
         color = "rgba(255,0,0,1)",  // for color options: need to use Cesium.Color
-        disableDepthTestDistance = Number.POSITIVE_INFINITY,
         id = "annotate_point",
         ...rest
     } = options;
@@ -393,7 +392,7 @@ export function createPointPrimitive(coordinate, options = {}) {
         position: cartesian,
         pixelSize,
         color: Color.fromCssColorString(color), // for color options: need to use Cesium.Color
-        disableDepthTestDistance,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
         id,
         ...rest
     };
@@ -547,6 +546,7 @@ export function createGroundPolylinePrimitive(coordinateArray, modeString, color
     const material = new Cesium.Material.fromType('Color', { color: color });
     const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
 
+    // -- Create the line primitive --
     const polylinePrimitive = new GroundPolylinePrimitive({
         geometryInstances: geometryInstance,
         appearance: appearance,
@@ -554,8 +554,8 @@ export function createGroundPolylinePrimitive(coordinateArray, modeString, color
         releaseGeometryInstances: true,
     });
     polylinePrimitive.isSubmitted = false;
-    // FIXME: consider using other property to store the id as the layer primitive also has id property
-    // polylinePrimitive.annotateId = generateId(convertedCoordinates, modeString);
+
+    // Add metadata to the polyline primitive
     polylinePrimitive.id = generateId(convertedCoordinates, modeString);
     polylinePrimitive.positions = convertedCoordinates;
 
@@ -577,13 +577,19 @@ export function createLabelPrimitive(coordinates, value, unit = "meter", options
         return null;
     }
 
+    const {
+        fillColor = "rgba(255, 255, 255, 1)",
+        showBackground = true,
+        backgroundColor = "rgba(0, 0, 0, 0.5)",
+        ...rest // other options
+    } = options
+
     // --- Coordinate Conversion ---
     const cartesianArray = coordinates.map((pos) => convertToCartesian3(pos)).filter(Boolean);
     if (!Array.isArray(cartesianArray) || cartesianArray.length === 0) {
         console.error("Convert Cartesian3 failed, check passed coordinate.");
         return null;
     }
-
 
     // --- Center Calculation (Conditional) ---
     let position;
@@ -593,6 +599,7 @@ export function createLabelPrimitive(coordinates, value, unit = "meter", options
         // Case 1: Single point
         position = cartesianArray[0];
     } else {
+        // Case 2: Multiple points: two points (middle point), three or more points (center of bounding sphere)
         position = calculateMiddlePos(cartesianArray);
     }
 
@@ -609,31 +616,21 @@ export function createLabelPrimitive(coordinates, value, unit = "meter", options
         labelString = value.toString();
     }
 
-    // --- Default Label Options ---
-    const defaultOptions = {
+    return {
+        position: position,
+        text: labelString,
         pixelOffset: new Cesium.Cartesian2(0, -20),
         font: "14px Roboto, sans-serif",
-        fillColor: Cesium.Color.fromCssColorString("rgba(255, 255, 255, 1)"),
+        fillColor: Cesium.Color.fromCssColorString(fillColor),
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        showBackground: true,
-        backgroundColor: Cesium.Color.fromCssColorString('rgba(0, 0, 0, 0.5)'),
+        showBackground,
+        backgroundColor: Cesium.Color.fromCssColorString(backgroundColor),
         scale: 1.2,
         scaleByDistance: new Cesium.NearFarScalar(1000.0, 1.0, 20000.0, 0.5),
         style: Cesium.LabelStyle.FILL,
         disableDepthTestDistance: Number.POSITIVE_INFINITY, // Disable depth test to always show on top
-
-    };
-    // --- Merge Options and Return ---
-    const labelOptions = {
-        ...defaultOptions,
-        ...options,
-    };
-
-    return {
-        position: position,
-        text: labelString,
-        ...labelOptions
+        ...rest // other options
     };
 }
 
@@ -654,9 +651,9 @@ export function createPolygonPrimitive(Primitive, coordinateArray, options = {})
     const {
         polygonGeometry: polygonGeometryOptions = {}, // Renamed for clarity
         geometryInstance: geometryInstanceOptions = {}, // Renamed for clarity
-        color = "rgba(0, 128, 0, 0.8)",
+        color = "rgba(0, 85, 128, 0.7)",
         id = "annotate_polygon",
-        ...rest // primitive options
+        ...rest // primitive options    
     } = options;
 
     // Convert the coordinates to Cartesian3

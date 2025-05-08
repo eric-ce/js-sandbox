@@ -3,15 +3,19 @@ import { MeasureModeGoogle } from "./MeasureModeGoogle";
 import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng, formatMeasurementValue } from "../../lib/helper/googleHelper.js";
 
 
-/** @typedef {{lat: number, lng: number}} LatLng*/
+/** @typedef {{lat: number, lng: number}} LatLng */
 
 /**
- * @typedef {{
- * polygons: google.maps.Polygon[],
- * labels: google.maps.OverlayView[]
- * }} InteractiveAnnotationsState
+ * @typedef InteractiveAnnotationsState
+ * @property {google.maps.Polyline[]} polylines
+ * @property {google.maps.OverlayView[]} labels
  */
-
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
+ * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
+ */
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement

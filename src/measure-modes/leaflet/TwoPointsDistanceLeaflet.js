@@ -208,10 +208,10 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
         switch (true) {
             case isMeasuring:
                 if (this.coordsCache.length === 1) {
-                    const positions = [this.coordsCache[0], pos];
+                    const positions = [this.coordsCache[0], pos].filter(Boolean); // Filter out any null value
 
-                    // validate leaflet positions
-                    if (!positions || positions.length === 0 || positions.some(pos => pos === null)) {
+                    // Validate leaflet positions
+                    if (positions.length < 2) {
                         console.error("Leaflet positions are empty or invalid:", positions);
                         return;
                     }
@@ -449,6 +449,8 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
                 interactive: false,
                 id: `annotate_distance_label_${this.measure.id}`
             });
+            console.log("🚀 labelInstance:", labelInstance);
+
 
             if (!labelInstance) {
                 console.error("_createOrUpdateLabel: Failed to create new label instance.");

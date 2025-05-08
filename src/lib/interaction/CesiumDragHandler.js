@@ -8,6 +8,8 @@ import { areCoordinatesEqual, formatDistance, getPrimitiveByPointPosition } from
 /** @typedef {import('cesium').PointPrimitive} PointPrimitive */
 /** @typedef {import('cesium').Label} Label */
 /** @typedef {import('cesium').Primitive} Primitive */
+/** @typedef {import('cesium').Cartesian3} Cartesian3 */
+/** @typedef {import('cesium').Cartesian2} Cartesian2 */
 
 
 // -- Dependencies types --
@@ -26,7 +28,13 @@ import { areCoordinatesEqual, formatDistance, getPrimitiveByPointPosition } from
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
  * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
  */
-
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {Cartesian3} mapPoint - The point on the map where the event occurred
+ * @property {any[]} pickedFeature - The feature that was picked at the event location
+ * @property {Cartesian2} screenPoint - The screen coordinates of the event
+ */
 
 /**
  * Handles dragging events in Cesium.
@@ -75,6 +83,7 @@ class CesiumDragHandler {
         return this.#coordinate;
     }
 
+
     activate(modeInstance) {
         // Validate the variables from modeInstance
         if (!modeInstance || typeof modeInstance.mode !== 'string' || typeof modeInstance.flags !== 'object') {
@@ -104,6 +113,11 @@ class CesiumDragHandler {
         this._resetValue(); // Reset the dragged object info and flags
     }
 
+    /**
+     * Handles the drag start event.
+     * @param {NormalizedEventData} eventData - The event data from the input handler
+     * @returns {Promise<void>}
+     */
     _handleDragStart = async (eventData) => {
         // initialize camera movement, default camera moving
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
@@ -166,6 +180,11 @@ class CesiumDragHandler {
         this.inputHandler.on('leftup', this._handleDragEnd);
     }
 
+    /**
+     * Handles the drag event.
+     * @param {NormalizedEventData} eventData - The event data from the input handler
+     * @returns {Promise<void>}
+     */
     _handleDrag = async (eventData) => {
         // Set drag flag by moving distance threshold
         const dragThreshold = 5;
@@ -202,6 +221,11 @@ class CesiumDragHandler {
         this.activeModeInstance?.updateGraphicsOnDrag(this.measure);
     }
 
+    /**
+     * Handles the drag end event.
+     * @param {NormalizedEventData} eventData - The event data from the input handler
+     * @returns {Promise<void>}
+     */
     _handleDragEnd = async (eventData) => {
         // Re-enable camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
@@ -241,6 +265,10 @@ class CesiumDragHandler {
         this._resetValue(); // Reset the dragged object info and flags
     }
 
+    /**
+     * Creates a default dragged object info object.
+     * @returns {object} - Default dragged object info
+     */
     _createDefaultDraggedObjectInfo() {
         return {
             /** @type {PointPrimitive} */
@@ -260,6 +288,9 @@ class CesiumDragHandler {
         };
     }
 
+    /**
+     * Resets the dragged object info and flags.
+     */
     _resetValue() {
         // Reset flags
         this.isDragging = false; // Reset the dragging state
@@ -279,6 +310,9 @@ class CesiumDragHandler {
         this.inputHandler.off('leftup', this._handleDragEnd); // Remove the mouse up event listener
     }
 
+    /**
+     * Destroys the CesiumDragHandler instance and removes all event listeners.
+     */
     destroy() {
         this.deactivate(); // Ensure listeners are removed
     }

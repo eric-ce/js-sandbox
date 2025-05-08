@@ -22,7 +22,6 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 /** @typedef {import('cesium').Cartesian2} Cartesian2 */
 
 // -- Data types -- 
-/** @typedef {{domEvent:object, mapPoint: Cartesian3, pickedFeature: any[], screenPoint: Cartesian2}} EventDataState */
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -34,6 +33,14 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
  * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
  */
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {Cartesian3} mapPoint - The point on the map where the event occurred
+ * @property {any[]} pickedFeature - The feature that was picked at the event location
+ * @property {Cartesian2} screenPoint - The screen coordinates of the event
+ */
+
 // -- Dependencies types --
 /** @typedef {import('../../lib/data/DataPool.js').DataPool} DataPool */
 /** @typedef {import('../../lib/input/CesiumInputHandler.js').CesiumInputHandler} CesiumInputHandler */
@@ -42,6 +49,8 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 /** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
 /** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
 /** @typedef {import('../../components/CesiumMeasure.js').CesiumMeasure} CesiumMeasure */
+
+
 
 class PolygonCesium extends MeasureModeCesium {
     // -- Public fields: dependencies --
@@ -201,7 +210,7 @@ class PolygonCesium extends MeasureModeCesium {
             // -- Handle Label Graphics --
             this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "pending",
-                showBackground: true,
+                showBackground: false,
             });
         }
     }
@@ -211,7 +220,7 @@ class PolygonCesium extends MeasureModeCesium {
      ***********************/
     /**
      * Handles mouse move events on the map.
-     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
      * @returns {Void}
      */
     handleMouseMove = async (eventData) => {
@@ -265,7 +274,7 @@ class PolygonCesium extends MeasureModeCesium {
      ************************/
     /**
      * Handles right-click events on the map.
-     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
      * @returns {Void}
      */
     handleRightClick = async (eventData) => {
