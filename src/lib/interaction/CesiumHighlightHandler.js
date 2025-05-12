@@ -86,6 +86,7 @@ class CesiumHighlightHandler {
         // -- Validate dependencies --
         const { pickedFeature } = eventData;
         if (!Array.isArray(pickedFeature)) return; // No picked feature, exit early
+
         if (pickedFeature.length === 0) {
             // reset highlighting
             this._resetAllHighlights();
@@ -155,7 +156,7 @@ class CesiumHighlightHandler {
      * Helper method
      * @param {Primitive} primitive 
      * @param {"label"|"point"|"line"|"polygon"} primitiveType 
-     * @returns 
+     * @returns {void}
      */
     _ensureOriginalStyleStored(primitive, primitiveType) {
         if (!primitive || this.originalStylesMap.has(primitive)) {
@@ -191,6 +192,8 @@ class CesiumHighlightHandler {
                 // console.warn(`Unknown primitive type: ${primitiveType}`);
                 return; // Unknown type, exit early
         }
+
+        // Store the original style in the map for reference
         if (Object.keys(originalStyle).length > 0) {
             this.originalStylesMap.set(primitive, originalStyle);
         }
@@ -200,7 +203,7 @@ class CesiumHighlightHandler {
      * Update the appearance of the primitive based on its type and selection/hover state.
      * @param {Primitive} primitive - The primitive to update.
      * @param {"label"|"point"|"line"|"polygon"} primitiveType - The type of the primitive. 
-     * @returns 
+     * @returns {void}
      */
     _updatePrimitiveAppearance(primitive, primitiveType) {
         if (!primitive || !this.activeModeInstance) return;
@@ -250,7 +253,7 @@ class CesiumHighlightHandler {
                     targetLineColor = originalStyle.materialColor;
                 }
 
-                // Apply the color to the polyline primitive
+                // Apply the color to the primitive
                 if (targetLineColor) {
                     if (primitive.appearance?.material?.uniforms?.color) {
                         primitive.appearance.material.uniforms.color = targetLineColor;
@@ -267,14 +270,16 @@ class CesiumHighlightHandler {
 
     /**
      * Reset the visual highlights for selected and hovered primitives.
+     * @returns {void}
      */
     _resetAllHighlights() {
+        // Reset the original styles
         if (this.currentlyHoveredPrimitive) {
             const prim = this.currentlyHoveredPrimitive;
             const type = this.currentHoverType;
             this.currentlyHoveredPrimitive = null;
             this.currentHoverType = null;
-            this._updatePrimitiveAppearance(prim, type);
+            this._updatePrimitiveAppearance(prim, type); // Reset to original style
         }
         if (this.currentlySelectedPrimitive) {
             const prim = this.currentlySelectedPrimitive;
@@ -285,6 +290,10 @@ class CesiumHighlightHandler {
             this._updatePrimitiveAppearance(prim, type);
         }
         // this.isSelected = false; // if you use this flag
+    }
+
+    destroy() {
+        this.deactivate(); // Deactivate the handler
     }
 
 };

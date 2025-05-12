@@ -227,6 +227,8 @@ class CesiumDragHandler {
      * @returns {Promise<void>}
      */
     _handleDragEnd = async (eventData) => {
+        this.inputHandler.off('mousemove', this._handleDrag);
+
         // Re-enable camera movement
         this.viewer.scene.screenSpaceCameraController.enableInputs = true;
 

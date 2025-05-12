@@ -58,6 +58,35 @@ class MeasureModeGoogle extends MeasureModeBase {
 
         return { ...measure, coordinates }; // Return a new object with the coordinates converted to Google format
     }
+
+    /**
+     * Remove all annotations and listeners from the map.
+     * It is intended to be called when the map disconnects. 
+     */
+    removeAnnotationsAndListeners() {
+        this.pointCollection.forEach(marker => {
+            google.maps.event.clearInstanceListeners(marker); // Remove all listeners from this marker
+            marker.setMap(null); // Remove marker from map
+        });
+        this.pointCollection = []; // Clear the collection
+
+        this.labelCollection.forEach(label => {
+            google.maps.event.clearInstanceListeners(label); // Remove all listeners from this label
+            label.setMap(null); // Remove label from map
+        })
+        this.labelCollection = []; // Clear the collection
+
+        this.polylineCollection.forEach(polyline => {
+            google.maps.event.clearInstanceListeners(polyline); // Remove all listeners from this polyline
+            polyline.setMap(null); // Remove polyline from map
+        });
+        this.polylineCollection = []; // Clear the collection
+
+        this.polygonCollection.forEach(polygon => {
+            google.maps.event.clearInstanceListeners(polygon); // Remove all listeners from this polygon
+            polygon.setMap(null); // Remove polygon from map
+        });
+    }
 }
 
 export { MeasureModeGoogle };

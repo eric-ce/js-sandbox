@@ -255,6 +255,17 @@ class MeasureModeBase {
         };
     }
 
+    /**
+     * Destroys the mode instance: cleans up graphics, removes listeners.
+     */
+    destroy() {
+        this.removeAnnotationsAndListeners();
+    }
+
+    removeAnnotationsAndListeners() {
+        console.warn(`removeAnnotationsAndListeners not implemented in ${this.constructor.name}`);
+    }
+
     // /**
     //  * Finds a measurement group managed by this instance that contains the given coordinate.
     //  * Assumes coordinate is in the map-specific format used in `group.coordinates`.
