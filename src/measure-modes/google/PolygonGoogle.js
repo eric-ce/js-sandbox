@@ -141,16 +141,16 @@ export class PolygonGoogle extends MeasureModeGoogle {
                     }
                 },
                 // --- ADD MOUSEUP LISTENER HERE ---
-                mouseup: (event) => { // 'event' here is google.maps.MapMouseEvent
-                    // Check if a drag sequence was potentially active
-                    if (this.dragHandler && this.dragHandler.isDragging) {
-                        event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
-                        event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
+                // mouseup: (event) => { // 'event' here is google.maps.MapMouseEvent
+                //     // Check if a drag sequence was potentially active
+                //     if (this.dragHandler && this.dragHandler.isDragging) {
+                //         event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
+                //         event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
 
-                        // Directly call the drag handler's end method
-                        this.dragHandler._handleDragEnd(event);
-                    }
-                }
+                //         // Directly call the drag handler's end method
+                //         this.dragHandler._handleDragEnd(event);
+                //     }
+                // }
             }
         };
 
@@ -174,7 +174,8 @@ export class PolygonGoogle extends MeasureModeGoogle {
         if (this.coordsCache.length > 2) {
             this._createOrUpdatePolygon(this.coordsCache, this.#interactiveAnnotations.polygons, {
                 status: "pending",
-                color: this.stateManager.getColorState("polygon")
+                color: this.stateManager.getColorState("polygon"),
+                clickable: false
             });
 
             this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
@@ -204,7 +205,8 @@ export class PolygonGoogle extends MeasureModeGoogle {
                 // -- Handle Polygon
                 this._createOrUpdatePolygon(movingDataCache, this.#interactiveAnnotations.polygons, {
                     status: "moving",
-                    color: "#FFFF00"
+                    color: "#FFFF00",
+                    clickable: false
                 });
 
                 // -- Handle Label --
@@ -251,17 +253,6 @@ export class PolygonGoogle extends MeasureModeGoogle {
                         // Tell the drag handler to start dragging this specific marker
                         this.dragHandler._handleDragStart(marker, event);
                     }
-                },
-                // --- ADD MOUSEUP LISTENER HERE ---
-                mouseup: (event) => { // 'event' here is google.maps.MapMouseEvent
-                    // Check if a drag sequence was potentially active
-                    if (this.dragHandler && this.dragHandler.isDragging) {
-                        event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
-                        event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
-
-                        // Directly call the drag handler's end method
-                        this.dragHandler._handleDragEnd(event);
-                    }
                 }
             }
         };
@@ -278,7 +269,8 @@ export class PolygonGoogle extends MeasureModeGoogle {
         // -- Handle Polygon --
         this._createOrUpdatePolygon(this.coordsCache, this.#interactiveAnnotations.polygons, {
             status: "completed",
-            color: this.stateManager.getColorState("polygon")
+            color: this.stateManager.getColorState("polygon"),
+            clickable: true
         });
 
         // -- Handle Label --
@@ -322,7 +314,8 @@ export class PolygonGoogle extends MeasureModeGoogle {
         // -- Handle polygon --
         this._createOrUpdatePolygon(latLngArray, this.dragHandler.draggedObjectInfo.polygons, {
             status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            clickable: false
         });
 
         // -- Handle label --
@@ -347,7 +340,8 @@ export class PolygonGoogle extends MeasureModeGoogle {
         // -- Finalize polygon --
         this._createOrUpdatePolygon(latLngArray, this.dragHandler.draggedObjectInfo.polygons, {
             status: "completed",
-            color: this.stateManager.getColorState("polygon")
+            color: this.stateManager.getColorState("polygon"),
+            clickable: true
         });
 
         // -- Finalize Label --
@@ -385,6 +379,8 @@ export class PolygonGoogle extends MeasureModeGoogle {
         const {
             status = null,
             color = this.stateManager.getColorState("polygon"),
+            clickable = false,
+            ...rest
         } = options;
 
         let polygonInstance = null;
@@ -398,7 +394,7 @@ export class PolygonGoogle extends MeasureModeGoogle {
             } else {
                 // -- Handle Polygon Visual Update --
                 polygonInstance.setPaths(positions); // update position
-                polygonInstance.setOptions({ strokeColor: color }); // Change color to indicate moving state
+                polygonInstance.setOptions({ strokeColor: color, clickable }); // Change color to indicate moving state
             }
         }
 
@@ -408,7 +404,8 @@ export class PolygonGoogle extends MeasureModeGoogle {
             polygonInstance = this.drawingHelper._addPolygon(positions, {
                 color,
                 id: `annotate_area_${this.measure.id}`,
-                clickable: false
+                clickable,
+                ...rest
             });
 
             if (!polygonInstance) {
@@ -446,7 +443,9 @@ export class PolygonGoogle extends MeasureModeGoogle {
         // default options
         const {
             status = null,
+            clickable = false,
             // add more options here if needed
+            ...rest
         } = options;
 
         const area = calculateArea(positions);
@@ -474,10 +473,10 @@ export class PolygonGoogle extends MeasureModeGoogle {
                 // Ensure getLabel() exists and returns an object before spreading
                 const currentLabelOptions = labelInstance.getLabel();
                 if (currentLabelOptions) {
-                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText }); // update text
+                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText, clickable }); // update text
                 } else {
                     // Fallback if getLabel() is not as expected
-                    labelInstance.setLabel({ text: formattedText });
+                    labelInstance.setLabel({ text: formattedText, clickable });
                 }
             }
         }
@@ -487,6 +486,8 @@ export class PolygonGoogle extends MeasureModeGoogle {
             labelInstance = this.drawingHelper._addLabel(positions, area, "squareMeter", {
                 id: `annotate_area_label_${this.measure.id}`,
                 status: status,
+                clickable,
+                ...rest
             });
 
             if (!labelInstance) {

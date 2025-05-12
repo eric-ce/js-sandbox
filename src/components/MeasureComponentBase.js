@@ -19,7 +19,7 @@ import {
 import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
-import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, LeafletDragHandler } from "../lib/interaction/index.js";
+import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
 import { TwoPointsDistanceCesium, PolygonCesium, TwoPointsDistanceGoogle, PolygonGoogle, TwoPointsDistanceLeaflet, PolygonLeaflet } from "../measure-modes/index.js";
 
 
@@ -181,18 +181,30 @@ export class MeasureComponentBase extends HTMLElement {
             this.#dataHandler = null;
         }
 
-        // Deactivate current mode and destroy input handler
-        this._deactivateCurrentMode();
+        // Deactivate current mode
+        // this._deactivateCurrentMode();
+        Object.values(this.#modeInstances).forEach(instance => {
+            if (instance && typeof instance.destroy === 'function') {
+                // console.log(`${this.constructor.name}: Destroying pooled mode instance: ${instance.mode || 'unknown mode'}`);
+                instance.destroy();
+            }
+        });
+        this.#modeInstances = {}; // Clear the instance pool
+
+        // Destroy interaction handler
         this.inputHandler?.destroy();
         this.inputHandler = null;
+        this.dragHandler?.destroy();
+        this.dragHandler = null;
+        this.highlightHandler?.destroy();
+        this.highlightHandler = null;
 
+        // Clear references 
         this.toolbar = null;
         this.uiButtons = {};
         this.availableModeConfigs = [];
 
-        this.#modeInstances = {}; // Clear the instance pool
-
-        // Clean up map annotations
+        // Clean up map annotations from sync drawing
         if (this.#data.length > 0) {
             this.#data.forEach((item) => {
                 if (item.annotations) {
@@ -253,11 +265,11 @@ export class MeasureComponentBase extends HTMLElement {
                     break;
                 case "google":
                     this.dragHandler = new GoogleDragHandler(this.map, this.inputHandler, this.emitter);
-                    // this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter);
                     break;
                 case "leaflet": // Add Leaflet handlers later
                     this.dragHandler = new LeafletDragHandler(this.map, this.inputHandler, this.emitter);
-                    // this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter);
                     break;
                 default:
                     console.warn(`Drag/Highlight handlers not implemented for ${this.mapName}`);
@@ -428,7 +440,14 @@ export class MeasureComponentBase extends HTMLElement {
             const modeId = modeConfig.id; // Unique ID for the button
 
             if (modeConfig.icon) {
-                btn.innerHTML = `<img src="${modeConfig.icon}" alt="${modeConfig.name}" style="width: 30px; height: 30px; display: block;">`; // Adjust size
+                const image = document.createElement("img");
+                image.src = modeConfig.icon;
+                image.alt = modeConfig.name;
+                image.style.width = "30px"; // Adjust size
+                image.style.height = "30px"; // Adjust size
+                image.style.display = "block"; // Center the icon
+                btn.appendChild(image);
+                // btn.innerHTML = `<img src="${modeConfig.icon}" alt="${modeConfig.name}" style="width: 30px; height: 30px; display: block;">`; // Adjust size
             } else {
                 btn.textContent = modeConfig.name.slice(0, 3); // Fallback text
             }
@@ -553,8 +572,7 @@ export class MeasureComponentBase extends HTMLElement {
                 // Instance doesn't exist, create it
                 // console.log(`Instantiating new instance for mode '${modeId}'.`);
                 const standardArgs = [
-                    this.inputHandler, this.dragHandler, this.highlightHandler,
-                    this, this.stateManager, this.emitter
+                    this.inputHandler, this.dragHandler, this.highlightHandler, this, this.stateManager, this.emitter
                 ];
                 let args = standardArgs;
                 if (ModeClass.name.includes("Cesium")) {

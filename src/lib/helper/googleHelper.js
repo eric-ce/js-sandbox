@@ -4,6 +4,25 @@ import { LatLng } from "@googlemaps/js-api-loader";
  * OVERLAY *
  ***********/
 /**
+ * Checks the type of Google Maps overlay (marker, polyline, polygon, label).
+ * @param {google.maps.Marker| google.maps.Polyline|google.maps.Polygon} overlay 
+ * @returns {"polyline"|"polygon"|"label"|"point"|null} - The type of overlay
+ */
+export function checkOverlayType(overlay) {
+    if (overlay instanceof google.maps.Polyline) {
+        return "polyline";
+    } else if (overlay instanceof google.maps.Polygon) {
+        return "polygon";
+    } else if (overlay instanceof google.maps.Marker && typeof overlay?.getLabel()?.text === "string") {
+        return "label";
+    } else if (overlay instanceof google.maps.Marker) {
+        return "point";
+    } else {
+        return null;
+    }
+}
+
+/**
  * Finds Google Maps overlays associated with a specific geographic position
  * by checking a custom 'positions' property stored on the overlays.
  * Searches through points, labels, polylines, and polygons.
@@ -116,14 +135,15 @@ export function createPointMarker(map, position, options = {}) {
         marker = {},
         markerStyle = {},
         id = "annotate_point",
-        color = "#FF0000", // Default color if not provided
-        outlineColor = "#FF0000",
+        color = "rgba(255,0,0,1)", // Default color if not provided
+        outlineColor = "rgba(255,0,0,1)",
         opacity = 1.0,
         weight = 0, // No border by default
         scale = 5,  // Default size of the circle
         zIndex = 1, // Default zIndex
         clickable = true, // Default clickable
         title = "Point Marker",
+        ...rest
     } = options;
 
     // -- Create the point marker --
@@ -134,13 +154,13 @@ export function createPointMarker(map, position, options = {}) {
         const advancedMarkerStyleOptions = {
             width: "10px",
             height: "10px",
-            backgroundColor: options.color || "#FF0000",
+            backgroundColor: color,
             borderRadius: "50%",
             position: "absolute",
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            ...advancedMarkerStyle
+            ...advancedMarkerStyle,
         }
 
         // Merge default options with user provided options
@@ -163,6 +183,7 @@ export function createPointMarker(map, position, options = {}) {
                 title,
                 zIndex,
                 ...advancedMarker,
+                ...rest
             });
         } catch (e) {
             console.error("Failed to create AdvancedMarkerElement. Ensure the Google Maps Marker library is loaded.", e);
@@ -191,7 +212,8 @@ export function createPointMarker(map, position, options = {}) {
                 ...markerStyleOptions,
             },
             clickable, // Default true, but can be overridden by options if needed
-            ...marker
+            ...marker,
+            ...rest
         });
     }
 
@@ -207,24 +229,6 @@ export function createPointMarker(map, position, options = {}) {
     pointInstance.id = id;
 
     return pointInstance;
-}
-
-/**
- * Creates multiple point markers on the provided map from an array of positions.
- *
- * @param {google.maps.Map} map - The Google Map instance.
- * @param {{latitude: number, longitude: number}[]} positions - Array of position objects.
- * @param {Object} [options={}] - Additional options for marker styling.
- * @returns {google.maps.marker.AdvancedMarkerElement[]|google.maps.Marker[]} An array of marker elements.
- */
-export function createPointMarkers(map, positions, options = {}) {
-    if (!map || !Array.isArray(positions) || positions.length === 0) {
-        return [];
-    }
-
-    return positions
-        .map((pos) => createPointMarker(map, pos, options))
-        .filter(Boolean);
 }
 
 /**
@@ -291,32 +295,6 @@ export function createPolyline(map, positions, options = {}) {
 }
 
 /**
- * Creates multiple polylines on the provided map by connecting consecutive positions.
- *
- * @param {google.maps.Map} map - The Google Map instance.
- * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
- * @param {string} [color="#A52A2A"] - Stroke color for the polylines.
- * @param {Object} [options={}] - Additional options for polyline styling.
- * @returns {Array<google.maps.Polyline>|undefined} An array of created polylines if valid; otherwise, undefined.
- */
-export function createPolylines(map, positions, options = {}) {
-    // -- Validate input params --
-    if (!map || !Array.isArray(positions) || positions.length < 2) {
-        console.error("createPolylines: Invalid positions provided. Ensure at least two positions are provided.");
-        return [];
-    }
-
-    // -- Create polylines --
-    const polylines = [];
-    for (let i = 0; i < positions.length - 1; i++) {
-        const polyline = createPolyline(map, [positions[i], positions[i + 1]], options);
-        polyline && polylines.push(polyline);
-    }
-
-    return polylines;
-}
-
-/**
  * Creates a polygon on a Google Map
  * @param {google.maps.Map} map - The Google Map instance
  * @param {{lat:number, lng: number}[] | {latitude: number, longitude: number, height: number}[]} positions - Array of coordinates
@@ -345,12 +323,10 @@ export function createPolygon(map, positions, options = {}) {
     // -- Create The Polygon --
     // Options for polygon
     const {
-        polygonStyle = {},
-        editable = false,
         clickable = false,
         id = "annotate_polygon",
-        color = "#FF0000", // Default color if not provided
-        fillColor = "#FF0000",
+        color = "rgba(255,0,0,1)", // Default color if not provided
+        fillColor = "rgba(255,0,0,1)",
         opacity = 0.35,
         weight = 2,
         zIndex = 1,
@@ -358,24 +334,18 @@ export function createPolygon(map, positions, options = {}) {
         ...rest     // Captures any other properties from options
     } = options;
 
-    // Styling options with default values
-    const polygonStyleOptions = {
+    // Create polygon
+    const polygon = new google.maps.Polygon({
+        map,
+        paths: polygonPositions,
+        title,
+        clickable,
         strokeColor: color, // Default if options.color is undefined
         strokeOpacity: 0.8,
         strokeWeight: weight,
         fillColor,
         fillOpacity: opacity,
         zIndex,
-        ...polygonStyle
-    }
-    // Create polygon
-    const polygon = new google.maps.Polygon({
-        map,
-        paths: polygonPositions,
-        title,
-        editable,
-        clickable,
-        ...polygonStyleOptions,
         ...rest
     });
 
@@ -418,6 +388,7 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
         zIndex = 1,
         title = "Label Marker",
         clickable = true,
+        ...rest
     } = options;
 
     let markerInstance;
@@ -461,7 +432,8 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
             content: labelElement,
             title,
             zIndex,
-            ...advancedMarker
+            ...advancedMarker,
+            ...rest
         };
 
         // Use the anchor property to set the offset
@@ -487,7 +459,8 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
             title,
             clickable,
             zIndex,
-            ...marker
+            ...marker,
+            ...rest
         }
 
         // Create a transparent image for the marker icon in order to make offsets
@@ -526,32 +499,6 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
 
     return markerInstance;
 }
-
-
-/**
- * Creates multiple label markers for an array of positions and texts.
- * @param {*} map - The Google Map instance
- * @param {Array} positions - Array of position objects
- * @param {Number[]} valueArray - Array of text labels to display
- * @param {Object} options - Optional configuration for the label markers
- * @returns {Array} - Array of created markers
- */
-export function createLabelMarkers(map, positions, valueArray, unit = "meter", options = {}) {
-    // -- Validate input params --
-    if (!map || !Array.isArray(positions) || positions.length < 2 || !Array.isArray(valueArray) || valueArray.length < 1) return;
-    const labels = [];
-
-    // -- Create label markers --
-    // Create a label for each segment (between consecutive points)
-    for (let i = 0; i < valueArray.length; i++) {
-        // Create label for the segment between position i and i+1
-        const label = createLabelMarker(map, [positions[i], positions[i + 1]], valueArray[i], unit, options);
-        label && labels.push(label);
-    }
-
-    return labels;
-}
-
 
 /**
  * Removes an overlay (marker, polygon, polyline, label) from the map.
@@ -879,3 +826,71 @@ export function formatMeasurementValue(value, unit) {
 //     if (!label) return;
 //     label.setMap(null);
 // }
+
+/**
+ * Creates multiple polylines on the provided map by connecting consecutive positions.
+ *
+ * @param {google.maps.Map} map - The Google Map instance.
+ * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
+ * @param {string} [color="#A52A2A"] - Stroke color for the polylines.
+ * @param {Object} [options={}] - Additional options for polyline styling.
+ * @returns {Array<google.maps.Polyline>|undefined} An array of created polylines if valid; otherwise, undefined.
+ */
+export function createPolylines(map, positions, options = {}) {
+    // -- Validate input params --
+    if (!map || !Array.isArray(positions) || positions.length < 2) {
+        console.error("createPolylines: Invalid positions provided. Ensure at least two positions are provided.");
+        return [];
+    }
+
+    // -- Create polylines --
+    const polylines = [];
+    for (let i = 0; i < positions.length - 1; i++) {
+        const polyline = createPolyline(map, [positions[i], positions[i + 1]], options);
+        polyline && polylines.push(polyline);
+    }
+
+    return polylines;
+}
+
+/**
+ * Creates multiple point markers on the provided map from an array of positions.
+ *
+ * @param {google.maps.Map} map - The Google Map instance.
+ * @param {{latitude: number, longitude: number}[]} positions - Array of position objects.
+ * @param {Object} [options={}] - Additional options for marker styling.
+ * @returns {google.maps.marker.AdvancedMarkerElement[]|google.maps.Marker[]} An array of marker elements.
+ */
+export function createPointMarkers(map, positions, options = {}) {
+    if (!map || !Array.isArray(positions) || positions.length === 0) {
+        return [];
+    }
+
+    return positions
+        .map((pos) => createPointMarker(map, pos, options))
+        .filter(Boolean);
+}
+
+/**
+ * Creates multiple label markers for an array of positions and texts.
+ * @param {*} map - The Google Map instance
+ * @param {Array} positions - Array of position objects
+ * @param {Number[]} valueArray - Array of text labels to display
+ * @param {Object} options - Optional configuration for the label markers
+ * @returns {Array} - Array of created markers
+ */
+export function createLabelMarkers(map, positions, valueArray, unit = "meter", options = {}) {
+    // -- Validate input params --
+    if (!map || !Array.isArray(positions) || positions.length < 2 || !Array.isArray(valueArray) || valueArray.length < 1) return;
+    const labels = [];
+
+    // -- Create label markers --
+    // Create a label for each segment (between consecutive points)
+    for (let i = 0; i < valueArray.length; i++) {
+        // Create label for the segment between position i and i+1
+        const label = createLabelMarker(map, [positions[i], positions[i + 1]], valueArray[i], unit, options);
+        label && labels.push(label);
+    }
+
+    return labels;
+}

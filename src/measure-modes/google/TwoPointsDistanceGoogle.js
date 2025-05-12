@@ -1,5 +1,5 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { convertToLatLng, calculateMiddlePos, calculateDistance, formatMeasurementValue, areCoordinatesEqual, } from "../../lib/helper/googleHelper.js";
+import { convertToLatLng, calculateMiddlePos, calculateDistance, formatMeasurementValue, areCoordinatesEqual, checkOverlayType, } from "../../lib/helper/googleHelper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /** @typedef {{lat: number, lng: number}} LatLng */
@@ -138,17 +138,6 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                         this.dragHandler._handleDragStart(marker, event);
                     }
                 },
-                // --- ADD MOUSEUP LISTENER HERE ---
-                mouseup: (event) => { // 'event' here is google.maps.MapMouseEvent
-                    // Check if a drag sequence was potentially active
-                    if (this.dragHandler && this.dragHandler.isDragging) {
-                        event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
-                        event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
-
-                        // Directly call the drag handler's end method
-                        this.dragHandler._handleDragEnd(event);
-                    }
-                }
             }
         };
 
@@ -178,12 +167,14 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             // -- Handle polyline --
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
                 status: "completed",
-                color: this.stateManager.getColorState("line")
+                color: this.stateManager.getColorState("line"),
+                clickable: true
             });
 
             // -- Handle label --
             const { distance } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "completed",
+                clickable: true
             });
 
             // Update this.measure
@@ -239,12 +230,14 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                     // Moving line: update if existed, create if not existed
                     this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
                         status: "moving",
-                        color: this.stateManager.getColorState("move")
+                        color: this.stateManager.getColorState("move"),
+                        clickable: false
                     });
 
                     // Moving label: update if existed, create if not existed
                     this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
                         status: "moving",
+                        clickable: false
                     });
                 }
                 break;
@@ -274,12 +267,14 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // -- Handle polyline --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
             status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            clickable: false
         });
 
         // -- Handle label --
         this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
             status: "moving",
+            clickable: false
         });
     }
 
@@ -298,13 +293,15 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         // -- Finalize Line Graphics --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "moving",
-            color: this.stateManager.getColorState("line")
+            status: "completed",
+            color: this.stateManager.getColorState("line"),
+            clickable: true
         });
 
         // -- Finalize Label Graphics --
         const { distance } = this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
             status: "completed",
+            clickable: true
         });
 
         // -- Update dragHandler variables --
@@ -345,7 +342,9 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // Default options
         const {
             status = null,
-            color = this.stateManager.getColorState("move") // Default color if not provided
+            color = this.stateManager.getColorState("move"), // Default color if not provided
+            clickable = false,
+            ...rest
         } = options;
 
         let lineInstance = null;
@@ -363,7 +362,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                 // -- Handle Polyline Visual Update --
                 // Assumes lineInstance is a valid Polyline if it exists
                 lineInstance.setPath(positions); // Update path of the line
-                lineInstance.setOptions({ strokeColor: color }); // Update color
+                lineInstance.setOptions({ strokeColor: color, clickable }); // Update color
             }
         }
         // --- Creation Block (if needed) ---
@@ -372,7 +371,9 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             lineInstance = this.drawingHelper._addPolyline(positions, {
                 color,
                 // Assumes this.measure.id is always available when creating
-                id: `annotate_distance_line_${this.measure.id}`
+                id: `annotate_distance_line_${this.measure.id}`,
+                clickable,
+                ...rest
             });
 
             if (!lineInstance) {
@@ -412,7 +413,9 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // Default options
         const {
             status = null,
+            clickable = false,
             // add more options here if needed
+            ...rest
         } = options;
 
         const distance = calculateDistance(positions[0], positions[1]); // calculate distance
@@ -440,10 +443,10 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                 // Ensure getLabel() exists and returns an object before spreading
                 const currentLabelOptions = labelInstance.getLabel();
                 if (currentLabelOptions) {
-                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText }); // update text
+                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText, clickable }); // update text
                 } else {
                     // Fallback if getLabel() is not as expected
-                    labelInstance.setLabel({ text: formattedText });
+                    labelInstance.setLabel({ text: formattedText, clickable });
                 }
             }
         }
@@ -451,8 +454,9 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
-                clickable: false, // Assuming labels aren't clickable by default
-                id: `annotate_distance_label_${this.measure.id}`
+                clickable,
+                id: `annotate_distance_label_${this.measure.id}`,
+                ...rest
             });
 
             if (!labelInstance) {

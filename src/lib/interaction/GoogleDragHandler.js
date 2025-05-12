@@ -16,7 +16,12 @@ import { getOverlayByPosition } from "../helper/googleHelper.js";
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
  * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
  */
-
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
+ * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
+ */
 
 /**
  * Handles drag events for Google Maps.
@@ -77,11 +82,9 @@ class GoogleDragHandler {
     }
 
     deactivate() {
-        this._removeDragListeners(); // Ensure listeners are removed
-
         this.activeModeInstance = null;
 
-        this._resetValue(); // Reset state    
+        this._resetValue(); // Reset state, temporary data, and listeners  
     }
 
     /**
@@ -93,14 +96,7 @@ class GoogleDragHandler {
         // initialize map dragging, default enabled
         this.map.setOptions({ draggable: true });
 
-        if (!this.activeModeInstance || this.isDragging || !eventData.mapPoint) {
-            console.log("Drag Start Aborted. Reason:", {
-                hasActiveInstance: !!this.activeModeInstance,
-                isDragging: this.isDragging,
-                hasMapPoint: !!eventData.mapPoint
-            });
-            return;
-        }
+        if (!this.activeModeInstance || this.isDragging || !eventData.mapPoint) return;
 
         const dragBeginPosition = eventData.mapPoint; // {lat, lng}
 
@@ -141,9 +137,14 @@ class GoogleDragHandler {
 
         // Attach mousemove and mouseup listeners via the InputHandler
         this.mouseMoveListener = this.inputHandler.on('mousemove', this._handleDrag);
-        this.mouseUpListener = this.inputHandler.on('leftup', this._handleDragEnd);
+        this.mouseUpListener = document.addEventListener('mouseup', this._handleDragEnd);   // Use document for mouseup event due to point marker block maps issue
     }
 
+    /**
+     * Handles the drag event.
+     * @param {NormalizedEventData} eventData 
+     * @returns {void}
+     */
     _handleDrag = (eventData) => {
         // Set dragging State
         if (!this.isDragging) {
@@ -164,7 +165,7 @@ class GoogleDragHandler {
         this.draggedObjectInfo.beginPoint.setIcon({
             ...this.draggedObjectInfo.beginPoint.getIcon(),
             strokeWeight: 2,
-            strokeColor: "#FFFF00"
+            strokeColor: "rgb(255,255,0,1)"
         });
 
         this.draggedObjectInfo.beginPoint.setPosition(this.#coordinate); // Update the marker visual position on the map
@@ -175,9 +176,11 @@ class GoogleDragHandler {
         this.activeModeInstance?.updateGraphicsOnDrag(this.measure); // Update graphics on drag (optional)
     }
 
-    _handleDragEnd = (eventData) => {
-        this.inputHandler.off('mousemove', this._handleDrag); // Remove listener early
-
+    /**
+     * Handles the drag end event.
+     * @returns {void}
+     */
+    _handleDragEnd = () => {
         // Re-enable map dragging
         this.map.setOptions({ draggable: true });
 
@@ -191,7 +194,7 @@ class GoogleDragHandler {
         this.draggedObjectInfo.beginPoint.setIcon({
             ...this.draggedObjectInfo.beginPoint.getIcon(),
             strokeWeight: 0, // Reset stroke weight 
-            strokeColor: "#FF0000" // FIXME: replace the color using stateManager to make consistent color
+            strokeColor: "rgba(255,0,0,1)" // FIXME: replace the color using stateManager to make consistent color
         });
         this.draggedObjectInfo.beginPoint.setPosition(this.#coordinate); // Update the marker position on the map
         // Update metadata in the marker object
@@ -215,9 +218,12 @@ class GoogleDragHandler {
 
         // Reset values
         this._resetValue(); // Reset state variables and flags
-
     }
 
+    /**
+     * Creates a default dragged object info object.
+     * @returns {object} - Default dragged object info structure
+     */
     _createDefaultDraggedObjectInfo() {
         // Consistent structure with CesiumDragHandler
         return {
@@ -237,6 +243,10 @@ class GoogleDragHandler {
         };
     }
 
+    /**
+     * Resets the dragged object info and flags.
+     * @returns {void}
+     */
     _resetValue() {
         // Reset flags
         this.isDragging = false;
@@ -250,21 +260,27 @@ class GoogleDragHandler {
         // Reset the dragged object info
         this.draggedObjectInfo = this._createDefaultDraggedObjectInfo();
         this.measure = null; // Reset the measure reference
+
+        // Reset drag listeners
+        this._removeDragListeners(); // Ensure listeners are removed
     }
 
+    /**
+     * Removes drag listeners to prevent memory leaks.
+     */
     _removeDragListeners() {
-        if (this.mouseMoveListener) {
-            // Assuming inputHandler.on returns a reference or function to remove
-            // If inputHandler.on returns void, this needs adjustment based on inputHandler's implementation
-            this.inputHandler.off('mousemove', this._handleDrag); // Use the correct reference/callback
-            this.mouseMoveListener = null;
-        }
-        if (this.mouseUpListener) {
-            this.inputHandler.off('leftup', this._handleDragEnd); // Use the correct reference/callback
-            this.mouseUpListener = null;
-        }
+        // Always attempt to remove the mousemove listener from the inputHandler
+        this.inputHandler.off('mousemove', this._handleDrag);
+        this.mouseMoveListener = null;
+
+        // remove the mouseup listener from the document
+        document.removeEventListener('mouseup', this._handleDragEnd);
+        this.mouseUpListener = null;
     }
 
+    /**
+     * Cleans up the handler by removing listeners and resetting state.
+     */
     destroy() {
         this.deactivate(); // Ensure cleanup
     }

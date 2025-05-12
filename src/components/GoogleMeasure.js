@@ -63,6 +63,40 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             const point = createPointMarker(this.map, position, markerOptions);
 
+            // Highlight event listeners
+            if (this.highlightHandler) {
+                point.addListener('mouseover', () => {
+                    this.highlightHandler.applyHoverHighlight(point);
+                });
+                point.addListener('mouseout', () => {
+                    // highlightHandler's removeHoverHighlight should know which object was hovered
+                    this.highlightHandler.removeHoverHighlight();
+                });
+                // Optional: Add click listener for selection highlighting
+                // point.addListener('click', (event) => {
+                //     // Prevent click from propagating if it's part of a drag
+                //     // This check might be more robust if done within the highlightHandler or mode
+                //     if (event.domEvent && (event.domEvent.button !== 0 || event.domEvent.metaKey || event.domEvent.ctrlKey)) {
+                //         return;
+                //     }
+                //     // Assuming toggleSelectHighlight or similar method exists
+                //     if (typeof this.highlightHandler.toggleSelectHighlight === 'function') {
+                //         this.highlightHandler.toggleSelectHighlight(point, event);
+                //     } else if (typeof this.highlightHandler.handleClickToSelect === 'function') {
+                //         // If your method is named handleClickToSelect and needs eventData
+                //         const latLng = event.latLng;
+                //         const pixel = event.pixel;
+                //         const eventData = {
+                //             mapPoint: latLng ? { lat: latLng.lat(), lng: latLng.lng() } : null,
+                //             screenPoint: pixel ? { x: pixel.x, y: pixel.y } : { x: NaN, y: NaN },
+                //             domEvent: event.domEvent,
+                //             graphic: point // Pass the graphic itself
+                //         };
+                //         this.highlightHandler.handleClickToSelect(eventData);
+                //     }
+                // });
+            }
+
             // Attach listeners if provided
             if (point && listeners && typeof listeners === 'object') {
                 for (const eventName in listeners) {
@@ -124,6 +158,17 @@ export default class GoogleMeasure extends MeasureComponentBase {
         const polyline = createPolyline(this.map, positions, options);
         if (!polyline) return null;
 
+        // Highlight event listeners
+        if (this.highlightHandler) {
+            polyline.addListener('mouseover', () => {
+                this.highlightHandler.applyHoverHighlight(polyline);
+            });
+            polyline.addListener('mouseout', () => {
+                // highlightHandler's removeHoverHighlight should know which object was hovered
+                this.highlightHandler.removeHoverHighlight();
+            });
+        }
+
         // Store the polyline in the collection
         polyline && this.#polylineCollection.push(polyline);
 
@@ -170,6 +215,17 @@ export default class GoogleMeasure extends MeasureComponentBase {
         const label = createLabelMarker(this.map, positions, value, unit, options);
         if (!label) return null;
 
+        // Highlight event listeners
+        if (this.highlightHandler) {
+            label.addListener('mouseover', () => {
+                this.highlightHandler.applyHoverHighlight(label);
+            });
+            label.addListener('mouseout', () => {
+                // highlightHandler's removeHoverHighlight should know which object was hovered
+                this.highlightHandler.removeHoverHighlight();
+            });
+        }
+
         // Store the label in the collection
         label && this.#labelCollection.push(label);
 
@@ -213,6 +269,17 @@ export default class GoogleMeasure extends MeasureComponentBase {
         const polygon = createPolygon(this.map, positions, options);
         if (!polygon) return null;
 
+        // Highlight event listeners
+        if (this.highlightHandler) {
+            polygon.addListener('mouseover', () => {
+                this.highlightHandler.applyHoverHighlight(polygon);
+            });
+            polygon.addListener('mouseout', () => {
+                // highlightHandler's removeHoverHighlight should know which object was hovered
+                this.highlightHandler.removeHoverHighlight();
+            });
+        }
+
         // Store the polygon in the collection
         polygon && this.#polygonCollection.push(polygon);
 
@@ -226,6 +293,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
     _removePointMarker(marker) {
         // remove the overlay from the map
         removeOverlay(marker);
+
+        // FIXME: remove the listeners from the marker
+
 
         // remove the marker from the collection
         const index = this.#pointCollection.indexOf(marker);
