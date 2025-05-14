@@ -59,6 +59,7 @@ class LeafletDragHandler {
         return this.#coordinate; // Getter for coordinate
     }
 
+
     activate(modeInstance) {
         // Validate the variables from modeInstance
         if (!modeInstance || typeof modeInstance.mode !== 'string' || typeof modeInstance.flags !== 'object') {
@@ -75,11 +76,9 @@ class LeafletDragHandler {
     }
 
     deactivate() {
-        this._removeDragListeners(); // Ensure listeners are removed
-
         this.activeModeInstance = null;
 
-        this._resetValue(); // Reset state    
+        this._resetValue(); // Reset state, temporary data, and listeners   
     }
 
     /**
@@ -132,7 +131,7 @@ class LeafletDragHandler {
 
         // Attach mousemove and mouseup listeners via the InputHandler
         this.mouseMoveListener = this.inputHandler.on('mousemove', this._handleDrag);
-        this.mouseUpListener = this.inputHandler.on('leftup', this._handleDragEnd);
+        this.mouseUpListener = document.addEventListener('mouseup', this._handleDragEnd);
     }
 
     _handleDrag = (eventData) => {
@@ -152,8 +151,9 @@ class LeafletDragHandler {
 
         // --- Update Dragging Point ---
         this.draggedObjectInfo.beginPoint.setStyle({
+            weight: 2,
             color: "#FFFF00",
-            fillColor: "#FFFF00"
+            fillColor: "#FF0000"
         }); // Update the marker style
         this.draggedObjectInfo.beginPoint.setLatLng(this.#coordinate); // Update the marker position
 
@@ -166,8 +166,6 @@ class LeafletDragHandler {
     }
 
     _handleDragEnd = (eventData) => {
-        this.inputHandler.off('mousemove', this._handleDrag); // Remove listener early
-
         // Re-enable map dragging
         this.map?.dragging.enable();
 
@@ -238,21 +236,27 @@ class LeafletDragHandler {
         // Reset the dragged object info
         this.draggedObjectInfo = this._createDefaultDraggedObjectInfo();
         this.measure = null; // Reset the measure reference
+
+        // Reset listeners
+        this._removeDragListeners(); // Ensure listeners are removed
     }
 
+    /**
+     * Removes drag listeners to prevent memory leaks.
+     */
     _removeDragListeners() {
-        if (this.mouseMoveListener) {
-            // Assuming inputHandler.on returns a reference or function to remove
-            // If inputHandler.on returns void, this needs adjustment based on inputHandler's implementation
-            this.inputHandler.off('mousemove', this._handleDrag); // Use the correct reference/callback
-            this.mouseMoveListener = null;
-        }
-        if (this.mouseUpListener) {
-            this.inputHandler.off('leftup', this._handleDragEnd); // Use the correct reference/callback
-            this.mouseUpListener = null;
-        }
+        // Always attempt to remove the mousemove listener from the inputHandler
+        this.inputHandler.off('mousemove', this._handleDrag); // Use the correct reference/callback
+        this.mouseMoveListener = null;
+
+        // remove the mouseup listener from the document
+        document.removeEventListener('mouseup', this._handleDragEnd); // Use the correct reference/callback
+        this.mouseUpListener = null;
     }
 
+    /**
+     * Cleans up the handler by removing listeners and resetting state.
+     */
     destroy() {
         this.deactivate(); // Ensure cleanup
     }

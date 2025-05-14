@@ -123,17 +123,6 @@ class PolygonLeaflet extends MeasureModeBase {
                         this.dragHandler._handleDragStart(marker, event);
                     }
                 },
-                // --- ADD MOUSEUP LISTENER HERE ---
-                mouseup: (event) => { // 'event' here is google.maps.MapMouseEvent
-                    // Check if a drag sequence was potentially active
-                    if (this.dragHandler && this.dragHandler.isDragging) {
-                        event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
-                        event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
-
-                        // Directly call the drag handler's end method
-                        this.dragHandler._handleDragEnd(event);
-                    }
-                }
             }
         };
 
@@ -157,11 +146,13 @@ class PolygonLeaflet extends MeasureModeBase {
         if (this.coordsCache.length > 2) {
             this._createOrUpdatePolygon(this.coordsCache, this.#interactiveAnnotations.polygons, {
                 status: "pending",
-                color: this.stateManager.getColorState("polygon")
+                color: this.stateManager.getColorState("polygon"),
+                interactive: false // Disable interactivity for the polygon
             });
 
             this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "pending",
+                interactive: false // Disable interactivity for the label
             });
         }
     }
@@ -188,12 +179,14 @@ class PolygonLeaflet extends MeasureModeBase {
                 // -- Handle Polygon
                 this._createOrUpdatePolygon(movingDataCache, this.#interactiveAnnotations.polygons, {
                     status: "moving",
-                    color: "#FFFF00"
+                    color: "#FFFF00",
+                    interactive: false // Disable interactivity during moving
                 });
 
                 // -- Handle Label --
                 this._createOrUpdateLabel(movingDataCache, this.#interactiveAnnotations.labels, {
                     status: "moving",
+                    interactive: false // Disable interactivity during moving
                 });
                 break;
             default:
@@ -236,17 +229,6 @@ class PolygonLeaflet extends MeasureModeBase {
                         this.dragHandler._handleDragStart(marker, event);
                     }
                 },
-                // --- ADD MOUSEUP LISTENER HERE ---
-                mouseup: (event) => { // 'event' here is google.maps.MapMouseEvent
-                    // Check if a drag sequence was potentially active
-                    if (this.dragHandler && this.dragHandler.isDragging) {
-                        event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
-                        event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
-
-                        // Directly call the drag handler's end method
-                        this.dragHandler._handleDragEnd(event);
-                    }
-                }
             }
         };
 
@@ -262,12 +244,14 @@ class PolygonLeaflet extends MeasureModeBase {
         // -- Handle Polygon --
         this._createOrUpdatePolygon(this.coordsCache, this.#interactiveAnnotations.polygons, {
             status: "completed",
-            color: this.stateManager.getColorState("polygon")
+            color: this.stateManager.getColorState("polygon"),
+            interactive: true // Enable interactivity for the final polygon
         });
 
         // -- Handle Label --
         const { area } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
             status: "completed",
+            interactive: true // Enable interactivity for the final label
         });
 
         // -- Update data --
@@ -306,12 +290,14 @@ class PolygonLeaflet extends MeasureModeBase {
         // -- Handle polygon --
         this._createOrUpdatePolygon(latLngArray, this.dragHandler.draggedObjectInfo.polygons, {
             status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            interactive: false // Disable interactivity during moving
         });
 
         // -- Handle label --
         this._createOrUpdateLabel(latLngArray, this.dragHandler.draggedObjectInfo.labels, {
             status: "moving",
+            interactive: false // Disable interactivity during moving
         });
     }
 
@@ -331,12 +317,14 @@ class PolygonLeaflet extends MeasureModeBase {
         // -- Finalize polygon --
         this._createOrUpdatePolygon(latLngArray, this.dragHandler.draggedObjectInfo.polygons, {
             status: "completed",
-            color: this.stateManager.getColorState("polygon")
+            color: this.stateManager.getColorState("polygon"),
+            interactive: true // Enable interactivity for the final polygon
         });
 
         // -- Finalize Label --
         const { area } = this._createOrUpdateLabel(latLngArray, this.dragHandler.draggedObjectInfo.labels, {
             status: "completed",
+            interactive: true // Enable interactivity for the final label
         });
 
         // --- Update Measure Data ---
@@ -370,6 +358,8 @@ class PolygonLeaflet extends MeasureModeBase {
         const {
             status = null,
             color = this.stateManager.getColorState("polygon"),
+            interactive = false,
+            ...rest
         } = options;
 
         let polygonInstance = null;
@@ -384,6 +374,18 @@ class PolygonLeaflet extends MeasureModeBase {
                 // -- Handle Polygon Visual Update --
                 polygonInstance.setLatLngs(positions); // update position
                 polygonInstance.setStyle({ color: color }); // Change color to indicate moving state
+
+                // Update interactive state
+                const oldInteractiveState = polygonInstance.options.interactive;
+                // Compare the old with current interactive state, only update interactive if different
+                if (oldInteractiveState !== interactive) {
+                    // Update the interactive
+                    polygonInstance.options.interactive = interactive;
+                    // Refresh the layer to apply the new interactive state. 
+                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
+                        this.drawingHelper._refreshLayerInteractivity(polygonInstance);
+                    }
+                }
             }
         }
 
@@ -392,8 +394,9 @@ class PolygonLeaflet extends MeasureModeBase {
         if (!polygonInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             polygonInstance = this.drawingHelper._addPolygon(positions, {
                 color,
-                interactive: false,
-                id: `annotate_area_${this.measure.id}`
+                id: `annotate_area_polygon_${this.measure.id}`,
+                interactive,
+                ...rest
             });
 
             if (!polygonInstance) {
@@ -433,7 +436,9 @@ class PolygonLeaflet extends MeasureModeBase {
         // default options
         const {
             status = null,
-            // add more options here if needed
+            color = 'rgba(0,0,0,1)',
+            interactive = false,
+            ...rest
         } = options;
 
         const area = calculateArea(positions);
@@ -457,7 +462,26 @@ class PolygonLeaflet extends MeasureModeBase {
             } else {
                 // -- Handle Label Visual Update --
                 labelInstance.setLatLng(middlePos); // update position
-                labelInstance.setContent(formattedText); // update text
+
+                // Create HTML element for label content
+                const contentElement = document.createElement('span');
+                contentElement.style.color = color;
+                contentElement.textContent = formattedText;
+
+                // Set the content of the label
+                labelInstance.setContent(contentElement); // update content
+
+                // Update interactive state
+                const oldInteractiveState = labelInstance.options.interactive;
+                // Compare the old with current interactive state, only update interactive if different
+                if (oldInteractiveState !== interactive) {
+                    // Update the interactive
+                    labelInstance.options.interactive = interactive;
+                    // Refresh the layer to apply the new interactive state. 
+                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
+                        this.drawingHelper._refreshLayerInteractivity(labelInstance);
+                    }
+                }
             }
         }
 
@@ -465,7 +489,8 @@ class PolygonLeaflet extends MeasureModeBase {
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, area, "squareMeter", {
                 id: `annotate_area_label_${this.measure.id}`,
-                status: status,
+                interactive,
+                ...rest
             });
 
             if (!labelInstance) {

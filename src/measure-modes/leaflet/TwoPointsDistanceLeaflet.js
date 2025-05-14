@@ -120,17 +120,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
                         this.dragHandler._handleDragStart(marker, event);
                     }
                 },
-                // --- ADD MOUSEUP LISTENER HERE ---
-                mouseup: (event) => {
-                    // Check if a drag sequence was potentially active
-                    if (this.dragHandler && this.dragHandler.isDragging) {
-                        event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
-                        event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
-
-                        // Directly call the drag handler's end method
-                        this.dragHandler._handleDragEnd(event);
-                    }
-                }
             }
         };
 
@@ -162,12 +151,14 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
             // -- Handle polyline --
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
                 status: "completed",
-                color: this.stateManager.getColorState("line")
+                color: this.stateManager.getColorState("line"),
+                interactive: true
             });
 
             // -- Handle label --
             const { distance } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "completed",
+                interactive: true,
             });
 
             // Update this.measure
@@ -219,13 +210,15 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
                     // Moving line: remove if existed, create if not existed
                     this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
                         status: "moving",
-                        color: this.stateManager.getColorState("move")
+                        color: this.stateManager.getColorState("move"),
+                        interactive: false
                     });
 
                     // Moving label: update if existed, create if not existed
                     this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
                         status: "moving",
-                        showBackground: false
+                        // showBackground: false
+                        interactive: false
                     });
                 }
                 break;
@@ -265,12 +258,14 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
         // -- Handle polyline --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
             status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            interactive: false
         });
 
         // -- Handle label --
         this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
             status: "moving",
+            interactive: false
         });
     }
 
@@ -298,13 +293,15 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
 
         // -- Finalize Line Graphics --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "moving",
-            color: this.stateManager.getColorState("line")
+            status: "completed",
+            color: this.stateManager.getColorState("line"),
+            interactive: true
         });
 
         // -- Finalize Label Graphics --
         const { distance } = this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
             status: "completed",
+            interactive: true
         });
 
         // -- Update dragHandler variables --
@@ -327,7 +324,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
      * Creates a new polyline or updates an existing one based on positions.
      * Manages the reference within the provided polylinesArray.
      * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
-     * @param {L.polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified.
+     * @param {L.polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified. Caution: this is not the polylineCollection.
      * @param {Object} [options={}] - Options for the line.
      * @returns {L.polyline | null} The created or updated polyline instance, or null if failed.
      */
@@ -346,7 +343,9 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
         // Default options
         const {
             status = null,
-            color = this.stateManager.getColorState("move") // Default color if not provided
+            color = this.stateManager.getColorState("move"), // Default color if not provided
+            interactive = false,
+            ...rest
         } = options;
 
         let lineInstance = null;
@@ -365,15 +364,29 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
                 // Assumes lineInstance is a valid Polyline if it exists
                 lineInstance.setLatLngs(positions); // Update path of the line, requires L.latLng[]
                 lineInstance.setStyle({ color: color }); // Update color
+
+                // Update lineInstance interactive attribute
+                const oldInteractiveState = lineInstance.options.interactive;
+                // Compare the old with current interactive state, only update interactive if different
+                if (oldInteractiveState !== interactive) {
+                    // Update the interactive
+                    lineInstance.options.interactive = interactive;
+                    // Refresh the layer to apply the new interactive state. 
+                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
+                        this.drawingHelper._refreshLayerInteractivity(lineInstance);
+                    }
+                }
             }
         }
-        // --- Creation Block (if needed) ---
+
+        // --- Creation new polyline ---
         // This block runs if polylinesArray was empty OR if the existing entry was invalid (!lineInstance was true above)
         if (!lineInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             lineInstance = this.drawingHelper._addPolyline(positions, {
                 color,
-                interactive: false,
-                id: `annotate_distance_line_${this.measure.id}`
+                id: `annotate_distance_line_${this.measure.id}`,
+                interactive,
+                ...rest
             });
 
             if (!lineInstance) {
@@ -398,7 +411,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
       * If the label exists in labelsArray, update its position and text, else create a new one.
       * Manages the reference within the provided labelsArray.
       * @param {{lat:number,lng:number}[]} positions - Array of positions (expects 2) to calculate distance and middle point.
-      * @param {L.tooltip[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified.
+      * @param {L.tooltip[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified. Caution: this is not the labelCollection.
       * @param {Object} [options={}] - Options for the label.
       * @param {string|null} [options.status=null] - Status to set on the label instance.
       * @return {{ distance: number, labelInstance: L.tooltip | null }} - The calculated distance and the created/updated label instance, or null if failed.
@@ -413,7 +426,9 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
         // Default options
         const {
             status = null,
-            // add more options here if needed
+            color = "rgba(0,0,0,1)",
+            interactive = false,
+            ...rest
         } = options;
 
         const distance = calculateDistance(positions[0], positions[1]); // calculate distance
@@ -439,18 +454,36 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
             } else {
                 // -- Handle Label Visual Update --
                 labelInstance.setLatLng(middlePos); // update position
-                labelInstance.setContent(formattedText); // update text
+
+                // Create HTML element for label content
+                const contentElement = document.createElement('span');
+                contentElement.style.color = color;
+                contentElement.textContent = formattedText;
+
+                // Set the content of the label
+                labelInstance.setContent(contentElement); // update content
+
+                // Update interactive state
+                const oldInteractiveState = labelInstance.options.interactive;
+                // Compare the old with current interactive state, only update interactive if different
+                if (oldInteractiveState !== interactive) {
+                    // Update the interactive
+                    labelInstance.options.interactive = interactive;
+                    // Refresh the layer to apply the new interactive state. 
+                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
+                        this.drawingHelper._refreshLayerInteractivity(labelInstance);
+                    }
+                }
             }
         }
 
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
-                interactive: false,
-                id: `annotate_distance_label_${this.measure.id}`
+                id: `annotate_distance_label_${this.measure.id}`,
+                interactive,
+                ...rest
             });
-            console.log("🚀 labelInstance:", labelInstance);
-
 
             if (!labelInstance) {
                 console.error("_createOrUpdateLabel: Failed to create new label instance.");
@@ -480,6 +513,8 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
         // Reset flags
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
+
+        this.#coordinate = null;
 
         // Clear cache
         this.coordsCache = [];

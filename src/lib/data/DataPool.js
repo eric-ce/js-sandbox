@@ -86,56 +86,6 @@ class DataPool {
     }
 
     /**
-     * Update a measurement record by its id.
-     * @param {Number} id - The id of the measurement record. 
-     * @param {Object} newData - The new data to replace the existing record.
-     * @returns 
-     */
-    updateMeasureById(id, newData) {
-        const measureIndex = this._data.findIndex(measure => measure.id === id);
-        if (measureIndex === -1) {
-            console.warn("No measurement found containing the provided id.");
-            return;
-        }
-
-        // coordinates handling to convert to cartographicDegrees
-        newData.coordinates = this._coordToCartographicDegrees(newData.coordinates);
-
-        // Update the entire group with newData (you might also merge instead of replace)
-        this._data[measureIndex] = newData;
-
-        if (this.emitter) {
-            this.emitter.emit("data:updated", this._data[measureIndex]);
-            this.emitter.emit("data", this._data);
-        }
-
-        return this._data[measureIndex];
-    }
-
-    /**
-     * Updates a measurement record that contains a given coordinate.
-     * This method finds the measurement group by matching one coordinate (using areCoordinatesEqual).
-     * @param {Object} position - A coordinate to match.
-     * @param {Object} newData - The new data to replace the existing record.
-     */
-    updateMeasureByPosition(position, newData) {
-        const groupIndex = this._data.findIndex(group =>
-            group.coordinates.some(coord => cesiumHelper.areCoordinatesEqual(coord, position))
-        );
-        if (groupIndex === -1) {
-            console.warn("No measurement found containing the provided position.");
-            return;
-        }
-
-        // Update the entire group with newData (you might also merge instead of replace)
-        this._data[groupIndex] = newData;
-
-        if (this.emitter) {
-            this.emitter.emit("data:updated", this._data[groupIndex]);
-        }
-    }
-
-    /**
      * Retrieves a measurement record by matching one of its coordinates.
      * @param {Object} position - A coordinate to match.
      * @returns {Object|undefined} The matched measurement record or undefined if not found.
@@ -190,6 +140,77 @@ class DataPool {
         return [...this._data]
     }
 
+    /**
+     * Update a measurement record by its id.
+     * @param {Number} id - The id of the measurement record. 
+     * @param {Object} newData - The new data to replace the existing record.
+     * @returns 
+     */
+    updateMeasureById(id, newData) {
+        const measureIndex = this._data.findIndex(measure => measure.id === id);
+        if (measureIndex === -1) {
+            console.warn("No measurement found containing the provided id.");
+            return;
+        }
+
+        // coordinates handling to convert to cartographicDegrees
+        newData.coordinates = this._coordToCartographicDegrees(newData.coordinates);
+
+        // Update the entire group with newData (you might also merge instead of replace)
+        this._data[measureIndex] = newData;
+
+        if (this.emitter) {
+            this.emitter.emit("data:updated", this._data[measureIndex]);
+            this.emitter.emit("data", this._data);
+        }
+
+        return this._data[measureIndex];
+    }
+
+    /**
+     * Updates a measurement record that contains a given coordinate.
+     * This method finds the measurement group by matching one coordinate (using areCoordinatesEqual).
+     * @param {Object} position - A coordinate to match.
+     * @param {Object} newData - The new data to replace the existing record.
+     */
+    updateMeasureByPosition(position, newData) {
+        const groupIndex = this._data.findIndex(group =>
+            group.coordinates.some(coord => cesiumHelper.areCoordinatesEqual(coord, position))
+        );
+        if (groupIndex === -1) {
+            console.warn("No measurement found containing the provided position.");
+            return;
+        }
+
+        // Update the entire group with newData (you might also merge instead of replace)
+        this._data[groupIndex] = newData;
+
+        if (this.emitter) {
+            this.emitter.emit("data:updated", this._data[groupIndex]);
+        }
+    }
+
+    /**
+     * Removes a measurement record by its id.
+     * @param {number} id - The id of the measurement record. 
+     * @returns {Object} The removed measurement record.
+     */
+    removeMeasureById(id) {
+        const measureIndex = this._data.findIndex(measure => measure.id === Number(id));
+        if (measureIndex === -1) {
+            console.warn("No measurement found containing the provided id.");
+            return; // Or return null / undefined explicitly
+        }
+
+        // Remove the measurement from the data pool
+        const removedMeasure = this._data.splice(measureIndex, 1)[0];
+
+        if (this.emitter) {
+            this.emitter.emit("data:removed", removedMeasure);
+            this.emitter.emit("data", this._data);
+        }
+        return removedMeasure; // Explicitly return the removed measure
+    }
 
     /*******************
      * HELPER FEATURES *

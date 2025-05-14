@@ -2,8 +2,27 @@ import L from 'leaflet';
 import * as turf from '@turf/turf';
 
 /***********
- * VECTORS *
+ * Layers *
  ***********/
+/**
+ * Checks the type of a given layer.
+ * @param {L.Polyline|L.Polygon|L.Tooltip|L.CircleMarker} layer - The layer to check.
+ * @returns {"polyline"|"polygon"|"label"|"point"|null} - The type of the layer or null if not recognized.
+ */
+export function checkLayerType(layer) {
+    if (layer instanceof L.Polyline && layer?.id.includes('line')) {
+        return "polyline";
+    } else if (layer instanceof L.Polygon && layer?.id.includes('polygon')) {
+        return "polygon";
+    } else if (layer instanceof L.Tooltip && layer?.id.includes('label')) {
+        return "label";
+    } else if (layer instanceof L.CircleMarker && layer?.id.includes('point')) {
+        return "point";
+    } else {
+        return null;
+    }
+}
+
 /**
  * Creates a circle marker object with specific position and options.
  * Does NOT add the marker to the map.
@@ -31,7 +50,7 @@ export function createCircleMarker(position, options = {}) {
         radius = 5,
         fillColor = "rgba(255,0,0,1)",
         color = "rgba(255,0,0,1)",
-        weight = 1,
+        weight = 0,
         opacity = 1,
         fillOpacity = 0.8,
         pane = 'markerPane',
@@ -139,6 +158,7 @@ export function createPolyline(positions, options = {}) {
         opacity = 1.0,
         pane = 'overlayPane',
         id = "annotate_polyline",
+        interactive = false,
         ...rest
     } = options
 
@@ -148,6 +168,7 @@ export function createPolyline(positions, options = {}) {
         color,
         weight,
         opacity,
+        interactive,
         pane,
         ...rest
     });
@@ -240,19 +261,28 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
         opacity = 0.8,
         offset = [0, -20],
         id = "annotate_label",
+        color = "rgba(0, 0, 0, 1)",
+        interactive = false,
         ...rest
     } = options;
 
+    // Create an HTMLElement for the content
+    const contentElement = document.createElement('span');
+    contentElement.style.color = color;
+    contentElement.textContent = textContent;
+
     // Create Label tooltip
-    const tooltip = L.tooltip({
+    const tooltip = L.tooltip(middlePos, {
+        content: contentElement,
         className,
         direction,
         permanent,
         opacity,
         offset,
-        rest,
-    }).setLatLng(middlePos)
-        .setContent(textContent)
+        ...rest,
+    })
+    // .setLatLng(middlePos)
+    // .setContent(contentElement);
 
     if (!tooltip) {
         console.error("Failed to create tooltip.");
@@ -267,8 +297,8 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
 }
 
 /**
- * Removes a vector layer from the map.
- * This function is a generic utility to remove various types of vector layers from the map.
+ * Removes a layer from the map.
+ * This function is a generic utility to remove various types of layers from the map.
  * @param {L.polyline | L.circleMarker | L.tooltip | L.polygon} layer 
  * @returns {void}
  */

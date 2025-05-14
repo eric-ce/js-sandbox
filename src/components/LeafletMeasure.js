@@ -3,6 +3,7 @@ import {
     createPolygon,
     createPolyline,
     createLabelTooltip,
+    checkLayerType,
 } from "../lib/helper/leafletHelper.js";
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
@@ -54,53 +55,54 @@ export default class LeafletMeasure extends MeasureComponentBase {
             return null;
         }
 
-        try {
-            // Separate listeners from other marker options
-            const { listeners, status = null, ...markerOptions } = options;
+        // Separate listeners from other marker options
+        const { listeners, ...rest } = options;
 
-            // Create the point marker (assuming helper doesn't add to map)
-            const pointMarker = createCircleMarker(position, markerOptions);
+        // Create the point marker (assuming helper doesn't add to map)
+        const pointMarker = createCircleMarker(position, { ...rest });
+        if (!pointMarker) return null;
 
-            if (pointMarker) {
-                // -- Handle Metadata --
-                pointMarker.status = status; // Add custom properties if needed
-
-                // --- Attach Listeners (Leaflet Style) ---
-                if (listeners && typeof listeners === 'object') {
-                    for (const eventName in listeners) {
-                        if (typeof listeners[eventName] === 'function') {
-                            // Use marker.on() for Leaflet
-                            pointMarker.on(eventName, (leafletEvent) => {
-                                // Normalize Leaflet event data (similar to GoogleMapsInputHandler)
-                                const eventData = {
-                                    mapPoint: leafletEvent.latlng ? { lat: leafletEvent.latlng.lat, lng: leafletEvent.latlng.lng } : null,
-                                    screenPoint: leafletEvent.containerPoint ? { x: leafletEvent.containerPoint.x, y: leafletEvent.containerPoint.y } : { x: NaN, y: NaN }, // Provide fallback
-                                    domEvent: leafletEvent.originalEvent, // Pass original DOM event
-                                    leafletEvent: leafletEvent // Keep original Leaflet event if needed
-                                };
-
-                                // Pass the marker itself and the normalized event data to the callback
-                                // This matches the signature expected by your mode's listener functions
-                                listeners[eventName](pointMarker, eventData);
-
-                                // Optional: Stop propagation if needed within the original listener
-                                // L.DomEvent.stopPropagation(leafletEvent); // Or handle in the mode's listener
-                            });
-                        }
-                    }
-                }
-                // --- End Attach Listeners ---
-
-                // -- Add to the collection --
-                this.#pointCollection.addLayer(pointMarker);
-            }
-
-            return pointMarker;
-
-        } catch (error) {
-            console.error("LeafletMeasure: Error in _addPointMarker:", error);
-            return null;
+        // Highlight event listeners
+        if (this.highlightHandler) {
+            pointMarker.on('mouseover', () => {
+                this.highlightHandler.applyHoverHighlight(pointMarker);
+            });
+            pointMarker.on('mouseout', () => {
+                // highlightHandler's removeHoverHighlight should know which object was hovered
+                this.highlightHandler.removeHoverHighlight();
+            });
         }
+
+        // --- Attach Listeners (Leaflet Style) ---
+        if (listeners && typeof listeners === 'object') {
+            for (const eventName in listeners) {
+                if (typeof listeners[eventName] === 'function') {
+                    // Use marker.on() for Leaflet
+                    pointMarker.on(eventName, (leafletEvent) => {
+                        // Normalize Leaflet event data (similar to GoogleMapsInputHandler)
+                        const eventData = {
+                            mapPoint: leafletEvent.latlng ? { lat: leafletEvent.latlng.lat, lng: leafletEvent.latlng.lng } : null,
+                            screenPoint: leafletEvent.containerPoint ? { x: leafletEvent.containerPoint.x, y: leafletEvent.containerPoint.y } : { x: NaN, y: NaN }, // Provide fallback
+                            domEvent: leafletEvent.originalEvent, // Pass original DOM event
+                            leafletEvent: leafletEvent // Keep original Leaflet event if needed
+                        };
+
+                        // Pass the marker itself and the normalized event data to the callback
+                        // This matches the signature expected by your mode's listener functions
+                        listeners[eventName](pointMarker, eventData);
+
+                        // Optional: Stop propagation if needed within the original listener
+                        // L.DomEvent.stopPropagation(leafletEvent); // Or handle in the mode's listener
+                    });
+                }
+            }
+        }
+        // --- End Attach Listeners ---
+
+        // -- Add to the collection --
+        this.#pointCollection.addLayer(pointMarker);
+
+        return pointMarker;
     }
 
     _addPointMarkersFromArray(positions, options = {}) {
@@ -125,6 +127,12 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return addedMarkers; // Return the array of successfully added markers
     }
 
+    /**
+     * Adds a polyline to the map.
+     * @param {*} positions - Array of positions for the polyline
+     * @param {object} [options={}] - Options for the polyline
+     * @returns {L.Polyline|null} - The created polyline or null if failed
+     */
     _addPolyline(positions, options = {}) {
         // -- Validate dependencies --
         if (!this.map || !Array.isArray(positions) || positions.length < 2) {
@@ -132,20 +140,24 @@ export default class LeafletMeasure extends MeasureComponentBase {
             return null;
         }
 
-        // Default options
-        const {
-            status = null,
-        } = options;
-
         // -- Create Polyline --
         const polyline = createPolyline(positions, options);
+        if (!polyline) return null;
 
-        if (polyline) {
-            // -- Handle Metadata --
-            polyline.status = status;
-            // -- Add to the collection --
-            this.#polylineCollection.addLayer(polyline);
+        // Highlight event listeners
+        if (this.highlightHandler) {
+            polyline.on('mouseover', () => {
+                this.highlightHandler.applyHoverHighlight(polyline);
+            });
+            polyline.on('mouseout', () => {
+                // highlightHandler's removeHoverHighlight should know which object was hovered
+                this.highlightHandler.removeHoverHighlight();
+            });
         }
+
+        // -- Add to the collection --
+        this.#polylineCollection.addLayer(polyline);
+
         return polyline;
     }
 
@@ -176,19 +188,24 @@ export default class LeafletMeasure extends MeasureComponentBase {
             return null;
         }
 
-        // Default options
-        const {
-            status = null,
-        } = options;
-
         // -- Create Polygon --
         const polygon = createPolygon(positions, options);
-        if (polygon) {
-            // -- Handle Metadata --
-            polygon.status = status;
-            // -- Add to the collection --
-            this.#polygonCollection.addLayer(polygon);
+        if (!polygon) return null;
+
+        // Highlight event listeners
+        if (this.highlightHandler) {
+            polygon.on('mouseover', () => {
+                this.highlightHandler.applyHoverHighlight(polygon);
+            });
+            polygon.on('mouseout', () => {
+                // highlightHandler's removeHoverHighlight should know which object was hovered
+                this.highlightHandler.removeHoverHighlight();
+            });
         }
+
+        // -- Add to the collection --
+        this.#polygonCollection.addLayer(polygon);
+
         return polygon;
     }
 
@@ -199,19 +216,23 @@ export default class LeafletMeasure extends MeasureComponentBase {
             return null;
         }
 
-        // Default options
-        const {
-            status = null,
-        } = options;
-
         // -- Create Label --
         const label = createLabelTooltip(positions, value, unit, options);
-        if (label) {
-            // -- Handle Metadata --
-            label.status = status;
-            // -- Add to the collection --
-            this.#labelCollection.addLayer(label);
+        if (!label) return null;
+
+        // Highlight event listeners
+        if (this.highlightHandler) {
+            label.on('mouseover', () => {
+                this.highlightHandler.applyHoverHighlight(label);
+            });
+            label.on('mouseout', () => {
+                // highlightHandler's removeHoverHighlight should know which object was hovered
+                this.highlightHandler.removeHoverHighlight();
+            });
         }
+
+        // -- Add to the collection --
+        this.#labelCollection.addLayer(label);
         return label;
     }
 
@@ -232,6 +253,46 @@ export default class LeafletMeasure extends MeasureComponentBase {
         }
 
         return addedLabels; // Return the array of successfully added polylines
+    }
+
+    /**
+     * Refreshes a layer's interactivity by removing and re-adding it to its collection.
+     * This ensures Leaflet re-initializes event bindings based on current options.
+     * @param {L.Layer} layerInstance - The Leaflet layer to refresh.
+     */
+    _refreshLayerInteractivity(layerInstance) {
+        if (!layerInstance) return;
+
+        const layerType = checkLayerType(layerInstance);
+
+        switch (layerType) {
+            case "point":
+                if (this.#polylineCollection && this.#polylineCollection.hasLayer(layerInstance)) {
+                    this.#polylineCollection.removeLayer(layerInstance);
+                    this.#polylineCollection.addLayer(layerInstance);
+                }
+                break;
+            case "polyline":
+                if (this.#polylineCollection && this.#polylineCollection.hasLayer(layerInstance)) {
+                    this.#polylineCollection.removeLayer(layerInstance);
+                    this.#polylineCollection.addLayer(layerInstance);
+                }
+                break;
+            case "polygon":
+                if (this.#polygonCollection && this.#polygonCollection.hasLayer(layerInstance)) {
+                    this.#polygonCollection.removeLayer(layerInstance);
+                    this.#polygonCollection.addLayer(layerInstance);
+                }
+                break;
+            case "label":
+                if (this.#labelCollection && this.#labelCollection.hasLayer(layerInstance)) {
+                    this.#labelCollection.removeLayer(layerInstance);
+                    this.#labelCollection.addLayer(layerInstance);
+                }
+                break;
+            default:
+                return;
+        }
     }
 
     _removePointMarker(marker) {
