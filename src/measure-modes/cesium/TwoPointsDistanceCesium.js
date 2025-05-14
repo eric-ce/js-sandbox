@@ -54,7 +54,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
 /**
  * Handles two-point distance measurement specifically for Cesium Map.
- * @extends MeasureModeCesium
+ * @extends {MeasureModeCesium}
  */
 class TwoPointsDistanceCesium extends MeasureModeCesium {
     // -- Public fields: dependencies --
@@ -190,7 +190,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         // create a new point primitive
         const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
-            id: `annotate_distance_point_${this.measure.id}`,
+            id: `annotate_${this.mode}_point_${this.measure.id}`,
         });
         if (!pointPrimitive) return; // If point creation fails, exit
         pointPrimitive.status = "pending"; // Set status to pending for the point primitive
@@ -247,6 +247,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         }
     }
 
+
     /***********************
      * MOUSE MOVE FEATURES *
      ***********************/
@@ -275,27 +276,27 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
 
         switch (true) {
             case isMeasuring:
-                if (this.coordsCache.length === 1) {
-                    const positions = [this.coordsCache[0], cartesian].filter(Boolean); // Filter out any undefined values
+                // if (this.coordsCache.length === 1) {
+                const positions = [this.coordsCache[0], cartesian].filter(Boolean); // Filter out any undefined values
 
-                    // Validate cesium positions
-                    if (positions.length < 2) {
-                        console.error("Cesium positions are empty or invalid:", positions);
-                        return;
-                    }
-
-                    // Moving line: remove if existed, create if not existed
-                    this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                        status: "moving",
-                        color: this.stateManager.getColorState("move")
-                    });
-
-                    // Moving label: update if existed, create if not existed
-                    this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                        status: "moving",
-                        showBackground: false
-                    });
+                // Validate cesium positions
+                if (positions.length < 2) {
+                    console.error("Cesium positions are empty or invalid:", positions);
+                    return;
                 }
+
+                // Moving line: remove if existed, create if not existed
+                this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
+                    status: "moving",
+                    color: this.stateManager.getColorState("move")
+                });
+
+                // Moving label: update if existed, create if not existed
+                this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
+                    status: "moving",
+                    showBackground: false
+                });
+                // }
                 break;
             default:
                 // this.handleHoverHighlighting(pickedObjects[0]);
@@ -367,15 +368,6 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
     /*******************
      * HELPER FEATURES *
      *******************/
-    resetValuesModeSpecific() {
-        // Reset flags
-        this.flags.isMeasurementComplete = false;
-        this.flags.isDragMode = false;
-
-        // Clear cache
-        this.coordsCache = [];
-    }
-
     // _removePendingAnnotations() {
     //     // Remove pending annotations
     //     const pendingPoints = this.pointCollection._pointPrimitives.filter(point => point.status === "pending");
@@ -438,7 +430,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         // -- Create new polyline --
         const newLinePrimitive = this.drawingHelper._addPolyline(positions, {
             color,
-            id: `annotate_distance_line_${this.measure.id}` // Consider making ID more specific if needed (e.g., adding status)
+            id: `annotate_${this.mode}_line_${this.measure.id}` // Consider making ID more specific if needed (e.g., adding status)
         });
 
         // If creation failed, exit
@@ -471,7 +463,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         if (!Array.isArray(positions) || !Array.isArray(labelsArray)) {
             console.warn("Invalid input: positions and labelsArray should be arrays.");
             return { distance: null, labelPrimitive: null }; // Validate input positions
-        }
+        };
 
         // default options
         const {
@@ -508,7 +500,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
             labelPrimitive = this.drawingHelper._addLabel(positions, distance, "meter", {
-                id: `annotate_distance_label_${this.measure.id}`,
+                id: `annotate_${this.mode}_label_${this.measure.id}`,
                 showBackground: showBackground,
             });
 
@@ -528,27 +520,13 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         return { distance, labelPrimitive };
     }
 
-    /**
-     * Checks if the given coordinate is near any existing point in the mode.
-     * @param {Cartesian3} coordinate - The coordinate to check.
-     * @return {boolean} - Returns true if the coordinate is near an existing point, false otherwise.
-     */
-    _isNearPoint(coordinate) {
-        if (!coordinate) {   // Validate input coordinate
-            console.warn("Invalid coordinate provided.");
-            return false;
-        };
+    resetValuesModeSpecific() {
+        // Reset flags
+        this.flags.isMeasurementComplete = false;
+        this.flags.isDragMode = false;
 
-        // Get all measure data from the data pool in Cartesian3 format
-        const data = dataPool.getAllMeasures("cartesian3");
-
-        if (!Array.isArray(data) && data.length === 0) return false; // No measures available
-
-        // Check if the coordinate is near any existing point in the mode
-        return data.some(measure => {
-            if (measure.mapName !== this.mapName) return false; // Check if the measure belongs to the current map
-            return measure.coordinates.some(coord => Cartesian3.distance(coord, coordinate) < 0.3);
-        });
+        // Clear cache
+        this.coordsCache = [];
     }
 }
 

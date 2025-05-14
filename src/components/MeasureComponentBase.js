@@ -20,7 +20,7 @@ import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
-import { TwoPointsDistanceCesium, PolygonCesium, TwoPointsDistanceGoogle, PolygonGoogle, TwoPointsDistanceLeaflet, PolygonLeaflet } from "../measure-modes/index.js";
+import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, TwoPointsDistanceGoogle, PolygonGoogle, TwoPointsDistanceLeaflet, PolygonLeaflet } from "../measure-modes/index.js";
 
 
 /**
@@ -161,6 +161,7 @@ export class MeasureComponentBase extends HTMLElement {
         this._initializeCesiumCollections();
     }
 
+
     /**********************************************
      * CONNECTEDCALLBACK AND DISCONNECTEDCALLBACK *
      **********************************************/
@@ -215,6 +216,7 @@ export class MeasureComponentBase extends HTMLElement {
         this.#isInitialized = false;
         console.log(`${this.constructor.name}: Disconnected cleanup complete.`);
     }
+
 
     /*****************
      * OTHER METHODS *
@@ -345,14 +347,14 @@ export class MeasureComponentBase extends HTMLElement {
                 }
             },
             {
-                id: 'bookmark',
-                name: 'Bookmark',
+                id: 'pointInfo',
+                name: 'PointInfo',
                 icon: pointsIcon,
                 mapAvailability: ['cesium', 'google', 'leaflet'],
                 getClass: (type) => {
-                    if (type === 'google') return BookmarkGoogle;
-                    if (type === 'cesium') return BookmarkCesium; // Use specific for now
-                    if (type === 'leaflet') return BookmarkLeaflet;
+                    if (type === 'google') return PointInfoGoogle;
+                    if (type === 'cesium') return PointInfoCesium; // Use specific for now
+                    if (type === 'leaflet') return PointInfoLeaflet;
                     return null;
                 }
             },
@@ -374,7 +376,7 @@ export class MeasureComponentBase extends HTMLElement {
                 name: "Curve",
                 icon: curveIcon,
                 mapAvailability: ["cesium"],
-                getClass: (type) => (type === 'cesium' ? CurveCesium : null)
+                getClass: (type) => (type === 'cesium' ? ThreePointsCurveCesium : null)
             },
             {
                 id: 'multi_distance',

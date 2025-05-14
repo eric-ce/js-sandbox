@@ -64,6 +64,35 @@ class MeasureModeCesium extends MeasureModeBase {
         return { ...measure, coordinates: clonedCoordinates }; // Return a new object with the coordinates cloned
     }
 
+    /**
+     * Checks if the given coordinate is near any existing point in the mode.
+     * @param {Cartesian3} coordinate - The coordinate to check.
+     * @return {boolean} - Returns true if the coordinate is near an existing point, false otherwise.
+     */
+    _isNearPoint(coordinate) {
+        if (!coordinate) {   // Validate input coordinate
+            console.warn("Invalid coordinate provided.");
+            return false;
+        };
+
+        // Get all measure data from the data pool in Cartesian3 format
+        const data = dataPool.getAllMeasures("cartesian");
+
+        if (!Array.isArray(data) && data.length === 0) {
+            console.warn("No measures available in the data pool.");
+            return false; // No measures available}
+        }
+
+        // Check if the coordinate is near any existing point in the mode
+        return data.some(measure => {
+            if (measure.mapName !== this.mapName) return false; // Check if the measure belongs to the current map
+            return measure.coordinates.some(coord => Cartesian3.distance(coord, coordinate) < 0.2);
+        });
+    }
+
+    removeAnnotationsAndListeners() {
+        this.drawingHelper.clearCollections();
+    }
 }
 
 export { MeasureModeCesium };

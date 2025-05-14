@@ -5,7 +5,8 @@
 // export { TwoPointsDistance } from "./cesium/TwoPointsDistance.js";
 export { TwoPointsDistanceCesium } from "./cesium/TwoPointsDistanceCesium.js";
 // export { Points } from "./Points.js";
-// export { ThreePointsCurve } from "./ThreePointsCurve.js";
+export { PointInfoCesium } from "./cesium/PointInfoCesium.js";
+export { ThreePointsCurveCesium } from "./cesium/ThreePointsCurveCesium.js";
 // export { Height } from "./Height.js";
 // export { MultiDistance } from "./MultiDistance.js";
 // export { MultiDistanceClamped } from "./MultiDistanceClamped.js";
