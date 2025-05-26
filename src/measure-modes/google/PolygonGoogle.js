@@ -39,7 +39,7 @@ import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng
 /**
  * Handles polygon area measurement specifically for Google Maps.
 */
-export class PolygonGoogle extends MeasureModeGoogle {
+class PolygonGoogle extends MeasureModeGoogle {
     /** @type {InteractiveAnnotationsState} */
     #interactiveAnnotations = {
         polygons: [],
@@ -529,3 +529,5 @@ export class PolygonGoogle extends MeasureModeGoogle {
         this.coordsCache = []; // Clear cache
     }
 };
+
+export { PolygonGoogle };

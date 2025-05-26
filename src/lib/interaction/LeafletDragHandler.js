@@ -97,7 +97,8 @@ class LeafletDragHandler {
         const dragBeginPosition = eventData.mapPoint; // {lat, lng}
 
         // Find the associated measurement data (Requires _findMeasureByCoordinate in the mode)
-        this.measure = findMeasureByCoordinate(dragBeginPosition, dataPool.getAllMeasures("cartographicDegrees"), "leaflet");
+        // this.measure = findMeasureByCoordinate(dragBeginPosition, dataPool.getAllMeasures("cartographicDegrees"), "leaflet");
+        this.measure = this.activeModeInstance._findMeasureByCoordinate(dragBeginPosition);
 
         if (!this.measure) {
             console.warn("LeafletDragHandler: Could not find measure data for dragged marker at", dragBeginPosition);

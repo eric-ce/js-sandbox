@@ -204,6 +204,9 @@ class GoogleDragHandler {
         // -- Finalize Associated Geometry --
         this.activeModeInstance?.finalizeDrag(this.measure);
 
+        // -- Update end position --
+        this.draggedObjectInfo.endPosition = this.#coordinate; // Update the end position
+
         // Update data pool
         dataPool.updateOrAddMeasure({ ...this.measure });
 

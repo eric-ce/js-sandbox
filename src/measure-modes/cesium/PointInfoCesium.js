@@ -9,6 +9,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium";
 
 // -- Cesium types --
 /** @typedef {import('cesium').Cartesian3} Cartesian3 */
+/** @typedef {import('cesium').PointPrimitive} PointPrimitive */
 // -- Data types -- 
 /** @typedef {{labels: Label[]}} InteractiveAnnotationsState */
 /**
@@ -147,7 +148,7 @@ class PointInfoCesium extends MeasureModeCesium {
                 }
                 return true;
             case "point":
-                this._removePointInfoMarker(pickedObject.primitive);
+                // this._removePointInfoMarker(pickedObject.primitive);
                 return true;
             case "line":
                 return false;   // False mean do not handle line click, because it could click on moving line
@@ -214,22 +215,6 @@ class PointInfoCesium extends MeasureModeCesium {
         this.#interactiveAnnotations.labels = [];
     }
 
-    _removePointInfoMarker(pointPrimitive) {
-        // -- Remove point --
-        const pointToRemove = this.pointCollection._pointPrimitives.find(primitive => primitive.id === pointPrimitive.id);
-        if (!pointToRemove) return null;
-        this.drawingHelper._removePointMarker(pointToRemove);
-
-        // -- Remove label --
-        const labelToRemove = this.labelCollection._labels.find(label => areCoordinatesEqual(label.position, pointToRemove.position));
-        if (!labelToRemove) return null;
-        this.drawingHelper._removeLabel(labelToRemove);
-
-        // -- Remove data --
-        const measureId = pointToRemove.id.split("_").slice(-1)[0];
-        dataPool.removeMeasureById(measureId);  // Remove data from data pool
-    }
-
 
     /***********************
      * MOUSE MOVE FEATURES *
@@ -262,6 +247,54 @@ class PointInfoCesium extends MeasureModeCesium {
     }
 
 
+    /*************************
+     * MIDDLE CLICK FEATURES *
+     *************************/
+    /**
+     * Handles middle-click events on the map.
+     * Remove point primitive and its label within pointInfo mode.
+     * @param {NormalizedEventData} eventData 
+     */
+    handleMiddleClick = async (eventData) => {
+        const pickedObject = eventData.pickedFeature[0];
+        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+
+        if (pickedObjectType === "point") {
+            const pointPrimitive = pickedObject.primitive;
+
+            // Find the point primitive to remove
+            const pointToRemove = this.pointCollection._pointPrimitives.find(primitive => primitive.id === pointPrimitive.id);
+            if (!pointToRemove) return null;
+
+            // Get the measure id
+            const idParts = pointToRemove.id.split("_");
+            const measureId = idParts.pop(); // Gets the last element and modifies idParts
+
+            // -- Confirm deletion --
+            // Use js confirm dialog to confirm deletion
+            const confirmDelete = window.confirm(`Do you want to delete this point at measure id ${measureId}?`);
+            if (!confirmDelete) return;
+
+            // -- Remove point--
+            this.drawingHelper._removePointMarker(pointToRemove);
+
+            // -- Remove label --
+            let labelToRemove;
+            // Find the label by id
+            labelToRemove = this.labelCollection._labels.find(label => label.id === `annotate_${this.mode}_label_${measureId}`);
+            if (!labelToRemove) {
+                // Fall back to find by position
+                labelToRemove = this.labelCollection._labels.find(label => areCoordinatesEqual(label.position, pointToRemove.position));
+            }
+            if (!labelToRemove) return null;
+            this.drawingHelper._removeLabel(labelToRemove);
+
+            // -- Remove data --
+            dataPool.removeMeasureById(measureId);  // Remove data from data pool
+        }
+    }
+
+
     /******************
      * EVENT HANDLING *
      *    FOR DRAG    *
@@ -271,14 +304,40 @@ class PointInfoCesium extends MeasureModeCesium {
      * @param {MeasurementGroup} measure - The measure object data from drag operation.
      * @returns {void}
      */
-    updateGraphicsOnDrag(measure) { }
+    updateGraphicsOnDrag(measure) {
+        const position = this.dragHandler.coordinate;
+
+        // -- Handle label --
+        this._createOrUpdateLabel([position], this.dragHandler.draggedObjectInfo.labels, {
+            status: "moving",
+            showBackground: false
+        });
+
+        // -- Hide the coordinate info overlay --
+        if (this.#coordinateInfoOverlay) {
+            this.#coordinateInfoOverlay.style.display = 'none';
+        }
+    }
 
     /**
      * Finalize graphics updates for the end of drag operation
      * @param {MeasurementGroup} measure - The measure object data from drag operation.
      * @returns {void}
      */
-    finalizeDrag(measure) { }
+    finalizeDrag(measure) {
+        const position = this.dragHandler.coordinate;
+
+        // -- Finalize Label Graphics --
+        const { cartographicDegrees } = this._createOrUpdateLabel([position], this.dragHandler.draggedObjectInfo.labels, {
+            status: "completed",
+            showBackground: true
+        });
+
+        // --- Update Measure Data ---
+        measure._records = [cartographicDegrees.latitude, cartographicDegrees.longitude, cartographicDegrees.height]; // Update new records
+        measure.coordinates = [{ ...position }]; // Update coordinates
+        measure.status = "completed"; // Update the measure status
+    }
 
 
     /*******************
@@ -321,7 +380,7 @@ Alt: ${cartographicDegrees.height.toFixed(2)}`;
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
                 // -- Handle Label Visual Update --
-                labelPrimitive.position = middlePos;
+                labelPrimitive.position = positions[0];
                 labelPrimitive.text = formattedText;
                 labelPrimitive.showBackground = showBackground; // Set background visibility
             }
@@ -353,8 +412,25 @@ Alt: ${cartographicDegrees.height.toFixed(2)}`;
     _createCoordinateInfoOverlay() {
         this.#coordinateInfoOverlay = document.createElement("div");
         this.#coordinateInfoOverlay.className = "coordinate-info-overlay";
-        this.#coordinateInfoOverlay.style.cssText =
-            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: block;";
+        // Define styles as an object
+        const styles = {
+            position: "absolute",
+            pointerEvents: "none",
+            padding: "6px 12px",
+            display: "none",
+            backgroundColor: "#1F1F1F", // M3 Dark theme surface color (approx)
+            color: "#E2E2E2",             // M3 Dark theme on-surface text color (approx)
+            borderRadius: "12px",
+            fontFamily: "'Roboto', Arial, sans-serif",
+            fontSize: "14px",
+            lineHeight: "1.5",
+            zIndex: "1001",
+            whiteSpace: "nowrap",
+            boxShadow: "0px 1px 2px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15)" // M3 Dark theme elevation 2 shadow (approx)
+        };
+
+        // Apply styles using Object.assign
+        Object.assign(this.#coordinateInfoOverlay.style, styles);
 
         this.map.container.appendChild(this.#coordinateInfoOverlay);
         return this.#coordinateInfoOverlay;
@@ -389,13 +465,7 @@ Alt: ${cartographicDegrees.height.toFixed(2)}`;
         this.#coordinateInfoOverlay.style.display = 'block';
         this.#coordinateInfoOverlay.style.left = `${screenPosition.x + 20}px`;
         this.#coordinateInfoOverlay.style.top = `${screenPosition.y - 20}px`;
-        this.#coordinateInfoOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        this.#coordinateInfoOverlay.style.color = 'white';
-        this.#coordinateInfoOverlay.style.borderRadius = '4px';
-        this.#coordinateInfoOverlay.style.padding = '8px';
-        this.#coordinateInfoOverlay.style.fontFamily = 'Roboto, sans-serif';
     }
-
 
 
     resetValuesModeSpecific() {
@@ -406,7 +476,10 @@ Alt: ${cartographicDegrees.height.toFixed(2)}`;
         // Clear cache
         this.coordsCache = [];
 
-        this.#coordinateInfoOverlay && this.#coordinateInfoOverlay.remove();
+        if (this.#coordinateInfoOverlay) {
+            this.#coordinateInfoOverlay.remove();
+            this.#coordinateInfoOverlay = null;
+        };
     }
 }
 

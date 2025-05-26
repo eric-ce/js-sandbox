@@ -3,17 +3,17 @@ import {
     defined,
 } from "cesium";
 import {
+    calculateDistance,
     editableLabel,
     updatePointerOverlay,
     getPickedObjectType,
-    computePolygonArea,
-    formatArea,
+    formatDistance,
+    areCoordinatesEqual,
     calculateMiddlePos,
-    areCoordinatesEqual
+    calculateClampedDistance,
 } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
-
 
 // -- Cesium types --
 /** @typedef {import('cesium').Primitive} Primitive */
@@ -22,6 +22,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 /** @typedef {import('cesium').Cartesian2} Cartesian2 */
 
 // -- Data types -- 
+/** @typedef {{polylines: Primitive[], labels: Label[]}} InteractiveAnnotationsState */
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -51,8 +52,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 /** @typedef {import('../../components/CesiumMeasure.js').CesiumMeasure} CesiumMeasure */
 
 
-
-class PolygonCesium extends MeasureModeCesium {
+class ProfileCesium extends MeasureModeCesium {
     // -- Public fields: dependencies --
     /** @type {any} The Cesium package instance. */
     cesiumPkg;
@@ -62,8 +62,7 @@ class PolygonCesium extends MeasureModeCesium {
 
     /** @type {InteractiveAnnotationsState} - References to temporary primitive objects used for interactive drawing*/
     #interactiveAnnotations = {
-        polygons: [],
-        polygonOutlines: [],
+        polylines: [],
         labels: []
     };
 
@@ -71,7 +70,7 @@ class PolygonCesium extends MeasureModeCesium {
     measure = null;
 
     /** @type {Cartesian3[]} */
-    coordsCache = [];
+    coordCache = [];
 
     /**
      * 
@@ -86,10 +85,10 @@ class PolygonCesium extends MeasureModeCesium {
     constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, cesiumPkg) {
         // Validate input parameters
         if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("PolygonCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+            throw new Error("ProfileCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("profile", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -108,13 +107,16 @@ class PolygonCesium extends MeasureModeCesium {
         return this.#interactiveAnnotations;
     }
 
-    /***********************
-     *    EVENT HANDLER    *
-     * LEFT CLICK FEATURES *
-     ***********************/
+    /**********************
+     *   EVENT HANDLER    *
+     * FOR NORMAL MEASURE *
+     **********************/
+    /********************
+     * LEFT CLICK EVENT *
+     ********************/
     /**
      * Handles left-click events on the map.
-     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
      * @returns {Void}
      */
     handleLeftClick = async (eventData) => {
@@ -127,7 +129,6 @@ class PolygonCesium extends MeasureModeCesium {
 
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
-
 
         // If the click was not on a handled primitive and not in drag mode, start measuring
         if (!handled && !this.flags.isDragMode) {
@@ -151,14 +152,17 @@ class PolygonCesium extends MeasureModeCesium {
                 }
                 return true;
             case "point":
-                return true;
+                return false;   // False mean do not handle point click 
             case "line":
-                return true;
+                return false;   // False mean do not handle line click, because it could click on moving line
             default:
                 return false;
         }
     }
 
+    /**
+     * Initiates the measurement process by creating a new group or adding a point.
+     */
     _startMeasure() {
         if (this.flags.isMeasurementComplete) {
             this.flags.isMeasurementComplete = false;
@@ -186,34 +190,62 @@ class PolygonCesium extends MeasureModeCesium {
         if (!pointPrimitive) return; // If point creation fails, exit
         pointPrimitive.status = "pending"; // Set status to pending for the point primitive
 
-        // Update the coordinates cache and this.measure coordinates
+        // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
 
         // -- Update dataPool --
         dataPool.updateOrAddMeasure({ ...this.measure });
 
 
-        // -- Handle Polygon --
-        // If three points create the polygon primitive
-        if (this.coordsCache.length > 2) {
-
-            // -- Handle Polygon Graphics --
-            this._createOrUpdatePolygonGraphics(this.coordsCache, this.#interactiveAnnotations.polygons, {
-                status: "pending",
-                polygonOptions: {
-                    color: this.stateManager.getColorState("polygon"),
-                },
-                polygonOutlineOptions: {
-                    color: this.stateManager.getColorState("line"),
+        // -- Handle Finishing the measure --
+        if (this.coordsCache.length === 2) {
+            // -- Update annotations status --
+            // update points status
+            // Using Cesium recommended public API way to update it instead of accessing via _pointPrimitives
+            const collectionLength = this.pointCollection.length;
+            for (let i = 0; i < collectionLength; i++) {
+                const pointPrimitive = this.pointCollection.get(i);
+                // pointPrimitive is guaranteed to be a valid primitive object here
+                if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
+                    pointPrimitive.status = "completed";
                 }
+            }
+
+            // -- APPROACH 2: Update existing polyline and label --
+            // -- Handle polyline
+            this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
+                status: "completed",
+                color: this.stateManager.getColorState("line")
             });
-            // -- Handle Label Graphics --
-            this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-                status: "pending",
-                showBackground: false,
+
+            // -- Handle label --
+            const { distance, clampedPositions, clampedPositionsCartographic } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
+                status: "completed",
+                showBackground: true
             });
+
+            // -- Handle Chart --
+            this._createOrUpdateChart(clampedPositions, clampedPositionsCartographic);
+
+            // -- Handle Data --
+            this.measure._records.push(distance);
+            this.measure.interpolatedPoints = clampedPositions; // Store interpolated points
+            this.measure.status = "completed";
+
+            // -- Update Data Pool --
+            dataPool.updateOrAddMeasure({ ...this.measure });
+
+            // -- Update State --
+            this.flags.isMeasurementComplete = true;
+
+            // -- Reset Values --
+            // Clean up the current measure state, to prepare for the next measure
+            this.coordsCache = [];
+            this.#interactiveAnnotations.polylines = []; // Clear the interactive polylines
+            this.#interactiveAnnotations.labels = []; // Clear the interactive labels
         }
     }
+
 
     /***********************
      * MOUSE MOVE FEATURES *
@@ -239,29 +271,31 @@ class PolygonCesium extends MeasureModeCesium {
 
         // Handle different scenarios based on the state of the tool
         // the condition to determine if it is measuring
-        const isMeasuring = this.coordsCache.length > 2 && !this.flags.isMeasurementComplete
+        const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete
+
         switch (true) {
             case isMeasuring:
-                // moving coordinate data
-                const positions = [...this.coordsCache, cartesian];
+                // if (this.coordsCache.length === 1) {
+                const positions = [this.coordsCache[0], cartesian].filter(Boolean); // Filter out any undefined values
 
-                // Moving polygon: remove if existed, create if not existed
-                this._createOrUpdatePolygonGraphics(positions, this.#interactiveAnnotations.polygons, {
+                // Validate cesium positions
+                if (positions.length < 2) {
+                    console.error("Cesium positions are empty or invalid:", positions);
+                    return;
+                }
+
+                // Moving line: remove if existed, create if not existed
+                this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
                     status: "moving",
-                    polygonOptions: {
-                        color: this.stateManager.getColorState("polygon"),
-                    },
-                    polygonOutlineOptions: {
-                        color: this.stateManager.getColorState("polygonOutline"),
-                    }
+                    color: this.stateManager.getColorState("move")
                 });
 
                 // Moving label: update if existed, create if not existed
                 this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
                     status: "moving",
-                    showBackground: false,
+                    showBackground: false
                 });
-
+                // }
                 break;
             default:
                 // this.handleHoverHighlighting(pickedObjects[0]);
@@ -269,83 +303,6 @@ class PolygonCesium extends MeasureModeCesium {
         }
     }
 
-    /************************
-     * RIGHT CLICK FEATURES *
-     ************************/
-    /**
-     * Handles right-click events on the map.
-     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
-     * @returns {Void}
-     */
-    handleRightClick = async (eventData) => {
-        if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) { // prevent user to right click on first action
-            // use mouse move position to control only one pickPosition is used
-            const cartesian = this.#coordinate;
-            if (!defined(cartesian)) return;
-
-            // update coordinate data cache
-            this.coordsCache.push(this.#coordinate);
-
-            // -- Update annotations status --
-            // update points status
-            // Using Cesium recommended public API way to update it instead of accessing via _pointPrimitives
-            const collectionLength = this.pointCollection.length;
-            for (let i = 0; i < collectionLength; i++) {
-                const pointPrimitive = this.pointCollection.get(i);
-                // pointPrimitive is guaranteed to be a valid primitive object here
-                if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
-                    pointPrimitive.status = "completed";
-                }
-            }
-
-            // -- Handle final point --
-            // check if final point is near any existing point
-            const nearPoint = this._isNearPoint(this.#coordinate);
-            if (nearPoint) return;
-
-            // create point
-            const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
-                color: this.stateManager.getColorState("pointColor"),
-                id: `annotate_${this.mode}_point_${this.measure.id}`,
-            });
-            if (!pointPrimitive) return; // If point creation fails, exit
-            pointPrimitive.status = "completed"; // Set status to completed for the point primitive
-
-
-            // -- Handle polygon graphics --
-            this._createOrUpdatePolygonGraphics(this.coordsCache, this.#interactiveAnnotations.polygons, {
-                status: "completed",
-                polygonOptions: {
-                    color: this.stateManager.getColorState("polygon"),
-                },
-                polygonOutlineOptions: {
-                    color: this.stateManager.getColorState("line"),
-                }
-            });
-
-
-            // -- Handle label --
-            const { area } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-                status: "completed",
-                showBackground: true,
-            });
-
-            // -- Update data --
-            this.measure._records.push(area);
-            this.measure.status = "completed";
-
-            // Update to data pool
-            dataPool.updateOrAddMeasure({ ...this.measure });
-
-            // set flags
-            this.flags.isMeasurementComplete = true;
-
-            // Clear cache
-            this.coordsCache = [];
-            this.#interactiveAnnotations.polygons = []; // Clear the reference to the polygon primitive
-            this.#interactiveAnnotations.labels = []; // Clear the reference to the polygon primitive
-        }
-    }
 
     /******************
      * EVENT HANDLING *
@@ -357,20 +314,14 @@ class PolygonCesium extends MeasureModeCesium {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
-        const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
-        if (draggedPositionIndex === -1) return; // No dragged position found
-        const positions = [...measure.coordinates];
-        positions[draggedPositionIndex] = this.dragHandler.coordinate; // Update the dragged position
+        const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
+        if (!anchorPosition) return;
+        const positions = [anchorPosition, this.dragHandler.coordinate];
 
-        // -- Handle polygon --
-        this._createOrUpdatePolygonGraphics(positions, this.dragHandler.draggedObjectInfo.polygons, {
+        // -- Handle polyline --
+        this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
             status: "moving",
-            polygonOptions: {
-                color: this.stateManager.getColorState("polygon"),
-            },
-            polygonOutlineOptions: {
-                color: this.stateManager.getColorState("polygonOutline"),
-            }
+            color: this.stateManager.getColorState("move")
         });
 
         // -- Handle label --
@@ -386,108 +337,100 @@ class PolygonCesium extends MeasureModeCesium {
      * @returns {void}
      */
     finalizeDrag(measure) {
-        const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
-        if (draggedPositionIndex === -1) return; // No dragged position found
-        const positions = [...measure.coordinates];
-        positions[draggedPositionIndex] = this.dragHandler.coordinate; // Update the dragged position
+        const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
+        if (!anchorPosition) return;
+        const positions = [anchorPosition, this.dragHandler.coordinate];
 
         // -- Finalize Line Graphics --
-        this._createOrUpdatePolygonGraphics(positions, this.dragHandler.draggedObjectInfo.polygons, {
+        this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
             status: "completed",
-            polygonOptions: {
-                color: this.stateManager.getColorState("polygon"),
-            },
-            polygonOutlineOptions: {
-                color: this.stateManager.getColorState("line"),
-            }
+            color: this.stateManager.getColorState("line")
         });
 
         // -- Finalize Label Graphics --
-        const { area } = this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
+        const { distance, clampedPositions, clampedPositionsCartographic } = this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
             status: "completed",
             showBackground: true
         });
 
+        // -- Handle Chart --
+        this._createOrUpdateChart(clampedPositions, clampedPositionsCartographic);
+
         // --- Update Measure Data ---
-        measure._records = [area]; // Update new area record
+        measure._records = [distance]; // Update new distance record
         measure.coordinates = positions.map(pos => ({ ...pos })); // Update the measure with the new coordinates
+        measure.interpolatedPoints = clampedPositions; // Store interpolated points
         measure.status = "completed"; // Update the measure status
 
         return measure;
     }
 
+
     /*******************
      * HELPER FEATURES *
      *******************/
     /**
-     * Updates polygon primitive by removing the existing one and creating a new one.
-     * @param {Cartesian3[]} positions - The positions to create or update the polygon graphics.
-     * @param {Primitive[]} polygonsArray - The polygons array to update - Not the polygonCollection.
-     * @param {object} options - Options for the polygon primitive.
-     * @returns 
+     * Updates line primitive by removing the existing one and creating a new one.
+     * @param {Cartesian3[]} positions - Array of positions to create or update the line.
+     * @param {Primitive[]} polylinesArray - Array to store the line primitive reference of the operation not the polyline collection.
+     * @param {object} options - Options for line creation or update.
+     * @returns {void}
      */
-    _createOrUpdatePolygonGraphics(positions, polygonsArray, options = {}) {
-        if (positions.length < 3) return; // Ensure there are enough points to create a polygon
-
+    _createOrUpdateLine(positions, polylinesArray, options = {}) {
         // default options
         const {
             status = null,
-            polygonOptions = {},
-            polygonOutlineOptions = {},
+            color = this.stateManager.getColorState("line"),
         } = options;
 
-        // -- Check for and remove existing polyline --    
-        if (Array.isArray(polygonsArray) && polygonsArray.length > 0) {
-            // remove polygon graphics: polygon and polygon outline primitives
-            polygonsArray.forEach(polygonGraphic => {
-                this.drawingHelper._removePolygon(polygonGraphic);
-            });
-            polygonsArray.length = 0; // Clear the reference to the polygon primitive
+        // -- Check for and remove existing polyline --
+        // -- Check for and remove existing polyline --
+        if (Array.isArray(polylinesArray) && polylinesArray.length > 0) {
+            const existingLinePrimitive = polylinesArray[0]; // Get reference to the existing primitive
+            if (existingLinePrimitive) {
+                this.drawingHelper._removePolyline(existingLinePrimitive);
+            }
+            // Clear the array passed by reference. This modifies the original array (e.g., this.#interactiveAnnotations.polylines)
+            polylinesArray.length = 0;
         }
 
-        // -- Create new polygon --
-        const polygonPrimitive = this.drawingHelper._addPolygon(positions, {
-            id: `annotate_${this.mode}_polygon_${this.measure.id}`,
-            ...polygonOptions
-        });
-        // Create polygon outline primitive
-        const polygonOutlinePrimitive = this.drawingHelper._addPolygonOutline(positions, {
-            id: `annotate_${this.mode}_polygonOutline_${this.measure.id}`,
-            ...polygonOutlineOptions
+        // -- Create new polyline --
+        const newLinePrimitive = this.drawingHelper._addGroundPolyline(positions, {
+            color,
+            id: `annotate_${this.mode}_line_${this.measure.id}` // Consider making ID more specific if needed (e.g., adding status)
         });
 
-        // Validate polygon graphics
-        if (!polygonPrimitive || !polygonOutlinePrimitive) {
-            console.warn("Failed to create polygon graphics.");
-            return null;
+        // If creation failed, exit
+        if (!newLinePrimitive) {
+            console.error("Failed to create new polyline primitive.");
+            return; // Explicitly return
         }
 
-        // -- Handle Polygon Metadata Update --
-        polygonPrimitive.status = status; // Set status for polygon primitive
-        polygonOutlinePrimitive.status = status; // Set status for polygon outline primitive
+        // -- Handle Metadata Update --
+        newLinePrimitive.status = status; // Set status on the new primitive
 
         // -- Handle References Update --
         // Push the new primitive into the array passed by reference.
-        if (Array.isArray(polygonsArray)) {
-            polygonsArray.push(polygonPrimitive, polygonOutlinePrimitive); // Store the polygon primitive reference
+        if (Array.isArray(polylinesArray)) {
+            polylinesArray.push(newLinePrimitive);
         } else {
-            console.warn("Invalid polygonsArray provided.");
+            console.warn("_createOrUpdateLine: polylinesArray argument is not an array. Cannot store new primitive reference.");
         }
     }
 
     /**
-     * Creates or updates the label primitive.
-     * @param {Cartesian3[]} positions - The positions to update or create label primitive.
-     * @param {Label[]} labelsArray - The labels array to update - Not the labelCollection.
-     * @param {Object} options - Options for the polygon primitive.
-     * @return {{area: number, labelPrimitive: Label}} - Returns the area and the label primitive.
+     * 
+     * @param {Cartesian3[]} positions - the positions to create or update the label. 
+     * @param {Label[]} labelsArray - the array to store the label primitive reference of the operation not the label collection.
+     * @param {object} options - options for label creation or update.
+     * @returns 
      */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
         // Validate input
         if (!Array.isArray(positions) || !Array.isArray(labelsArray)) {
             console.warn("Invalid input: positions and labelsArray should be arrays.");
-            return { area: null, labelPrimitive: null }; // Validate input positions
-        }
+            return { distance: null, labelPrimitive: null }; // Validate input positions
+        };
 
         // default options
         const {
@@ -495,13 +438,13 @@ class PolygonCesium extends MeasureModeCesium {
             showBackground = true,
         } = options;
 
-        const area = computePolygonArea(positions);
-        const formattedText = formatArea(area);
-        const middlePos = calculateMiddlePos(positions); // Calculate the middle position of the polygon
+        const { distance, clampedPositions, clampedPositionsCartographic } = calculateClampedDistance(positions, this.map.scene, 4);
+        const formattedText = formatDistance(distance);
+        const middlePos = calculateMiddlePos(positions);
 
         if (!middlePos) {
             console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { area, labelPrimitive: null }; // Return distance but null primitive
+            return { distance, labelPrimitive: null }; // Return distance but null primitive
         }
 
         let labelPrimitive = null;
@@ -523,14 +466,14 @@ class PolygonCesium extends MeasureModeCesium {
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
-            labelPrimitive = this.drawingHelper._addLabel(positions, area, "squareMeter", {
+            labelPrimitive = this.drawingHelper._addLabel(positions, distance ?? 0, "meter", {
                 id: `annotate_${this.mode}_label_${this.measure.id}`,
                 showBackground: showBackground,
             });
 
             if (!labelPrimitive) {
                 console.error("_createOrUpdateLabel: Failed to create new label primitive.");
-                return { area, labelPrimitive: null }; // Return area but null primitive
+                return { distance, labelPrimitive: null }; // Return distance but null primitive
             }
 
             // -- Handle References Update --
@@ -541,7 +484,49 @@ class PolygonCesium extends MeasureModeCesium {
         labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
         labelPrimitive.status = status; // Set status
 
-        return { area, labelPrimitive };
+        return { distance, clampedPositions, clampedPositionsCartographic, labelPrimitive };
+    }
+
+    /**
+     * Creates or updates the chart based on the provided positions and options.
+     * @param {Cartesian3[]} clampedPositions 
+     * @param {Cartographic[]} clampedPositionsCartographic 
+     * @param {object} [options={}] - options for chart creation or update.
+     * @returns {void}
+     */
+    _createOrUpdateChart(clampedPositions, clampedPositionsCartographic, options = {}) {
+        if (Array.isArray(clampedPositionsCartographic) && clampedPositionsCartographic.length === 0 &&
+            Array.isArray(clampedPositions) && clampedPositions.length === 0 &&
+            clampedPositions.length === clampedPositionsCartographic.length
+        ) return null;
+
+        // Default options
+        const {
+            show = true,
+        } = options;
+
+        // check if the chart is already created
+        if (!this.charDiv) {
+            this._createChart();
+            this._setChartVisibility(show);
+        }
+
+        // -- Prepare data for the chart --
+        // x-axis label: the distance between points, the first label is 0
+        const labels = new Array(clampedPositions.length);
+        labels[0] = 0; // First point is at distance 0
+        for (let i = 0; i < clampedPositions.length - 1; i++) {
+            const segmentDistance = Cartesian3.distance(clampedPositions[i], clampedPositions[i + 1]);
+            // Cumulative distance: previous cumulative distance + current segment distance (rounded)
+            labels[i + 1] = labels[i] + Math.round(segmentDistance);
+        }
+
+        // y-axis label: the height of the points
+        const heights = clampedPositionsCartographic.map(pos => pos.height);
+
+        // -- Update chart data --
+        const data = { labels, datasets: [{ label: "Terrain Profile", data: [...heights] }] };
+        this._updateChartData(data);
     }
 
     resetValuesModeSpecific() {
@@ -551,6 +536,10 @@ class PolygonCesium extends MeasureModeCesium {
 
         // Clear cache
         this.coordsCache = [];
+
+        // Clear chart
+        this._destroyChart();
     }
 }
-export { PolygonCesium };
+
+export { ProfileCesium };

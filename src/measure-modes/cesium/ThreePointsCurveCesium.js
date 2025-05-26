@@ -208,7 +208,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
             for (let i = 0; i < collectionLength; i++) {
                 const pointPrimitive = this.pointCollection.get(i);
                 // pointPrimitive is guaranteed to be a valid primitive object here
-                if (pointPrimitive.id?.includes(this.mode)) { // The check for pointPrimitive itself is less critical here
+                if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
                     pointPrimitive.status = "completed";
                 }
             }

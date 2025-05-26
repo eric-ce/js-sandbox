@@ -211,8 +211,13 @@ export default class GoogleMeasure extends MeasureComponentBase {
     _addLabel(positions, value, unit, options = {}) {
         if (!this.map || !Array.isArray(positions)) return null;
 
+        const {
+            status = null,
+            ...rest
+        } = options;
+
         // Create the label
-        const label = createLabelMarker(this.map, positions, value, unit, options);
+        const label = createLabelMarker(this.map, positions, value, unit, { ...rest });
         if (!label) return null;
 
         // Highlight event listeners
@@ -226,8 +231,11 @@ export default class GoogleMeasure extends MeasureComponentBase {
             });
         }
 
+        // -- Handle metadata --
+        label.status = status;
+
         // Store the label in the collection
-        label && this.#labelCollection.push(label);
+        this.#labelCollection.push(label);
 
         return label;
     }

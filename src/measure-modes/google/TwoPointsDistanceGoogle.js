@@ -39,7 +39,7 @@ import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
  * Handles two-point distance measurement specifically for Google Map.
  * @extends MeasureModeGoogle
  */
-export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
+class TwoPointsDistanceGoogle extends MeasureModeGoogle {
     /** @type {InteractiveAnnotationsState} */
     #interactiveAnnotations = {
         polylines: [], // Array to store polyline references
@@ -144,7 +144,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // -- Create point marker --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
-            id: `annotate_distance_point_${this.measure.id}`,
+            id: `annotate_${this.mode}_point_${this.measure.id}`,
             ...markerListener
         });
         if (!point) return;
@@ -304,10 +304,6 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             clickable: true
         });
 
-        // -- Update dragHandler variables --
-        this.dragHandler.draggedObjectInfo.endPosition = this.dragHandler.coordinate; // Update end position
-
-
         // --- Update Measure Data ---
         measure._records = [distance]; // Update new distance record
         measure.coordinates = positions.map(pos => ({ ...pos })); // Update the measure with the new coordinates
@@ -371,7 +367,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             lineInstance = this.drawingHelper._addPolyline(positions, {
                 color,
                 // Assumes this.measure.id is always available when creating
-                id: `annotate_distance_line_${this.measure.id}`,
+                id: `annotate_${this.mode}_line_${this.measure.id}`,
                 clickable,
                 ...rest
             });
@@ -455,13 +451,13 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
                 clickable,
-                id: `annotate_distance_label_${this.measure.id}`,
+                id: `annotate_${this.mode}_label_${this.measure.id}`,
                 ...rest
             });
 
             if (!labelInstance) {
                 console.error("_createOrUpdateLabel: Failed to create new label instance.");
-                return { distance, labelInstance: null }; // Return area but null instance
+                return { distance, labelInstance: null }; // Return distance but null instance
             }
 
             // -- Handle References Update --
@@ -470,7 +466,7 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         if (!labelInstance) {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
-            return { area, labelInstance: null }; // Early exit if labelInstance is not valid
+            return { distance, labelInstance: null }; // Early exit if labelInstance is not valid
         }
 
         // -- Handle Metadata Update --
@@ -498,3 +494,5 @@ export class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         this.coordsCache = []; // Clear cache
     }
 }
+
+export { TwoPointsDistanceGoogle };

@@ -5,6 +5,8 @@ import {
     Cartographic,
     Color,
     GeometryInstance,
+    GroundPolylineGeometry,
+    GroundPolylinePrimitive,
     LabelPrimitive,
     Math as CesiumMath,
     Material,
@@ -25,7 +27,7 @@ import {
  * Get the neighboring values of an array at a given index.
  * @param {array} array - the array to get the neighboring values from
  * @param {number} index - the index of the array
- * @returns {previous: any, current: any, next: any} - the previous, current and next value of the array
+ * @returns {{previous: any, current: any, next: any}} - the previous, current and next value of the array
  */
 export function getNeighboringValues(array, index) {
     if (index < 0 || index >= array.length) {
@@ -43,10 +45,13 @@ export function getNeighboringValues(array, index) {
  * calculate the distance between two points
  * @param {Cartesian3} startPoint - the cartesian coordinates
  * @param {Cartesian3} endPoint - the cartesian coordinates
- * @returns {number} distance - the distance between startPoint and endPoint
+ * @returns {number|null} the distance between startPoint and endPoint
  */
 export function calculateDistance(startPoint, endPoint) {
-    return Cartesian3.distance(startPoint, endPoint);
+    // Validate input
+    if (!startPoint || !endPoint) return null;
+
+    return Cartesian3.distance(startPoint, endPoint) || null;
 }
 
 /**
@@ -373,8 +378,59 @@ export function calculateMiddlePos(positions) {
     }
 }
 
+/**
+ * Get the ground position of a given Cartesian3 coordinate.
+ * @param {Cesium.Scene} scene - The Cesium scene instance.
+ * @param {Cartesian3} position - The position to get the ground position for.
+ * @returns {Cartesian3 | null} - The ground position in Cartesian3 or null if invalid.
+ */
+export function getGroundPosition(scene, position) {
+    if (!position) return null;
+    // -- Handle cartographic conversion
+    // Convert the position to Cartographic
+    const cartographic = convertToCartographicRadians(position);
+    if (!cartographic) return null;
 
+    // -- Handle height calculation
+    // Get the ground height using the globe getHeight method
+    const height = getHeight(scene, position);
 
+    // -- Handle Cartesian3 conversion
+    // Create a new Cartographic object with the ground height
+    const groundCartographic = new Cartographic(cartographic.longitude, cartographic.latitude, height);
+
+    // Convert the ground Cartographic to Cartesian3
+    const cartesian = Cartesian3.fromRadians(
+        groundCartographic.longitude,
+        groundCartographic.latitude,
+        groundCartographic.height
+    )
+    return cartesian;
+}
+
+/**
+ * Get the height of a given Cartesian3 coordinate.
+ * @param {Cesium.Scene} scene - The Cesium scene instance.
+ * @param {Cartesian3|Cartographic|{latitude:number, longitude:number, height:number}} position - The position to get the ground position for.
+ * @returns {Cartesian3 | null} - The ground position in Cartesian3 or null if invalid.
+ */
+export function getHeight(scene, position) {
+    if (!position) return null;
+
+    // Convert the position to Cartographic
+    const cartographic = convertToCartographicRadians(position);
+    if (!cartographic) return null;
+
+    // if (!scene.sampleHeightSupported) {  // sampleHeight() only supports in 3D mode
+    //     console.warn("sampleHeight failed")
+    //     return null;
+    // }
+
+    // USE APPROACH: global getHeight() to get the height of position on the terrain ground.
+    const height = scene.globe.getHeight(cartographic);
+    if (!height) return null;
+    return height;
+}
 
 /*******************************
  * HELPER FOR CESIUM PRIMITIVE *
@@ -383,7 +439,7 @@ export function calculateMiddlePos(positions) {
  * Create a point primitive.
  * @param {Cartesian3 | Cartographic} coordinate - The Cartesian3 coordinate of the point.
  * @param {object} [options={}] - Optional configuration for the point primitive.
- * @returns {import('cesium').PointPrimitive} - The point primitive.
+ * @returns {PointPrimitive} - The point primitive.
  */
 export function createPointPrimitive(coordinate, options = {}) {
     if (!coordinate) {
@@ -460,7 +516,7 @@ export function createPolylinePrimitive(Primitive, coordinateArray, options = {}
     const lineGeometryInstance = new Cesium.GeometryInstance({
         geometry: lineGeometry,
         id: id, // Use the destructured id
-        ...geometryInstanceOptions
+        ...geometryInstanceOptions // User options override defaults
     });
 
     // --- Material and Appearance ---
@@ -543,42 +599,76 @@ export function createLineArrowPrimitive(coordinateArray, modeString, width = 10
     return linePrimitive;
 }
 
-export function createGroundPolylinePrimitive(coordinateArray, modeString, color = Cesium.Color.YELLOWGREEN, GroundPolylinePrimitive) {
+/**
+ * Create a ground polyline primitive.
+ * @param {GroundPolylinePrimitive} GroundPolylinePrimitive - The Cesium ground primitive
+ * @param {Cesium.Cartesian3[] | Cesium.Cartographic[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {object} [options={}] - Optional configuration for the line primitive.
+ * @returns {Cesium.Primitive} - The ground line primitive
+ */
+export function createGroundPolylinePrimitive(GroundPolylinePrimitive, coordinateArray, options = {}) {
+    // -- Validate dependencies --
     if (!Array.isArray(coordinateArray) || coordinateArray.length < 2) {
-        console.error("Invalid array, needs to pass more than 2 position"); // Exit early if coordinateArray is not defined
+        return null;
     }
 
-    const convertedCoordinates = coordinateArray.map(convertToCartesian3);
-    if (convertedCoordinates.length < 2) {
-        console.error("Conversion failed, pass correct data type"); // Exit early if coordinateArray is not defined
+    // Default options
+    const {
+        groundPolylineGeometry: groundPolylineGeometryOptions = {}, // Renamed for clarity
+        geometryInstance: geometryInstanceOptions = {}, // Renamed for clarity
+        color = "rgba(0,255,0,1)",
+        width = 3,
+        id = "annotate_line",
+        ...rest
+    } = options;
+
+    // Convert the coordinates to Cartesian3
+    const cartesianArray = coordinateArray.map(convertToCartesian3);
+    if (!Array.isArray(cartesianArray) || cartesianArray.length < 2) {
+        console.error("Convert Cartesian3 failed");
+        return null;
     }
 
-    const geometryInstance = new Cesium.GeometryInstance({
-        geometry: new Cesium.GroundPolylineGeometry({
-            positions: convertedCoordinates,
-            width: 3
-        }),
-        id: generateId(convertedCoordinates, modeString),
+    // --- Ground Polyline Geometry ---
+    // Create the ground line GroundPolylineGeometry
+    const lineGeometry = new GroundPolylineGeometry({
+        positions: cartesianArray,
+        width,
+        ...groundPolylineGeometryOptions // User options override defaults
     });
 
-    const material = new Cesium.Material.fromType('Color', { color: color });
-    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
+    // --- Geometry Instance ---
+    // Create the ground line GeometryInstance
+    const geometryInstance = new GeometryInstance({
+        geometry: lineGeometry,
+        id,
+        ...geometryInstanceOptions // User options override defaults
+    });
 
-    // -- Create the line primitive --
-    const polylinePrimitive = new GroundPolylinePrimitive({
+    // --- Material and Appearance ---
+    // Create the material and appearance
+    const material = Material.fromType('Color', { color: Color.fromCssColorString(color) });
+    const appearance = new PolylineMaterialAppearance({ material: material });
+
+    // --- Primitive ---
+    // Create the line Primitive
+    const groundPolylinePrimitive = new GroundPolylinePrimitive({
         geometryInstances: geometryInstance,
         appearance: appearance,
-        asynchronous: true,
         releaseGeometryInstances: true,
+        asynchronous: true,
+        ...rest
     });
-    polylinePrimitive.isSubmitted = false;
+
+    // Final check for groundPolylinePrimitive
+    if (!groundPolylinePrimitive) return null;
 
     // Add metadata to the polyline primitive
-    polylinePrimitive.id = generateId(convertedCoordinates, modeString);
-    polylinePrimitive.positions = convertedCoordinates;
+    groundPolylinePrimitive.id = id;
+    groundPolylinePrimitive.positions = cartesianArray;
+    // groundPolylinePrimitive.isSubmitted = false; // for fireTrail mode
 
-
-    return polylinePrimitive;
+    return groundPolylinePrimitive;
 }
 
 /**
@@ -880,7 +970,7 @@ export function interpolatePoints(pointA, pointB, interval = 2) {
     const points = [];
 
     // Calculate the distance between the two points
-    const distance = Cesium.Cartesian3.distance(pointA, pointB);
+    const distance = Cartesian3.distance(pointA, pointB);
 
     // Determine the number of interpolation points based on the interval
     let numberOfPoints = Math.floor(distance / interval);
@@ -889,11 +979,11 @@ export function interpolatePoints(pointA, pointB, interval = 2) {
 
     for (let i = 0; i <= numberOfPoints; i++) {
         const t = i / numberOfPoints;
-        const interpolatedPoint = Cesium.Cartesian3.lerp(
+        const interpolatedPoint = Cartesian3.lerp(
             pointA,
             pointB,
             t,
-            new Cesium.Cartesian3()
+            new Cartesian3()
         );
         points.push(interpolatedPoint);
     }
@@ -903,31 +993,54 @@ export function interpolatePoints(pointA, pointB, interval = 2) {
 
 /**
  * Computes detailed pick positions by interpolating points and clamping their heights.
- * @param {Cesium.Cartesian3} startPosition - The starting Cartesian position.
- * @param {Cesium.Cartesian3} endPosition - The ending Cartesian position.
- * @param {Scene} scene - viewer.scene
- * @param {number} [interval=2] - The interval between interpolated points.
- * @returns {Cesium.Cartesian3[]} - The clamped positions with ground heights.
+ * @param {Cartesian3|Cartographic|{latitude:number,longitude:number,height:number}} startPosition - The starting Cartesian position.
+ * @param {Cartesian3|Cartographic|{latitude:number,longitude:number,height:number}} endPosition - The ending Cartesian position.
+ * @param {Scene} scene - The Cesium scene instance.
+ * @param {number} [interval=2] - The interval between interpolated points. Default is 2.
+ * @returns {{interpolatePoints:Cartographic[],clampedPositions:Cartesian3[]}} - The clamped positions with ground heights.
  */
-export function computeDetailedPickPositions(startPosition, endPosition, scene, interval = 2) {
-    // Interpolate points between the start and end positions
+export function computeClampedPositions(startPosition, endPosition, scene, interval = 2) {
+    // -- Validate dependencies --
+    if (!startPosition || !endPosition || !scene) return null;
+
+    // -- Compute the interpolated points --
     const interpolatedPoints = interpolatePoints(startPosition, endPosition, interval);
+    const numPoints = interpolatedPoints.length;
 
-    // Convert interpolated points to Cartographic coordinates
-    const interpolatedCartographics = interpolatedPoints.map(point => Cesium.Cartographic.fromCartesian(point));
+    // -- Handle clamped positions --
+    const interpolatedCartographicArray = new Array(numPoints); // For return
+    const finalClampedPositions = new Array(numPoints);       // For return
+    const clampedCartographicArray = new Array(numPoints); // For return
 
-    // Sample height if supported
-    if (scene.sampleHeightSupported) { // sampleHeight() only supports in 3D mode
-        const clampedPositions = interpolatedCartographics.map((cartographic) => {
+    if (scene.sampleHeightSupported) {
+        for (let i = 0; i < numPoints; i++) {
+            const cartesianPoint = interpolatedPoints[i];
+            const cartographic = Cartographic.fromCartesian(cartesianPoint);
+            interpolatedCartographicArray[i] = cartographic;
+
+            // -- Calculate the clamped height --
             const height = scene.sampleHeight(cartographic);
-            return Cesium.Cartesian3.fromRadians(
+
+            // -- Handle position conversion --
+            // Covert to Cartographic
+            const clampedCartographic = new Cartographic(
                 cartographic.longitude,
                 cartographic.latitude,
-                height !== undefined ? height : cartographic.height // Fallback to original height if sampling fails
+                height !== undefined ? height : cartographic.height
             );
-        });
-        return { interpolatePoints: interpolatedCartographics, clampedPositions };
+            clampedCartographicArray[i] = clampedCartographic;
+
+            // Convert to Cartesian3
+            finalClampedPositions[i] = Cartesian3.fromRadians(
+                clampedCartographic.longitude,
+                clampedCartographic.latitude,
+                clampedCartographic.height
+            );
+        }
     }
+
+    return { interpolatePoints: interpolatedCartographicArray, clampedPositions: finalClampedPositions, clampedPositionsCartographic: clampedCartographicArray };
+
     // getHeight() approach
     // the height of the surface
     // const groundCartesianArray = interpolatedCartographics.map((cartographic) => {
@@ -968,23 +1081,55 @@ export function computeDetailedPickPositions(startPosition, endPosition, scene, 
 
 /**
  * Calculates the clamped distance between two points by interpolating and summing segment distances.
- * @param {Cesium.Cartesian3} pointA - The first Cartesian coordinate.
- * @param {Cesium.Cartesian3} pointB - The second Cartesian coordinate.
- * @param {Scene} scene - viewer.scene
- * @param {number} [interval=2] - The interval between interpolated points.
- * @returns {{distance: number, clampedPositions: Cesium.Cartesian3[]}} - An object containing:
+ * @param {Cartesian3[]|Cartographic[]|{latitude:number,longitude:number,height:number}[]} positions - The cesium supported coordinates array.
+ * @param {Scene} scene - Cesium viewer scene object.
+ * @param {number} [interval=2] - The interval between interpolated points. Default is 2
+ * @returns {{distance: number, clampedPositions: Cartesian3[], clampedPositionsCartographic: Cartographic[]}} - An object containing:
  *  - `distance`: The total clamped distance between the two points.
  *  - `clampedPositions`: An array of interpolated Cartesian coordinates used in the calculation.
  */
-export function calculateClampedDistance(pointA, pointB, scene, interval = 2) {
-    const { clampedPositions } = computeDetailedPickPositions(pointA, pointB, scene, interval);
-    let distance = 0; // Initialize to 0 instead of null
+export function calculateClampedDistance(positions, scene, interval = 2) {
+    // -- Validate dependencies --
+    if (!Array.isArray(positions) || positions.length < 2 || !scene) return null;
 
-    for (let i = 0; i < clampedPositions.length - 1; i++) {
-        distance += Cesium.Cartesian3.distance(clampedPositions[i], clampedPositions[i + 1]);
+    // -- Convert input positions to Cartesian3 --
+    const cartesianSegmentNodes = positions.map(convertToCartesian3).filter(Boolean);
+    if (cartesianSegmentNodes.length < 2) return null;
+
+    // This array will store ALL interpolated and clamped points from ALL segments, concatenated.
+    const fullClampedPath = [];
+    const fullClampedPathCartographic = [];
+    let successfullyProcessedSegment = false;
+
+    for (let i = 0; i < cartesianSegmentNodes.length - 1; i++) {
+        const startNode = cartesianSegmentNodes[i];
+        const endNode = cartesianSegmentNodes[i + 1];
+
+        // -- Handle clamped positions
+        const segmentData = computeClampedPositions(startNode, endNode, scene, interval);
+
+        if (segmentData && segmentData.clampedPositions && Array.isArray(segmentData.clampedPositions) && segmentData.clampedPositions.length > 0) {
+            fullClampedPath.push(...segmentData.clampedPositions);
+            fullClampedPathCartographic.push(...segmentData.clampedPositionsCartographic);
+            successfullyProcessedSegment = true;
+        }
     }
 
-    return { distance, clampedPositions };
+    // If no segments were successfully processed or the resulting path is too short for distance calculation
+    if (!successfullyProcessedSegment || fullClampedPath.length < 2) {
+        return { distance: 0, clampedPositions: fullClampedPath };
+    }
+
+    // -- Calculate the total distance along the fullClampedPath --
+    let totalDistance = 0;
+    for (let i = 0; i < fullClampedPath.length - 1; i++) {
+        // Ensure points are valid Cartesian3 before calculating distance, though computeClampedPositions should ensure this.
+        if (fullClampedPath[i] && fullClampedPath[i + 1]) {
+            totalDistance += Cartesian3.distance(fullClampedPath[i], fullClampedPath[i + 1]);
+        }
+    }
+
+    return { distance: totalDistance, clampedPositions: fullClampedPath, clampedPositionsCartographic: fullClampedPathCartographic };
 }
 
 /**
@@ -1080,7 +1225,6 @@ export function getPrimitiveByPointPosition(
             p && p.id && typeof p.id === 'string' &&
             p.id.startsWith(startsWithMeasureMode) &&
             !p.id.includes("moving") &&
-            p.show && // Check if the primitive is visible/active
             Array.isArray(p.positions) && // Ensure positions array exists
             p.positions.some(cart => areCoordinatesEqual(cart, position))
         );

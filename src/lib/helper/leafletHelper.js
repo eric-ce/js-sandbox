@@ -235,7 +235,7 @@ export function createPolygon(positions, options = {}) {
  * @param {Array} positions - An array containing two position objects with { latitude, longitude }.
  * @param {number} value - The numerical value to display on the tooltip label.
  * @param {Object} [options={}] - Optional tooltip options.
- * @returns {L.Tooltip|undefined} The created tooltip label or undefined if parameters are invalid.
+ * @returns {L.Tooltip|null} The created tooltip label or undefined if parameters are invalid.
  */
 export function createLabelTooltip(positions, value, unit = "meter", options = {}) {
     // -- Validate dependencies --
@@ -244,7 +244,9 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
     // -- Handle positions -- 
     const latLngArray = positions.map(pos => convertToLatLng(pos)).filter(Boolean);
 
-    const middlePos = calculateMiddlePos(latLngArray);
+    const numPos = latLngArray.length;
+    const middlePos = numPos === 1 ? latLngArray[0] : calculateMiddlePos(latLngArray);
+
     if (!middlePos) {
         console.error("Failed to calculate middle position for tooltip.");
         return null;
@@ -259,7 +261,7 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
         direction = "center",
         permanent = true,
         opacity = 0.8,
-        offset = [0, -20],
+        offset = [0, -30],
         id = "annotate_label",
         color = "rgba(0, 0, 0, 1)",
         interactive = false,
@@ -272,17 +274,18 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
     contentElement.textContent = textContent;
 
     // Create Label tooltip
-    const tooltip = L.tooltip(middlePos, {
-        content: contentElement,
+    // !important: L.tooltip requires L.latLng for position but using setLagLng() can accept lat lng object
+    const tooltip = L.tooltip({
         className,
         direction,
         permanent,
         opacity,
         offset,
+        interactive,
         ...rest,
     })
-    // .setLatLng(middlePos)
-    // .setContent(contentElement);
+        .setLatLng(middlePos) // Set the position
+        .setContent(contentElement); // Set the content
 
     if (!tooltip) {
         console.error("Failed to create tooltip.");
@@ -388,7 +391,7 @@ export function areCoordinatesEqual(coord1, coord2) {
 
 /**
  * Calculates the center position between two or more positions.
- * @param {L.LatLngBounds} positions 
+ * @param {Coordinate} positions - The positions to calculate the middle point for. 
  * @returns {L.LatLng} The center position of the bounds
  */
 export function calculateMiddlePos(positions) {

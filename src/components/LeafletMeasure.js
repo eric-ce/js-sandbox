@@ -7,6 +7,12 @@ import {
 } from "../lib/helper/leafletHelper.js";
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
+
+/**
+ * LeafletMeasure class to provide measurement drawing functionalities in Leaflet. 
+ * Overrides methods from MeasureComponentBase to implement Leaflet-specific features.
+ * @extends {MeasureComponentBase}
+ */
 export default class LeafletMeasure extends MeasureComponentBase {
     /** @type {L.FeatureGroup | null} - store the markers */
     #pointCollection = null;
@@ -22,6 +28,12 @@ export default class LeafletMeasure extends MeasureComponentBase {
     }
 
     _initializeMapSpecifics() {
+        // -- Validate dependencies --
+        if (!this.map || this.mapName !== "leaflet") return;
+
+        // if collections are already initialized, do nothing
+        if (this.#pointCollection || this.#polylineCollection || this.#labelCollection || this.#polygonCollection) return;
+
         // -- Create Collections --
         this.#pointCollection = L.featureGroup().addTo(this.map);
         this.#polylineCollection = L.featureGroup().addTo(this.map);
@@ -33,6 +45,10 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this.map.getPane('overlayPane').style.zIndex = 450; // Higher than default overlayPane (400)
     }
 
+
+    /**********
+     * GETTER *
+     **********/
     get pointCollection() {
         return this.#pointCollection;
     }
@@ -53,6 +69,11 @@ export default class LeafletMeasure extends MeasureComponentBase {
         if (!this.map || !position) {
             console.warn("LeafletMeasure: Failed to add point marker. Map or position is not defined.");
             return null;
+        }
+
+        // initialize the collections if not already done
+        if (!this.#pointCollection) {
+            this._initializeMapSpecifics();
         }
 
         // Separate listeners from other marker options
@@ -140,6 +161,11 @@ export default class LeafletMeasure extends MeasureComponentBase {
             return null;
         }
 
+        // initialize the collections if not already done
+        if (!this.#polylineCollection) {
+            this._initializeMapSpecifics();
+        }
+
         // -- Create Polyline --
         const polyline = createPolyline(positions, options);
         if (!polyline) return null;
@@ -188,6 +214,11 @@ export default class LeafletMeasure extends MeasureComponentBase {
             return null;
         }
 
+        // initialize the collections if not already done
+        if (!this.#polygonCollection) {
+            this._initializeMapSpecifics();
+        }
+
         // -- Create Polygon --
         const polygon = createPolygon(positions, options);
         if (!polygon) return null;
@@ -214,6 +245,11 @@ export default class LeafletMeasure extends MeasureComponentBase {
         if (!this.map || !Array.isArray(positions) || positions.length === 0) {
             console.error("Label collection is not initialized.");
             return null;
+        }
+
+        // initialize the collections if not already done
+        if (!this.#labelCollection) {
+            this._initializeMapSpecifics();
         }
 
         // -- Create Label --

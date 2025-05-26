@@ -1,6 +1,6 @@
 import { Cartesian2, Cartesian3, Color, defined } from "cesium";
 import dataPool from "../data/DataPool.js";
-import { areCoordinatesEqual, formatDistance, getPrimitiveByPointPosition } from "../helper/cesiumHelper";
+import { getPrimitiveByPointPosition } from "../helper/cesiumHelper";
 
 
 // --Cesium types --
@@ -150,7 +150,27 @@ class CesiumDragHandler {
         this.draggedObjectInfo.beginPosition = isPoint.primitive.position.clone();
         this.draggedObjectInfo.beginScreenPoint = this.viewer.scene.cartesianToCanvasCoordinates(this.draggedObjectInfo.beginPosition); // store the screen position
 
-        // Store the dragged related point, line, label, and polygon primitives
+
+        // -- Handle Measure Data --
+        // find the measure data and update the status and update data pool
+        this.measure = this.activeModeInstance._findMeasureByCoordinate(this.draggedObjectInfo.beginPosition);
+        if (!this.measure) return;
+
+        // Update status to pending
+        this.measure.status = "pending";
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
+
+
+        // -- Store position reference --
+        // Store the bottom point relative to the dragged point - ONLY for height mode
+        if (typeof this.activeModeInstance?.setAnchorPoint === 'function') {
+            this.activeModeInstance?.setAnchorPoint(this.measure);
+        }
+
+        // -- Store primitives reference --
+        // Store the dragged related point, line, label, and polygon primitives by the dragged point position
         const { linePrimitives, labelPrimitives, polygonPrimitives } = getPrimitiveByPointPosition(
             this.draggedObjectInfo.beginPosition,
             `annotate_${this.activeModeInstance.mode}`,
@@ -164,18 +184,16 @@ class CesiumDragHandler {
         this.draggedObjectInfo.labels = labelPrimitives; // Store the label primitives
         this.draggedObjectInfo.polygons = polygonPrimitives; // Store the polygon primitives
 
-        // find the measure data and update the status and update data pool
-        this.measure = this.activeModeInstance._findMeasureByCoordinate(this.draggedObjectInfo.beginPosition);
-        if (!this.measure) return;
+        // -- Store total label primitive reference --
+        const LabelLen = this.labelCollection.length;
+        for (let i = 0; i < LabelLen; ++i) {
+            const label = this.labelCollection.get(i);
+            if (label.id === `annotate_${this.activeModeInstance.mode}_total_label_${this.measure.id}`) {
+                this.draggedObjectInfo.totalLabels = [label]; // Store the total label primitive
+            }
+        }
 
-        // Update status to pending
-        this.measure.status = "pending";
-
-        // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
-
-
-        // Set events for dragging
+        // -- Set event for dragging --
         this.inputHandler.on('mousemove', this._handleDrag);
         this.inputHandler.on('leftup', this._handleDragEnd);
     }
@@ -218,7 +236,9 @@ class CesiumDragHandler {
         // -- Handle graphics update --
         // let activeModeInstance to handle the graphics update, each mode has its own way to update the graphics
         // this will handle the graphics visual updates and update reference in this class instance    
-        this.activeModeInstance?.updateGraphicsOnDrag(this.measure);
+        if (typeof this.activeModeInstance?.updateGraphicsOnDrag === 'function') {
+            this.activeModeInstance?.updateGraphicsOnDrag(this.measure);
+        }
     }
 
     /**
@@ -249,7 +269,9 @@ class CesiumDragHandler {
 
         // -- Handle graphics update --
         // let activeModeInstance to handle the graphics update, each mode has its own way to update the graphics
-        this.activeModeInstance?.finalizeDrag(this.measure);
+        if (typeof this.activeModeInstance?.finalizeDrag === 'function') {
+            this.activeModeInstance?.finalizeDrag(this.measure);
+        }
 
         // -- Update draggedObjectInfo --
         this.draggedObjectInfo.endPosition = Cartesian3.clone(this.#coordinate); // Store the end position
@@ -263,6 +285,7 @@ class CesiumDragHandler {
             measureData: { ...this.measure },
             draggedObjectInfo: { ...this.draggedObjectInfo },
         })
+
         // Reset values
         this._resetValue(); // Reset the dragged object info and flags
     }
@@ -279,10 +302,14 @@ class CesiumDragHandler {
             beginPosition: null, // The position where dragging started
             /** @type {Cartesian2} */
             beginScreenPoint: null, // The screen position where dragging started
+            /** @type {PointPrimitive} */
+            anchorPoint: null, // The anchor position for height mode
             /** @type {Primitive[]} */
             lines: [],
             /** @type {Label[]} */
             labels: [],
+            /** @type {Label[]} */
+            totalLabels: [],
             /** @type {Primitive[]} */
             polygons: [],
             /** @type {Cartesian3} */

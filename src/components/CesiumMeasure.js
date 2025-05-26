@@ -3,8 +3,7 @@ import {
     BlendOption,
 } from "cesium";
 
-import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive } from "../lib/helper/cesiumHelper.js";
-// import { toolIcon, pickerIcon, pointsIcon, distanceIcon, curveIcon, heightIcon, multiDImage, multiDClampedIcon, polygonIcon, profileIcon, profileDistancesIcon, clearIcon, helpBoxIcon, logBoxIcon } from '../assets/icons.js';
+import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive } from "../lib/helper/cesiumHelper.js";
 // import { LogTable } from './shared/LogTable.js';
 // import { HelpTable } from './shared/HelpTable.js';
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
@@ -20,9 +19,9 @@ import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
 
 /**
- * CesiumMeasure class to provide measurement functionalities in Cesium.
+ * CesiumMeasure class to provide measurement drawing functionalities in Cesium.
  * Overrides methods from MeasureComponentBase to implement Cesium-specific features.
- * @extends MeasureComponentBase
+ * @extends {MeasureComponentBase}
  */
 export default class CesiumMeasure extends MeasureComponentBase {
     // --- Private Fields ---
@@ -67,7 +66,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Use _cesiumPkg (assuming it's set by the base or externally)
         if (!this.cesiumPkg || !this.map || this.mapName !== "cesium") return;
 
-        // Check if already initialized
+        // if collections are already initialized, do nothing
         if (this.#pointCollection || this.#labelCollection) return;
 
         // Create new collections using the provided Cesium package
@@ -137,7 +136,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         pointPrimitive.positions = [{ ...position }]; // Store cloned position
 
         return pointPrimitive;
-    }
+    };
 
     /**
      * Adds multiple point markers to the map at the specified positions.
@@ -165,7 +164,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // Filter out any null results if creation failed for some points
         return pointPrimitives.filter(Boolean);
-    }
+    };
 
     /**
      * Adds a polyline to the map at the specified positions.
@@ -205,7 +204,8 @@ export default class CesiumMeasure extends MeasureComponentBase {
         polylinePrimitive.status = status; // Store status
 
         return polylinePrimitive;
-    }
+    };
+
 
     /**
      * Adds multiple polylines to the map at the specified positions.
@@ -234,7 +234,41 @@ export default class CesiumMeasure extends MeasureComponentBase {
         }
 
         return addedPolylines; // Return the array of successfully added polylines
-    }
+    };
+
+    /**
+     * Adds a ground polyline to the map at the specified positions.
+     * @param {Cartesian3[]} positions 
+     * @param {object} options - Options for the polyline primitive
+     * @returns {Primitive} The created polyline primitive or null if an error occurs.
+     */
+    _addGroundPolyline(positions, options = {}) {
+        // -- Validate dependencies --
+        if (!this.cesiumPkg || !this.map) {
+            console.warn("CesiumMeasure: Cesium package or map not available for _addPolyline.");
+            return null; // Ensure dependencies are available
+        }
+
+        // Default options
+        const {
+            status = null,
+        } = options;
+
+        // -- Handle visualization --
+        // Create the polyline primitive
+        const polyline = createGroundPolylinePrimitive(this.cesiumPkg.GroundPolylinePrimitive, positions, options);
+        if (!polyline) return null;
+        // Add line to to cesium map
+        const polylinePrimitive = this.map.scene.primitives.add(polyline);
+
+        // Add to private collection - will not affect visualization, store for reference only
+        this.#polylineCollection.push(polylinePrimitive);
+
+        // -- Handle metadata --
+        polylinePrimitive.status = status; // Store status
+
+        return polylinePrimitive;
+    };
 
     /**
      * Adds a label marker to the map at the specified position.
@@ -275,7 +309,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         labelPrimitive.positions = positions.map(pos => ({ ...pos })); // Store cloned position
 
         return labelPrimitive;
-    }
+    };
 
     /**
      * Adds multiple label markers to the map at the specified positions.
@@ -307,7 +341,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         }
 
         return addedLabels; // Return the array of successfully added labels
-    }
+    };
 
     /**
      * Adds a polygon to the map at the specified positions.
@@ -362,7 +396,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         polygonPrimitive.status = status; // Add status property
 
         return polygonPrimitive;
-    }
+    };
 
     /**
      * Adds a polygon outline to the map at the specified positions.
@@ -416,7 +450,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         polygonOutlinePrimitive.status = status; // Store status
 
         return polygonOutlinePrimitive;
-    }
+    };
 
     /**
      * Removes a point marker from its point collection.
@@ -426,7 +460,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         if (!this.#pointCollection) return false;
 
         this.#pointCollection.remove(pointPrimitive);
-    }
+    };
 
     /**
      * Removes a label from its label collection.
@@ -436,7 +470,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         if (!this.#labelCollection) return false;
 
         this.#labelCollection.remove(labelPrimitive);
-    }
+    };
     /**
      * Removes a polyline from the map.
      * @param {Primitive} polyline 
@@ -452,7 +486,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         if (index > -1) {
             this.#polylineCollection.splice(index, 1);
         }
-    }
+    };
 
     /**
      * Removes a polygon from the map.
@@ -469,7 +503,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         if (index > -1) {
             this.#polygonCollection.splice(index, 1);
         }
-    }
+    };
 
     /**
      * Removes a primitive from the map.
@@ -480,7 +514,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         if (!this.map || !primitive) return false;
         // Remove the primitive from the map
         this.map.scene.primitives.remove(primitive);
-    }
+    };
 
     /**
      * Clamps positions to the ground and converts them to Cartographic degrees.
@@ -504,7 +538,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         }).filter(Boolean); // Filter out null values
 
         return clampedPositions;
-    }
+    };
 
     clearCollections() {
         // Clear point collection

@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { calculateDistance, calculateMiddlePos, formatMeasurementValue, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
-import { MeasureModeBase } from "../MeasureModeBase.js";
+import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 
 /**
  * @typedef MeasurementGroup
@@ -28,7 +28,7 @@ import { MeasureModeBase } from "../MeasureModeBase.js";
 /** @typedef {{lat:number, lng:number}} Coordinate*/
 
 
-class TwoPointsDistanceLeaflet extends MeasureModeBase {
+class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
     /** @type {Coordinate} */
     #coordinate = null;
     /** @type {InteractiveAnnotationsState} */
@@ -39,7 +39,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
     /** @type {MeasurementGroup} */
     measure = null;
     /** @type {Coordinate[]} */
-    coordCache = [];
+    coordsCache = [];
 
     /**
      * 
@@ -126,7 +126,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
         // -- Create point marker --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
-            id: `annotate_distance_point_${this.measure.id}`,
+            id: `annotate_${this.mode}_point_${this.measure.id}`,
             ...markerListener
         });
         if (!point) return;
@@ -194,7 +194,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
 
         // Handle different scenarios based on the state of the tool
         // the condition to determine if it is measuring
-        const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete
+        const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete;
 
         switch (true) {
             case isMeasuring:
@@ -384,7 +384,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
         if (!lineInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             lineInstance = this.drawingHelper._addPolyline(positions, {
                 color,
-                id: `annotate_distance_line_${this.measure.id}`,
+                id: `annotate_${this.mode}_line_${this.measure.id}`,
                 interactive,
                 ...rest
             });
@@ -480,7 +480,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeBase {
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
-                id: `annotate_distance_label_${this.measure.id}`,
+                id: `annotate_${this.mode}_label_${this.measure.id}`,
                 interactive,
                 ...rest
             });

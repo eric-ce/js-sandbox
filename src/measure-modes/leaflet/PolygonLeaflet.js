@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng, formatMeasurementValue } from "../../lib/helper/leafletHelper.js";
-import { MeasureModeBase } from "../MeasureModeBase.js";
+import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 
 /**
  * @typedef MeasurementGroup
@@ -27,7 +27,7 @@ import { MeasureModeBase } from "../MeasureModeBase.js";
 /** @typedef {{polylines: L.polyline[], labels: L.tooltip[]}} InteractiveAnnotationsState */
 /** @typedef {{lat:number, lng:number}} Coordinate*/
 
-class PolygonLeaflet extends MeasureModeBase {
+class PolygonLeaflet extends MeasureModeLeaflet {
     /** @type {InteractiveAnnotationsState} */
     #interactiveAnnotations = {
         polygons: [],

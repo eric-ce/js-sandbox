@@ -13,16 +13,18 @@ sharedStyleSheet.replaceSync(`
     }
     .measure-toolbar button.active, 
     .fire-trail-toolbar button.active {
+        background-color: #adf;
+        border-color: #fff;
         color: #000;
         fill: #000;
-        background: #adf;
-        border-color: #fff;
-        box-shadow: 0 0 8px #fff;
+        box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.2); 
+        transform: scale(0.98); 
+        z-index: 4;
     }
     .measure-toolbar button:hover,
     .fire-trail-toolbar button:hover,
     .fly-through-toolbar button:hover{
-        transform: scale(1.1);
+        transform: scale(1.05);
     }
     .measure-tools{
         display: flex;
@@ -106,30 +108,29 @@ sharedStyleSheet.replaceSync(`
         transition: opacity 0.2s ease-in-out, transform 0.2s ease-in;
     }
     .annotate-button{
-        opacity : 0.95;
         display: flex;
         flex-direction: row;
         justify-content: center;
         align-items: center;
-        background: rgba(38, 38, 38, 0.95);
-        border: 1px solid #444;
+        background-color: rgba(38, 38, 38, 0.95);
         color: #edffff;
         fill: #edffff;
-        border-radius: 4px;
+        border: 1px solid #444;
+        border-radius: 12px; 
         cursor: pointer;
         overflow: hidden;
         user-select: none;
-        height: 40px;
-        width: 45px;
-        border-radius: 5px;
+        height: 44px; 
+        width: 44px;
+        transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
         z-index: 2;
     }
-    .annotate-button:hover{
-        transform: scale(1.1);
-        fill: #fff;
-        background: #48b;
-        border-color: #aef;
-        box-shadow: 0 0 8px #fff;
+    .annotate-button:hover {
+        background-color: #4488bb;
+        border-color: #aaeeff;
+        fill: #ffffff;
+        box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.15); 
+        transform: scale(1.05); 
         z-index: 3;
     }
     .annotate-button.animate-on-show.visible {

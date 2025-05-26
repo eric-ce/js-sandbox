@@ -20,7 +20,7 @@ import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
-import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, TwoPointsDistanceGoogle, PolygonGoogle, TwoPointsDistanceLeaflet, PolygonLeaflet } from "../measure-modes/index.js";
+import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistanceCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet } from "../measure-modes/index.js";
 
 
 /**
@@ -391,8 +391,8 @@ export class MeasureComponentBase extends HTMLElement {
                 },
             },
             {
-                id: "multi_distances_clamped",
-                name: "Multi Distances Clamped",
+                id: "multi_distance_clamped",
+                name: "Multi Distance Clamped",
                 icon: multiDClampedIcon,
                 mapAvailability: ["cesium"],
                 getClass: (type) => (type === 'cesium' ? MultiDistanceClampedCesium : null)
@@ -445,8 +445,8 @@ export class MeasureComponentBase extends HTMLElement {
                 const image = document.createElement("img");
                 image.src = modeConfig.icon;
                 image.alt = modeConfig.name;
-                image.style.width = "30px"; // Adjust size
-                image.style.height = "30px"; // Adjust size
+                image.style.width = "28px"; // Adjust size
+                image.style.height = "28px"; // Adjust size
                 image.style.display = "block"; // Center the icon
                 btn.appendChild(image);
                 // btn.innerHTML = `<img src="${modeConfig.icon}" alt="${modeConfig.name}" style="width: 30px; height: 30px; display: block;">`; // Adjust size
@@ -745,12 +745,14 @@ export class MeasureComponentBase extends HTMLElement {
                     this._addLabel(data.coordinates, data._records[0], "squareMeter"),
                 ];
                 break;
-            case "bookmark":
+            case "pointInfo":
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
                 annotations.labels = [
                     this._addLabel(
                         [data.coordinates[0], data.coordinates[0]],
-                        `Point ${data.labelNumberIndex + 1}`
+                        `Lat:${data.coordinates[0].latitude.toFixed(6)} 
+Lng:${data.coordinates[0].longitude.toFixed(6)}`,
+                        null,
                     ),
                 ];
                 break;

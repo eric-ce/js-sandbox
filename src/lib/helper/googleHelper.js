@@ -71,6 +71,7 @@ export function getOverlayByPosition(
         foundLabelMarkers = labelCollection.filter(label =>
             label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))
         );
+
         // for (const label of labelCollection) {
         //     // Check the custom 'positions' property
         //     if (label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))) {
@@ -363,7 +364,7 @@ export function createPolygon(map, positions, options = {}) {
 /**
  * Creates a label marker on the provided map at the given position.
  * @param {google.maps.Map} map - The Google Map instance
- * @param {{lat:number,lng:number}[]}} positions - Array of position objects
+ * @param {{lat:number,lng:number}[]} positions - Array of position objects
  * @param {Number} value - The value to display on the label marker
  * @param {string} unit - The unit of measurement (default is "meter")
  * @param {Object} options - Optional configuration for the label marker
@@ -371,11 +372,22 @@ export function createPolygon(map, positions, options = {}) {
  */
 export function createLabelMarker(map, positions, value, unit = "meter", options = {}) {
     // -- Validate input params --
-    if (!map || !positions || positions.length < 2 || !value) return;
+    if (!map || !positions || positions.length === 0 || !value) return;
+
+    // -- Convert positions to {lat, lng} format --
+    const latLngArray = positions.map(pos => convertToLatLng(pos)).filter(Boolean); // Filter out invalid positions
+    if (latLngArray.length === 0) return;
 
     // -- Prepare label value --
     const formattedText = formatMeasurementValue(value, unit); // Format the value based on the unit
-    const middlePos = calculateMiddlePos(positions);    // Calculate the middle position of the two points
+
+    const numPos = positions.length;
+    let middlePos = null;
+    if (numPos === 1) { // Use the single position
+        middlePos = latLngArray[0];
+    } else {  // Calculate the middle positions
+        middlePos = calculateMiddlePos(latLngArray);
+    }
 
     const {
         advancedMarker = {},

@@ -37,7 +37,7 @@ class GoogleHighlightHandler {
      * @param {google.maps.Marker| google.maps.Polyline|google.maps.Polygon} overlay - The overlay object to highlight.
      */
     applyHoverHighlight(overlay) {
-        if (!overlay || overlay === this.#hoveredObject) {
+        if (!overlay || overlay === this.#hoveredObject || !this.activeModeInstance) {
             return; // No overlay, or already hovering this one
         }
 
