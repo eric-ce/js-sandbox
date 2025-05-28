@@ -163,6 +163,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                     point.status = "completed"
                 }
             });
+
             // -- APPROACH 2: Update/ Reuse existing polyline and label --
             // -- Handle polyline --
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
@@ -337,7 +338,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         // Default options
         const {
-            status = null,
+            status = "pending",
             color = this.stateManager.getColorState("move"), // Default color if not provided
             clickable = false,
             ...rest
@@ -408,7 +409,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         // Default options
         const {
-            status = null,
+            status = "pending",
             clickable = false,
             // add more options here if needed
             ...rest
@@ -476,10 +477,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         return { distance, labelInstance }; // Return the newly created instance
     }
 
-
-    /*******************
-     * OVERRIDE METHOD *
-     *******************/
     /**
      * Resets values specific to the mode.
      */

@@ -11,6 +11,9 @@ import {
     areCoordinatesEqual,
     calculateMiddlePos,
     getNeighboringValues,
+    getPrimitiveByPointPosition,
+    convertToCartesian3,
+    showCustomNotification
 } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
@@ -107,7 +110,6 @@ class MultiDistanceCesium extends MeasureModeCesium {
 
         this.cesiumPkg = cesiumPkg;
 
-        this.coordsCache = [];
         this.measure = super._createDefaultMeasure();
     }
 
@@ -122,7 +124,6 @@ class MultiDistanceCesium extends MeasureModeCesium {
 
     /**********************
      *   EVENT HANDLER    *
-     * FOR NORMAL MEASURE *
      **********************/
     /********************
      * LEFT CLICK EVENT *
@@ -130,7 +131,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
     /**
      * Handles left-click events on the map.
      * @param {NormalizedEventData} eventData - The event data containing information about the click event.
-     * @returns {Void}
+     * @returns {Promise<void>}
      */
     handleLeftClick = async (eventData) => {
         // use move position for the position
@@ -159,7 +160,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
         if (!pickedObject || !pickedObjectType) {
             return false;
         }
-
+        // FIXME: picked object priority, point > line > label
         // Handle different scenarios based on the clicked primitive type and the state of the tool
         switch (pickedObjectType) {
             case "label":
@@ -170,19 +171,177 @@ class MultiDistanceCesium extends MeasureModeCesium {
                 }
                 return true;
             case "point":
+                const point = pickedObject.primitive;
+
                 // this._selectAction(pickedObject.primitive);
 
-                // TODO: remove a point for its related segment during measuring, except for the first point
-                // TODO: forms a perimeter when the first point is clicked during measuring 
+                // if it is during measuring 
+                if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) {
+                    const pointIndex = this.coordsCache.findIndex(coordinate => areCoordinatesEqual(coordinate, point.position));
+                    if (pointIndex === -1) return false;
+                    const isFirstPoint = pointIndex === 0;
 
-                // TODO: continue to measure if click on first or last point of the whole line.
-
-                return false;   // False mean do not handle point click 
+                    // if it click on the first point then forms perimeter
+                    if (isFirstPoint) {
+                        // -- Feature: forms perimeter --
+                        this._formsPerimeter(point);
+                    }
+                    // if it click on other points then remove the point and its related segment
+                    else {
+                        this._removePointDuringMeasure(point);
+                    }
+                }
+                // if it is not measuring
+                else {
+                    // -- Feature: resume measure --
+                    // if click on the first or last point then resume measure
+                    this._resumeMeasure(point);
+                }
+                return true;   // False mean do not handle point click 
             case "line":
                 // this._selectAction(pickedObject.primitive);
                 return false;   // False mean do not handle line click, because it could click on moving line
             default:
                 return false;
+        }
+    }
+    _formsPerimeter(point) {
+        const pointPosition = point.position;
+
+        // const positions = [this.coordsCache[this.coordsCache.length - 1], pointPosition];
+        this.coordsCache.push(pointPosition); // Add the point to the cache
+
+        this._finalizeMeasure(); // Finalize the measurement
+    }
+
+    _removePointDuringMeasure(point) {
+        // -- Show notification for expected user experience --
+        showCustomNotification("Removing point and its related segment", this.map.container);
+
+        // -- Remove point --
+        this.drawingHelper._removePointMarker(point); // Remove the point primitive
+
+        const pointIndex = this.coordsCache.findIndex(coordinate => areCoordinatesEqual(coordinate, point.position));
+        if (pointIndex === -1) return; // If the point is not found, exit
+
+        // -- Handle neighboring coordinate --
+        const { previous, current, next } = getNeighboringValues(this.coordsCache, pointIndex);
+
+        // Remove the point from the cache
+        this.coordsCache.splice(pointIndex, 1);
+
+        // -- Remove related annotations --
+        const { linePrimitives, labelPrimitives } = getPrimitiveByPointPosition(point.position,
+            `annotate_${this.mode}`,
+            this.map.scene,
+            this.pointCollection,
+            this.labelCollection,
+            this.polylineCollection,
+            this.polygonCollection,
+        )
+        // remove related lines
+        linePrimitives.forEach(line => {
+            this.drawingHelper._removePolyline(line); // Remove the line primitive
+
+            const lineToRemoveIndex = this.#interactiveAnnotations.polylines.findIndex(l => areCoordinatesEqual(l.positions[0], line.positions[0]) && areCoordinatesEqual(l.positions[1], line.positions[1]));
+            this.#interactiveAnnotations.polylines.splice(lineToRemoveIndex, 1); // Remove the line from this interactive annotations
+        });
+        // remove related labels
+        labelPrimitives.forEach(label => {
+            const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total_label`);
+            const isMovingLabel = label.status === "moving";
+            if (isTotalLabel || isMovingLabel) return;
+
+            this.drawingHelper._removeLabel(label); // Remove the label primitive            
+
+            // remove the label from this.#interactiveAnnotations
+            const labelToRemoveIndex = this.#interactiveAnnotations.labels.findIndex(l => areCoordinatesEqual(l.position, label.position));
+            this.#interactiveAnnotations.labels.splice(labelToRemoveIndex, 1);
+        });
+
+        // -- Handle Reconnection and distance record --
+        if (previous && next) {
+            const reconnectedPositions = [previous, next];
+
+            // -- Create polyline --
+            this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
+                status: "pending",
+                color: this.stateManager.getColorState("line")
+            });
+            // -- Create label --
+            const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
+                status: "pending",
+                showBackground: true
+            });
+
+            // -- Handle Distances record --
+            // Don't calculate all distances from coordsCache due to performance and consistency
+            this.#distances.splice(pointIndex - 1, 2);
+            this.#distances.splice(pointIndex - 1, 0, distances[0]);
+        }
+        // it is the first point, as it doesn't have previous point
+        // click on the first point will forms perimeter so this won't be executed
+        else if (next) {
+            this.#distances.splice(pointIndex, 1) // Remove the first distance
+        }
+        // it is the last point, as it doesn't have next point
+        else if (previous) {
+            this.#distances.splice(pointIndex - 1, 1); // Remove the last distance
+        }
+
+
+        // -- Reposition the total label --
+        const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
+            status: "pending",
+            showBackground: false
+        });
+
+        // -- Update current measure data --
+        this.measure.status = "pending"; // Update the measure status
+        if (this.#distances.length > 0 && typeof totalDistance === "number") {
+            const record = { distances: [...this.#distances], totalDistance };
+            this.measure._records[0] = record // Update distances record
+        }
+        // Update dataPool with the measure data
+        dataPool.updateOrAddMeasure({ ...this.measure });
+    }
+
+    _resumeMeasure(point) {
+        // Find the measure data
+        const measureId = Number(point.id.split("_").slice(-1)[0]);
+        if (isNaN(measureId)) return;
+
+        // Confirm the resume action
+        const confirmResume = window.confirm(`Do you want to resume this measure? id: ${measureId}`);
+        if (!confirmResume) return;
+
+        // -- Handle Measure Data --
+        // Get the measure data from the data pool
+        const measureData = dataPool.getMeasureById(measureId);
+        if (!measureData) return;
+
+        // convert measure data coordinates from cartographic degrees to Cartesian3
+        measureData.coordinates = measureData.coordinates.map(cartographicDegrees => convertToCartesian3(cartographicDegrees));
+        this.measure = measureData;
+        this.measure.status = "pending"; // Set the measure status to pending
+
+        // Find the index of the point in the measure coordinates
+        const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, point.positions[0]));
+
+        // -- Resume Measure --
+        // Resume measure only when the point is the first or last point
+        const isFirstPoint = pointIndex === 0;
+        const isLastPoint = pointIndex === this.measure.coordinates.length - 1;
+
+        if (isFirstPoint || isLastPoint) {
+            // Set variables and flags to resume measuring
+            this.coordsCache = this.measure.coordinates;
+
+            this.flags.isMeasurementComplete = false; // reset the flag to continue measuring
+            this.flags.isReverse = isFirstPoint; // If the point is the first point, set the reverse flag to true
+
+            // Resume start the measurement process
+            this._startMeasure(); // Start the measurement process
         }
     }
 
@@ -258,8 +417,10 @@ class MultiDistanceCesium extends MeasureModeCesium {
 
             // -- Update current measure data --
             this.measure.status = "pending";
-            this.measure._records.distances = [...this.#distances]; // Update distances record
-            this.measure._records.totalDistance = totalDistance; // Update the total distance
+            if (this.#distances.length > 0 && typeof totalDistance === "number") {
+                const record = { distances: [...this.#distances], totalDistance };
+                this.measure._records[0] = record // Update distances record
+            }
 
             // Update dataPool with the measure data
             dataPool.updateOrAddMeasure({ ...this.measure });
@@ -281,7 +442,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
     /**
      * Handles mouse move events on the map.
      * @param {NormalizedEventData} eventData - The event data containing information about the click event.
-     * @returns {Void}
+     * @returns {Promise<void>}
      */
     handleMouseMove = async (eventData) => {
         // update coordinate
@@ -331,7 +492,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
     /**
      * Handles right-click events on the map.
      * @param {NormalizedEventData} eventData - The event data containing information about the click event.
-     * @returns {Void}
+     * @returns {Promise<void>}
      */
     handleRightClick = async (eventData) => {
         if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) { // prevent user to right click on first action
@@ -342,30 +503,6 @@ class MultiDistanceCesium extends MeasureModeCesium {
             // update coordinate data cache
             this.coordsCache.push(this.#coordinate);
 
-            // -- Update annotations status --
-            // update points status
-            // Using Cesium recommended public API way to update it instead of accessing via _pointPrimitives
-            const pointCollectionLength = this.pointCollection.length;
-            for (let i = 0; i < pointCollectionLength; i++) {
-                const pointPrimitive = this.pointCollection.get(i);
-                // pointPrimitive is guaranteed to be a valid primitive object here
-                if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
-                    pointPrimitive.status = "completed";
-                }
-            }
-            // update lines status
-            const pendingLines = this.#interactiveAnnotations.polylines.filter(line => line.status === "pending");
-            pendingLines.forEach(line => {
-                line.status = "completed";
-            });
-            // update labels status
-            const pendingLabels = this.#interactiveAnnotations.labels.filter(label => label.status === "pending");
-            pendingLabels.forEach(label => {
-                label.status = "completed";
-            });
-
-
-            // -- Create last annotations --
             // Create last point
             const lastPointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
                 color: this.stateManager.getColorState("pointColor"),
@@ -374,51 +511,74 @@ class MultiDistanceCesium extends MeasureModeCesium {
             });
             if (!lastPointPrimitive) return; // If point creation fails, exit
 
-            const lastPositions = [this.coordsCache[this.coordsCache.length - 2], this.coordsCache[this.coordsCache.length - 1]];
-            // Create last line
-            this._createOrUpdateLine(lastPositions, this.#interactiveAnnotations.polylines, {
-                status: "completed",
-                color: this.stateManager.getColorState("line")
-            });
-            // Create last label
-            const { distances } = this._createOrUpdateLabel(lastPositions, this.#interactiveAnnotations.labels, {
-                status: "completed",
-                showBackground: true
-            });
-
-            // -- Handle Distances record --
-            this.#distances.push(...distances); // Store the last distance in the cache
-
-            // -- Update the last total label --
-            const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
-                status: "completed",
-                showBackground: true
-            });
-
-            // -- Update measure data --
-            if (this.#distances.length > 0 && typeof totalDistance === "number") {
-                this.measure._records.distances = [...this.#distances]; // Update distances record
-                this.measure._records.totalDistance = totalDistance; // Update the total distance
-            }
-            this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
-            this.measure.status = "completed"; // Update the measure status
-
-            // update data pool
-            dataPool.updateOrAddMeasure({ ...this.measure });
-
-            // -- Set state --
-            this.flags.isMeasurementComplete = true; // Set the measurement as complete
-
-            // -- Clean up after finish --
-            this.#interactiveAnnotations.polylines = [];
-            this.#interactiveAnnotations.labels = [];
-            this.#interactiveAnnotations.totalLabels = [];
-            this.coordsCache = []; // Clear the cache
-            this.#coordinate = null; // Clear the coordinate
-            this.#distances = []; // Clear the distances
+            this._finalizeMeasure();
         }
     }
 
+    _finalizeMeasure() {
+        // -- Update annotations status --
+        // update points status
+        // Using Cesium recommended public API way to update it instead of accessing via _pointPrimitives
+        const pointCollectionLength = this.pointCollection.length;
+        for (let i = 0; i < pointCollectionLength; i++) {
+            const pointPrimitive = this.pointCollection.get(i);
+            // pointPrimitive is guaranteed to be a valid primitive object here
+            if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
+                pointPrimitive.status = "completed";
+            }
+        }
+        // update lines status
+        const pendingLines = this.#interactiveAnnotations.polylines.filter(line => line.status === "pending");
+        pendingLines.forEach(line => {
+            line.status = "completed";
+        });
+        // update labels status
+        const pendingLabels = this.#interactiveAnnotations.labels.filter(label => label.status === "pending");
+        pendingLabels.forEach(label => {
+            label.status = "completed";
+        });
+
+
+        const lastPositions = [this.coordsCache[this.coordsCache.length - 2], this.coordsCache[this.coordsCache.length - 1]];
+
+        // -- Create last annotations --
+        // Create last line
+        this._createOrUpdateLine(lastPositions, this.#interactiveAnnotations.polylines, {
+            status: "completed",
+            color: this.stateManager.getColorState("line")
+        });
+        // Create last label
+        const { distances } = this._createOrUpdateLabel(lastPositions, this.#interactiveAnnotations.labels, {
+            status: "completed",
+            showBackground: true
+        });
+
+        // -- Handle Distances record --
+        this.#distances.push(...distances); // Store the last distance in the cache
+
+        // -- Update the last total label --
+        const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
+            status: "completed",
+            showBackground: true
+        });
+
+        // -- Update measure data --
+        if (this.#distances.length > 0 && typeof totalDistance === "number") {
+            const record = { distances: [...this.#distances], totalDistance };
+            this.measure._records[0] = record // Update distances record
+        }
+        this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
+        this.measure.status = "completed"; // Update the measure status
+
+        // update data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
+
+        // Reset to clean up after finish
+        this.resetValuesModeSpecific();
+
+        // -- Set state --
+        this.flags.isMeasurementComplete = true; // Set the measurement as complete
+    }
 
     /******************
      * EVENT HANDLING *
@@ -835,6 +995,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
         this.#distances = []; // Clear the distances
         this.#interactiveAnnotations.polylines = [];
         this.#interactiveAnnotations.labels = [];
+        this.#interactiveAnnotations.totalLabels = [];
         this.measure = super._createDefaultMeasure(); // Reset measure to default state
     }
 }

@@ -124,7 +124,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
                             event.domEvent.stopPropagation();
                             event.domEvent.preventDefault();
 
-                            this.removePointInfo(marker); // Call removePointInfo for middle click
+                            this._removePointInfo(marker); // Call removePointInfo for middle click
                         }
                         // LEFT DOWN EVENT: Check for left mouse button (button === 0) for dragging
                         else if (event.domEvent.button === 0) {
@@ -139,7 +139,6 @@ class PointInfoGoogle extends MeasureModeGoogle {
                     }
                 }
             },
-
         };
 
         // -- Create point marker --
@@ -208,7 +207,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @param {google.maps.Marker} marker - The marker to remove. 
      * @returns {null|void} - Returns null if the marker is not found, otherwise returns void.
      */
-    removePointInfo(marker) {
+    _removePointInfo(marker) {
         // Get the measure id
         const idParts = marker.id.split("_");
         const measureId = idParts[idParts.length - 1]; // Extract the measure ID from the marker ID

@@ -119,17 +119,31 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
             // Pass the mousedown listener
             listeners: {
                 mousedown: (marker, event) => {
-                    // Check if drag handler exists and is active
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
+                    if (event.domEvent) {
+                        // MIDDLE CLICK EVENT: Check for middle mouse button (button === 1)
+                        if (event.domEvent.button === 1) {
+                            // Prevent map drag, default behavior
+                            event.domEvent.stopPropagation();
+                            event.domEvent.preventDefault();
 
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
+                            this.map?.dragging.disable();
+                            this._removePointInfo(marker); // Call removePointInfo for middle click
+                            this.map?.dragging.enable();
+                        }
+                        // LEFT DOWN EVENT: Check for left mouse button (button === 0) for dragging
+                        else if (event.domEvent.button === 0) {
+                            if (this.dragHandler && this.flags.isActive) {
+                                // Prevent map drag, default behavior
+                                event.domEvent?.stopPropagation();
+                                event.domEvent?.preventDefault();
+
+                                // Tell the drag handler to start dragging this specific marker
+                                this.dragHandler._handleDragStart(marker, event);
+                            }
+                        }
                     }
-                },
-            }
+                }
+            },
         };
 
         // -- Create point marker --
@@ -191,6 +205,33 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
             // Pass both map coordinate (for display) and screen coordinate (for positioning)
             this.updateCoordinateInfoOverlay(this.#coordinate, screenPos);
         }
+    }
+
+    /**
+     * To remove a point marker and its associated label.
+     * @param {L.CircleMarker} marker - The marker to be removed.
+     * @return {void}
+     */
+    _removePointInfo(marker) {
+        // Get the measure id
+        const idParts = marker.id.split("_");
+        const measureId = idParts[idParts.length - 1]; // Extract the measure ID from the marker ID
+
+        // -- Confirm deletion --
+        // Use js confirm dialog to confirm deletion
+        const confirmDelete = window.confirm(`Do you want to delete this point at measure id ${measureId}?`);
+        if (!confirmDelete) return;
+
+        // -- Remove point --
+        this.drawingHelper._removePointMarker(marker);
+        console.log(this.labelCollection)
+        // -- Remove label --
+        const labelToRemove = this.labelCollection.getLayers().find(label => label.id.includes(measureId));
+        if (!labelToRemove) return null;
+        this.drawingHelper._removeLabel(labelToRemove);
+
+        // -- Remove data --
+        dataPool.removeMeasureById(measureId); // Remove data from data pool
     }
 
     /******************

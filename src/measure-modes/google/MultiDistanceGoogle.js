@@ -1,15 +1,20 @@
-// import {
-//     createPointMarker,
-//     createPolyline,
-//     createLabelMarker,
-//     removePointMarker,
-//     removePolyline,
-//     removeLabel,
-// } from '../../lib/helper/googleHelper.js';
-
 import dataPool from "../../lib/data/DataPool.js";
-import { generateIdByTimestamp } from "../../lib/helper/cesiumHelper.js"; // Keep if generic enough
-import { convertToconvertToLatLng, calculateMiddlePos, calculateDistance, formatMeasurementValue, } from "../../lib/helper/googleHelper.js";
+import { convertToLatLng, calculateMiddlePos, calculateDistance, formatMeasurementValue, areCoordinatesEqual, checkOverlayType, } from "../../lib/helper/googleHelper.js";
+import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
+
+/** @typedef {{lat: number, lng: number}} LatLng */
+
+/**
+ * @typedef InteractiveAnnotationsState
+ * @property {google.maps.Polyline[]} polylines
+ * @property {google.maps.OverlayView[]} labels
+ */
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
+ * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
+ */
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -17,26 +22,49 @@ import { convertToconvertToLatLng, calculateMiddlePos, calculateDistance, format
  * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
  * @property {number} labelNumberIndex - Index used for sequential labeling
  * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {string} mapName - Map provider name ("google")
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
  */
 
+/** @typedef {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../../components/MeasureComponentBase').MeasureComponentBase} MeasureComponentBase */
+/** @typedef {import('../../lib/state/StateManager').StateManager} StateManager */
+/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
+/** @typedef {import('../../lib/interaction/GoogleDragHandler.js').GoogleDragHandler} DragHandler */
+/** @typedef {import('../../lib/interaction/GoogleHighlightHandler.js').GoogleHighlightHandler} HighlightHandler */
+
 /**
- * Handles two-point distance measurement specifically for Google Maps.
- * Uses googleHelper functions for drawing temporary graphics.
- * Expects an IInputEventHandler and IDrawingHelper (but only uses map from drawingHelper for now).
+ * Handles two-point distance measurement specifically for Google Map.
+ * @extends MeasureModeGoogle
  */
-export class MultiDistanceGoogle {
+export class MultiDistanceGoogle extends MeasureModeGoogle {
+    /** @type {InteractiveAnnotationsState} */
+    #interactiveAnnotations = {
+        polylines: [], // Array to store polyline references
+        labels: [], // Array to store label references
+        totalLabels: [] // Array to store total label references
+    }
+    /** @type {LatLng} */
+    #coordinate = null;
+    /** @type {MeasurementGroup} */
+    measure = null; // measure data used internally 
+    /** @type {LatLng[]} */
+    coordsCache = [];
+    /** @type {number[]} */
+    #distances = []; // Array to store distances between points
+
     /**
      * Creates an instance of TwoPointsDistanceGoogle.
-     * @param {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} inputHandler - The Google Maps input handler instance.
-     * @param {import('../../components/MeasureComponentBase').MeasureComponentBase} drawingHelper - The GoogleMeasure component instance (provides map).
-     * @param {import('../../lib/state/StateManager').StateManager} stateManager - The state manager instance.
-     * @param {import('eventemitter3').EventEmitter} emitter - The event emitter instance.
+     * @param {GoogleMapsInputHandler} inputHandler
+     * @param {DragHandler} dragHandler
+     * @param {HighlightHandler} highlightHandler
+     * @param {MeasureComponentBase} drawingHelper
+     * @param {StateManager} stateManager
+     * @param {EventEmitter} emitter
      */
-    constructor(inputHandler, drawingHelper, stateManager, emitter) {
-        // --- Updated Constructor Arguments ---
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
+        // Validate input parameters
         if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
             throw new Error("TwoPointsDistanceGoogle requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
@@ -44,288 +72,353 @@ export class MultiDistanceGoogle {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        this.handler = inputHandler; // Use the passed Input Handler abstraction
-        this.drawingHelper = drawingHelper; // The GoogleMeasure instance
-        this.map = drawingHelper.map;      // Get map reference from drawing helper
-        this.stateManager = stateManager;
-        this.emitter = emitter;
-        // --- End Updated Args ---
+        super("multi_distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter)
 
-        this.mode = "multi_distance"; // Use generic mode ID now
-
-        // Coordinate management and related properties
-        this.coords = {
-            /** @type {Array<{lat: number, lng: number}>} */
-            cache: [],                  // Stores temporary coordinates during operations
-            /** @type {MeasurementGroup[]} */
-            groups: [],                 // Tracks all coordinates involved in operations
-            measureCounter: 0,            // Counter for the number of groups
-            /** @type {Array<{lat: number, lng: number}>} */
-            dragStart: null,            // Stores the initial position before a drag begins
-            /** @type {Array<{x: number, y: number}>} */
-            dragStartToCanvas: null,    // Stores the initial position in canvas coordinates before a drag begins
-        };
-
-        // Flags
-        this.flags = {
-            isMeasurementComplete: false,
-            isDragMode: false,
-            isShowLabels: true
-        };
-
-        // Stored points (generic format)
-        /** @type {{lat: number, lng: number}} */
-        this.coordinate = null;
-
-        // References to temporary Google Maps overlays
-        this.interactiveAnnotations = {
-            movingPolylines: [],    // Array of moving polylines
-            movingLabels: [],       // Array of moving labels
-
-            dragPoint: null,          // Currently dragged point primitive
-            dragPolylines: [],        // Array of dragging polylines
-            dragLabels: [],           // Array of dragging labels
-
-            hoveredPoint: null,       // Point that is currently hovered
-            hoveredLine: null,        // Line that is currently hovered
-            hoveredLabel: null        // Label that is currently hovered
-        };
-
-        this.pointCollection = [];      // Collection of point markers
-        this.labelCollection = [];      // Collection of labels
-        this.polylineCollection = [];   // Collection of polylines
-    }
-
-    /**
-     * Activates the mode: attaches listeners via inputHandler, resets state.
-     */
-    activate() {
-        console.log(`Activating ${this.constructor.name} mode.`);
+        // flags specific to this mode
         this.flags.isMeasurementComplete = false;
+        this.flags.isDragMode = false; // Initialize drag mode flag
+        this.flags.isReverse = false; // Initialize reverse flag
 
-        // --- Use Input Handler ---
-        // Pass the bound method reference directly
-        this.handler.on('leftClick', (eventData) => this.handleLeftClick(eventData));
-        this.handler.on('mouseMove', (eventData) => this.handleMouseMove(eventData));
-        this.emitter.on('annotation:click', (eventData) => {
-            if (!eventData) return;
-            this.flags.isDragMode = true;
-            // add drag event logic here
-            console.log(this.flags.isDragMode);
-        });
-        // --- End Use Input Handler ---
-
-        this.handler.setCursor('crosshair'); // Set cursor via handler
+        /** @type {MeasurementGroup} */
+        this.measure = this._createDefaultMeasure(); // Create a new measure object
     }
 
-    /**
-     * Deactivates the mode: removes listeners via inputHandler and temporary graphics.
-     */
-    deactivate() {
-        console.log(`Deactivating ${this.constructor.name} mode.`);
-
-        // remove any pending annotations
-        this._removePendingOrMovingAnnotations();
-
-        // --- Use Input Handler to remove listeners ---
-        // Pass the *same function references* used in activate()
-        this.handler.off('leftClick', this.handleLeftClick);
-        this.handler.off('mouseMove', this.handleMouseMove);
-        // --- End Use Input Handler ---
-
-        this.handler.setCursor('default'); // Reset cursor via handler
+    /**********
+     * GETTER *
+     **********/
+    get interactiveAnnotations() {
+        return this.#interactiveAnnotations;
     }
 
+    // get coordinate() {
+    //     return this.#coordinate;
+    // }
+
+
+    /******************
+     * EVENTS HANDLER *
+     ******************/
+    /***********************
+     * LEFT CLICK FEATURES *
+     ***********************/
     /**
      * Handles left clicks, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
+     * @returns {Promise<void>}
      */
-    handleLeftClick(eventData) {
-        // Use normalized mapPoint
-        if (!eventData || !eventData.mapPoint) return;
+    handleLeftClick = async (eventData) => {
+        // -- Validate input parameters and safety check --
+        if (!eventData || !eventData.mapPoint || this.flags.isDragMode) return;
+
+        // Ignore any click within 200 ms of drag‑end to prevent drag-end and left click clash issue
+        if (this.dragHandler?.lastDragEndTs && (Date.now() - this.dragHandler?.lastDragEndTs) < 200) {
+            return;
+        }
 
         if (this.flags.isMeasurementComplete) {
             this.flags.isMeasurementComplete = false;
-            this.coords.cache = [];
+            this.coordsCache = [];
         }
 
         // Initiate cache if it is empty, start a new group and assign cache to it
-        if (this.coords.cache.length === 0) {
+        if (this.coordsCache.length === 0) {
             // Reset for a new measure using the default structure
-            this.measure = {
-                id: null,
-                mode: "",
-                coordinates: [],
-                labelNumberIndex: 0,
-                status: "pending",
-                _records: [],
-                interpolatedPoints: [],
-                mapName: "google",
-            };
+            this.measure = this._createDefaultMeasure(); // Create a new measure object
 
-            // Set values for the new measure
-            this.measure.id = generateIdByTimestamp();
-            this.measure.mode = this.mode;
-            this.measure.labelNumberIndex = this.coords.measureCounter;
-            this.measure.status = "pending";
-
-            // Establish data relation
-            this.coords.groups.push(this.measure);
-            this.measure.coordinates = this.coords.cache; // when cache changed groups will be changed due to reference by address
-            this.coords.measureCounter++;
+            // Establish data relationship
+            this.measure.coordinates = this.coordsCache; // when cache changed groups will be changed due to reference by address
         }
 
+        const markerListener = {
+            // Add any specific marker options here if needed
+            // Pass the mousedown listener
+            listeners: {
+                mousedown: (marker, event) => {
+                    // Check if drag handler exists and is active
+                    if (this.dragHandler && this.flags.isActive) {
+                        // Prevent map drag, default behavior
+                        event.domEvent?.stopPropagation();
+                        event.domEvent?.preventDefault();
 
-        const point = this.drawingHelper._addPointMarker(this.coordinate);
+                        // Tell the drag handler to start dragging this specific marker
+                        this.dragHandler._handleDragStart(marker, event);
+                    }
+                },
+            }
+        };
+
+        // -- Create point marker --
+        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+            color: this.stateManager.getColorState("pointColor"),
+            id: `annotate_${this.mode}_point_${this.measure.id}`,
+            ...markerListener
+        });
         if (!point) return;
-        point.id = `annotate_distance_${this.measure.id}`
-        this.pointCollection.push(point); // Store point reference
+        point.status = "pending"; // Set status to pending
 
-        // Update the this.coords cache and this.measure coordinates
-        this.coords.cache.push({ latitude: this.coordinate.lat, longitude: this.coordinate.lng, height: 0 });
+        // Update the coordsCache based on the measurement direction
+        if (this.flags.isReverse) {
+            this.coordsCache.unshift(this.#coordinate);
+        } else {
+            this.coordsCache.push(this.#coordinate);
+        }
 
-        // Update to data pool
+        // -- Update dataPool --
         dataPool.updateOrAddMeasure({ ...this.measure });
 
-        if (this.coords.cache.length === 2) {
-            // create line
-            const line = this.drawingHelper._addPolyline(this.coords.cache, "#A52A2A", { dataId: this.measure.id });
-            this.polylineCollection.push(line); // Store polyline reference
+        if (this.coordsCache.length > 1) {
+            // Determine the indices of the previous and current points based on the measurement direction
+            const [prevIndex, currIndex] = this.flags.isReverse
+                ? [0, 1] // If reversing, use the first two points
+                : [this.coordsCache.length - 2, this.coordsCache.length - 1]; // Otherwise, use the last two points
 
-            // create label 
-            const googlePositions = this.coords.cache.map(pos => convertToconvertToLatLng(pos));
-            const distance = calculateDistance(googlePositions[0], googlePositions[1]);
-            const label = this.drawingHelper._addLabel(googlePositions, distance, "meter");
-            this.labelCollection.push(label); // Store label reference
+            const positions = [this.coordsCache[prevIndex], this.coordsCache[currIndex]];
 
-            // Update this.measure
-            this.measure.status = "completed";
+            // -- Create Annotations --
+            // Create the line
+            this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
+                status: "pending",
+                color: this.stateManager.getColorState("line")
+            });
 
-            // Update to data pool
+            // Create the label
+            const { distances } = this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
+                status: "pending",
+                showBackground: true
+            });
+
+            // -- Handle Distances record --
+            this.#distances.push(...distances); // Store the distance in the cache
+
+            // Create the total label
+            const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
+                status: "pending",
+                showBackground: false
+            });
+
+            // -- Update current measure data --
+            this.measure.status = "pending";
+            if (this.#distances.length > 0 && typeof totalDistance === "number") {
+                const record = { distances: [...this.#distances], totalDistance };
+                this.measure._records[0] = record // Update distances record
+            }
+
+            // Update dataPool with the measure data
             dataPool.updateOrAddMeasure({ ...this.measure });
-
-            // set flag that the measure has ended
-            this.flags.isMeasurementComplete = true;
-            this.coords.cache = [];
         }
-    };
+    }
 
+
+    /**********************
+     * MOUSE MOVE FEATURE *
+     **********************/
     /**
      * Handles mouse move, using normalized event data.
      * @param {NormalizedEventData} eventData - Normalized data from input handler.
+     * @returns {Promise<void>}
      */
-    handleMouseMove(eventData) { // Use arrow fn
+    handleMouseMove = async (eventData) => {
         if (!eventData || !eventData.mapPoint) return;
 
         const pos = eventData.mapPoint; // Already {latitude, longitude}
         if (!pos) return;
-        this.coordinate = pos; // Store for later use
+        this.#coordinate = pos; // Store for later use
 
-        const isMeasuring = this.coords.cache.length > 0 && !this.flags.isMeasurementComplete;
+        const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete;
 
         switch (true) {
             case isMeasuring:
-                if (this.coords.cache.length === 1) {
-                    // convert to google coord
-                    const googlePositions = [convertToconvertToLatLng(this.coords.cache[0]), this.coordinate];
+                // Moving coordinate data
+                const positions = [this.coordsCache[this.coordsCache.length - 1], cartesian];
 
-                    // validate googlePositions
-                    if (!googlePositions || googlePositions.length === 0 || googlePositions.some(pos => pos === null)) {
-                        console.error("Google positions are empty or invalid:", googlePositions);
-                        return;
-                    }
+                // Moving line: remove if existed, create if not existed
+                this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
+                    status: "moving",
+                    color: this.stateManager.getColorState("move"),
+                });
 
-                    // Remove existing moving lines and labels
-                    // this._removeMovingAnnotations();
-
-                    // Moving line: update if existed, create if not existed, to save dom operations
-                    this._createOrUpdateMovingLine(googlePositions);
-
-                    // Moving label: update if existed, create if not existed, to save dom operations
-                    this._createOrUpdateMovingLabel(googlePositions);
-                }
+                // Moving label: update if existed, create if not existed
+                this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
+                    status: "moving",
+                    showBackground: false
+                });
                 break;
             default:
-                this.handleHoverHighlighting();
+                // this.handleHoverHighlighting();
                 break;
         }
-    };
+    }
+
+
+    /***********************
+     * RIGHT CLICK FEATURE *
+     ***********************/
+    handleRightClick = async (eventData) => {
+        if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) { // prevent user to right click on first action
+
+            // Update the this.coords cache and this.measure coordinates
+            this.coordsCache.push(this.#coordinate);
+
+            // Create last point
+            const lastPointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
+                color: this.stateManager.getColorState("pointColor"),
+                id: `annotate_${this.mode}_point_${this.measure.id}`,
+                status: "completed"
+            });
+            if (!lastPointPrimitive) return; // If point creation fails, exit
+
+            this._finalizeMeasure();
+        }
+    }
+
+    _finalizeMeasure() {
+        // -- Update annotations status --
+        // update points status
+        this.pointCollection.forEach(point => {
+            if (point.id.includes(this.mode)) {
+                point.status = "completed"
+            }
+        });
+        // update polylines status
+        this.#interactiveAnnotations.polylines.forEach(polyline => {
+            if (polyline.id.includes(this.mode)) {
+                polyline.setOptions({ status: "completed" });
+            }
+        });
+        // update labels status
+        this.#interactiveAnnotations.labels.forEach(label => {
+            if (label.id.includes(this.mode)) {
+                label.setOptions({ status: "completed" });
+            }
+        });
+
+
+        const lastPositions = [this.coordsCache[this.coordsCache.length - 2], this.coordsCache[this.coordsCache.length - 1]];
+
+        // -- APPROACH 2: Update/ Reuse existing polyline and label --
+        // -- Handle polyline --
+        this._createOrUpdateLine(lastPositions, this.#interactiveAnnotations.polylines, {
+            status: "completed",
+            color: this.stateManager.getColorState("line"),
+            clickable: true
+        });
+
+        // -- Handle label --
+        const { distances } = this._createOrUpdateLabel(lastPositions, this.#interactiveAnnotations.labels, {
+            status: "completed",
+            clickable: true
+        });
+
+        // -- Handle Distances record --
+        this.#distances.push(...distances); // Store the last distance in the cache
+
+        const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
+            status: "completed",
+            clickable: true
+        });
+
+        // -- Handle Measure Data --
+        if (this.#distances.length > 0 && typeof totalDistance === "number") {
+            const record = { distances: [...this.#distances], totalDistance };
+            this.measure._records[0] = record // Update distances record
+        }
+        this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
+        this.measure.status = "completed";
+
+        // Update to data pool
+        dataPool.updateOrAddMeasure({ ...this.measure });
+
+        // Reset to clean up after finish
+        this.resetValuesModeSpecific();
+
+        // Set flag
+        this.flags.isMeasurementComplete = true;
+    }
+
+    /******************
+     * EVENT HANDLING *
+     *    FOR DRAG    *
+     ******************/
+    /**
+     * Handle graphics updates during dragging operation.
+     * @param {MeasurementGroup} measure - The measure object data from drag operation.
+     * @returns {void}
+     */
+    updateGraphicsOnDrag(measure) { };
 
     /**
-     * Creates or update the moving line
-     * @param {{latitude: number, longitude: number}[]|{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
+     * Finalize graphics updates for the end of drag operation
+     * @param {MeasurementGroup} measure - The measure object data from drag operation.
+     * @returns {void}
      */
-    _createOrUpdateMovingLine(positions) {
-        if (this.interactiveAnnotations.movingPolylines && this.interactiveAnnotations.movingPolylines.length > 0) {
-            // update position of the line
-            const movingLine = this.interactiveAnnotations.movingPolylines[0];
-            movingLine.setPath(positions);
-            // TODO: update moving line id
-        } else {
-            // create new line
-            // TODO: set line id
-            const movingLine = this.drawingHelper._addPolyline(positions, "A52A2A", { clickable: false })
-            this.interactiveAnnotations.movingPolylines.push(movingLine);
+    finalizeDrag(measure) { }
+
+
+    /**********
+     * HELPER *
+     **********/
+    _createOrUpdateLine(positions, polylinesArray, options = {}) {
+        // 1. DEFAULTS & INPUT VALIDATION
+        if (!Array.isArray(polylinesArray) || !Array.isArray(positions) || positions.length === 0) {
+            console.warn("_createOrUpdateLine: input parameters are invalid.");
+            return;
         }
+
+        // default options
+        const {
+            status = "pending",
+            color = this.stateManager.getColorState("move"),
+            clickable = false,
+            ...rest
+        } = options;
     }
 
+    _createOrUpdateLabel(positions, labelsArray, options = {}) {
+        // 1. DEFAULTS & INPUT VALIDATION
+        if (!Array.isArray(positions) || !Array.isArray(labelsArray) || positions.length === 0) {
+            console.warn("Invalid input: positions and labelsArray should be arrays.");
+            return { distances: [], labelPrimitives: null }; // Validate input positions
+        };
 
-    _createOrUpdateMovingLabel(positions) {
-        // calculate distance
-        const distance = calculateDistance(positions[0], positions[1]);
-        const formattedText = formatMeasurementValue(distance, "meter"); // Format the distance value
-
-        if (this.interactiveAnnotations.movingLabels && this.interactiveAnnotations.movingLabels.length > 0) {
-            const movingLabel = this.interactiveAnnotations.movingLabels[0];
-            // calculate label position
-            const middlePos = calculateMiddlePos(positions);
-            // set label position
-            movingLabel.setPosition(middlePos);
-            // set label text
-            movingLabel.setLabel({ ...movingLabel.getLabel(), text: formattedText });
-
-            // TODO: update moving label id
-        } else {
-            // create new label
-            const movingLabel = this.drawingHelper._addLabel(positions, distance, "meter", { clickable: false });
-            this.interactiveAnnotations.movingLabels = [movingLabel];
-            // TODO: set labelid
-        }
+        // default options
+        const {
+            status = null,
+            clickable = false,
+            ...rest
+        } = options;
     }
 
-    _removePendingOrMovingAnnotations() {
-        // Remove pending annotations
-        const pendingPoints = this.pointCollection.filter(point => point.id.includes("pending"));
-        if (pendingPoints && pendingPoints.length > 0) {
-            pendingPoints.forEach(point => this.drawingHelper._removePointMarker(point));
-        }
+    _createOrUpdateTotalLabel(positions, labelsArray, options = {}) {
+        // 1. DEFAULTS & INPUT VALIDATION
+        if (!Array.isArray(positions) || !Array.isArray(labelsArray) || positions.length === 0) {
+            console.warn("Invalid input: positions and labelsArray should be arrays.");
+            return { distances: [], labelPrimitives: null }; // Validate input positions
+        };
 
-        const pendingLines = this.polylineCollection.filter(line => line.id.includes("pending"));
-        if (pendingLines && pendingLines.length > 0) {
-            pendingLines.forEach(line => this.drawingHelper._removePolyline(line));
-        }
-
-        const pendingLabels = this.labelCollection.filter(label => label.id.includes("pending"));
-        if (pendingLabels && pendingLabels.length > 0) {
-            pendingLabels.forEach(label => this.drawingHelper._removeLabel(label));
-        }
-
-        // Remove moving annotations
-        if (this.interactiveAnnotations.movingPolylines && this.interactiveAnnotations.movingPolylines.length > 0) {
-            this.interactiveAnnotations.movingPolylines.forEach((line) => {
-                this.drawingHelper._removePolyline(line);
-            });
-            this.interactiveAnnotations.movingPolylines = [];
-        }
-
-        if (this.interactiveAnnotations.movingLabels && this.interactiveAnnotations.movingLabels.length > 0) {
-            this.interactiveAnnotations.movingLabels.forEach((label) => {
-                this.drawingHelper._removeLabel(label);
-            });
-            this.interactiveAnnotations.movingLabels = [];
-        }
+        // default options
+        const {
+            status = null,
+            clickable = false,
+            ...rest
+        } = options;
     }
 
-    handleHoverHighlighting() {
+    /**
+     * Resets values specific to the mode.
+     */
+    resetValuesModeSpecific() {
+        // Reset flags
+        this.flags.isMeasurementComplete = false;
+        this.flags.isDragMode = false;
+        this.flags.isReverse = false;
+
+        // Clear cache
+        this.coordsCache = [];
+        this.#coordinate = null; // Clear the coordinate
+        this.#distances = []; // Clear the distances
+        this.#interactiveAnnotations.polylines = [];
+        this.#interactiveAnnotations.labels = [];
+        this.#interactiveAnnotations.totalLabels = [];
+        this.measure = super._createDefaultMeasure(); // Reset measure to default state
     }
 }
