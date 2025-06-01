@@ -20,7 +20,7 @@ import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
-import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistanceCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet } from "../measure-modes/index.js";
+import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistanceCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
 
 
 /**
@@ -58,7 +58,7 @@ export class MeasureComponentBase extends HTMLElement {
     #data = []; // Internal data, not for sharing with other components
     /** @type {'cesium' | 'google' | 'leaflet' | null} */
     #mapName = null;
-    /** @type {import('cesium').Viewer | google.maps.Map| leaftlet.map| null| undefined} */
+    /** @type {import('cesium').Viewer | google.maps.Map| L.map| null| undefined} */
     #map = null; // The specific map instance (Viewer, google.maps.Map, etc.)
     /** @type {Object} */
     #cesiumPkg = null; // Only relevant for CesiumMeasure
@@ -71,34 +71,40 @@ export class MeasureComponentBase extends HTMLElement {
     /** @type {import('../lib/data/DataPool').DataPool | null} */
     #dataHandler = null; // Reference to the bound data listener
 
-    // --- Public Fields ---
-    log = console; // Default logger, overridden by app setter
+    /** @type {HTMLElement | null} */
+    _buttonContainer = null;
+    /** @type {DocumentFragment | null} */
+    _buttonFragment = null;
+    /** @type {boolean} */
+    _isToggling = false;
+    /** @type {Array<number>} */
+    _toggleTimeouts = [];
 
+    // --- Public Fields ---
+    log = null;
     /** @type {CesiumInputHandler | GoogleMapsInputHandler | null} */
     inputHandler = null;
     /** @type {CesiumDragHandler | GoogleDragHandler | null} */
     dragHandler = null;
     /** @type {CesiumHighlightHandler | GoogleHighlightHandler | null} */ // Replace 'any' with specific type if available
     highlightHandler = null;
-
     /** @type {object | null} */
     activeModeInstance = null;
     /** @type {string | null} */
     activeModeId = null;
-
     /** @type {HTMLElement | null} */
     toolbar = null;
     /** @type {{string: HTMLElement}} */
     uiButtons = {};
     /** @type {Array<object>} */ // Consider a more specific type for mode configs
     availableModeConfigs = [];
-
     /** @type {{ [modeId: string]: object }} */
     #modeInstances = {}; // Pool to store instantiated modes
 
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
+        this._buttonFragment = document.createDocumentFragment();
     }
 
     /***********************
@@ -107,7 +113,6 @@ export class MeasureComponentBase extends HTMLElement {
     get app() {
         return this.#app;
     }
-
     set app(app) {
         this.#app = app;
         this.log = app.log;
@@ -116,7 +121,6 @@ export class MeasureComponentBase extends HTMLElement {
     get stateManager() {
         return this.#stateManager;
     }
-
     set stateManager(manager) {
         this.#stateManager = manager;
     }
@@ -128,7 +132,6 @@ export class MeasureComponentBase extends HTMLElement {
     get emitter() {
         return this.#emitter;
     }
-
     set emitter(emitter) {
         this.#emitter = emitter;
     }
@@ -136,7 +139,6 @@ export class MeasureComponentBase extends HTMLElement {
     get map() {
         return this.#map;
     }
-
     set map(map) {
         this.#map = map;
     }
@@ -144,7 +146,6 @@ export class MeasureComponentBase extends HTMLElement {
     get mapName() {
         return this.#mapName;
     }
-
     set mapName(name) {
         if (this.#mapName === name) return;
         this.#mapName = name;
@@ -153,12 +154,9 @@ export class MeasureComponentBase extends HTMLElement {
     get cesiumPkg() {
         return this.#cesiumPkg;
     }
-
     set cesiumPkg(pkg) {
         if (this.#cesiumPkg === pkg) return; // Avoid re-setting if same instance
         this.#cesiumPkg = pkg;
-        // Initialize Cesium collection from Cesium package
-        this._initializeCesiumCollections();
     }
 
 
@@ -200,8 +198,16 @@ export class MeasureComponentBase extends HTMLElement {
         this.highlightHandler?.destroy();
         this.highlightHandler = null;
 
+        this._toggleTimeouts.forEach(clearTimeout);
+        this._toggleTimeouts = [];
+
         // Clear references 
-        this.toolbar = null;
+        if (this.toolbar) {
+            this.toolbar.remove();
+            this.toolbar = null;
+        }
+        this._buttonContainer = null;
+
         this.uiButtons = {};
         this.availableModeConfigs = [];
 
@@ -212,6 +218,7 @@ export class MeasureComponentBase extends HTMLElement {
                     this._removeAnnotations(item.annotations);
                 }
             });
+            this.#data = [];
         }
         this.#isInitialized = false;
         console.log(`${this.constructor.name}: Disconnected cleanup complete.`);
@@ -227,64 +234,47 @@ export class MeasureComponentBase extends HTMLElement {
 
         // --- Dependency Checks ---
         if (!this.map || !this.mapName || !this.emitter || !this.stateManager) {
-            this.log.error(`${this.constructor.name}: Initialization failed - missing dependencies.`);
+            console.error(`${this.constructor.name}: Initialization failed - missing dependencies.`);
             return;
         }
 
-        // --- Create Input Handler ---
+        // --- Create Handler ---
         try {
-            // Destroy previous handler if any (e.g., if mapName changed)
+            // Destroy previous handler if any 
             this.inputHandler?.destroy();
+            this.dragHandler?.destroy();
+            this.highlightHandler?.destroy();
 
             switch (this.mapName) {
                 case "cesium":
                     this.inputHandler = new CesiumInputHandler(this.map);
+                    this.dragHandler = new CesiumDragHandler(this.map, this.inputHandler, this.emitter);
+                    this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter);
+
                     break;
                 case "google":
                     this.inputHandler = new GoogleMapsInputHandler(this.map);
-                    break;
-                case "leaflet":
-                    this.inputHandler = new LeafletInputHandler(this.map);
-                    break;
-                default:
-                    throw new Error(`Unsupported map type for Input Handler: ${this.mapName}`);
-            }
-            // console.log(`${this.constructor.name}: Input handler created.`);
-        } catch (error) {
-            console.error(`${this.constructor.name}: Failed to create Input Handler:`, error);
-            return; // Cannot proceed without input handler
-        }
-
-        // --- *** Create Interaction Handlers *** ---
-        try {
-            this.dragHandler?.destroy(); // Destroy previous if any
-            // this.highlightHandler?.destroy();
-
-            switch (this.mapName) {
-                case "cesium":
-                    this.dragHandler = new CesiumDragHandler(this.map, this.inputHandler, this.emitter);
-                    this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter);
-                    break;
-                case "google":
                     this.dragHandler = new GoogleDragHandler(this.map, this.inputHandler, this.emitter);
                     this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter);
                     break;
-                case "leaflet": // Add Leaflet handlers later
+                case "leaflet":
+                    this.inputHandler = new LeafletInputHandler(this.map);
                     this.dragHandler = new LeafletDragHandler(this.map, this.inputHandler, this.emitter);
                     this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter);
                     break;
                 default:
-                    console.warn(`Drag/Highlight handlers not implemented for ${this.mapName}`);
-                    this.dragHandler = null;
-                    this.highlightHandler = null;
+                    throw new Error(`Unsupported map type for Input Handler: ${this.mapName}`);
             }
-            // console.log(`${this.constructor.name}: Interaction handlers created (or skipped).`);
         } catch (error) {
-            console.error(`${this.constructor.name}: Failed to create Interaction Handlers:`, error);
-            // Continue without drag/highlight? Or return? Depends on requirements.
+            this.inputHandler = null; // Reset input handler on error
             this.dragHandler = null;
             this.highlightHandler = null;
+
+            console.error(`${this.constructor.name}: Failed to create Handler:`, error);
+
+            return; // Cannot proceed without input handler
         }
+
 
         // --- Create UI ---
         this._createUI(this.mapName); // Create the toolbar depends on the map type
@@ -321,6 +311,7 @@ export class MeasureComponentBase extends HTMLElement {
         if (this.toolbar) this.toolbar.remove(); // Clear existing
         this.uiButtons = {};
         this.availableModeConfigs = []; // Reset available modes
+        this._buttonContainer = null; // Reset button container
 
         this.toolbar = document.createElement("div");
         this.toolbar.setAttribute("role", "toolbar");
@@ -330,6 +321,17 @@ export class MeasureComponentBase extends HTMLElement {
         this.toolbar.style.position = "absolute";
         this.toolbar.style.transform = `translate(${120}px, ${-160}px)`;
         this.toolbar.style.zIndex = 400;
+        // Append the toolbar to the shadow root
+        this.shadowRoot.appendChild(this.toolbar);
+
+        this._setupToolButton();      // Sets up the main toggle button
+        this._setupButtonContainer(); // Sets up the container for mode buttons (initially in fragment)
+
+        // Initialize toolbar state (collapsed)
+        if (this.stateManager) {
+            this.stateManager.setFlagState("isToolsExpanded", false);
+        }
+        this.toolbar.classList.add("collapsed");
 
         // --- Define Mode Configurations ---
         // Store CLASS definitions, not instances
@@ -436,6 +438,8 @@ export class MeasureComponentBase extends HTMLElement {
         // --- Filter modes available for the current map type ---
         this.availableModeConfigs = allModeConfigs.filter(m => m.mapAvailability.includes(mapName));
 
+        if (!this._buttonContainer) return;
+
         // --- Create Buttons ---
         this.availableModeConfigs.forEach((modeConfig) => {
             const btn = document.createElement("button");
@@ -454,7 +458,7 @@ export class MeasureComponentBase extends HTMLElement {
                 btn.textContent = modeConfig.name.slice(0, 3); // Fallback text
             }
             btn.title = modeConfig.name; // Tooltip
-            btn.className = `annotate-button animate-on-show measure-button-${modeId}`;
+            btn.className = `annotate-button animate-on-show measure-button-${modeId} hidden`;
             btn.dataset.modeId = modeId; // Store mode ID for the handler
             btn.setAttribute("aria-pressed", "false"); // Accessibility
 
@@ -462,21 +466,185 @@ export class MeasureComponentBase extends HTMLElement {
                 e.stopPropagation(); // Prevent map click through button
                 // When button is clicked, tell StateManager the desired mode ID
                 // check if the button is inactive if so activate it
-                if (btn.classList.contains("active")) {
-                    btn.classList.remove("active");
-                    btn.setAttribute("aria-pressed", "false");
-                }
+                // if (btn.classList.contains("active")) {
+                //     btn.classList.remove("active");
+                //     btn.setAttribute("aria-pressed", "false");
+                // }
 
                 // activate the mode
                 this._handleModeButtonClick(modeId);
             });
 
-            this.toolbar.appendChild(btn);
-            this.uiButtons[modeId] = btn; // Store reference by mode ID
+            this._buttonContainer.appendChild(btn);
+            this.uiButtons[modeId] = btn;
         });
 
-        // Append the toolbar to the shadow root
-        this.shadowRoot.appendChild(this.toolbar);
+        this._setupClearButton(this._buttonContainer);
+    }
+
+    _setupToolButton() {
+        if (!this.toolbar) return;
+        const toolButton = document.createElement("button");
+        toolButton.className = "measure-tools annotate-button visible animate-on-show"; // Main button is always visible
+        toolButton.innerHTML = `<img src="${toolIcon}" alt="Toggle Tools" style="width: 30px; height: 30px; display: block;">`;
+        toolButton.title = "Toggle Measurement Tools";
+        toolButton.setAttribute("aria-expanded", "false"); // Initial state: tools are collapsed
+
+        toolButton.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.toggleTools();
+        });
+        this.toolbar.appendChild(toolButton);
+    }
+
+    _setupButtonContainer() {
+        this._buttonContainer = document.createElement('div');
+        this._buttonContainer.classList.add('toolbar-container');
+        // The container starts in the fragment and is moved to the toolbar by toggleTools when expanding
+        if (this._buttonFragment && this._buttonContainer) {
+            this._buttonFragment.appendChild(this._buttonContainer);
+        }
+    }
+
+    toggleTools() {
+        if (this._isToggling || !this.toolbar || !this._buttonContainer || !this._buttonFragment || !this.stateManager) {
+            console.warn("ToggleTools prerequisites not met", { isToggling: this._isToggling, toolbar: !!this.toolbar, container: !!this._buttonContainer, fragment: !!this._buttonFragment, sm: !!this.stateManager });
+            this._isToggling = false; // Reset lock if prerequisites fail
+            return;
+        }
+        this._isToggling = true;
+
+        this._toggleTimeouts.forEach(clearTimeout);
+        this._toggleTimeouts = [];
+
+        const isExpanded = this.stateManager.getFlagState("isToolsExpanded");
+        this.stateManager.setFlagState("isToolsExpanded", !isExpanded); // Toggle the state
+
+        const toolButton = this.toolbar.querySelector(".measure-tools");
+        if (toolButton) {
+            toolButton.setAttribute("aria-expanded", String(!isExpanded));
+            // Optional: Toggle 'active' class on the tool button itself
+            if (!isExpanded) toolButton.classList.add('active'); else toolButton.classList.remove('active');
+        }
+
+        const delayStep = 40; // ms
+        const animationDuration = 300; // ms, should match CSS transition duration
+
+        // Get all buttons within the container (mode buttons + clear button)
+        const buttonsToAnimate = Array.from(this._buttonContainer.querySelectorAll("button.annotate-button"));
+
+        if (isExpanded) { // Currently expanded, so COLLAPSING
+            this.toolbar.classList.remove("expanded");
+            this.toolbar.classList.add("collapsed");
+            const n = buttonsToAnimate.length;
+            if (n === 0) {
+                this._isToggling = false;
+                return;
+            }
+
+            buttonsToAnimate.slice().reverse().forEach((button, index) => { // Animate in reverse for collapse
+                const timeoutId = setTimeout(() => {
+                    button.classList.remove("visible");
+                    button.classList.add("hidden");
+                    if (index === n - 1) { // Last button animation finished
+                        setTimeout(() => {
+                            if (this._buttonFragment && this._buttonContainer) this._buttonFragment.appendChild(this._buttonContainer);
+                            this._isToggling = false;
+                        }, animationDuration);
+                    }
+                }, index * delayStep);
+                this._toggleTimeouts.push(timeoutId);
+            });
+        } else { // Currently collapsed, so EXPANDING
+            this.toolbar.classList.remove("collapsed");
+            this.toolbar.classList.add("expanded");
+
+            // Move container from fragment to toolbar
+            if (this._buttonContainer && this._buttonContainer.parentNode !== this.toolbar) {
+                const mainButton = this.toolbar.querySelector(".measure-tools");
+                if (mainButton) {
+                    if (mainButton.nextSibling) {
+                        this.toolbar.insertBefore(this._buttonContainer, mainButton.nextSibling);
+                    } else {
+                        this.toolbar.appendChild(this._buttonContainer);
+                    }
+                } else { // Fallback if main tool button isn't found
+                    this.toolbar.appendChild(this._buttonContainer);
+                }
+            }
+
+            if (buttonsToAnimate.length === 0) {
+                this._isToggling = false;
+                return;
+            }
+
+            buttonsToAnimate.forEach(button => { // Ensure all start hidden before animation
+                button.classList.remove("visible");
+                button.classList.add("hidden");
+            });
+
+            buttonsToAnimate.forEach((button, index) => {
+                const timeoutId = setTimeout(() => {
+                    button.classList.remove("hidden");
+                    button.classList.add("visible");
+                    if (index === buttonsToAnimate.length - 1) { // Last button animation finished
+                        setTimeout(() => {
+                            this._isToggling = false;
+                        }, animationDuration);
+                    }
+                }, index * delayStep);
+                this._toggleTimeouts.push(timeoutId);
+            });
+        }
+    }
+
+    _setupClearButton(container) {
+        if (!container) {
+            console.error("Clear button setup failed: container is null");
+            return;
+        }
+        const clearButton = document.createElement("button");
+        clearButton.className = "clear-button annotate-button animate-on-show hidden"; // Start hidden
+        clearButton.innerHTML = `<img src="${clearIcon}" alt="Clear All" style="width: 28px; height: 28px; display: block;">`;
+        clearButton.title = "Clear All Measurements";
+        clearButton.setAttribute("aria-label", "Clear All Measurements");
+
+        clearButton.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this._handleClearButtonClick();
+        });
+        container.appendChild(clearButton);
+        this.uiButtons["clear"] = clearButton; // Store reference
+    }
+
+    _handleClearButtonClick() {
+        // this.log.info(`${this.constructor.name}: Clear button clicked.`);
+        // // 1. Deactivate any active measurement mode
+        // this._activateMode(null);
+
+        // // 2. Remove annotations from the map for data associated with this component/map
+        // const dataAssociatedWithThisMap = this.#data.filter(item => item.mapName === this.mapName || !item.mapName);
+        // dataAssociatedWithThisMap.forEach(item => {
+        //     if (item.annotations) {
+        //         this._removeAnnotations(item.annotations); // This uses the abstract _remove... methods
+        //     }
+        // });
+
+        // // 3. Clear the internal #data array for this component
+        // this.#data = this.#data.filter(item => item.mapName !== this.mapName && item.mapName); // Keep data for other maps
+
+        // // 4. Instruct DataPool to remove data for the current mapName
+        // // This assumes DataPool is the central source of truth and will emit an event.
+        // // If this component is solely responsible for its data, this step might be different.
+        // if (dataPool) {
+        //     dataPool.removeDataByFilter(item => item.mapName === this.mapName);
+        // }
+
+        // // 5. Emit an event indicating measurements were cleared for this component
+        // if (this.emitter) {
+        //     this.emitter.emit("measurementsCleared", { mapName: this.mapName, component: this });
+        // }
+        // this.log.info(`${this.constructor.name}: Measurements cleared for map: ${this.mapName}.`);
     }
 
     /**
@@ -486,16 +654,12 @@ export class MeasureComponentBase extends HTMLElement {
      * @private
      */
     _handleModeButtonClick(clickedModeId) {
-        // console.log(`${this.constructor.name}: Button clicked for mode '${clickedModeId}'`);
         const currentModeId = this.activeModeId;
-
         if (currentModeId === clickedModeId) {
             // Clicked the already active button - deactivate
-            // console.log(`Deactivating mode '${clickedModeId}' due to same button click.`);
             this._activateMode(null); // Pass null to deactivate
         } else {
             // Clicked a new button - activate the new mode
-            // console.log(`Requesting activation of mode '${clickedModeId}'. Current: '${currentModeId}'`);
             this._activateMode(clickedModeId);
         }
     }
@@ -526,17 +690,21 @@ export class MeasureComponentBase extends HTMLElement {
         // 1. There IS an active instance AND
         // 2. We are activating a DIFFERENT mode (modeId is different from currentActiveModeId) OR we are explicitly deactivating (modeId is null/falsy)
         if (currentActiveInstance && (currentActiveModeId !== modeId || !modeId)) {
-            // console.log(`Calling _deactivateCurrentMode for mode '${currentActiveModeId}'.`);
             this._deactivateCurrentMode(); // This now only calls deactivate() and clears component's active refs
         }
 
         // If the request was just to deactivate, update UI and exit
         if (!modeId || modeId === "inactive") {
-            // console.log(`Exiting _activateMode as it was a deactivation request.`);
             Object.values(this.uiButtons).forEach((btn) => {
                 btn.classList.remove("active");
                 btn.setAttribute("aria-pressed", "false");
             });
+            // Ensure the main tool button is also not 'active' if all modes are off
+            const toolButton = this.toolbar?.querySelector(".measure-tools");
+            if (toolButton && this.stateManager?.getFlagState("isToolsExpanded") === false) {
+                // If panel is collapsed and no mode active, tool button might also be non-active
+                // toolButton.classList.remove('active'); // This depends on desired UX for the main toggle
+            }
             return;
         }
 
@@ -569,7 +737,6 @@ export class MeasureComponentBase extends HTMLElement {
         // --- Instantiate (if needed) and Activate New Mode ---
         try {
             let instanceToActivate = this.#modeInstances[modeId]; // Check if instance exists in pool
-
             if (!instanceToActivate) {
                 // Instance doesn't exist, create it
                 // console.log(`Instantiating new instance for mode '${modeId}'.`);
@@ -584,21 +751,17 @@ export class MeasureComponentBase extends HTMLElement {
 
                 instanceToActivate = new ModeClass(...args);
                 this.#modeInstances[modeId] = instanceToActivate; // Store the new instance in the pool
-            } else {
-                // console.log(`Reusing existing instance for mode '${modeId}'.`);
             }
 
             // --- Activate the Instance ---
             if (typeof instanceToActivate.activate !== "function") {
                 throw new Error(`Mode instance for ${modeId} does not have an activate method.`);
             }
-            // console.log(`Calling activate() on instance for mode '${modeId}'.`);
-            instanceToActivate.activate(); // Call activate on the (potentially reused) instance
 
+            instanceToActivate.activate(); // Call activate on the (potentially reused) instance
             // Update component's state to reflect the newly active mode
             this.activeModeInstance = instanceToActivate;
             this.activeModeId = modeId;
-            // console.log(`Mode '${modeId}' successfully activated. Component activeModeId set.`);
 
             // Update UI Button State
             Object.entries(this.uiButtons).forEach(([id, btn]) => {
@@ -629,7 +792,6 @@ export class MeasureComponentBase extends HTMLElement {
     _deactivateCurrentMode = () => {
         const instance = this.activeModeInstance; // Get current instance
         const modeId = this.activeModeId;
-
         if (instance) {
             console.log(`${this.constructor.name}: Deactivating mode instance: ${modeId}`);
             try {
@@ -645,7 +807,6 @@ export class MeasureComponentBase extends HTMLElement {
                 // It remains in the #modeInstances pool for reuse
                 this.activeModeInstance = null;
                 this.activeModeId = null;
-                // console.log(`Component activeModeInstance/Id cleared for ${modeId}. Instance remains in pool.`);
                 // Reset input handler cursor to default when no mode is active
                 this.inputHandler?.setCursor("default");
             }
@@ -763,7 +924,7 @@ Lng:${data.coordinates[0].longitude.toFixed(6)}`,
                 annotations.polylines = this._addPolylinesFromArray(data.coordinates);
                 annotations.labels = this._addLabelsFromArray(
                     data.coordinates,
-                    data._records[0]?.distances
+                    data._records[0]?.distances,
                 );
                 // add label for total distance
                 if (data.status === "completed") {
