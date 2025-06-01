@@ -212,35 +212,20 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         switch (true) {
             case isMeasuring:
-                if (this.coordsCache.length === 1) {
-                    // moving positions
-                    const positions = [convertToLatLng(this.coordsCache[0]), this.#coordinate].filter(Boolean);
+                const positions = [this.coordsCache[0], this.#coordinate];
 
-                    // Validate google positions
-                    if (positions.length < 2) {
-                        console.error("Google positions are empty or invalid:", positions);
-                        return;
-                    }
+                // Moving line: update if existed, create if not existed
+                this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
+                    status: "moving",
+                    color: this.stateManager.getColorState("move"),
+                    clickable: false
+                });
 
-                    // validate positions
-                    if (!positions || positions.length === 0 || positions.some(pos => pos === null)) {
-                        console.error("Google positions are empty or invalid:", positions);
-                        return;
-                    }
-
-                    // Moving line: update if existed, create if not existed
-                    this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                        status: "moving",
-                        color: this.stateManager.getColorState("move"),
-                        clickable: false
-                    });
-
-                    // Moving label: update if existed, create if not existed
-                    this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                        status: "moving",
-                        clickable: false
-                    });
-                }
+                // Moving label: update if existed, create if not existed
+                this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
+                    status: "moving",
+                    clickable: false
+                });
                 break;
             default:
                 // this.handleHoverHighlighting();

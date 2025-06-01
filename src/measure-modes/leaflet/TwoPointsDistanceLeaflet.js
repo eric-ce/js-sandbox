@@ -198,29 +198,21 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
 
         switch (true) {
             case isMeasuring:
-                if (this.coordsCache.length === 1) {
-                    const positions = [this.coordsCache[0], pos].filter(Boolean); // Filter out any null value
+                const positions = [this.coordsCache[0], this.#coordinate];
 
-                    // Validate leaflet positions
-                    if (positions.length < 2) {
-                        console.error("Leaflet positions are empty or invalid:", positions);
-                        return;
-                    }
+                // Moving line: remove if existed, create if not existed
+                this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
+                    status: "moving",
+                    color: this.stateManager.getColorState("move"),
+                    interactive: false
+                });
 
-                    // Moving line: remove if existed, create if not existed
-                    this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                        status: "moving",
-                        color: this.stateManager.getColorState("move"),
-                        interactive: false
-                    });
-
-                    // Moving label: update if existed, create if not existed
-                    this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                        status: "moving",
-                        // showBackground: false
-                        interactive: false
-                    });
-                }
+                // Moving label: update if existed, create if not existed
+                this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
+                    status: "moving",
+                    // showBackground: false
+                    interactive: false
+                });
                 break;
             default:
                 // this.handleHoverHighlighting(pickedObjects[0]);
@@ -342,8 +334,8 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
 
         // Default options
         const {
-            status = null,
-            color = this.stateManager.getColorState("move"), // Default color if not provided
+            status = "pending", // Default pending status
+            color = this.stateManager.getColorState("move"), // Default color 
             interactive = false,
             ...rest
         } = options;

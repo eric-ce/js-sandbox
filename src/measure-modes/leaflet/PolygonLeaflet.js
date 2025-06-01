@@ -176,6 +176,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         switch (true) {
             case isMeasuring:
                 const movingDataCache = [...this.coordsCache, this.#coordinate];
+
                 // -- Handle Polygon
                 this._createOrUpdatePolygon(movingDataCache, this.#interactiveAnnotations.polygons, {
                     status: "moving",

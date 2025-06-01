@@ -303,9 +303,9 @@ export default class LeafletMeasure extends MeasureComponentBase {
 
         switch (layerType) {
             case "point":
-                if (this.#polylineCollection && this.#polylineCollection.hasLayer(layerInstance)) {
-                    this.#polylineCollection.removeLayer(layerInstance);
-                    this.#polylineCollection.addLayer(layerInstance);
+                if (this.#pointCollection && this.#pointCollection.hasLayer(layerInstance)) {
+                    this.#pointCollection.removeLayer(layerInstance);
+                    this.#pointCollection.addLayer(layerInstance);
                 }
                 break;
             case "polyline":
