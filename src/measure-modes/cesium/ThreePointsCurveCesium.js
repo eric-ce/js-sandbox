@@ -7,10 +7,10 @@ import {
     calculateDistance,
     editableLabel,
     updatePointerOverlay,
-    getPickedObjectType,
     formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
+    getRankedPickedObjectType,
 } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
@@ -126,8 +126,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         const cartesian = this.#coordinate
         if (!defined(cartesian)) return;
 
-        const pickedObject = eventData.pickedFeature[0];
-        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
@@ -274,7 +273,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         switch (true) {
             case isMeasuring:
                 // moving coordinate data
-                const positions = [...this.coordsCache, cartesian];
+                const positions = [...this.coordsCache, this.#coordinate];
 
                 // Moving line: remove if existed, create if not existed
                 this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {

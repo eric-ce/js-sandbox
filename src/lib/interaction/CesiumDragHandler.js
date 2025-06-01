@@ -173,8 +173,6 @@ class CesiumDragHandler {
         // Store the dragged related point, line, label, and polygon primitives by the dragged point position
         const { linePrimitives, labelPrimitives, polygonPrimitives } = getPrimitiveByPointPosition(
             this.draggedObjectInfo.beginPosition,
-            `annotate_${this.activeModeInstance.mode}`,
-            this.viewer.scene,
             this.pointCollection,
             this.labelCollection,
             this.polylineCollection,

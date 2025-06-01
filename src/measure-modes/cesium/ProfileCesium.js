@@ -3,14 +3,13 @@ import {
     defined,
 } from "cesium";
 import {
-    calculateDistance,
     editableLabel,
     updatePointerOverlay,
-    getPickedObjectType,
     formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
     calculateClampedDistance,
+    getRankedPickedObjectType,
 } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
@@ -124,8 +123,7 @@ class ProfileCesium extends MeasureModeCesium {
         const cartesian = this.#coordinate
         if (!defined(cartesian)) return;
 
-        const pickedObject = eventData.pickedFeature[0];
-        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
@@ -275,14 +273,7 @@ class ProfileCesium extends MeasureModeCesium {
 
         switch (true) {
             case isMeasuring:
-                // if (this.coordsCache.length === 1) {
-                const positions = [this.coordsCache[0], cartesian].filter(Boolean); // Filter out any undefined values
-
-                // Validate cesium positions
-                if (positions.length < 2) {
-                    console.error("Cesium positions are empty or invalid:", positions);
-                    return;
-                }
+                const positions = [this.coordsCache[0], this.#coordinate]
 
                 // Moving line: remove if existed, create if not existed
                 this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
@@ -295,7 +286,6 @@ class ProfileCesium extends MeasureModeCesium {
                     status: "moving",
                     showBackground: false
                 });
-                // }
                 break;
             default:
                 // this.handleHoverHighlighting(pickedObjects[0]);

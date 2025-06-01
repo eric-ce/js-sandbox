@@ -3,13 +3,16 @@ import {
     defined,
     SceneTransforms,
 } from "cesium";
-import { areCoordinatesEqual, convertToCartographicDegrees, editableLabel, getPickedObjectType, updatePointerOverlay } from "../../lib/helper/cesiumHelper";
+import { areCoordinatesEqual, convertToCartographicDegrees, editableLabel, getRankedPickedObjectType, updatePointerOverlay } from "../../lib/helper/cesiumHelper";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium";
 
 // -- Cesium types --
-/** @typedef {import('cesium').Cartesian3} Cartesian3 */
+/** @typedef {import('cesium').Label} Label*/
 /** @typedef {import('cesium').PointPrimitive} PointPrimitive */
+/** @typedef {import('cesium').Cartesian3} Cartesian3 */
+/** @typedef {import('cesium').Cartesian2} Cartesian2 */
+
 // -- Data types -- 
 /** @typedef {{labels: Label[]}} InteractiveAnnotationsState */
 /**
@@ -120,8 +123,7 @@ class PointInfoCesium extends MeasureModeCesium {
         const cartesian = this.#coordinate
         if (!defined(cartesian)) return;
 
-        const pickedObject = eventData.pickedFeature[0];
-        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
@@ -256,8 +258,7 @@ class PointInfoCesium extends MeasureModeCesium {
      * @param {NormalizedEventData} eventData 
      */
     handleMiddleClick = async (eventData) => {
-        const pickedObject = eventData.pickedFeature[0];
-        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
         if (pickedObjectType === "point") {
             const pointPrimitive = pickedObject.primitive;
