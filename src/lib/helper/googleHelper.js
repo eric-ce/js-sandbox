@@ -58,7 +58,11 @@ export function getOverlayByPosition(
     if (Array.isArray(pointCollection)) {
         for (const marker of pointCollection) {
             // Check the custom 'positions' property
-            if (marker && Array.isArray(marker.positions) && marker.positions.some(p => areCoordinatesEqual(p, position))) {
+            if (
+                marker &&
+                Array.isArray(marker.positions) &&
+                marker.positions.some(p => areCoordinatesEqual(p, position))
+            ) {
                 foundPointMarker = marker;
                 break; // Found the point marker associated with this position
             }
@@ -69,24 +73,20 @@ export function getOverlayByPosition(
     // Checks if the search position matches any coordinate in the label's 'positions' property.
     if (Array.isArray(labelCollection)) {
         foundLabelMarkers = labelCollection.filter(label =>
-            label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))
+            label &&
+            !label.id.includes("total_label") &&
+            Array.isArray(label.positions) &&
+            label.positions.some(p => areCoordinatesEqual(p, position))
         );
-
-        // for (const label of labelCollection) {
-        //     // Check the custom 'positions' property
-        //     if (label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))) {
-        //         foundLabelMarker = label;
-        //         // Assuming a point matches at most one label directly for drag purposes.
-        //         break;
-        //     }
-        // }
     }
 
     // --- Find Polylines ---
     // Checks if the search position matches any coordinate in the polyline's 'positions' property.
     if (Array.isArray(polylineCollection)) {
         foundPolylines = polylineCollection.filter(polyline =>
-            polyline && Array.isArray(polyline.positions) && polyline.positions.some(p => areCoordinatesEqual(p, position))
+            polyline &&
+            Array.isArray(polyline.positions) &&
+            polyline.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
@@ -94,7 +94,9 @@ export function getOverlayByPosition(
     // Checks if the search position matches any coordinate in the polygon's 'positions' property.
     if (Array.isArray(polygonCollection)) {
         foundPolygons = polygonCollection.filter(polygon =>
-            polygon && Array.isArray(polygon.positions) && polygon.positions.some(p => areCoordinatesEqual(p, position))
+            polygon &&
+            Array.isArray(polygon.positions) &&
+            polygon.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 

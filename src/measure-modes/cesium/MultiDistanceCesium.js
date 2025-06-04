@@ -74,6 +74,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
         polylines: [],
         labels: [],
         totalLabels: [],
+        addModeLines: [],
     };
 
     /** @type {MeasurementGroup} */
@@ -144,13 +145,14 @@ class MultiDistanceCesium extends MeasureModeCesium {
         // -- Handle interactive event --
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
 
+        // -- Normal Measure --
         // If the click was not on a handled primitive and not in drag mode, start normal measuring
         if (!handled && !this.flags.isDragMode && !this.flags.isAddMode) {
             this._startMeasure();
         }
 
-        // TODO: If it is in add mode, start adding logic
-        if (this.flags.isAddMode) {
+        // -- Add Mode --
+        if (!handled && this.flags.isAddMode) {
             this._addAction();
         }
     }
@@ -195,7 +197,12 @@ class MultiDistanceCesium extends MeasureModeCesium {
                 }
                 return true;   // False mean do not handle point click 
             case "line":
+                if (this.flags.isMeasurementComplete && this.coordsCache.length === 0) {
+                    this._setAddModeByLine(pickedObject.primitive); // Set the add mode by line primitive
+                    return true;
+                }
                 // this._selectAction(pickedObject.primitive);
+
                 return false;   // False mean do not handle line click, because it could click on moving line
             default:
                 return false;
@@ -333,7 +340,65 @@ class MultiDistanceCesium extends MeasureModeCesium {
     }
 
     _addAction() {
-        console.log("add action logic to be implemented");
+        const line = this.#interactiveAnnotations.polylines[0];
+        if (!line || line.status === "moving") {
+            console.warn("No valid line to add a point to.");
+            return;
+        }
+
+        // -- Update this.coordsCache --
+        const linePositions = line.positions;
+        const linePos1Index = this.coordsCache.findIndex(pos => areCoordinatesEqual(pos, linePositions[0]));
+        const linePos2Index = this.coordsCache.findIndex(pos => areCoordinatesEqual(pos, linePositions[1]));
+        if (linePos1Index === -1 || linePos2Index === -1) return; // If positions are not found, exit
+        const minIndex = Math.min(linePos1Index, linePos2Index);
+        this.coordsCache.splice(minIndex + 1, 0, this.#coordinate); // Insert the new coordinate after the first position of the line
+
+        // -- Create new point --
+        this.drawingHelper._addPointMarker(this.#coordinate, {
+            color: this.stateManager.getColorState("pointColor"),
+            id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "completed"
+        });
+
+        const newPositions = [[linePositions[0], this.#coordinate], [this.#coordinate, linePositions[1]]]; // Create new positions for the line
+
+        // -- Create or update the line --
+        this._createOrUpdateLine(newPositions, this.#interactiveAnnotations.polylines, {
+            status: "completed",
+            color: this.stateManager.getColorState("line")
+        });
+
+        // -- Create or update the label --
+        const { distances } = this._createOrUpdateLabel(newPositions, this.#interactiveAnnotations.labels, {
+            status: "completed",
+            showBackground: true
+        });
+        if (distances.length === 0) return;
+
+        // -- Handle Distances record --
+        this.#distances.splice(minIndex, 1, ...distances);
+
+        // -- Update total distance label --
+        const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
+            status: "completed",
+            showBackground: true
+        });
+
+        // -- Update measure data --
+        if (distances.length > 0 && typeof totalDistance === "number") {
+            const record = { distances: [...this.#distances], totalDistance };
+            this.measure._records[0] = record; // Update distances record
+        }
+        this.measure.status = "completed"; // Set the measure status to completed
+        this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
+        dataPool.updateOrAddMeasure({ ...this.measure }); // Update data pool with the measure data
+
+        // -- Reset values --
+        this.resetValuesModeSpecific(); // Reset the mode-specific values
+
+        // reset the flags to be ready for the next measurement
+        this.flags.isMeasurementComplete = true; // Set the measurement as complete
     }
 
     _selectAction(primitive) {
@@ -369,7 +434,9 @@ class MultiDistanceCesium extends MeasureModeCesium {
         switch (true) {
             case isMeasuring:
                 // Moving coordinate data
-                const positions = [this.coordsCache[this.coordsCache.length - 1], this.#coordinate];
+                const positions = this.flags.isReverse ?
+                    [this.coordsCache[0], this.#coordinate] :
+                    [this.coordsCache[this.coordsCache.length - 1], this.#coordinate];
 
                 // Moving line: remove if existed, create if not existed
                 this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
@@ -406,7 +473,11 @@ class MultiDistanceCesium extends MeasureModeCesium {
             if (!defined(cartesian)) return;
 
             // update coordinate data cache
-            this.coordsCache.push(this.#coordinate);
+            if (this.flags.isReverse) {
+                this.coordsCache.unshift(this.#coordinate);
+            } else {
+                this.coordsCache.push(this.#coordinate);
+            }
 
             // Create last point
             const lastPoint = this.drawingHelper._addPointMarker(this.#coordinate, {
@@ -421,7 +492,9 @@ class MultiDistanceCesium extends MeasureModeCesium {
     }
 
     _finalizeMeasure() {
-        const lastPositions = [this.coordsCache[this.coordsCache.length - 2], this.coordsCache[this.coordsCache.length - 1]];
+        const lastPositions = this.flags.isReverse ?
+            [this.coordsCache[0], this.coordsCache[1]] :
+            [this.coordsCache[this.coordsCache.length - 2], this.coordsCache[this.coordsCache.length - 1]];
 
         // -- Create last annotations --
         // Create last line
@@ -538,13 +611,9 @@ class MultiDistanceCesium extends MeasureModeCesium {
         // -- Set Measure and Distances --
         // Find the measure data by ID
         const measureId = Number(point.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID 
-        if (isNaN(measureId)) return; // If the measure ID is not a number, exit
-        const measure = dataPool.getMeasureById(measureId);
-        if (!measure) return;
-        measure.coordinates = measure.coordinates.map(cartographicDegrees => convertToCartesian3(cartographicDegrees)); // Convert measure data coordinates from cartographic degrees to Cartesian3
 
-        // Set the measure and distances variables
-        this.measure = measure;
+        this.measure = this._findMeasureById(measureId);    // Set the measure
+        if (!this.measure) return;  // If the measure is not found, exit
         this.#distances = [...measure._records[0].distances]; // Get the distances from the measure data
         this.coordsCache = measure.coordinates // Get the coordinates from the measure data
 
@@ -663,6 +732,66 @@ class MultiDistanceCesium extends MeasureModeCesium {
             this.#distances = []; // Clear the distances cache
             dataPool.removeMeasureById(measureId);
         }
+    }
+
+
+    /*****************************
+     * DOUBLE LEFT CLICK FEATURE *
+     *****************************/
+    // handleLeftDoubleClick = async (eventData) => {
+    //     if (eventData.pickedFeature.length === 0) return; // If no feature is picked, exit
+
+    //     // clone the left click handler then remove it when setAddMode finish then recover it
+
+    //     // Prevent condition to start double click
+    //     if (!this.flags.isMeasurementComplete || this.coordsCache > 0) return;
+    //     if (this.flags.isDragMode) return;
+    //     const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
+
+    //     if (pickedObjectType === "line") {
+    //         const linePrimitive = pickedObject.primitive;
+    //         this.setAddModeByLine(linePrimitive);
+    //     }
+    // }
+
+    _setAddModeByLine(linePrimitive) {
+        // Validate input parameters
+        if (!linePrimitive) return;
+        if (linePrimitive.status === "moving") return;
+
+        // -- Set measure id --
+        const measureId = Number(linePrimitive.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
+
+        // -- User confirmation --
+        const userConfirmation = window.confirm(`Do you want to add mode to add a new point to this segment? Measure id: ${measureId}`);
+        if (!userConfirmation) return; // If the user does not confirm, exit
+
+        // Set the measure data
+        this.measure = this._findMeasureById(measureId);
+        if (!this.measure) return; // If the measure is not found, exit
+        this.coordsCache = this.measure.coordinates;
+        this.#distances = [...this.measure._records[0].distances]; // Get the distances from the measure data
+
+        // Update measure data and dataPool
+        this.measure.status = "pending"; // Set the measure status to pending
+        dataPool.updateOrAddMeasure({ ...this.measure });
+
+        // Set flags for add mode
+        this.flags.isAddMode = true; // Set the add mode flag to true
+
+        // Store references 
+        this.#interactiveAnnotations.polylines = [linePrimitive];  // Store the line primitive in the interactive annotations
+
+        // Due to update method logic only update on existing label, so it need to clone it again to update two labels 
+        const existingLabel = this.drawingHelper._getLabelByPosition(linePrimitive.positions)[0];
+        if (!existingLabel) return; // If no label is found, exit
+        const clonedLabel = this.labelCollection.add(existingLabel);
+        this.#interactiveAnnotations.labels = [existingLabel, clonedLabel];
+
+        this.#interactiveAnnotations.totalLabels = [...this.drawingHelper._getLabelByPosition(this.coordsCache[this.coordsCache.length - 1])]; // Get the total label by the last position of the coordsCache
+
+        // Show notification
+        showCustomNotification(`Add mode is enabled. Click on the map to add a new point for segment, measure id: ${measureId}`, this.map.container);
     }
 
     /******************
@@ -953,7 +1082,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
                     labelToUpdate.positions = posSet.map(pos => ({ ...pos })); // store positions
 
                     // -- Handle records Update --
-                    distances.push(segmentDistance); // Collect distances for each segment
+                    segmentDistance && distances.push(segmentDistance); // Collect distances for each segment
                 });
             }
             // Case: update SINGLE LABEL, typically for moving operation 
@@ -975,7 +1104,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
 
                     // -- Handle references Update --
                     labelPrimitives = [labelPrimitive]; // Get the label that is currently being moved
-                    distances = [segmentDistance]; // Store the distance for the single segment
+                    segmentDistance ? distances = [segmentDistance] : distances = []; // Store the distance for the single segment
                 }
             }
         }
@@ -983,6 +1112,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
         // 3. CREATE LOGIC
         if (labelPrimitives.length === 0) {
             const segmentDistance = calculateDistance(positions[0], positions[1]);
+            if (!segmentDistance) console.warn("Failed to calculate segment distance.");
 
             const labelPrimitive = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
                 id: `annotate_${this.mode}_label_${this.measure.id}`,
@@ -991,7 +1121,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
             });
 
             // Update the distances 
-            distances = [segmentDistance]; // Store the distance for the single segment
+            segmentDistance ? distances = [segmentDistance] : distances = []; // Store the distance for the single segment
 
             // Safe exit if label creation fails, but return the distances
             if (!labelPrimitive) {

@@ -546,7 +546,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
                 // Case 1: Input `positions` is an array of one point.
                 // Find labels where `label.positions` contains this point.
                 if (positions.length === 1) {
-                    if (label.positions.some(lp => areCoordinatesEqual(lp, positions[0]))) {
+                    if (label.positions.some(pos => areCoordinatesEqual(pos, positions[0]))) {
                         foundLabels.push(label);
                     }
                 }
@@ -555,6 +555,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
                 else if (positions.length === 2) {
                     const pos1 = positions[0];
                     const pos2 = positions[1];
+
                     // Ensure label.positions has at least two points for comparison
                     if (label.positions.length === 2 &&
                         areCoordinatesEqual(label.positions[0], pos1) &&

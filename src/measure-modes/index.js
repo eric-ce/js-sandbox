@@ -26,9 +26,9 @@ export { ProfileCesium } from "./cesium/ProfileCesium.js"
  * GOOGLE MEASURE MODES *
  ************************/
 export { TwoPointsDistanceGoogle } from "./google/TwoPointsDistanceGoogle.js";
-// export { MultiDistanceGoogle } from "./google/MultiDistanceGoogle.js";
 export { PolygonGoogle } from "./google/PolygonGoogle.js";
 export { PointInfoGoogle } from "./google/PointInfoGoogle.js";
+export { MultiDistanceGoogle } from "./google/MultiDistanceGoogle.js";
 
 /*************************
  * LEAFLET MEASURE MODES *
@@ -36,3 +36,4 @@ export { PointInfoGoogle } from "./google/PointInfoGoogle.js";
 export { TwoPointsDistanceLeaflet } from "./leaflet/TwoPointsDistanceLeaflet.js";
 export { PolygonLeaflet } from "./leaflet/PolygonLeaflet.js";
 export { PointInfoLeaflet } from "./leaflet/PointInfoLeaflet.js";
+export { MultiDistanceLeaflet } from "./leaflet/MultiDistanceLeaflet.js";

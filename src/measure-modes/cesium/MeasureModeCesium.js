@@ -45,6 +45,20 @@ class MeasureModeCesium extends MeasureModeBase {
     /*******************
      * UTILITY FEATURE *
      *******************/
+    _findMeasureById(measureId) {
+        if (typeof measureId !== "number") {
+            console.warn("Invalid measureId provided. It should be a number.");
+            return null; // Return null if measureId is not a number
+        }
+
+        const measure = dataPool.getMeasureById(measureId); // Get the measure data by ID
+        if (!measure) return; // If no measure found, exit the function
+
+        // Convert cartographic degrees to Cartesian3 coordinates
+        measure.coordinates = measure.coordinates.map(coord => convertToCartesian3(coord)); // Ensure coordinates are in Cartesian3 format
+        return measure;
+    }
+
     _findMeasureByCoordinate(coordinate) {
         if (!coordinate) return null;
 

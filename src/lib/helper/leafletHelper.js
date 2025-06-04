@@ -55,13 +55,14 @@ export function createCircleMarker(position, options = {}) {
         fillOpacity = 0.8,
         pane = 'markerPane',
         id = "annotate_marker",
+        interactive = false,
         ...rest
     } = options;
 
     // Create a circle marker (dot)
     const marker = L.circleMarker(
         latLng,
-        { radius, fillColor, color, weight, opacity, fillOpacity, pane, ...rest }
+        { radius, fillColor, color, weight, opacity, fillOpacity, pane, interactive, ...rest }
     );
 
     if (!marker) {
@@ -96,7 +97,8 @@ export function getVectorByPosition(
     // --- Find Point Marker ---
     if (Array.isArray(pointCollection.getLayers())) {
         for (const marker of pointCollection.getLayers()) {
-            if (marker && Array.isArray(marker.positions) && marker.positions.some(pos => areCoordinatesEqual(pos, position))) {
+            if (marker && Array.isArray(marker.positions) &&
+                marker.positions.some(pos => areCoordinatesEqual(pos, position))) {
                 foundPointMarker = marker;
                 break; // Stop searching after finding the first match
             }
@@ -107,7 +109,8 @@ export function getVectorByPosition(
     // Checks if the search position matches any coordinate in the label's 'positions' property.
     if (Array.isArray(labelCollection.getLayers())) {
         foundLabelMarkers = labelCollection.getLayers().filter(label =>
-            label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))
+            label && Array.isArray(label.positions) &&
+            label.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
@@ -115,7 +118,8 @@ export function getVectorByPosition(
     // Checks if the search position matches any coordinate in the polyline's 'positions' property.
     if (Array.isArray(polylineCollection.getLayers())) {
         foundPolylines = polylineCollection.getLayers().filter(polyline =>
-            polyline && Array.isArray(polyline.positions) && polyline.positions.some(p => areCoordinatesEqual(p, position))
+            polyline && Array.isArray(polyline.positions) &&
+            polyline.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
@@ -123,7 +127,8 @@ export function getVectorByPosition(
     // Checks if the search position matches any coordinate in the polygon's 'positions' property.
     if (Array.isArray(polygonCollection.getLayers())) {
         foundPolygons = polygonCollection.getLayers().filter(polygon =>
-            polygon && Array.isArray(polygon.positions) && polygon.positions.some(p => areCoordinatesEqual(p, position))
+            polygon && Array.isArray(polygon.positions) &&
+            polygon.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
