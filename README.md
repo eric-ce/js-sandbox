@@ -7,7 +7,7 @@ This is the test environment for `cesium-measure tool`
 3. Run `npm run dev` to start 
 
 # Description
-This is a test environment for `cesium-measure tool` using web components, cesium, chart.js and other libraries.
+This is a test environment for `cesium-measure tool` using web components, `cesium`, `chart.js`, `turf` and other libraries.
 
 <br />
 
