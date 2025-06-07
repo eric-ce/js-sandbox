@@ -24,24 +24,6 @@ import {
  * HELPER  FOR GENERAL *
  ***********************/
 /**
- * Get the neighboring values of an array at a given index.
- * @param {array} array - the array to get the neighboring values from
- * @param {number} index - the index of the array
- * @returns {{previous: any, current: any, next: any}} - the previous, current and next value of the array
- */
-export function getNeighboringValues(array, index) {
-    if (index < 0 || index >= array.length) {
-        throw new Error("Index out of bounds");
-    }
-
-    return {
-        previous: index > 0 ? array[index - 1] : undefined,
-        current: array[index],
-        next: index < array.length - 1 ? array[index + 1] : undefined,
-    };
-}
-
-/**
  * calculate the distance between two points
  * @param {Cartesian3} startPoint - the cartesian coordinates
  * @param {Cartesian3} endPoint - the cartesian coordinates

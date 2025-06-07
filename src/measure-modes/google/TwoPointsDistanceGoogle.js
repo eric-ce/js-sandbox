@@ -53,6 +53,24 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
     coordsCache = [];
 
     /**
+     * Listeners for point markers.
+     * @private
+     */
+    #markerListeners = {
+        mousedown: (marker, event) => {
+            // Check if drag handler exists and is active
+            if (this.dragHandler && this.flags.isActive) {
+                // Prevent map drag, default behavior
+                event.domEvent?.stopPropagation();
+                event.domEvent?.preventDefault();
+
+                // Tell the drag handler to start dragging this specific marker
+                this.dragHandler._handleDragStart(marker, event);
+            }
+        },
+    };
+
+    /**
      * Creates an instance of TwoPointsDistanceGoogle.
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {DragHandler} dragHandler
@@ -123,29 +141,12 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             this.measure.coordinates = this.coordsCache; // when cache changed groups will be changed due to reference by address
         }
 
-        const markerListener = {
-            // Add any specific marker options here if needed
-            // Pass the mousedown listener
-            listeners: {
-                mousedown: (marker, event) => {
-                    // Check if drag handler exists and is active
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
-
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
-                    }
-                },
-            }
-        };
-
         // -- Create point marker --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
-            ...markerListener
+            clickable: true, // Make the point clickable
+            listeners: this.#markerListeners, // Add listeners for the point marker
         });
         if (!point) return;
         point.status = "pending"; // Set status to pending
@@ -470,11 +471,15 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Reset temporary coordinate cache
+        // Reset variables
         this.#coordinate = null;
-
         this.coordsCache = []; // Clear cache
+        this.#interactiveAnnotations.polylines = []; // Clear polylines
+        this.#interactiveAnnotations.labels = []; // Clear labels
+
+        // Reset measure to default
+        this.measure = this._createDefaultMeasure(); // Reset measure to default
     }
-}
+};
 
 export { TwoPointsDistanceGoogle };

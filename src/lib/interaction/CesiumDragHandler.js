@@ -286,6 +286,7 @@ class CesiumDragHandler {
         })
 
         // Reset values
+        this.activeModeInstance?.resetValuesModeSpecific(); // Call mode specific reset values
         this._resetValue(); // Reset the dragged object info and flags
     }
 

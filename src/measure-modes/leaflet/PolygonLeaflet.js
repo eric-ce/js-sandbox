@@ -41,6 +41,24 @@ class PolygonLeaflet extends MeasureModeLeaflet {
     coordsCache = [];
 
     /**
+     * Listeners for point markers.
+     * @private
+     */
+    #markerListeners = {
+        mousedown: (marker, event) => {
+            // Check if drag handler exists and is active
+            if (this.dragHandler && this.flags.isActive) {
+                // Prevent map drag, default behavior
+                event.domEvent?.stopPropagation();
+                event.domEvent?.preventDefault();
+
+                // Tell the drag handler to start dragging this specific marker
+                this.dragHandler._handleDragStart(marker, event);
+            }
+        },
+    };
+
+    /**
      * 
      * @param {LeafletInputHandler} inputHandler 
      * @param {LeafletDragHandler} dragHandler 
@@ -108,29 +126,12 @@ class PolygonLeaflet extends MeasureModeLeaflet {
             this.measure.coordinates = this.coordsCache; // when cache changed groups will be changed due to reference by address
         }
 
-        const markerListener = {
-            // Add any specific marker options here if needed
-            // Pass the mousedown listener
-            listeners: {
-                mousedown: (marker, event) => {
-                    // Check if drag handler exists and is active
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
-
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
-                    }
-                },
-            }
-        };
-
         // -- Create point marker --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_area_point_${this.measure.id}`,
-            ...markerListener
+            interactive: true,
+            listeners: this.#markerListeners
         });
         if (!point) return;
         point.status = "pending"; // Set status to pending
@@ -215,29 +216,11 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         });
 
         // -- Create final point --
-        const markerListener = {
-            // Add any specific marker options here if needed
-            // Pass the mousedown listener
-            listeners: {
-                mousedown: (marker, event) => {
-                    // Check if drag handler exists and is active
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
-
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
-                    }
-                },
-            }
-        };
-
-        // create final point
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: "#FF0000",
             id: `annotate_area_point_${this.measure.id}`,
-            ...markerListener,
+            interactive: true, // Make the point interactive
+            listeners: this.#markerListeners
         });
         if (!point) return;
         point.status = "completed"; // Set status to completed
@@ -526,10 +509,14 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Reset temporary coordinate cache
-        this.#coordinate = null;
-
+        // Reset variables
         this.coordsCache = []; // Clear cache
+        this.#coordinate = null;
+        this.#interactiveAnnotations.polygons = []; // Clear the polygon reference
+        this.#interactiveAnnotations.labels = []; // Clear the moving labels reference
+
+        // Reset measure data to default
+        this.measure = this._createDefaultMeasure(); // Reset measure to default state
     }
 }
 

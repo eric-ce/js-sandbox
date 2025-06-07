@@ -1,7 +1,7 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { calculateDistance, calculateMiddlePos, formatMeasurementValue, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
+import { calculateDistance, calculateMiddlePos, formatMeasurementValue, areCoordinatesEqual } from "../../lib/helper/leafletHelper.js";
+import { getNeighboringValues } from "../../lib/helper/helper.js";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
-import { getNeighboringValues } from "../../lib/helper/cesiumHelper.js";
 
 /**
  * @typedef MeasurementGroup
@@ -366,12 +366,18 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
      */
     updateGraphicsOnDrag(measure) {
         // -- Handling positions -- 
-        const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
-        if (draggedPositionIndex === -1) return; // If the dragged position is not found, exit
-        const positions = [...measure.coordinates];
-        positions[draggedPositionIndex] = this.dragHandler.coordinate;
+        const draggedPositionIndices = measure.coordinates
+            .map((coord, index) => areCoordinatesEqual(coord, this.dragHandler.draggedObjectInfo.beginPosition) ? index : -1)
+            .filter(index => index !== -1);
+        if (draggedPositionIndices.length === 0) return; // If the dragged position is not found, exit
 
-        const { previous, current, next } = getNeighboringValues(positions, draggedPositionIndex);
+        // Update the dragged position with the new coordinate
+        const positions = [...measure.coordinates];
+        draggedPositionIndices.forEach(index => {
+            positions[index] = this.dragHandler.coordinate;
+        });
+
+        const { previous, current, next } = getNeighboringValues(positions, draggedPositionIndices[0]);
 
         let draggedPositions = [];
         // -- Handle dragged positions --
@@ -380,9 +386,17 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         } else if (previous) {
             draggedPositions = [[previous, this.dragHandler.coordinate]];
         } else if (next) {
-            draggedPositions = [[this.dragHandler.coordinate, next]];
+            // Case: forms perimeter
+            if (draggedPositionIndices.length === 2) {  // length of 2 means two positions matching beginPosition
+                draggedPositions = [[this.dragHandler.coordinate, next], [this.dragHandler.coordinate, positions[positions.length - 2]]];
+            }
+            // Case: first position
+            if (draggedPositionIndices.length === 1) {
+                draggedPositions = [[this.dragHandler.coordinate, next]];
+            }
         }
         if (draggedPositions.length === 0) return; // safe exit if no dragged positions are available
+
 
         // -- Update polyline --
         this._createOrUpdateLine(draggedPositions, this.dragHandler.draggedObjectInfo.lines, {
@@ -400,25 +414,32 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // -- Handle Distances record --
         this.#distances = [...measure._records[0].distances];
-        // Case: distances length is 1 means the draggedPositionIndex is the first or last index in the measure coordinates
+        // Case: distances length is 1 means the draggedPositionIndex is either first or last index in the measure coordinates
         if (distances.length === 1) {
-            const isFirstIndex = draggedPositionIndex + 1 < positions.length;
-            const isLastIndex = draggedPositionIndex - 1 >= 0;
-            if (isFirstIndex) {
+            if (next) { // Case: dragging the first position
                 this.#distances[0] = distances[0]; // Update the first distance
-            } else if (isLastIndex) {
+            } else if (previous) { // Case: dragging the last position
                 this.#distances[this.#distances.length - 1] = distances[0]; // Update the last distance
             }
         }
         // Case: distances length is 2 means the draggedPositionIndex is in the middle of the measure coordinates
         else if (distances.length === 2) {
-            this.#distances[draggedPositionIndex - 1] = distances[0];
-            this.#distances[draggedPositionIndex] = distances[1];
+            // Case: dragging the first or last position of perimeter
+            if (draggedPositionIndices.length === 2) {
+                this.#distances[draggedPositionIndices[0]] = distances[0];
+                this.#distances[draggedPositionIndices[1] - 1] = distances[1];
+            }
+            // Case: dragging the middle position
+            if (draggedPositionIndices.length === 1) {
+                if (previous && next) {
+                    this.#distances[draggedPositionIndices[0] - 1] = distances[0];
+                    this.#distances[draggedPositionIndices[0]] = distances[1];
+                }
+            }
         } else {
             console.warn("Unexpected distances length during drag finalization:", distances.length);
             return; // Exit if the distances length is not as expected
         }
-
 
         // -- Handle total label --
         this._createOrUpdateTotalLabel(positions, this.dragHandler.draggedObjectInfo.totalLabels, {
@@ -435,22 +456,34 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
      */
     finalizeDrag(measure) {
         // -- Handling positions -- 
-        const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
-        if (draggedPositionIndex === -1) return; // If the dragged position is not found, exit
-        const positions = [...measure.coordinates];
-        positions[draggedPositionIndex] = this.dragHandler.coordinate;
+        const draggedPositionIndices = measure.coordinates
+            .map((coord, index) => areCoordinatesEqual(coord, this.dragHandler.draggedObjectInfo.beginPosition) ? index : -1)
+            .filter(index => index !== -1);
+        if (draggedPositionIndices.length === 0) return; // If the dragged position is not found, exit
 
-        const { previous, current, next } = getNeighboringValues(positions, draggedPositionIndex);
+        // Update the dragged position with the new coordinate
+        const positions = [...measure.coordinates];
+        draggedPositionIndices.forEach(index => {
+            positions[index] = this.dragHandler.coordinate;
+        });
+
+        const { previous, current, next } = getNeighboringValues(positions, draggedPositionIndices[0]);
 
         let draggedPositions = [];
-
         // -- Handle dragged positions --
-        if (previous && next) {
+        if (previous && next) { // Case: dragging the middle position
             draggedPositions = [[previous, this.dragHandler.coordinate], [this.dragHandler.coordinate, next]];
-        } else if (previous) {
+        } else if (previous) {  // Case: dragging the last position
             draggedPositions = [[previous, this.dragHandler.coordinate]];
-        } else if (next) {
-            draggedPositions = [[this.dragHandler.coordinate, next]];
+        } else if (next) {  // Case: dragging the first position
+            // Case: forms perimeter
+            if (draggedPositionIndices.length === 2) {  // length of 2 means two positions matching beginPosition
+                draggedPositions = [[this.dragHandler.coordinate, next], [this.dragHandler.coordinate, positions[positions.length - 2]]];
+            }
+            // Case: first position
+            if (draggedPositionIndices.length === 1) {
+                draggedPositions = [[this.dragHandler.coordinate, next]];
+            }
         }
         if (draggedPositions.length === 0) return; // safe exit if no dragged positions are available
 
@@ -471,20 +504,28 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // -- Handle Distances record --
         this.#distances = [...measure._records[0].distances];
-        // Case: distances length is 1 means the draggedPositionIndex is the first or last index in the measure coordinates
+        // Case: distances length is 1 means the draggedPositionIndex is either first or last index in the measure coordinates
         if (distances.length === 1) {
-            const isFirstIndex = draggedPositionIndex + 1 < positions.length;
-            const isLastIndex = draggedPositionIndex - 1 >= 0;
-            if (isFirstIndex) {
+            if (next) { // Case: dragging the first position
                 this.#distances[0] = distances[0]; // Update the first distance
-            } else if (isLastIndex) {
+            } else if (previous) { // Case: dragging the last position
                 this.#distances[this.#distances.length - 1] = distances[0]; // Update the last distance
             }
         }
         // Case: distances length is 2 means the draggedPositionIndex is in the middle of the measure coordinates
         else if (distances.length === 2) {
-            this.#distances[draggedPositionIndex - 1] = distances[0];
-            this.#distances[draggedPositionIndex] = distances[1];
+            // Case: dragging the first or last position of perimeter
+            if (draggedPositionIndices.length === 2) {
+                this.#distances[draggedPositionIndices[0]] = distances[0];
+                this.#distances[draggedPositionIndices[1] - 1] = distances[1];
+            }
+            // Case: dragging the middle position
+            if (draggedPositionIndices.length === 1) {
+                if (previous && next) {
+                    this.#distances[draggedPositionIndices[0] - 1] = distances[0];
+                    this.#distances[draggedPositionIndices[0]] = distances[1];
+                }
+            }
         } else {
             console.warn("Unexpected distances length during drag finalization:", distances.length);
             return; // Exit if the distances length is not as expected
@@ -511,8 +552,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
 
     /**********
-      * HELPER *
-      **********/
+     * HELPER *
+     **********/
     /**
      * Creates a new polyline or updates an existing one based on positions.
      * Manages the reference within the provided polylinesArray.
@@ -843,13 +884,15 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         this.flags.isDragMode = false;
         this.flags.isReverse = false;
 
-        // Clear cache
+        // Reset variables
         this.coordsCache = [];
         this.#coordinate = null; // Clear the coordinate
         this.#distances = []; // Clear the distances
-        this.#interactiveAnnotations.polylines = [];
-        this.#interactiveAnnotations.labels = [];
-        this.#interactiveAnnotations.totalLabels = [];
+        this.#interactiveAnnotations.polylines = []; // Clear the polylines
+        this.#interactiveAnnotations.labels = [];  // Clear the labels
+        this.#interactiveAnnotations.totalLabels = [];  // Clear the total labels
+
+        // Reset the measure data
         this.measure = super._createDefaultMeasure(); // Reset measure to default state
     }
 }

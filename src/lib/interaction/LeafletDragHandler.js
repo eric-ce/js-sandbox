@@ -207,6 +207,7 @@ class LeafletDragHandler {
         this.lastDragEndTs = Date.now();
 
         // Reset values
+        this.activeModeInstance?.resetValuesModeSpecific(); // Call mode specific reset values
         this._resetValue(); // Reset state variables and flags
     }
 

@@ -1,9 +1,30 @@
 import { Cartesian3, Cartographic, Math } from "cesium";
 
+/**
+ * Get the neighboring values of an array at a given index.
+ * @param {array} array - the array to get the neighboring values from
+ * @param {number} index - the index of the array
+ * @returns {{previous: any, current: any, next: any}} - the previous, current and next value of the array
+ */
+export function getNeighboringValues(array, index) {
+    if (index < 0 || index >= array.length) {
+        throw new Error("Index out of bounds");
+    }
+
+    return {
+        previous: index > 0 ? array[index - 1] : undefined,
+        current: array[index],
+        next: index < array.length - 1 ? array[index + 1] : undefined,
+    };
+}
+
+/**
+ * Generates a unique ID based on the current timestamp in milliseconds.
+ * @returns {number} - A unique ID based on the current timestamp in milliseconds.
+ */
 export function generateIdByTimestamp() {
     return new Date().getTime();
 }
-
 
 /**
  * Makes an HTML element draggable within a specified container using CSS transforms.
