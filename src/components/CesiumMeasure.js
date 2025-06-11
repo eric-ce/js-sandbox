@@ -452,9 +452,9 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return polygonOutlinePrimitive;
     };
 
-    /****************
-     * FIND FEATURE *
-     ****************/
+    /*****************
+     * FIND GRAPHICS *
+     *****************/
     /**
      * Finds a point primitive by its position in the point collection.
      * @param {Cartesian3} position - The position to find the point primitive 
@@ -576,7 +576,50 @@ export default class CesiumMeasure extends MeasureComponentBase {
         }
 
         // Return the array of found labels if any were found, otherwise return null.
-        return foundLabels.length > 0 ? foundLabels : null;
+        return foundLabels;
+    }
+
+    _getRelatedPrimitivesByMeasureId(measureId) {
+        if (!measureId) return null;
+        // convert measureId to string if it is not
+        if (typeof measureId !== "string") {
+            measureId = String(measureId);
+        }
+
+        const relatedPrimitives = {
+            pointPrimitives: [],
+            labelPrimitives: [],
+            polylinePrimitives: [],
+            polygonPrimitives: []
+        };
+
+        // Find related point primitives
+        const pointsLength = this.#pointCollection.length;
+        for (let i = 0; i < pointsLength; i++) {
+            const point = this.#pointCollection.get(i);
+            if (!point) continue; // Skip if point is somehow null
+            if (point.id && point.id.includes(measureId)) {
+                relatedPrimitives.pointPrimitives.push(point);
+            }
+        }
+
+        // Find related label primitives
+        const labelsLength = this.#labelCollection.length;
+        for (let i = 0; i < labelsLength; i++) {
+            const label = this.#labelCollection.get(i);
+            if (!label) continue; // Skip if label is somehow null
+            if (label.id && label.id.includes(measureId)) {
+                relatedPrimitives.labelPrimitives.push(label);
+            }
+        }
+
+        // Find related polyline primitives
+        relatedPrimitives.polylinePrimitives = this.#polylineCollection.filter(polyline => polyline.id.includes(measureId));
+
+        // Find related polygon primitives
+        relatedPrimitives.polygonPrimitives = this.#polygonCollection.filter(polygon => polygon.id.includes(measureId));
+
+        return relatedPrimitives;
     }
 
     /******************

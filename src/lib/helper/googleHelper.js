@@ -23,9 +23,9 @@ export function checkOverlayType(overlay) {
 }
 
 /**
- * Finds Google Maps overlays associated with a specific geographic position
+ * Finds Google Maps related overlays of points, labels, polylines, and polygons by the point position.
  * by checking a custom 'positions' property stored on the overlays.
- * Searches through points, labels, polylines, and polygons.
+ * Exclude moving or total labels
  *
  * @param {google.maps.LatLng | {latitude: number, longitude: number} | {lat:number,lng:number} | {lat:number, lon:number}} position - The position to search for.
  * @param {Array<google.maps.Marker|google.maps.marker.AdvancedMarkerElement>} pointCollection - Array of point markers.

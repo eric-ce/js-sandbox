@@ -291,6 +291,10 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return addedLabels; // Return the array of successfully added polylines
     }
 
+
+    /********************
+     * UTILITY FEATURES *
+     ********************/
     /**
      * Refreshes a layer's interactivity by removing and re-adding it to its collection.
      * This ensures Leaflet re-initializes event bindings based on current options.
@@ -331,6 +335,45 @@ export default class LeafletMeasure extends MeasureComponentBase {
         }
     }
 
+
+    /*****************
+     * FIND GRAPHICS *
+     *****************/
+    /**
+     * Finds a point primitive by its position in the point collection.
+     * @param {{lat:number,lng:number}} position - The position to find the point primitive 
+     * @returns {google.maps.Marker | null} - The point primitive if found, otherwise null
+     */
+    _getPointByPosition(position) { }
+
+    /**
+    * Finds a polyline primitive by its positions in the polyline collection.
+    * Find lines exact match for two points, or line for any match for one point.
+    * @param {{lat:number,lng:number}[]} positions - The positions to find the polyline primitive
+    * @returns {google.maps.Polyline[] | null} - The polyline primitive if found, otherwise null
+    */
+    _getLineByPositions(positions) { }
+    /**
+     * Finds label primitives by their associated position(s).
+     * If `positions` is a single position, it matches `label.position`.
+     * If `positions` is an array of 1 position, it matches any label where `label.positions` contains that point.
+     * If `positions` is an array of 2 positions, it matches any label where `label.positions` exactly matches those two points in order.
+     * @param {{lat:number,lng:number} | {lat:number,lng:number}[]} positions - The position or an array of positions to find the label primitive(s).
+     * @returns {google.maps.Marker[] | null} - An array of matching label primitives if found, otherwise null.
+     */
+    _getLabelByPosition(positions) { }
+
+    /**
+     * Finds all related overlays (points, polylines, labels, polygons) by a given measureId.
+     * @param {number|string} measureId - The measureId to search for in the overlays.
+     * @returns {{points: google.maps.Marker[], polylines: Polyline[], labels: google.maps.Marker[], polygons: Polygon[]}|null} - An object containing arrays of related overlays or null if no measureId is provided.
+     */
+    _getRelatedOverlaysByMeasureId(measureId) { }
+
+
+    /******************
+     * REMOVE FEATURE *
+     ******************/
     _removePointMarker(marker) {
         if (this.#pointCollection && marker) {
             // Remove from the collection

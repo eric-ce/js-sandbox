@@ -1227,12 +1227,13 @@ export function calculateDistanceFromArray(cartesianArray) {
 
 /**
  * Get relevant point primitive, line primitive, and label primitive filtered by the position
- * @param {Cesium.Cartesian3} position 
+ * Exclude total or moving label primitives.
+ * @param {Cartesian3} position 
  * @param {object} pointCollection - The point collection to search in
  * @param {object} labelCollection - The label collection to search in
- * @param {Cesium.Primitive[]} lineCollection - An array containing line Primitive objects.
- * @param {Cesium.Primitive[]} polygonCollection - An array containing polygon Primitive objects.
- * @returns {{pointPrimitive: PointPrimitive | undefined, linePrimitives: Primitive[], labelPrimitives: Label[], polygonPrimitives: Primitive[]}} An object containing the found primitives.
+ * @param {Primitive[]} lineCollection - An array containing line Primitive objects.
+ * @param {Primitive[]} polygonCollection - An array containing polygon Primitive objects.
+ * @returns {{pointPrimitive: PointPrimitive|undefined, linePrimitives: Primitive[], labelPrimitives: Label[], polygonPrimitives: Primitive[]}} An object containing the found primitives.
  */
 export function getPrimitiveByPointPosition(
     position,

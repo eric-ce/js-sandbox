@@ -13,6 +13,20 @@ import dataPool from "../../lib/data/DataPool.js";
 /** @typedef {lat:number, lng:number | latitude: number, longitude: number, height: number} Coordinate */
 
 
+// Measure data 
+/**
+ * @typedef MeasurementGroup
+ * @property {string} id - Unique identifier for the measurement
+ * @property {string} mode - Measurement mode (e.g., "distance")
+ * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
+ * @property {number} labelNumberIndex - Index used for sequential labeling
+ * @property {'pending'|'completed'} status - Current state of the measurement
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ */
+
+
 /**
  * Shared functionality between modes in Google Maps.
  * Overrides method defined in MeasureModeBase.
@@ -31,6 +45,30 @@ class MeasureModeGoogle extends MeasureModeBase {
      */
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+    }
+
+
+
+    /*******************
+     * UTILITY FEATURE *
+     *******************/
+    /**
+     * Find a measure by its ID from the data pool.
+     * @param {number} measureId - The ID of the measure to find.
+     * @returns {MeasurementGroup|null} - The found measure or null if not found.
+     */
+    _findMeasureById(measureId) {
+        if (typeof measureId !== "number") {
+            console.warn("Invalid measureId provided. It should be a number.");
+            return null; // Return null if measureId is not a number
+        }
+
+        const measure = dataPool.getMeasureById(measureId); // Get the measure data by ID
+        if (!measure) return; // If no measure found, exit the function
+
+        // Convert cartographic degrees to Google coordinates
+        measure.coordinates = measure.coordinates.map(coord => convertToLatLng(coord)); // Ensure coordinates are in Google format
+        return measure;
     }
 
     /**

@@ -4,7 +4,8 @@ import {
     createPolyline,
     createPolygon,
     createLabelMarker,
-    removeOverlay
+    removeOverlay,
+    areCoordinatesEqual
 } from "../lib/helper/googleHelper.js";
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
@@ -153,26 +154,54 @@ export default class GoogleMeasure extends MeasureComponentBase {
      */
     _addPolyline(positions, options = {}) {
         if (!this.map || !Array.isArray(positions) || positions.length < 2) return null;
+        try {
+            // Separate listeners from other polyline options        
+            const { listeners, ...markerOptions } = options;
 
-        // Create the polyline
-        const polyline = createPolyline(this.map, positions, options);
-        if (!polyline) return null;
+            // Create the polyline
+            const polyline = createPolyline(this.map, positions, markerOptions);
+            if (!polyline) return null;
 
-        // Highlight event listeners
-        if (this.highlightHandler) {
-            polyline.addListener('mouseover', () => {
-                this.highlightHandler.applyHoverHighlight(polyline);
-            });
-            polyline.addListener('mouseout', () => {
-                // highlightHandler's removeHoverHighlight should know which object was hovered
-                this.highlightHandler.removeHoverHighlight();
-            });
+            // Highlight event listeners
+            if (this.highlightHandler) {
+                polyline.addListener('mouseover', () => {
+                    this.highlightHandler.applyHoverHighlight(polyline);
+                });
+                polyline.addListener('mouseout', () => {
+                    // highlightHandler's removeHoverHighlight should know which object was hovered
+                    this.highlightHandler.removeHoverHighlight();
+                });
+            }
+
+            // Attach listeners if provided
+            if (polyline && listeners && typeof listeners === 'object') {
+                for (const eventName in listeners) {
+                    if (typeof listeners[eventName] === 'function') {
+                        // Use addListener for robust event handling on markers/overlays
+                        polyline.addListener(eventName, (event) => {
+                            // const latLng = event.latLng;
+                            // const pixel = event.pixel; // Note: pixel coords might not always be available depending on event/context
+
+                            const eventData = {
+                                //     mapPoint: latLng ? { lat: latLng.lat(), lng: latLng.lng() } : null,
+                                //     screenPoint: pixel ? { x: pixel.x, y: pixel.y } : { x: NaN, y: NaN }, // Provide fallback
+                                domEvent: event.domEvent // Pass original DOM event - CRUCIAL for button check
+                            };
+                            // Pass the marker itself and the event object to the callback
+                            listeners[eventName](polyline, eventData);
+                        });
+                    }
+                }
+            }
+
+            // Store the polyline in the collection
+            polyline && this.#polylineCollection.push(polyline);
+
+            return polyline;
+        } catch (error) {
+            console.error("GoogleMeasure: Error in _addPolyline:", error);
+            return null;
         }
-
-        // Store the polyline in the collection
-        polyline && this.#polylineCollection.push(polyline);
-
-        return polyline;
     }
 
     /**
@@ -294,6 +323,164 @@ export default class GoogleMeasure extends MeasureComponentBase {
         return polygon;
     }
 
+
+    /*****************
+     * FIND GRAPHICS *
+     *****************/
+    /**
+     * Finds a point primitive by its position in the point collection.
+     * @param {{lat:number,lng:number}} position - The position to find the point primitive 
+     * @returns {google.maps.Marker | null} - The point primitive if found, otherwise null
+     */
+    _getPointByPosition(position) {
+        if (!Array.isArray(this.#pointCollection) || !position) return null;
+
+        let foundPointMarker = null;
+        // Iterate through the point collection to find the marker with the matching position
+        for (const marker of this.#pointCollection) {
+            // Check the custom 'positions' property
+            if (
+                marker &&
+                Array.isArray(marker.positions) &&
+                marker.positions.some(p => areCoordinatesEqual(p, position))
+            ) {
+                foundPointMarker = marker;
+                break; // Found the point marker associated with this position
+            }
+        }
+        return foundPointMarker || null; // Return the found point marker or null if not found
+    }
+
+    /**
+     * Finds a polyline primitive by its positions in the polyline collection.
+     * Find lines exact match for two points, or line for any match for one point.
+     * @param {{lat:number,lng:number}[]} positions - The positions to find the polyline primitive
+     * @returns {google.maps.Polyline[] | null} - The polyline primitive if found, otherwise null
+     */
+    _getLineByPositions(positions) {
+        if (!Array.isArray(this.#polylineCollection) || !Array.isArray(positions) || positions.length === 0) return null;
+
+        const foundPolylines = [];
+
+        // Case1: the positions is one point, find the lines that has some position matched
+        if (positions.length === 1) {
+            const targetPosition = positions[0];
+            const matchingLines = this.#polylineCollection.filter(polyline =>
+                polyline.positions && polyline.positions.some(pos => areCoordinatesEqual(pos, targetPosition))
+            );
+            if (matchingLines.length > 0) {
+                foundPolylines.push(...matchingLines);
+            }
+        }
+        // Case2: the positions is two points, find the line that exactly matches the two points
+        else if (positions.length === 2) {
+            const pos1 = positions[0];
+            const pos2 = positions[1];
+            // Find returns the first matching polyline or undefined
+            const matchingLine = this.#polylineCollection.find(polyline => {
+                // Check if the polyline has exactly two positions
+                if (polyline.positions && polyline.positions.length === 2) {
+                    // Compare the positions of the polyline with the provided positions
+                    return areCoordinatesEqual(polyline.positions[0], pos1) &&
+                        areCoordinatesEqual(polyline.positions[1], pos2);
+                }
+                return false; // Not a match
+            });
+            if (matchingLine) {
+                foundPolylines.push(matchingLine); // Add the single found primitive to the array
+            }
+        }
+
+        // Return the array of found primitives if any were found, otherwise return null.
+        return foundPolylines.length > 0 ? foundPolylines : null;
+    }
+
+    /**
+     * Finds label primitives by their associated position(s).
+     * If `positions` is a single position, it matches `label.position`.
+     * If `positions` is an array of 1 position, it matches any label where `label.positions` contains that point.
+     * If `positions` is an array of 2 positions, it matches any label where `label.positions` exactly matches those two points in order.
+     * @param {{lat:number,lng:number} | {lat:number,lng:number}[]} positions - The position or an array of positions to find the label primitive(s).
+     * @returns {google.maps.Marker[] | null} - An array of matching label primitives if found, otherwise null.
+     */
+    _getLabelByPosition(positions) {
+        if (!Array.isArray(this.#labelCollection) || (!positions)) return null;
+
+        const foundLabels = [];
+        for (const label of this.#labelCollection) {
+            // Check if label has positions property
+            if (label && Array.isArray(label.positions)) {
+                // If positions is a single position, check if it matches any position in label.positions
+                if (Array.isArray(positions) && positions.length === 1) {
+                    if (label.positions.some(p => areCoordinatesEqual(p, positions[0]))) {
+                        foundLabels.push(label);
+                    }
+                }
+                // If positions is an array of two positions, check for exact match
+                else if (Array.isArray(positions) && positions.length === 2) {
+                    if (areCoordinatesEqual(label.positions[0], positions[0]) &&
+                        areCoordinatesEqual(label.positions[1], positions[1])) {
+                        foundLabels.push(label);
+                    }
+                }
+                // If positions is a single position object, check for exact match
+                else if (typeof positions === 'object' && 'lat' in positions && 'lng' in positions) {
+                    if (label.positions.some(p => areCoordinatesEqual(p, positions))) {
+                        foundLabels.push(label);
+                    }
+                }
+            }
+        }
+        return foundLabels.length > 0 ? foundLabels : null; // Return the found labels or null if not found
+    }
+
+    /**
+     * Finds all related overlays (points, polylines, labels, polygons) by a given measureId.
+     * @param {number|string} measureId - The measureId to search for in the overlays.
+     * @returns {{points: google.maps.Marker[], polylines: Polyline[], labels: google.maps.Marker[], polygons: Polygon[]}|null} - An object containing arrays of related overlays or null if no measureId is provided.
+     */
+    _getRelatedOverlaysByMeasureId(measureId) {
+        if (!measureId) return null;
+        // convert measureId to string if it is not
+        if (typeof measureId !== "string") {
+            measureId = String(measureId);
+        }
+
+        const relatedOverlays = {
+            points: [],
+            polylines: [],
+            labels: [],
+            polygons: [],
+        };
+        // Find related points
+        relatedOverlays.points = this.#pointCollection.filter(marker => {
+            // Check if the marker has a 'measureId' property and matches the provided measureId
+            return marker && marker.id && marker.id.includes(measureId);
+        });
+        // Find related polygons
+        relatedOverlays.polygons = this.#polygonCollection.filter(polygon => {
+            // Check if the polygon has a 'measureId' property and matches the provided measureId
+            return polygon && polygon.id && polygon.id.includes(measureId);
+        });
+        // Find related polylines
+        relatedOverlays.polylines = this.#polylineCollection.filter(polyline => {
+            // Check if the polyline has a 'measureId' property and matches the provided measureId
+            return polyline && polyline.id && polyline.id.includes(measureId);
+        });
+
+        // Find related labels
+        relatedOverlays.labels = this.#labelCollection.filter(label => {
+            // Check if the label has a 'measureId' property and matches the provided measureId
+            return label && label.id && label.id.includes(measureId);
+        });
+
+        return relatedOverlays;
+    }
+
+
+    /******************
+     * REMOVE FEATURE *
+     ******************/
     /**
      * Removes a point marker from the map.
      * @param {AdvancedMarkerElement|Marker} marker 
@@ -303,7 +490,11 @@ export default class GoogleMeasure extends MeasureComponentBase {
         removeOverlay(marker);
 
         // FIXME: remove the listeners from the marker
-
+        if (marker && marker.listeners) {
+            for (const eventName in marker.listeners) {
+                marker.removeListener(eventName, marker.listeners[eventName]);
+            }
+        }
 
         // remove the marker from the collection
         const index = this.#pointCollection.indexOf(marker);

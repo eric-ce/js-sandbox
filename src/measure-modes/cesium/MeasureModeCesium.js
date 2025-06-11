@@ -16,6 +16,19 @@ import { Chart } from "chart.js/auto";
 /** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
 /** @typedef {import('../../components/CesiumMeasure.js').CesiumMeasure} CesiumMeasure */
 
+// Measure data 
+/**
+ * @typedef MeasurementGroup
+ * @property {string} id - Unique identifier for the measurement
+ * @property {string} mode - Measurement mode (e.g., "distance")
+ * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
+ * @property {number} labelNumberIndex - Index used for sequential labeling
+ * @property {'pending'|'completed'} status - Current state of the measurement
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ */
+
 
 /**
  * Shared functionality between modes in Cesium.
@@ -41,10 +54,11 @@ class MeasureModeCesium extends MeasureModeBase {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
     }
 
-
-    /*******************
-     * UTILITY FEATURE *
-     *******************/
+    /**
+     * Finds a measure by its ID.
+     * @param {number} measureId - The ID of the measure to find.
+     * @returns {MeasurementGroup|null} - The found measure or null if not found.
+     */
     _findMeasureById(measureId) {
         if (typeof measureId !== "number") {
             console.warn("Invalid measureId provided. It should be a number.");
@@ -59,6 +73,11 @@ class MeasureModeCesium extends MeasureModeBase {
         return measure;
     }
 
+    /**
+     * Finds a measure by its coordinate.
+     * @param {Cartesian3|Cartographic|{latitude:number, longitude:number, height: number}} coordinate - The coordinate to find the measure.
+     * @returns {MeasurementGroup|null} - The found measure or null if not found.
+     */
     _findMeasureByCoordinate(coordinate) {
         if (!coordinate) return null;
 
@@ -115,7 +134,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
 
     /********************
-     * CLEANNING METHOD *
+     * CLEANING METHOD *
      ********************/
     removeAnnotationsAndListeners() {
         this.drawingHelper.clearCollections();
