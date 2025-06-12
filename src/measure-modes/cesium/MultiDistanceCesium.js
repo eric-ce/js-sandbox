@@ -262,10 +262,6 @@ class MultiDistanceCesium extends MeasureModeCesium {
         const measureId = Number(point.id.split("_").slice(-1)[0]);
         if (isNaN(measureId)) return;
 
-        // Confirm the resume action
-        const confirmResume = window.confirm(`Do you want to resume this measure? id: ${measureId}`);
-        if (!confirmResume) return;
-
         // -- Handle Measure Data --
         // Get the measure data from the data pool
         const measureData = dataPool.getMeasureById(measureId);
@@ -285,6 +281,10 @@ class MultiDistanceCesium extends MeasureModeCesium {
         const isLastPoint = pointIndex === this.measure.coordinates.length - 1;
 
         if (isFirstPoint || isLastPoint) {
+            // Confirm the resume action
+            const confirmResume = window.confirm(`Do you want to resume this measure? id: ${measureId}`);
+            if (!confirmResume) return;
+
             // Set variables and flags to resume measuring
             this.coordsCache = this.measure.coordinates;
 

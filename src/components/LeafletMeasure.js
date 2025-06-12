@@ -4,6 +4,7 @@ import {
     createPolyline,
     createLabelTooltip,
     checkLayerType,
+    areCoordinatesEqual,
 } from "../lib/helper/leafletHelper.js";
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
@@ -342,33 +343,172 @@ export default class LeafletMeasure extends MeasureComponentBase {
     /**
      * Finds a point primitive by its position in the point collection.
      * @param {{lat:number,lng:number}} position - The position to find the point primitive 
-     * @returns {google.maps.Marker | null} - The point primitive if found, otherwise null
+     * @returns {L.circleMarker | null} - The point primitive if found, otherwise null
      */
-    _getPointByPosition(position) { }
+    _getPointByPosition(position) {
+        // -- Validate dependencies --
+        if (!this.#pointCollection || !position) return null;
+
+        // Get all points in the collection
+        const points = this.#pointCollection.getLayers();
+        if (!Array.isArray(points) || points.length === 0) return null;
+        // Find the point marker that matches the position
+        let foundPointMarker = null;
+
+        for (const point of points) {
+            if (point &&
+                Array.isArray(point.positions) &&
+                point.positions.some(p => areCoordinatesEqual(p, position))
+            ) {
+                foundPointMarker = point;
+                break; // Exit loop once found
+            }
+        }
+        return foundPointMarker || null; // Return the found point marker or null if not found
+    }
 
     /**
     * Finds a polyline primitive by its positions in the polyline collection.
     * Find lines exact match for two points, or line for any match for one point.
     * @param {{lat:number,lng:number}[]} positions - The positions to find the polyline primitive
-    * @returns {google.maps.Polyline[] | null} - The polyline primitive if found, otherwise null
+    * @returns {L.Polyline[] | null} - The polyline primitive if found, otherwise null
     */
-    _getLineByPositions(positions) { }
+    _getLineByPositions(positions) {
+        if (!this.#polylineCollection || !Array.isArray(positions) || positions.length === 0) return null;
+
+        // Get all polylines in the collection
+        const polylines = this.#polylineCollection.getLayers();
+        if (!Array.isArray(polylines) || polylines.length === 0) return null;
+
+        // Find the polyline(s) that match the positions
+        const foundPolylines = [];
+        // Case1: the positions is one point, find the lines that has some position matched
+        if (positions.length === 1) {
+            const targetPosition = positions[0];
+            const matchingLines = polylines.filter(polyline =>
+                polyline.positions && polyline.positions.some(pos => areCoordinatesEqual(pos, targetPosition))
+            );
+            if (matchingLines.length > 0) {
+                foundPolylines.push(...matchingLines);
+            }
+        }
+        // Case2: the positions is two points, find the line that exactly matches the two points
+        else if (positions.length === 2) {
+            const pos1 = positions[0];
+            const pos2 = positions[1];
+            // Find returns the first matching polyline or undefined
+            const matchingLine = polylines.find(polyline => {
+                // Check if the polyline has exactly two positions
+                if (polyline.positions && polyline.positions.length === 2) {
+                    // Compare the positions of the polyline with the provided positions
+                    return areCoordinatesEqual(polyline.positions[0], pos1) &&
+                        areCoordinatesEqual(polyline.positions[1], pos2);
+                }
+                return false; // Not a match
+            });
+            if (matchingLine) {
+                foundPolylines.push(matchingLine); // Add the single found primitive to the array
+            }
+        }
+
+        // Return the array of found primitives if any were found, otherwise return null.
+        return foundPolylines.length > 0 ? foundPolylines : null;
+    }
+
     /**
      * Finds label primitives by their associated position(s).
      * If `positions` is a single position, it matches `label.position`.
      * If `positions` is an array of 1 position, it matches any label where `label.positions` contains that point.
      * If `positions` is an array of 2 positions, it matches any label where `label.positions` exactly matches those two points in order.
      * @param {{lat:number,lng:number} | {lat:number,lng:number}[]} positions - The position or an array of positions to find the label primitive(s).
-     * @returns {google.maps.Marker[] | null} - An array of matching label primitives if found, otherwise null.
+     * @returns {L.Tooltip[] | null} - An array of matching label primitives if found, otherwise null.
      */
-    _getLabelByPosition(positions) { }
+    _getLabelByPosition(positions) {
+        if (!this.#labelCollection || (!positions)) return null;
+
+        // Get all labels in the collection
+        const labels = this.#labelCollection.getLayers();
+        if (!Array.isArray(labels) || labels.length === 0) return null;
+
+        // Find the label(s) that match the positions
+        const foundLabels = [];
+        for (const label of labels) {
+            // Check if label has positions property
+            if (label && Array.isArray(label.positions)) {
+                // If positions is a single position, check if it matches any position in label.positions
+                if (Array.isArray(positions) && positions.length === 1) {
+                    if (label.positions.some(p => areCoordinatesEqual(p, positions[0]))) {
+                        foundLabels.push(label);
+                    }
+                }
+                // If positions is an array of two positions, check for exact match
+                else if (Array.isArray(positions) && positions.length === 2) {
+                    if (areCoordinatesEqual(label.positions[0], positions[0]) &&
+                        areCoordinatesEqual(label.positions[1], positions[1])) {
+                        foundLabels.push(label);
+                    }
+                }
+                // If positions is a single position object, check for exact match
+                else if (typeof positions === 'object' && 'lat' in positions && 'lng' in positions) {
+                    if (label.positions.some(p => areCoordinatesEqual(p, positions))) {
+                        foundLabels.push(label);
+                    }
+                }
+            }
+        }
+        return foundLabels.length > 0 ? foundLabels : null; // Return the found labels or null if not found
+    }
 
     /**
      * Finds all related overlays (points, polylines, labels, polygons) by a given measureId.
      * @param {number|string} measureId - The measureId to search for in the overlays.
-     * @returns {{points: google.maps.Marker[], polylines: Polyline[], labels: google.maps.Marker[], polygons: Polygon[]}|null} - An object containing arrays of related overlays or null if no measureId is provided.
+     * @returns {{points: L.CircleMarker[], polylines: L.Polyline[], labels: L.Tooltip[], polygons: L.Polygon[]}|null} - An object containing arrays of related overlays or null if no measureId is provided.
      */
-    _getRelatedOverlaysByMeasureId(measureId) { }
+    _getRelatedOverlaysByMeasureId(measureId) {
+        if (!measureId) return null;
+        // convert measureId to string if it is not
+        if (typeof measureId !== "string") {
+            measureId = String(measureId);
+        }
+
+        const relatedOverlays = {
+            points: [],
+            polylines: [],
+            labels: [],
+            polygons: [],
+        };
+        // Find related points
+        const points = this.#pointCollection.getLayers();
+        if (!Array.isArray(points) || points.length === 0) return relatedOverlays; // Return empty if no points
+        relatedOverlays.points = points.filter(marker => {
+            // Check if the marker has a 'measureId' property and matches the provided measureId
+            return marker && marker.id && marker.id.includes(measureId);
+        });
+        // Find related polygons
+        const polygons = this.#polygonCollection.getLayers();
+        if (!Array.isArray(polygons) || polygons.length === 0) return relatedOverlays; // Return empty if no polygons
+        relatedOverlays.polygons = polygons.filter(polygon => {
+            // Check if the polygon has a 'measureId' property and matches the provided measureId
+            return polygon && polygon.id && polygon.id.includes(measureId);
+        });
+        // Find related polylines
+        const polylines = this.#polylineCollection.getLayers();
+        if (!Array.isArray(polylines) || polylines.length === 0) return relatedOverlays; // Return empty if no polylines
+        relatedOverlays.polylines = polylines.filter(polyline => {
+            // Check if the polyline has a 'measureId' property and matches the provided measureId
+            return polyline && polyline.id && polyline.id.includes(measureId);
+        });
+
+        // Find related labels
+        const labels = this.#labelCollection.getLayers();
+        if (!Array.isArray(labels) || labels.length === 0) return relatedOverlays; // Return empty if no labels
+        relatedOverlays.labels = labels.filter(label => {
+            // Check if the label has a 'measureId' property and matches the provided measureId
+            return label && label.id && label.id.includes(measureId);
+        });
+
+        return relatedOverlays;
+    }
 
 
     /******************

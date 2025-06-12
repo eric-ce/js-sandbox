@@ -83,6 +83,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             // Case: it is during measure
             if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) {
                 const pointIndex = this.coordsCache.findIndex(coordinate => areCoordinatesEqual(coordinate, marker.positions[0]));
+
                 if (pointIndex === -1) return false;
                 const isFirstPoint = pointIndex === 0;
 
@@ -208,6 +209,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             interactive: true, // Make the point interactive
             listeners: this.#pointMarkerListeners,
         });
+
         if (!point) return;
         point.status = "pending"; // Set status to pending
 
@@ -285,17 +287,13 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
     /**
      * Resumes a measurement by the clicked point.
-     * @param {google.maps.Marker} point - The point marker representing the clicked point.
+     * @param {L.CircleMarker} point - The point marker representing the clicked point.
      * @returns {void}
      */
     _resumeMeasure(point) {
         // Find the measure data
         const measureId = Number(point.id.split("_").slice(-1)[0]);
         if (isNaN(measureId)) return;
-
-        // Confirm the resume action
-        const confirmResume = window.confirm(`Do you want to resume this measure? id: ${measureId}`);
-        if (!confirmResume) return;
 
         // -- Handle Measure Data --
         // Get the measure data from the data pool
@@ -309,6 +307,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // Find the index of the point in the measure coordinates
         const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, point.positions[0]));
+        if (pointIndex === -1) return; // If the point is not found, exit
 
         // -- Resume Measure --
         // Resume measure only when the point is the first or last point
@@ -316,6 +315,10 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         const isLastPoint = pointIndex === this.measure.coordinates.length - 1;
 
         if (isFirstPoint || isLastPoint) {
+            // Confirm the resume action
+            const confirmResume = window.confirm(`Do you want to resume this measure? id: ${measureId}`);
+            if (!confirmResume) return;
+
             // Set variables and flags to resume measuring
             this.coordsCache = this.measure.coordinates;
 
@@ -347,7 +350,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete;
 
         switch (true) {
-            case isMeasuring:// Moving coordinate data
+            case isMeasuring:
                 // Moving coordinate data
                 const positions = this.flags.isReverse ?
                     [this.coordsCache[0], this.#coordinate] :
@@ -566,13 +569,13 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
                 status: isMeasuring ? "pending" : "completed",
                 color: this.stateManager.getColorState("line"),
-                clickable: true,
+                interactive: true,
                 listeners: this.#polylineListeners
             });
             // -- Create label --
             const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
                 status: isMeasuring ? "pending" : "completed",
-                clickable: true
+                interactive: true
             });
 
             // -- Handle Distances record --
@@ -593,13 +596,13 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                     this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
                         status: isMeasuring ? "pending" : "completed",
                         color: this.stateManager.getColorState("line"),
-                        clickable: true,
+                        interactive: true,
                         listeners: this.#polylineListeners
                     });
                     // -- Create label --
                     const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
                         status: isMeasuring ? "pending" : "completed",
-                        clickable: true
+                        interactive: true
                     });
 
                     // -- Handle Distances record --
@@ -624,7 +627,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         // -- Reposition the total label --
         const { totalDistance } = this._createOrUpdateTotalLabel(positions, this.#interactiveAnnotations.totalLabels, {
             status: isMeasuring ? "pending" : "completed",
-            clickable: true
+            interactive: true
         });
 
         // Case: if only one point left, remove the remaining point and labels
@@ -993,10 +996,10 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
       * If the label exists in labelsArray, update its position and text, else create a new one.
       * Manages the reference within the provided labelsArray.
       * @param {{lat:number,lng:number}[]} positions - Array of positions (expects 2) to calculate distance and middle point.
-      * @param {L.tooltip[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified. Caution: this is not the labelCollection.
+      * @param {L.tooltip[]} labelsArray - The array (passed by reference) that holds the label instance. This array will be modified. Caution: this is not the labelCollection.
       * @param {Object} [options={}] - Options for the label.
       * @param {string|null} [options.status=null] - Status to set on the label instance.
-      * @return {{ distance: number, labelInstance: L.tooltip | null }} - The calculated distance and the created/updated label instance, or null if failed.
+      * @return {{ distance:number, labelInstance:L.tooltip|null }} - The calculated distance and the created/updated label instance, or null if failed.
       */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
         // 1. DEFAULTS & INPUT VALIDATION
@@ -1070,6 +1073,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 const segmentMiddlePos = calculateMiddlePos(positions);
 
                 const labelInstance = labelsArray.find(label => label.status === "moving");
+
                 if (labelInstance) {
                     // -- Handle Label Visual Update --
                     labelInstance.setLatLng(segmentMiddlePos); // update position
@@ -1166,7 +1170,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         if (labelsArray.length > 0) {
             labelInstance = labelsArray[0]; // Get the reference from the array
 
-            // Check if the reference is a valid Google Maps Marker
+            // Check if the reference is a valid label instance
             if (!labelInstance) {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below

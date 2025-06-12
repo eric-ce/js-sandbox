@@ -370,15 +370,16 @@ export function createPolygon(map, positions, options = {}) {
  * @param {Number} value - The value to display on the label marker
  * @param {string} unit - The unit of measurement (default is "meter")
  * @param {Object} options - Optional configuration for the label marker
- * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
+ * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|null} The created marker.
  */
 export function createLabelMarker(map, positions, value, unit = "meter", options = {}) {
     // -- Validate input params --
-    if (!map || !positions || positions.length === 0 || !value) return;
+    if (!map || !positions) return null;
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
 
     // -- Convert positions to {lat, lng} format --
     const latLngArray = positions.map(pos => convertToLatLng(pos)).filter(Boolean); // Filter out invalid positions
-    if (latLngArray.length === 0) return;
+    if (latLngArray.length === 0) return null; // Handle empty positions
 
     // -- Prepare label value --
     const formattedText = formatMeasurementValue(value, unit); // Format the value based on the unit

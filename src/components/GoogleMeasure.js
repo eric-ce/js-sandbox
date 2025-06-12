@@ -63,6 +63,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             const { listeners, ...markerOptions } = options;
 
             const point = createPointMarker(this.map, position, markerOptions);
+            if (!point) return null;
 
             // Highlight event listeners
             if (this.highlightHandler) {
@@ -99,7 +100,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             }
 
             // Attach listeners if provided
-            if (point && listeners && typeof listeners === 'object') {
+            if (listeners && typeof listeners === 'object') {
                 for (const eventName in listeners) {
                     if (typeof listeners[eventName] === 'function') {
                         // Use addListener for robust event handling on markers/overlays
@@ -120,7 +121,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             }
 
             // Store the point in the collection
-            point && this.#pointCollection.push(point);
+            this.#pointCollection.push(point);
 
             return point;
         } catch (error) {
