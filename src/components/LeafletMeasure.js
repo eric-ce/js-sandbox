@@ -66,11 +66,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
 
     // Implementation of abstract methods from the base class
     _addPointMarker(position, options = {}) {
-        // -- Validate dependencies --
-        if (!this.map || !position) {
-            console.warn("LeafletMeasure: Failed to add point marker. Map or position is not defined.");
-            return null;
-        }
+        if (!this.map || !position) return null;
 
         // initialize the collections if not already done
         if (!this.#pointCollection) {
@@ -167,8 +163,11 @@ export default class LeafletMeasure extends MeasureComponentBase {
             this._initializeMapSpecifics();
         }
 
+        // Separate listeners from other marker options
+        const { listeners, ...rest } = options;
+
         // -- Create Polyline --
-        const polyline = createPolyline(positions, options);
+        const polyline = createPolyline(positions, { ...rest });
         if (!polyline) return null;
 
         // Highlight event listeners
@@ -180,6 +179,31 @@ export default class LeafletMeasure extends MeasureComponentBase {
                 // highlightHandler's removeHoverHighlight should know which object was hovered
                 this.highlightHandler.removeHoverHighlight();
             });
+        }
+
+        // --- Attach Listeners (Leaflet Style) ---
+        if (listeners && typeof listeners === 'object') {
+            for (const eventName in listeners) {
+                if (typeof listeners[eventName] === 'function') {
+                    // Use marker.on() for Leaflet
+                    polyline.on(eventName, (leafletEvent) => {
+                        // Normalize Leaflet event data (similar to GoogleMapsInputHandler)
+                        const eventData = {
+                            mapPoint: leafletEvent.latlng ? { lat: leafletEvent.latlng.lat, lng: leafletEvent.latlng.lng } : null,
+                            screenPoint: leafletEvent.containerPoint ? { x: leafletEvent.containerPoint.x, y: leafletEvent.containerPoint.y } : { x: NaN, y: NaN }, // Provide fallback
+                            domEvent: leafletEvent.originalEvent, // Pass original DOM event
+                            leafletEvent: leafletEvent // Keep original Leaflet event if needed
+                        };
+
+                        // Pass the marker itself and the normalized event data to the callback
+                        // This matches the signature expected by your mode's listener functions
+                        listeners[eventName](polyline, eventData);
+
+                        // Optional: Stop propagation if needed within the original listener
+                        // L.DomEvent.stopPropagation(leafletEvent); // Or handle in the mode's listener
+                    });
+                }
+            }
         }
 
         // -- Add to the collection --
@@ -484,28 +508,33 @@ export default class LeafletMeasure extends MeasureComponentBase {
             // Check if the marker has a 'measureId' property and matches the provided measureId
             return marker && marker.id && marker.id.includes(measureId);
         });
+
         // Find related polygons
         const polygons = this.#polygonCollection.getLayers();
-        if (!Array.isArray(polygons) || polygons.length === 0) return relatedOverlays; // Return empty if no polygons
-        relatedOverlays.polygons = polygons.filter(polygon => {
-            // Check if the polygon has a 'measureId' property and matches the provided measureId
-            return polygon && polygon.id && polygon.id.includes(measureId);
-        });
+        if (Array.isArray(polygons) && polygons.length > 0) {
+            relatedOverlays.polygons = polygons.filter(polygon => {
+                // Check if the polygon has a 'measureId' property and matches the provided measureId
+                return polygon && polygon.id && polygon.id.includes(measureId);
+            });
+        }
+
         // Find related polylines
         const polylines = this.#polylineCollection.getLayers();
-        if (!Array.isArray(polylines) || polylines.length === 0) return relatedOverlays; // Return empty if no polylines
-        relatedOverlays.polylines = polylines.filter(polyline => {
-            // Check if the polyline has a 'measureId' property and matches the provided measureId
-            return polyline && polyline.id && polyline.id.includes(measureId);
-        });
+        if (Array.isArray(polylines) && polylines.length > 0) {
+            relatedOverlays.polylines = polylines.filter(polyline => {
+                // Check if the polyline has a 'measureId' property and matches the provided measureId
+                return polyline && polyline.id && polyline.id.includes(measureId);
+            });
+        }
 
         // Find related labels
         const labels = this.#labelCollection.getLayers();
-        if (!Array.isArray(labels) || labels.length === 0) return relatedOverlays; // Return empty if no labels
-        relatedOverlays.labels = labels.filter(label => {
-            // Check if the label has a 'measureId' property and matches the provided measureId
-            return label && label.id && label.id.includes(measureId);
-        });
+        if (Array.isArray(labels) && labels.length > 0) {
+            relatedOverlays.labels = labels.filter(label => {
+                // Check if the label has a 'measureId' property and matches the provided measureId
+                return label && label.id && label.id.includes(measureId);
+            });
+        }
 
         return relatedOverlays;
     }

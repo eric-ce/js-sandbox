@@ -20,7 +20,7 @@ import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
-import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistanceCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
+import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistanceCesium, MultiDistanceClampedCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
 
 
 /**

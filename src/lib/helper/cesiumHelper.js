@@ -495,9 +495,9 @@ export function createPolylinePrimitive(Primitive, coordinateArray, options = {}
 
     // --- Geometry Instance ---
     // Create the line GeometryInstance
-    const lineGeometryInstance = new Cesium.GeometryInstance({
+    const lineGeometryInstance = new GeometryInstance({
         geometry: lineGeometry,
-        id: id, // Use the destructured id
+        id,
         ...geometryInstanceOptions // User options override defaults
     });
 
@@ -605,7 +605,7 @@ export function createGroundPolylinePrimitive(GroundPolylinePrimitive, coordinat
     } = options;
 
     // Convert the coordinates to Cartesian3
-    const cartesianArray = coordinateArray.map(convertToCartesian3);
+    const cartesianArray = coordinateArray.map((pos) => convertToCartesian3(pos)).filter(Boolean);
     if (!Array.isArray(cartesianArray) || cartesianArray.length < 2) {
         console.error("Convert Cartesian3 failed");
         return null;
@@ -646,8 +646,8 @@ export function createGroundPolylinePrimitive(GroundPolylinePrimitive, coordinat
     if (!groundPolylinePrimitive) return null;
 
     // Add metadata to the polyline primitive
-    groundPolylinePrimitive.id = id;
     groundPolylinePrimitive.positions = cartesianArray;
+    groundPolylinePrimitive.id = id;
     // groundPolylinePrimitive.isSubmitted = false; // for fireTrail mode
 
     return groundPolylinePrimitive;

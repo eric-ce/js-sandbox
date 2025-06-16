@@ -37,9 +37,10 @@ import { Chart } from "chart.js/auto";
  */
 class MeasureModeCesium extends MeasureModeBase {
     /** @type {import("chart.js/auto").Chart} */
-    chartInstance = null;
+    chartInstance;
     /** @type {HTMLElement} */
-    chartDiv = null;
+    chartDiv;
+
     /**
      * 
      * @param {string} modeName - The name of the mode (e.g., "Point", "Line", "Polygon")

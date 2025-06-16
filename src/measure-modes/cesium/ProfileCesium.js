@@ -71,6 +71,7 @@ class ProfileCesium extends MeasureModeCesium {
     /** @type {Cartesian3[]} */
     coordCache = [];
 
+
     /**
      * 
      * @param {CesiumInputHandler} inputHandler 
@@ -356,6 +357,7 @@ class ProfileCesium extends MeasureModeCesium {
     }
 
 
+
     /*******************
      * HELPER FEATURES *
      *******************/
@@ -524,11 +526,17 @@ class ProfileCesium extends MeasureModeCesium {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Clear cache
+        // Reset variables
         this.coordsCache = [];
+        this.#coordinate = null; // Clear the coordinate
+        this.#interactiveAnnotations.polylines = [];
+        this.#interactiveAnnotations.labels = [];
+
+        // Reset the measure data
+        this.measure = super._createDefaultMeasure(); // Reset measure to default state
 
         // Clear chart
-        this._destroyChart();
+        // this._destroyChart();
     }
 }
 

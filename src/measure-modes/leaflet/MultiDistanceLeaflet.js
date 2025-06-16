@@ -83,10 +83,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             // Case: it is during measure
             if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) {
                 const pointIndex = this.coordsCache.findIndex(coordinate => areCoordinatesEqual(coordinate, marker.positions[0]));
-
-                if (pointIndex === -1) return false;
+                if (pointIndex === -1) return;
                 const isFirstPoint = pointIndex === 0;
-
                 // if it click on the first point then forms perimeter
                 if (isFirstPoint) {
                     // -- Feature: forms perimeter --
@@ -305,6 +303,10 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         this.measure = measureData;
         this.measure.status = "pending"; // Set the measure status to pending
 
+        // Case: Not allowed perimeter to resume measure
+        const isPerimeter = areCoordinatesEqual(this.measure.coordinates[0], this.measure.coordinates[this.measure.coordinates.length - 1]);
+        if (isPerimeter) return;
+
         // Find the index of the point in the measure coordinates
         const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, point.positions[0]));
         if (pointIndex === -1) return; // If the point is not found, exit
@@ -313,7 +315,6 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         // Resume measure only when the point is the first or last point
         const isFirstPoint = pointIndex === 0;
         const isLastPoint = pointIndex === this.measure.coordinates.length - 1;
-
         if (isFirstPoint || isLastPoint) {
             // Confirm the resume action
             const confirmResume = window.confirm(`Do you want to resume this measure? id: ${measureId}`);
@@ -435,8 +436,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         // -- Update annotations status --
         // update points status
         this.pointCollection.getLayers().forEach(point => {
-            if (point.id.includes(this.mode) && point.status === "pending") {
-                point.status = "completed" // Set the status to completed
+            if (point.id.includes(this.mode)) {
+                if (point.status === "pending") point.status = "completed" // Set the status to completed
                 if (point.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
                     point.options.interactive = true; // Make the point interactive
                     this.drawingHelper._refreshLayerInteractivity(point);
@@ -445,8 +446,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         });
         // update polylines status
         this.#interactiveAnnotations.polylines.forEach(polyline => {
-            if (polyline.id.includes(this.mode) && polyline.status === "pending") {
-                polyline.status = "completed"; // Set the status to completed
+            if (polyline.id.includes(this.mode)) {
+                if (polyline.status === "pending") polyline.status = "completed"; // Set the status to completed
                 if (polyline.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
                     polyline.options.interactive = true; // Make the polyline interactive
                     this.drawingHelper._refreshLayerInteractivity(polyline);
@@ -455,8 +456,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         });
         // update labels status
         this.#interactiveAnnotations.labels.forEach(label => {
-            if (label.id.includes(this.mode) && label.status === "pending") {
-                label.status = "completed"; // Set the status to completed
+            if (label.id.includes(this.mode)) {
+                if (label.status === "pending") label.status = "completed"; // Set the status to completed
                 if (label.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
                     label.options.interactive = true; // Make the label interactive
                     this.drawingHelper._refreshLayerInteractivity(label);
@@ -498,7 +499,10 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // confirmation 
         const userConfirmation = window.confirm(`Do you want to remove this point?`) // Confirm the removal action
-        if (!userConfirmation) return;
+        if (!userConfirmation) {
+            this._refreshMapDrag();
+            return;
+        };
 
         // -- Remove point --
         this.drawingHelper._removePointMarker(point); // Remove the point marker
@@ -515,9 +519,12 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // Find the point index in the measure coordinates
         const pointPositionIndices = this.measure.coordinates
-            .map((coordinate, index) => areCoordinatesEqual(coordinate, point.position) ? index : -1)
+            .map((coordinate, index) => areCoordinatesEqual(coordinate, point.positions[0]) ? index : -1)
             .filter(index => index !== -1);
-        if (pointPositionIndices.length === 0) return; // If the point is not found, exit
+        if (pointPositionIndices.length === 0) {
+            this._refreshMapDrag();
+            return; // If the point is not found, exit
+        }
 
         // -- Update positions --
         // Set positions to filter out pointPositionIndices
@@ -546,7 +553,6 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             // Safety check: assume moving or total labels should not be removed here
             const isMovingLabel = label.status === "moving";
             const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total_label`);
-            this.#interactiveAnnotations.totalLabels = isTotalLabel ? [label] : [];
             if (isMovingLabel || isTotalLabel) return;
 
             this.drawingHelper._removeLabel(label); // Remove the label            
@@ -558,50 +564,59 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             this.#interactiveAnnotations.labels.splice(labelToRemoveIndex, 1);
         });
 
+        // set existed total label 
+        const labels = this.labelCollection.getLayers();
+        if (Array.isArray(labels) && labels.length > 0) {
+            this.#interactiveAnnotations.totalLabels = labels.filter(label => label.id.startsWith(`annotate_${this.mode}_total_label_${this.measure.id}`));
+        }
+
         // Find neighboring coordinate
         const { previous, current, next } = getNeighboringValues(this.measure.coordinates, pointPositionIndices[0]); // find the point position neighboring positions.
+
         const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete; // Check if it is measuring
-        // Case: the removing point is in the middle of the positions
-        if (previous && next) {
-            const reconnectedPositions = [previous, next];
-
-            // -- Create polyline --
-            this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
-                status: isMeasuring ? "pending" : "completed",
-                color: this.stateManager.getColorState("line"),
-                interactive: true,
-                listeners: this.#polylineListeners
-            });
-            // -- Create label --
-            const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
-                status: isMeasuring ? "pending" : "completed",
-                interactive: true
-            });
-
-            // -- Handle Distances record --
-            // Don't calculate all distances from coordsCache due to performance and consistency
-            this.#distances.splice(pointPositionIndices[0] - 1, 2);
-            this.#distances.splice(pointPositionIndices[0] - 1, 0, distances[0]);
-        }
-        // Case: The removing point is the first point
-        else if (next) {
-            // this.#distances.splice(pointIndex, 1) // Remove the first distance
-            // Case: Perimeter remove first point 
-            const isPerimeter = areCoordinatesEqual(this.measure.coordinates[0], this.measure.coordinates[this.measure.coordinates.length - 1]);
-            if (isPerimeter) {
-                // reconnect first and last point
-                if (positions.length > 2) {
-                    const reconnectedPositions = [positions[0], positions[positions.length - 1]];
+        const isPerimeter = areCoordinatesEqual(this.measure.coordinates[0], this.measure.coordinates[this.measure.coordinates.length - 1]);
+        const graphicsStatus = isMeasuring ? "pending" : "completed"; // Determine the graphics status based on measuring state
+        // Case: Perimeter measure, it can only be measure completed or measure not yet started
+        if (isPerimeter) {
+            if (previous && next) {  // Case: the removing point is in the middle of the positions
+                // Case: The minimum shape is a triangle that consists of 4 points. Less than 4 means it is not a shape
+                if (positions.length === 3) {
+                    positions.pop(); // Remove the last point if it is less than 4 points
+                    // -- Handle Distances record --
+                    this.#distances.splice(pointPositionIndices[0] - 1, 2);
+                } else {
+                    const reconnectedPositions = [previous, next];
                     // -- Create polyline --
                     this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
-                        status: isMeasuring ? "pending" : "completed",
+                        status: graphicsStatus,
                         color: this.stateManager.getColorState("line"),
                         interactive: true,
                         listeners: this.#polylineListeners
                     });
                     // -- Create label --
                     const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
-                        status: isMeasuring ? "pending" : "completed",
+                        status: graphicsStatus,
+                        interactive: true
+                    });
+
+                    // -- Handle Distances record --
+                    // Don't calculate all distances from coordsCache due to performance and consistency
+                    this.#distances.splice(pointPositionIndices[0] - 1, 2, distances[0]); // remove and insert the new distance
+                }
+            } else if (next) {  // Case: The removing point is the first point
+                if (positions.length > 2) {
+                    positions.push(positions[0]); // Reconnect the first point to the last point
+                    const reconnectedPositions = [positions[0], positions[positions.length - 2]];  // the last point primitive is the length-2 because first point equals to last point in perimeter.
+                    // -- Create polyline --
+                    this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
+                        status: graphicsStatus,
+                        color: this.stateManager.getColorState("line"),
+                        interactive: true,
+                        listeners: this.#polylineListeners
+                    });
+                    // -- Create label --
+                    const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
+                        status: graphicsStatus,
                         interactive: true
                     });
 
@@ -617,41 +632,49 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                     this.#distances.splice(0, 1); // Remove the first distance
                     this.#distances.splice(this.#distances.length - 1, 1); // Remove the last distance
                 }
+            } else if (previous) {  // Case: The removing point is the last point
+                this.#distances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
             }
         }
-        // Case: The removing point is the last point
-        else if (previous) {
-            this.#distances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
+
+        // Case: Normal measure, it could be during measuring or measure completed or measure not yet started
+        if (!isPerimeter) {
+            if (previous && next) {  // Case: the removing point is in the middle of the positions
+                const reconnectedPositions = [previous, next];
+                // -- Create polyline --
+                this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
+                    status: graphicsStatus,
+                    color: this.stateManager.getColorState("line"),
+                    interactive: true,
+                    listeners: this.#polylineListeners
+                });
+                // -- Create label --
+                const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
+                    status: graphicsStatus,
+                    interactive: true
+                });
+
+                // -- Handle Distances record --
+                // Don't calculate all distances from coordsCache due to performance and consistency
+                this.#distances.splice(pointPositionIndices[0] - 1, 2, distances[0]); // remove and insert the new distance
+            } else if (next) {  // Case: The removing point is the first point
+                this.#distances.splice(0, 1) // Remove the first distance
+            } else if (previous) {  // Case: The removing point is the last point
+                this.#distances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
+            }
         }
+        // -- End of Handle Reconnection and distance record --
 
         // -- Reposition the total label --
         const { totalDistance } = this._createOrUpdateTotalLabel(positions, this.#interactiveAnnotations.totalLabels, {
-            status: isMeasuring ? "pending" : "completed",
+            status: graphicsStatus,
             interactive: true
         });
 
         // Case: if only one point left, remove the remaining point and labels
         if (positions.length === 1) {
-            const lastPosition = positions[0];
-
-            // Remove the remaining point and labels 
-            const lastPoint = this.drawingHelper._getPointByPosition(lastPosition);
-            const lastLabels = this.drawingHelper._getLabelByPosition([lastPosition]);
-
-            if (lastPoint) {
-                this.drawingHelper._removePointMarker(lastPoint); // Remove the last point marker
-            }
-            if (Array.isArray(lastLabels) && lastLabels.length > 0) {
-                lastLabels.forEach(label => {
-                    this.drawingHelper._removeLabel(label); // Remove the label marker
-                });
-            }
-            // -- Handle Measure Data --
-            const measureId = Number(lastPoint.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
-            if (isNaN(measureId)) return; // If the measure ID is not a number, exit
-            this.coordsCache = []; // Clear the coordsCache
-            this.#distances = []; // Clear the distances cache
-            dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+            this._removeRemaining(positions); // Remove the remaining point and labels
+            this._refreshMapDrag(); // Refresh the map dragging, to solve issue the middle click keep dragging
             return; // Exit after removing the last point and labels
         }
 
@@ -669,6 +692,37 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         if (isMeasuring) {
             this.coordsCache = positions.map(pos => ({ ...pos })); // Update the coordsCache with the remaining positions
         }
+
+        // Refresh the map dragging, to solve issue the middle click keep dragging
+        this._refreshMapDrag();
+    }
+
+    /**
+     * Removes the remaining point and labels when only one point is left in the measure.
+     * @param {{lat:number,lng:number}[]} positions - The positions to be removed
+     * @returns {void}
+     */
+    _removeRemaining(positions) {
+        const lastPosition = positions[0];
+
+        // Remove the remaining point and labels 
+        const lastPoint = this.drawingHelper._getPointByPosition(lastPosition);
+        const lastLabels = this.drawingHelper._getLabelByPosition([lastPosition]);
+
+        if (lastPoint) {
+            this.drawingHelper._removePointMarker(lastPoint); // Remove the last point marker
+        }
+        if (Array.isArray(lastLabels) && lastLabels.length > 0) {
+            lastLabels.forEach(label => {
+                this.drawingHelper._removeLabel(label); // Remove the label marker
+            });
+        }
+        // -- Handle Measure Data --
+        const measureId = Number(lastPoint.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
+        if (isNaN(measureId)) return; // If the measure ID is not a number, exit
+        this.coordsCache = []; // Clear the coordsCache
+        this.#distances = []; // Clear the distances cache
+        dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
     }
 
     /**
@@ -684,28 +738,25 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         if (!userConfirmation) return;
 
         const measureId = Number(polyline.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
-
         const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
-
-
         points.forEach(point => {
             this.drawingHelper._removePointMarker(point); // Remove the point marker
         });
-
         labels.forEach(label => {
             this.drawingHelper._removeLabel(label); // Remove the label
         });
-
         polylines.forEach(polyline => {
             this.drawingHelper._removePolyline(polyline); // Remove the polyline
         });
-
         polygons.forEach(polygon => {
             this.drawingHelper._removePolygon(polygon); // Remove the polygon
         });
 
         // remove the measure data from dataPool
         dataPool.removeMeasureById(measureId);
+
+        // Refresh the map dragging, to solve issue the middle click keep dragging
+        this._refreshMapDrag();
     }
 
     /******************
@@ -1227,6 +1278,14 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         labelInstance.positions = [{ ...labelPosition }] // Store positions copy
 
         return { totalDistance, labelInstance }; // Return the newly created instance
+    }
+
+    /**
+     * Refreshes the map dragging to ensure it is responsive after changes.
+     */
+    _refreshMapDrag() {
+        this.map?.dragging.disable();
+        this.map?.dragging.enable();
     }
 
     /**

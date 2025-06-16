@@ -4,17 +4,13 @@
 // Standard measure modes
 // export { TwoPointsDistance } from "./cesium/TwoPointsDistance.js";
 export { TwoPointsDistanceCesium } from "./cesium/TwoPointsDistanceCesium.js";
-// export { Points } from "./Points.js";
 export { PointInfoCesium } from "./cesium/PointInfoCesium.js";
 export { ThreePointsCurveCesium } from "./cesium/ThreePointsCurveCesium.js";
-// export { Height } from "./Height.js";
 export { HeightCesium } from "./cesium/HeightCesium.js";
 export { MultiDistanceCesium } from "./cesium/MultiDistanceCesium.js";
-// export { MultiDistance } from "./MultiDistance.js";
-// export { MultiDistanceClamped } from "./MultiDistanceClamped.js";
+export { MultiDistanceClampedCesium } from "./cesium/MultiDistanceClampedCesium.js";
 export { PolygonCesium } from "./cesium/PolygonCesium.js"
 export { ProfileCesium } from "./cesium/ProfileCesium.js"
-// export { Profile } from "./Profile.js";
 // export { ProfileDistances } from "./ProfileDistances.js";
 // export { Picker } from "./Picker.js";
 
