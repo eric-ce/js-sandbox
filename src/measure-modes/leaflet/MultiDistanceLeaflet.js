@@ -245,7 +245,11 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             });
 
             // -- Handle Distances record --
-            this.#distances.push(...distances); // Store the distance in the cache
+            if (this.flags.isReverse) {
+                this.#distances.unshift(...distances); // Prepend distance if reversing
+            } else {
+                this.#distances.push(...distances); // Append distance otherwise
+            }
 
             // Create the total label
             const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
@@ -323,11 +327,11 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             // Set variables and flags to resume measuring
             this.coordsCache = this.measure.coordinates;
 
-            this.flags.isMeasurementComplete = false; // reset the flag to continue measuring
-            this.flags.isReverse = isFirstPoint; // If the point is the first point, set the reverse flag to true
+            // reset the flag to continue measuring
+            // NOTE: when coordsCache has values, and isMeasurementComplete flags is false, it means it is during measuring.
+            this.flags.isMeasurementComplete = false;
 
-            // Resume start the measurement process
-            this._startMeasure(); // Start the measurement process
+            this.flags.isReverse = isFirstPoint; // If the point is the first point, set the reverse flag to true
         }
     }
 
@@ -425,13 +429,17 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         });
 
         // -- Handle Distances record --
-        this.#distances.push(...distances); // Store the last distance in the cache
+        if (this.flags.isReverse) {
+            this.#distances.unshift(...distances); // Prepend distance if reversing
+        } else {
+            this.#distances.push(...distances); // Append distance otherwise
+        }
 
+        // Create the total label
         const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
             status: "completed",
             interactive: true
         });
-
 
         // -- Update annotations status --
         // update points status

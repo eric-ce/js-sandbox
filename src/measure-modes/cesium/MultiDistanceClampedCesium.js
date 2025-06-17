@@ -272,6 +272,7 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
         measureData.coordinates = measureData.coordinates.map(cartographicDegrees => convertToCartesian3(cartographicDegrees));
         this.measure = measureData;
         this.measure.status = "pending"; // Set the measure status to pending
+        this.#distances = [...this.measure._records[0].distances]; // Get the distances from the measure data
 
         // Find the index of the point in the measure coordinates
         const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, point.positions[0]));
@@ -289,11 +290,11 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
             // Set variables and flags to resume measuring
             this.coordsCache = this.measure.coordinates;
 
-            this.flags.isMeasurementComplete = false; // reset the flag to continue measuring
-            this.flags.isReverse = isFirstPoint; // If the point is the first point, set the reverse flag to true
+            // reset the flag to continue measuring
+            // NOTE: when coordsCache has values, and isMeasurementComplete flags is false, it means it is during measuring.
+            this.flags.isMeasurementComplete = false;
 
-            // Resume start the measurement process
-            this._startMeasure(); // Start the measurement process
+            this.flags.isReverse = isFirstPoint; // If the point is the first point, set the reverse flag to true
         }
     }
 
@@ -359,7 +360,13 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
             });
 
             // -- Handle Distances record --
-            this.#distances.push(...distances); // Store the distance in the cache
+            if (this.flags.isReverse) {
+                this.#distances.unshift(...distances); // Prepend distance if reversing
+                this.measure.interpolatedPoints.unshift([...interpolatedPositions]); // Store the interpolated points
+            } else {
+                this.#distances.push(...distances); // Append distance otherwise
+                this.measure.interpolatedPoints.push([...interpolatedPositions]); // Store the interpolated points
+            }
 
             // Create the total label
             const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
@@ -373,13 +380,74 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
                 const record = { distances: [...this.#distances], totalDistance };
                 this.measure._records[0] = record // Update distances record
             }
-            this.measure.interpolatedPoints.push([...interpolatedPositions]); // Store the interpolated points
 
             // Update dataPool with the measure data
             dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
+    _addAction() {
+        const line = this.#interactiveAnnotations.polylines[0];
+        if (!line || line.status === "moving") {
+            console.warn("No valid line to add a point to.");
+            return;
+        }
+
+        // -- Update this.coordsCache --
+        const linePositions = line.positions;
+        const linePos1Index = this.coordsCache.findIndex(pos => areCoordinatesEqual(pos, linePositions[0]));
+        const linePos2Index = this.coordsCache.findIndex(pos => areCoordinatesEqual(pos, linePositions[1]));
+        if (linePos1Index === -1 || linePos2Index === -1) return; // If positions are not found, exit
+        const minIndex = Math.min(linePos1Index, linePos2Index);
+        this.coordsCache.splice(minIndex + 1, 0, this.#coordinate); // Insert the new coordinate after the first position of the line
+
+        // -- Create new point --
+        this.drawingHelper._addPointMarker(this.#coordinate, {
+            color: this.stateManager.getColorState("pointColor"),
+            id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "completed"
+        });
+
+        const newPositions = [[linePositions[0], this.#coordinate], [this.#coordinate, linePositions[1]]]; // Create new positions for the line
+
+        // -- Create or update the line --
+        this._createOrUpdateLine(newPositions, this.#interactiveAnnotations.polylines, {
+            status: "completed",
+            color: this.stateManager.getColorState("line")
+        });
+
+        // -- Create or update the label --
+        const { distances, interpolatedPositions } = this._createOrUpdateLabel(newPositions, this.#interactiveAnnotations.labels, {
+            status: "completed",
+            showBackground: true
+        });
+        if (distances.length === 0) return;
+
+        // -- Handle Distances record --
+        this.#distances.splice(minIndex, 1, ...distances);
+        this.measure.interpolatedPoints.splice(minIndex, 1, ...interpolatedPositions); // Update the interpolated points
+
+        // -- Update total distance label --
+        const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
+            status: "completed",
+            showBackground: true
+        });
+
+        // -- Update measure data --
+        if (distances.length > 0 && typeof totalDistance === "number") {
+            const record = { distances: [...this.#distances], totalDistance };
+            this.measure._records[0] = record; // Update distances record
+        }
+        this.measure.status = "completed"; // Set the measure status to completed
+        this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
+        dataPool.updateOrAddMeasure({ ...this.measure }); // Update data pool with the measure data
+
+        // -- Reset values --
+        this.resetValuesModeSpecific(); // Reset the mode-specific values
+
+        // reset the flags to be ready for the next measurement
+        this.flags.isMeasurementComplete = true; // Set the measurement as complete
+    }
 
     /***********************
      * MOUSE MOVE FEATURES *
@@ -443,6 +511,15 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
      * @returns {Promise<void>}
      */
     handleRightClick = async (eventData) => {
+        // TODO: create right click context menu 
+        // options: display info 
+        // options: copy coordinate info - in cartographic degrees
+        // options: if click on line then add options to set add mode by line
+        // options: if click on point then add options to remove point
+        // options: if click on line then add options to remove line
+        // options: if click on label then add options to copy label text
+
+        // if during measuring, right click on empty space will finalize the measure, will not open the context menu
         if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) { // prevent user to right click on first action
             // use mouse move position to control only one pickPosition is used
             const cartesian = this.#coordinate;
@@ -485,7 +562,13 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
         });
 
         // -- Handle Distances record --
-        this.#distances.push(...distances); // Store the last distance in the cache
+        if (this.flags.isReverse) {
+            this.#distances.unshift(...distances); // Prepend distance if reversing
+            this.measure.interpolatedPoints.unshift([...interpolatedPositions]); // Store the interpolated points
+        } else {
+            this.#distances.push(...distances); // Append distance otherwise
+            this.measure.interpolatedPoints.push([...interpolatedPositions]); // Store the interpolated points
+        }
 
         // -- Update the last total label --
         const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
@@ -524,7 +607,7 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
         }
         this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
         this.measure.status = "completed"; // Update the measure status
-        this.measure.interpolatedPoints.push([...interpolatedPositions]); // Store the interpolated points
+
 
         // Update data pool
         dataPool.updateOrAddMeasure({ ...this.measure });

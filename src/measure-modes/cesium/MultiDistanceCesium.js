@@ -271,6 +271,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
         measureData.coordinates = measureData.coordinates.map(cartographicDegrees => convertToCartesian3(cartographicDegrees));
         this.measure = measureData;
         this.measure.status = "pending"; // Set the measure status to pending
+        this.#distances = [...this.measure._records[0].distances]; // Get the distances from the measure data
 
         // Find the index of the point in the measure coordinates
         const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, point.positions[0]));
@@ -288,11 +289,11 @@ class MultiDistanceCesium extends MeasureModeCesium {
             // Set variables and flags to resume measuring
             this.coordsCache = this.measure.coordinates;
 
-            this.flags.isMeasurementComplete = false; // reset the flag to continue measuring
-            this.flags.isReverse = isFirstPoint; // If the point is the first point, set the reverse flag to true
+            // reset the flag to continue measuring
+            // NOTE: when coordsCache has values, and isMeasurementComplete flags is false, it means it is during measuring.
+            this.flags.isMeasurementComplete = false;
 
-            // Resume start the measurement process
-            this._startMeasure(); // Start the measurement process
+            this.flags.isReverse = isFirstPoint; // If the point is the first point, set the reverse flag to true
         }
     }
 
@@ -358,7 +359,11 @@ class MultiDistanceCesium extends MeasureModeCesium {
             });
 
             // -- Handle Distances record --
-            this.#distances.push(...distances); // Store the distance in the cache
+            if (this.flags.isReverse) {
+                this.#distances.unshift(...distances); // Prepend distance if reversing
+            } else {
+                this.#distances.push(...distances); // Append distance otherwise
+            }
 
             // Create the total label
             const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
@@ -549,7 +554,11 @@ class MultiDistanceCesium extends MeasureModeCesium {
         });
 
         // -- Handle Distances record --
-        this.#distances.push(...distances); // Store the last distance in the cache
+        if (this.flags.isReverse) {
+            this.#distances.unshift(...distances); // Prepend distance if reversing
+        } else {
+            this.#distances.push(...distances); // Append distance otherwise
+        }
 
         // -- Update the last total label --
         const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
