@@ -41,6 +41,9 @@ class MeasureModeCesium extends MeasureModeBase {
     /** @type {HTMLElement} */
     chartDiv;
 
+    /** @type {HTMLElement} */
+    contextMenu;
+
     /**
      * 
      * @param {string} modeName - The name of the mode (e.g., "Point", "Line", "Polygon")
@@ -225,7 +228,7 @@ class MeasureModeCesium extends MeasureModeBase {
                 maintainAspectRatio: false,
                 onHover: (event, chartElements) => {
                     if (onHoverCallback && typeof onHoverCallback === 'function') {
-                        onHoverCallback(event, chartElements, this._chartInstance);
+                        onHoverCallback(event, chartElements, this.chartInstance);
                     }
                 },
                 scales: {
@@ -278,7 +281,7 @@ class MeasureModeCesium extends MeasureModeBase {
         closeButton.className = className;
 
         const originalButtonColor = "#333";
-        const hoverButtonColor = "#4488bb";
+        const hoverButtonColor = "#aaddff";
 
         Object.assign(closeButton.style, {
             position: "absolute",
@@ -296,7 +299,7 @@ class MeasureModeCesium extends MeasureModeBase {
             textAlign: "center",
             cursor: "pointer",
             zIndex: "1001", // Ensure it's above the canvas
-            transition: "color 0.2s ease-in-out"
+            transition: "all 0.2s ease-in-out 0.1s"
         });
 
         // Event listener for click
@@ -307,9 +310,13 @@ class MeasureModeCesium extends MeasureModeBase {
         // Event listeners for hover effect
         closeButton.addEventListener("mouseenter", () => {
             closeButton.style.color = hoverButtonColor;
+            closeButton.style.transform = "scale(1.3) rotate(180deg)"; // Slightly enlarge on hover
+            // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
         });
         closeButton.addEventListener("mouseleave", () => {
             closeButton.style.color = originalButtonColor;
+            closeButton.style.transform = "scale(1) rotate(0deg)"; // Reset size on mouse leave
+            // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
         });
 
         return closeButton;
@@ -357,6 +364,98 @@ class MeasureModeCesium extends MeasureModeBase {
         }
     }
 
+    // TODO: new feature: context menu to replace complicated left or middle click events
+    _setupContextMenu(container, itemOptions = [], options = {}) {
+        const {
+            show = true,
+            x = 0,
+            y = 0
+        } = options;
+
+        if (!container) {
+            console.warn("Container is not provided for context menu setup.");
+            return;
+        }
+
+        // If a context menu already exists, remove it or update it
+        if (this.contextMenu && this.contextMenu.parentElement) {
+            this.contextMenu.remove();
+        }
+
+        // Create the context menu element
+        this.contextMenu = document.createElement("div");
+        contextMenu.className = "context-menu";
+        this.contextMenu.style.display = show ? 'block' : 'none'; // Set initial visibility
+        this.contextMenu.style.position = "absolute";
+        this.contextMenu.style.zIndex = "1000"; // Ensure it appears above other elements
+
+        // list of menu items using ul li 
+        const menuList = document.createElement("ul");
+        menuList.className = "context-menu-list";
+        // Add menu items
+        // e.g: [{text: "remove point", callback: function() { }},{text: "remove line", callback: function() { }} ]
+        itemOptions.forEach(item => {
+            const menuItem = document.createElement("li");
+            menuItem.className = "context-menu-list-item";
+            menuItem.textContent = item.text;
+            menuItem.addEventListener("click", event => {
+                item.callback(event); // Call the callback function when the item is clicked
+                this._setContextMenuVisibility(false); // Hide menu after click
+            });
+            menuList.appendChild(menuItem);
+        });
+        this.contextMenu.appendChild(menuList);
+
+        // Append the context menu to the specified container
+        container.appendChild(this.contextMenu);
+
+        return this.contextMenu;
+    }
+
+    /**
+     * Update the context menu with new items and position. Fallbacks to setup context menu if not exists.
+     * @param {HTMLElement} container - the map container where the context menu should be displayed
+     * @param {{x:number, y:number}} position - the position where the context menu should be displayed
+     * @param {*} itemOptions - the context menu items options
+     *      e.g: [{text: "remove point", callback: function() { }},{text: "remove line", callback: function() { }}]
+     * @param {*} options - additional options for the context menu
+     * @returns {HTMLElement|null} - the updated context menu element or null if not created
+     */
+    _updateContextMenu(container, position, itemOptions = [], options = {}) {
+        if (!this.contextMenu) {
+            this._setupContextMenu(container, itemOptions, options)
+            return null;
+        }
+
+        // Update the position of the context menu
+        this.contextMenu.style.left = `${position.x}px`;
+        this.contextMenu.style.top = `${position.y}px`;
+
+        // Clear existing items
+        const menuList = this.contextMenu.querySelector(".context-menu-list");
+        if (menuList) {
+            menuList.innerHTML = ""; // Clear existing items
+            // Add new items
+            itemOptions.forEach(item => {
+                const menuItem = document.createElement("li");
+                menuItem.textContent = item.text;
+                menuItem.addEventListener("click", item.callback);
+                menuList.appendChild(menuItem);
+            });
+        } else {
+            console.warn("Menu list not found in context menu.");
+        }
+
+        return this.contextMenu || null;
+    }
+
+    _setContextMenuVisibility(visible) {
+        if (this.contextMenu) {
+            this.contextMenu.style.display = visible ? 'block' : 'none';
+        } else {
+            console.warn("Context menu is not initialized.");
+        }
+    }
 }
 
 export { MeasureModeCesium };

@@ -7,10 +7,8 @@ sharedStyleSheet.replaceSync(`
         padding: 0;
         box-sizing: border-box;
     }
-    .measure-toolbar{ 
-        display: flex;
-        flex-direction: row;
-    }
+
+    /* General Styles */
     .measure-toolbar button.active, 
     .fire-trail-toolbar button.active {
         background-color: #adf;
@@ -25,6 +23,12 @@ sharedStyleSheet.replaceSync(`
     .fire-trail-toolbar button:hover,
     .fly-through-toolbar button:hover{
         transform: scale(1.05);
+    }
+
+    /* Toolbar Styles */
+    .measure-toolbar{ 
+        display: flex;
+        flex-direction: row;
     }
     .measure-tools{
         display: flex;
@@ -58,6 +62,8 @@ sharedStyleSheet.replaceSync(`
         display: flex;
         flex-direction: row;
     }
+
+    /* info box and log box styles */
     .info-box {
         padding: 5px;
         font-size: 0.8rem;
@@ -107,6 +113,8 @@ sharedStyleSheet.replaceSync(`
         pointer-events: auto; /* Enable interaction when visible */
         transition: opacity 0.2s ease-in-out, transform 0.2s ease-in;
     }
+
+    /* Annotation Buttons Styles */
     .annotate-button{
         display: flex;
         flex-direction: row;
@@ -148,6 +156,47 @@ sharedStyleSheet.replaceSync(`
     .disabled-button:hover{
         cursor: not-allowed;
     }
+
+    /* Context Menu Styles */
+    .context-menu {
+        background-color: #ffffff;
+        color: #000000;
+        max-height : 628px;
+        min-width: 112px;
+        overflow-y : auto;
+        line-height: 1.5rem;
+        padding: 8px 0;
+    }
+    .context-menu-list {
+        display: block;
+        position: relative;
+        list-style-type: none;
+        font-size: 1rem;
+        text-decoration: inherit;
+        text-transform: inherit;
+        lineHeight: 1.5rem;
+        padding: 8px 0;
+    }
+    .context-menu-list-item {
+        display: flex;
+        position: relative;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: stretch;
+        padding: 0 16px;
+        cursor: pointer;
+    }
+    .context-menu-list-item: hover {
+        background-color: #f5f5f5;
+    }
+    .context-menu-list-item__text{
+        
+    }
+    .context-menu-list__meta{
+        
+    }
+
+    /* Animation Styles */
     @keyframes jumpIn {
         0% {
             transform: translateY(15px);
