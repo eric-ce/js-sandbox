@@ -233,6 +233,10 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
             console.warn("LeafletDragHandler: Could not find other position for polyline update.");
@@ -269,6 +273,10 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
             console.warn("GoogleDragHandler: Could not find other position for polyline update.");

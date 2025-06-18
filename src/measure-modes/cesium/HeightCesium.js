@@ -310,6 +310,10 @@ class HeightCesium extends MeasureModeCesium {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const groundPosition = getGroundPosition(this.map.scene, this.dragHandler.coordinate);
         const positions = [this.dragHandler.coordinate, groundPosition];
 
@@ -343,6 +347,10 @@ class HeightCesium extends MeasureModeCesium {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const groundPosition = getGroundPosition(this.map.scene, this.dragHandler.coordinate);
         const positions = [this.dragHandler.coordinate, groundPosition];
 

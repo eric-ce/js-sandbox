@@ -66,7 +66,7 @@ class MultiDistanceCesium extends MeasureModeCesium {
     /** @type {any} The Cesium package instance. */
     cesiumPkg;
 
-    /** @type {Cartesian3} */
+    /** @type {Cartesian3} - The current coordinate. */
     #coordinate = null;
 
     /** @type {InteractiveAnnotationsState} - References to temporary primitive objects used for interactive drawing*/
@@ -77,12 +77,11 @@ class MultiDistanceCesium extends MeasureModeCesium {
         addModeLines: [],
     };
 
-    /** @type {MeasurementGroup} */
+    /** @type {MeasurementGroup} - The measurement group for a measure.*/
     measure = null;
-
-    /** @type {Cartesian3[]} */
+    /** @type {Cartesian3[]} - Array of coordinates for a measure*/
     coordCache = [];
-
+    /** @type {number[]} - Distances between points in the measure */
     #distances = [];
 
     /**
@@ -597,7 +596,6 @@ class MultiDistanceCesium extends MeasureModeCesium {
         }
         this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
         this.measure.status = "completed"; // Update the measure status
-
         // Update data pool
         dataPool.updateOrAddMeasure({ ...this.measure });
 
@@ -905,6 +903,10 @@ class MultiDistanceCesium extends MeasureModeCesium {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         // -- Handling positions -- 
         const draggedPositionIndices = measure.coordinates
             .map((coord, index) => areCoordinatesEqual(coord, this.dragHandler.draggedObjectInfo.beginPosition) ? index : -1)
@@ -991,6 +993,10 @@ class MultiDistanceCesium extends MeasureModeCesium {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         // -- Handling positions -- 
         const draggedPositionIndices = measure.coordinates
             .map((coord, index) => areCoordinatesEqual(coord, this.dragHandler.draggedObjectInfo.beginPosition) ? index : -1)

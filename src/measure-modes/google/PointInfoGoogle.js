@@ -245,6 +245,10 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const position = this.dragHandler.coordinate;
 
         // -- Handle label --
@@ -265,6 +269,10 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const position = this.dragHandler.coordinate;
 
         // -- Finalize Label Graphics --

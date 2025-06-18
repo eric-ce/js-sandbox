@@ -277,6 +277,10 @@ class PolygonGoogle extends MeasureModeGoogle {
      * @param {MeasurementGroup} measure - The measure object data from drag operation.
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (draggedPositionIndex === -1) return; // No dragged position found
         const positions = [...measure.coordinates];
@@ -303,6 +307,10 @@ class PolygonGoogle extends MeasureModeGoogle {
     * @param {MeasurementGroup} measure - The measure object data from drag operation.
     */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (draggedPositionIndex === -1) return; // No dragged position found
         const positions = [...measure.coordinates];

@@ -182,7 +182,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             // Update this.measure
             this.measure._records.push(distance);
             this.measure.status = "completed";
-
             // Update to data pool
             dataPool.updateOrAddMeasure({ ...this.measure });
 
@@ -244,6 +243,10 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
             console.warn("GoogleDragHandler: Could not find other position for polyline update.");
@@ -271,6 +274,10 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
             console.warn("GoogleDragHandler: Could not find other position for polyline update.");
@@ -372,7 +379,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // -- Handle Metadata Update --
         lineInstance.status = status; // Set status
         lineInstance.positions = positions.map(p => ({ ...p })); // Store a copy of positions
-
         return lineInstance; // Return the instance
     }
 

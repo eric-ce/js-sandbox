@@ -758,6 +758,10 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         // -- Handling positions -- 
         const draggedPositionIndices = measure.coordinates
             .map((coord, index) => areCoordinatesEqual(coord, this.dragHandler.draggedObjectInfo.beginPosition) ? index : -1)
@@ -848,6 +852,10 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         // -- Handling positions -- 
         const draggedPositionIndices = measure.coordinates
             .map((coord, index) => areCoordinatesEqual(coord, this.dragHandler.draggedObjectInfo.beginPosition) ? index : -1)
