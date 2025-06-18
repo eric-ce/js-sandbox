@@ -2,7 +2,6 @@
  * CESIUM MEASURE MODES *
 ************************/
 // Standard measure modes
-// export { TwoPointsDistance } from "./cesium/TwoPointsDistance.js";
 export { TwoPointsDistanceCesium } from "./cesium/TwoPointsDistanceCesium.js";
 export { PointInfoCesium } from "./cesium/PointInfoCesium.js";
 export { ThreePointsCurveCesium } from "./cesium/ThreePointsCurveCesium.js";
@@ -11,7 +10,7 @@ export { MultiDistanceCesium } from "./cesium/MultiDistanceCesium.js";
 export { MultiDistanceClampedCesium } from "./cesium/MultiDistanceClampedCesium.js";
 export { PolygonCesium } from "./cesium/PolygonCesium.js"
 export { ProfileCesium } from "./cesium/ProfileCesium.js"
-// export { ProfileDistances } from "./ProfileDistances.js";
+export { ProfileDistancesCesium } from "./cesium/ProfileDistancesCesium.js";
 // export { Picker } from "./Picker.js";
 
 // Special measure modes with nested folders
