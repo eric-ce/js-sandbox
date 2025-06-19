@@ -1,0 +1,9 @@
+<svg id="curve" xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+  <g id="图层_8" data-name="图层 8">
+    <circle cx="9.5" cy="9.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <circle cx="14.5" cy="34.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <circle cx="40.5" cy="40.5" r="4" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <path d="M12.5,31.5A31.734,31.734,0,0,1,9.5,20c-.063-1.107-.105-4.648,0-6.5" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    <path d="M36.5,40.5c-5.281.193-13.532-.957-18.358-3.432" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+  </g>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+  <g id="multi-D_clamped" data-name="multi-D clamped">
+    <g id="图层_10_复制" data-name="图层 10_复制">
+      <circle cx="16.833" cy="37.667" r="3.333" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <circle cx="33.5" cy="33.5" r="3.333" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <circle cx="37.667" cy="11.833" r="3.333" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <path d="M15.167,11.833a3.462,3.462,0,0,1-2.129,3.109,2.958,2.958,0,0,1-1.2.225A3.508,3.508,0,0,1,8.5,11.833a3.334,3.334,0,0,1,6.667,0Z" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <path d="M12.667,15.167,16,34.333" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <path d="M20.167,37.667l10-3.334" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <path d="M34.333,30.167l2.5-15" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+    </g>
+    <g id="图层_22" data-name="图层 22">
+      <line x1="6.5" y1="6.75" x2="6.5" y2="43.75" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <line x1="43.5" y1="6.75" x2="43.5" y2="43.75" fill="none" stroke="#fff" stroke-miterlimit="10"/>
+      <line x1="25.5" y1="8" x2="25.5" y2="22" fill="none" stroke="#fff" stroke-miterlimit="10" stroke-width="2"/>
+      <line x1="25.5" y1="27" x2="25.5" y2="43" fill="none" stroke="#fff" stroke-miterlimit="10" stroke-width="2"/>
+    </g>
+  </g>
+</svg>
