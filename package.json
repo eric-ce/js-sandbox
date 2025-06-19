@@ -12,7 +12,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@turf/turf": "^7.0.0",
+    "@turf/turf": "^7.2.0",
     "copy-webpack-plugin": "^12.0.2",
     "css-loader": "^7.1.2",
     "css-minimizer-webpack-plugin": "^7.0.0",
@@ -28,7 +28,10 @@
     "webpack-dev-server": "^5.0.4"
   },
   "dependencies": {
+    "@googlemaps/js-api-loader": "^1.16.8",
     "cesium": "^1.118.2",
-    "chart.js": "^4.4.3"
+    "chart.js": "^4.4.3",
+    "eventemitter3": "^5.0.1",
+    "leaflet": "^1.9.4"
   }
 }
