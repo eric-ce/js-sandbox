@@ -4,7 +4,6 @@ export function generateIdByTimestamp() {
     return new Date().getTime();
 }
 
-
 /**
  * Makes an HTML element draggable within a specified container using CSS transforms.
  * @param {HTMLElement} element - The element to make draggable.

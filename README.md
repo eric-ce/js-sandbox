@@ -7,15 +7,17 @@ This is the test environment for `cesium-measure tool`
 3. Run `npm run dev` to start 
 
 # Description
-This is a test environment for `cesium-measure tool` using web components, cesium, chart.js and other libraries.
+This is a test environment for `cesium-measure tool` using web components, `cesium`, `chart.js`, `turf` and other libraries.
+
 
 <br />
 
 Here is the structure of the project:
-- `measure-modes` folder contains all the measure modes that is written in class format. Each of the measure modes handle its own data.
-- `lib` folder is to handle shared used data and relevant structural features.
-- `index`, `MapCesium`, `MapGoogle`, and `mapLeaflet` is to mimic the `Navigator` environment.
-- `MeasureToolbox` is the main component that contains the whole application including different measure tools including `cesium measure tool`, `leaflet measure tool` and `google map measure tool`.
+- `features` folder contains all the measure modes that is written in class format. Each of the measure modes handle its own data.
+- `helper` and `stateManager` file is to handle shared used data and functions.
+- `index` and `MapCesium` is to mimic the `cesium-measure` repo environment.
+- `MeasureToolbox` is the main component that contains the whole application including how measure modes interact with each other.
+
 
 
 
