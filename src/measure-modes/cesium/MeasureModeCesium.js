@@ -377,33 +377,65 @@ class MeasureModeCesium extends MeasureModeBase {
             return;
         }
 
-        // If a context menu already exists, remove it or update it
-        if (this.contextMenu && this.contextMenu.parentElement) {
-            this.contextMenu.remove();
-        }
-
         // Create the context menu element
         this.contextMenu = document.createElement("div");
-        contextMenu.className = "context-menu";
-        this.contextMenu.style.display = show ? 'block' : 'none'; // Set initial visibility
-        this.contextMenu.style.position = "absolute";
-        this.contextMenu.style.zIndex = "1000"; // Ensure it appears above other elements
+        this.contextMenu.classList.add("an-context-menu");
+
+        // Apply styles directly to the element
+        Object.assign(this.contextMenu.style, {
+            background: "white",
+            border: "1px solid #ddd",
+            borderRadius: "4px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            padding: "4px 0",
+            minWidth: "120px",
+            display: show ? 'block' : 'none',
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            zIndex: "1000"
+        });
 
         // list of menu items using ul li 
         const menuList = document.createElement("ul");
-        menuList.className = "context-menu-list";
-        // Add menu items
-        // e.g: [{text: "remove point", callback: function() { }},{text: "remove line", callback: function() { }} ]
+        menuList.className = "an-context-menu-list";
+        Object.assign(menuList.style, {
+            listStyle: "none",
+            margin: "0",
+            padding: "0"
+        });
+
+        // Add menu items with direct styling
         itemOptions.forEach(item => {
             const menuItem = document.createElement("li");
-            menuItem.className = "context-menu-list-item";
+            menuItem.classList.add("an-context-menu-list-item");
             menuItem.textContent = item.text;
+
+            Object.assign(menuItem.style, {
+                padding: "8px 12px",
+                cursor: "pointer",
+                borderBottom: "1px solid #eee"
+            });
+
+            // Add hover effects
+            menuItem.addEventListener("mouseenter", () => {
+                menuItem.style.backgroundColor = "#f5f5f5";
+            });
+            menuItem.addEventListener("mouseleave", () => {
+                menuItem.style.backgroundColor = "transparent";
+            });
+
             menuItem.addEventListener("click", event => {
-                item.callback(event); // Call the callback function when the item is clicked
-                this._setContextMenuVisibility(false); // Hide menu after click
+                item.event(event);
+                this._setContextMenuVisibility(false);
             });
             menuList.appendChild(menuItem);
         });
+
+        // Remove border from last item
+        if (menuList.lastElementChild) {
+            menuList.lastElementChild.style.borderBottom = "none";
+        }
         this.contextMenu.appendChild(menuList);
 
         // Append the context menu to the specified container
@@ -417,29 +449,27 @@ class MeasureModeCesium extends MeasureModeBase {
      * @param {HTMLElement} container - the map container where the context menu should be displayed
      * @param {{x:number, y:number}} position - the position where the context menu should be displayed
      * @param {*} itemOptions - the context menu items options
-     *      e.g: [{text: "remove point", callback: function() { }},{text: "remove line", callback: function() { }}]
+     *      e.g: [{text: "remove point", event: function() { }},{text: "remove line", event: function() { }}]
      * @param {*} options - additional options for the context menu
      * @returns {HTMLElement|null} - the updated context menu element or null if not created
      */
     _updateContextMenu(container, position, itemOptions = [], options = {}) {
-        if (!this.contextMenu) {
-            this._setupContextMenu(container, itemOptions, options)
-            return null;
-        }
+        if (!this.contextMenu) return;
 
+        // FIXME: the position needs to located at the mouse position.
         // Update the position of the context menu
         this.contextMenu.style.left = `${position.x}px`;
         this.contextMenu.style.top = `${position.y}px`;
 
         // Clear existing items
-        const menuList = this.contextMenu.querySelector(".context-menu-list");
+        const menuList = this.contextMenu.querySelector(".an-context-menu-list");
         if (menuList) {
             menuList.innerHTML = ""; // Clear existing items
             // Add new items
             itemOptions.forEach(item => {
                 const menuItem = document.createElement("li");
                 menuItem.textContent = item.text;
-                menuItem.addEventListener("click", item.callback);
+                menuItem.addEventListener("click", item.event);
                 menuList.appendChild(menuItem);
             });
         } else {

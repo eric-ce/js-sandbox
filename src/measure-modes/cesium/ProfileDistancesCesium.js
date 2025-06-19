@@ -389,6 +389,11 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         this.#distances.splice(minIndex, 1, ...distances);
         this.measure.interpolatedPoints.splice(minIndex, 1, ...interpolatedPositions); // Update the interpolated points
 
+        // -- Handle Chart --
+        const interpolatedCartesian = this.measure.interpolatedPoints.flat(1);
+        const interpolatedCartographicDegrees = interpolatedCartesian.map(pos => convertToCartographicDegrees(pos));
+        this._createOrUpdateChart(interpolatedCartesian, interpolatedCartographicDegrees); // Update the chart with the new interpolated points
+
         // -- Update total distance label --
         const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
             status: "completed",
@@ -535,6 +540,12 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         // options: if click on point then add options to remove point
         // options: if click on line then add options to remove line
         // options: if click on label then add options to copy label text
+        // const contextItemList = [
+        //     { text: "copy coordinate", event: () => this.testing() },
+        //     { text: "remove point", event: () => this.testing2() }
+        // ];
+
+        // this._setupContextMenu(this.map.container, contextItemList);
 
         // if during measuring, right click on empty space will finalize the measure, will not open the context menu
         if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) { // prevent user to right click on first action
@@ -560,6 +571,21 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             this._finalizeMeasure();
         }
     }
+
+    // createOrUpdateContextMenu(container, items) {
+    //     // -- Handle context menu creation --
+    //     // Remove context menu if it exists
+    //     if (this.contextMenu) {
+    //         this.contextMenu.remove(); // Remove existing context menu if it exists
+    //     }
+
+    //     // Create the context menu
+    //     const contextMenu = this._setupContextMenu(container, items);
+    //     contextMenu && (this.contextMenu = contextMenu); // Store the context menu for later use
+    //     if (!contextMenu) return;
+
+    //     this._updateContextMenu(container, position, items);
+    // }
 
     _finalizeMeasure() {
         const lastPositions = this.flags.isReverse ?
@@ -748,6 +774,9 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             this.#interactiveAnnotations.labels.splice(labelToRemoveIndex, 1);
         });
 
+        // remove chart hover point 
+        this.removeChartHoveredPoint(); // Remove the hovered point from the chart
+
         // -- Handle Reconnection and measure record --
         const { previous, current, next } = getNeighboringValues(this.measure.coordinates, pointPositionIndices[0]); // find the point position neighboring positions.
 
@@ -848,6 +877,11 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         }
         // -- End of Handle Reconnection and measure record --
 
+        // -- Handle Chart --
+        const interpolatedCartesian = this.measure.interpolatedPoints.flat(1); // Flatten the interpolated points to Cartesian3 array
+        const interpolatedCartographicDegrees = interpolatedCartesian.map(pos => convertToCartographicDegrees(pos)); // Convert to cartographic degrees
+        this._createOrUpdateChart(interpolatedCartesian, interpolatedCartographicDegrees); // Update the chart with the new interpolated points
+
         // -- Reposition the total label --
         // If the total label exists, update it; Fallback to create new one, If total label does not exist
         const { totalDistance } = this._createOrUpdateTotalLabel(positions, this.#interactiveAnnotations.totalLabels, {
@@ -903,6 +937,9 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         this.coordsCache = []; // Clear the coordsCache
         this.#distances = []; // Clear the distances cache
         dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+
+        // FIXME: destroy the chart if it is relevant to the line
+        this.chartDiv && this._destroyChart(); // Destroy the chart if it exists
     }
 
     /**
@@ -941,6 +978,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         // remove the measure data from dataPool
         dataPool.removeMeasureById(measureId);
 
+        // FIXME: destroy the chart if it is relevant to the line
         this.chartDiv && this._destroyChart(); // Destroy the chart if it exists
     }
 
@@ -1033,6 +1071,8 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             return; // Exit if the distances length is not as expected
         }
 
+        // -- Handle chart hovered point --
+        this.removeChartHoveredPoint(); // Remove the chart hovered point if it exists
 
         // -- Handle total label --
         this._createOrUpdateTotalLabel(positions, this.dragHandler.draggedObjectInfo.totalLabels, {

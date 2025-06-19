@@ -157,45 +157,6 @@ sharedStyleSheet.replaceSync(`
         cursor: not-allowed;
     }
 
-    /* Context Menu Styles */
-    .context-menu {
-        background-color: #ffffff;
-        color: #000000;
-        max-height : 628px;
-        min-width: 112px;
-        overflow-y : auto;
-        line-height: 1.5rem;
-        padding: 8px 0;
-    }
-    .context-menu-list {
-        display: block;
-        position: relative;
-        list-style-type: none;
-        font-size: 1rem;
-        text-decoration: inherit;
-        text-transform: inherit;
-        lineHeight: 1.5rem;
-        padding: 8px 0;
-    }
-    .context-menu-list-item {
-        display: flex;
-        position: relative;
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: stretch;
-        padding: 0 16px;
-        cursor: pointer;
-    }
-    .context-menu-list-item: hover {
-        background-color: #f5f5f5;
-    }
-    .context-menu-list-item__text{
-        
-    }
-    .context-menu-list__meta{
-        
-    }
-
     /* Animation Styles */
     @keyframes jumpIn {
         0% {
