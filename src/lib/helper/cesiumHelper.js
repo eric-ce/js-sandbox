@@ -1456,21 +1456,32 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
     // const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
     // cesium api update for world position to WindowCoordinates
     // const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+
+    // Convert Map coordinates to the screen position 
     let screenPosition;
     if (Cesium.SceneTransforms.worldToWindowCoordinates) {
         screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
     } else if (Cesium.SceneTransforms.wgs84ToWindowCoordinates) {
         screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
     }
+    // Validate pointerOverlay and screenPosition
+    if (!pointerOverlay || !screenPosition) return;
 
-    if (!pointerOverlay) return;
-    pointerOverlay.style.display = 'block';
-    pointerOverlay.style.left = `${screenPosition.x - 5}px`;
-    pointerOverlay.style.top = `${screenPosition.y - 5}px`;
-    pointerOverlay.style.borderRadius = "50%";
-    pointerOverlay.style.width = "1px";
-    pointerOverlay.style.height = "1px";
+    // Set the style properties for pointerOverlay
+    Object.assign(pointerOverlay.style, {
+        display: 'block',
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        pointerEvents: 'none',
+        borderRadius: '50%',
+        width: '1px',
+        height: '1px',
+        zIndex: '1000',
+        transform: `translate(${screenPosition.x - 5}px, ${screenPosition.y - 5}px)` // Translate uses GPU, makes pointerOverlay moving smoother
+    });
 
+    // Set the background color based on the pickedObjects
     if (pickedObjects.length === 0) {
         pointerOverlay.style.backgroundColor = "yellow";
     } else {
