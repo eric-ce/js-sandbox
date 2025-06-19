@@ -23,9 +23,9 @@ export function checkOverlayType(overlay) {
 }
 
 /**
- * Finds Google Maps overlays associated with a specific geographic position
+ * Finds Google Maps related overlays of points, labels, polylines, and polygons by the point position.
  * by checking a custom 'positions' property stored on the overlays.
- * Searches through points, labels, polylines, and polygons.
+ * Exclude moving or total labels
  *
  * @param {google.maps.LatLng | {latitude: number, longitude: number} | {lat:number,lng:number} | {lat:number, lon:number}} position - The position to search for.
  * @param {Array<google.maps.Marker|google.maps.marker.AdvancedMarkerElement>} pointCollection - Array of point markers.
@@ -58,7 +58,11 @@ export function getOverlayByPosition(
     if (Array.isArray(pointCollection)) {
         for (const marker of pointCollection) {
             // Check the custom 'positions' property
-            if (marker && Array.isArray(marker.positions) && marker.positions.some(p => areCoordinatesEqual(p, position))) {
+            if (
+                marker &&
+                Array.isArray(marker.positions) &&
+                marker.positions.some(p => areCoordinatesEqual(p, position))
+            ) {
                 foundPointMarker = marker;
                 break; // Found the point marker associated with this position
             }
@@ -69,24 +73,20 @@ export function getOverlayByPosition(
     // Checks if the search position matches any coordinate in the label's 'positions' property.
     if (Array.isArray(labelCollection)) {
         foundLabelMarkers = labelCollection.filter(label =>
-            label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))
+            label &&
+            !label.id.includes("total_label") &&
+            Array.isArray(label.positions) &&
+            label.positions.some(p => areCoordinatesEqual(p, position))
         );
-
-        // for (const label of labelCollection) {
-        //     // Check the custom 'positions' property
-        //     if (label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))) {
-        //         foundLabelMarker = label;
-        //         // Assuming a point matches at most one label directly for drag purposes.
-        //         break;
-        //     }
-        // }
     }
 
     // --- Find Polylines ---
     // Checks if the search position matches any coordinate in the polyline's 'positions' property.
     if (Array.isArray(polylineCollection)) {
         foundPolylines = polylineCollection.filter(polyline =>
-            polyline && Array.isArray(polyline.positions) && polyline.positions.some(p => areCoordinatesEqual(p, position))
+            polyline &&
+            Array.isArray(polyline.positions) &&
+            polyline.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
@@ -94,7 +94,9 @@ export function getOverlayByPosition(
     // Checks if the search position matches any coordinate in the polygon's 'positions' property.
     if (Array.isArray(polygonCollection)) {
         foundPolygons = polygonCollection.filter(polygon =>
-            polygon && Array.isArray(polygon.positions) && polygon.positions.some(p => areCoordinatesEqual(p, position))
+            polygon &&
+            Array.isArray(polygon.positions) &&
+            polygon.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
@@ -368,15 +370,16 @@ export function createPolygon(map, positions, options = {}) {
  * @param {Number} value - The value to display on the label marker
  * @param {string} unit - The unit of measurement (default is "meter")
  * @param {Object} options - Optional configuration for the label marker
- * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
+ * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|null} The created marker.
  */
 export function createLabelMarker(map, positions, value, unit = "meter", options = {}) {
     // -- Validate input params --
-    if (!map || !positions || positions.length === 0 || !value) return;
+    if (!map || !positions) return null;
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
 
     // -- Convert positions to {lat, lng} format --
     const latLngArray = positions.map(pos => convertToLatLng(pos)).filter(Boolean); // Filter out invalid positions
-    if (latLngArray.length === 0) return;
+    if (latLngArray.length === 0) return null; // Handle empty positions
 
     // -- Prepare label value --
     const formattedText = formatMeasurementValue(value, unit); // Format the value based on the unit

@@ -50,6 +50,39 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
     #coordinateInfoOverlay;
 
     /**
+     * Listeners for point markers.
+     * @private
+     */
+    #markerListeners = {
+        mousedown: (marker, event) => {
+            if (event.domEvent) {
+                // MIDDLE CLICK EVENT: Check for middle mouse button (button === 1)
+                if (event.domEvent.button === 1) {
+                    // Prevent map drag, default behavior
+                    event.domEvent.stopPropagation();
+                    event.domEvent.preventDefault();
+
+                    this.map?.dragging.disable();
+                    this._removePointInfo(marker); // Call removePointInfo for middle click
+                    this.map?.dragging.enable();
+                }
+                // LEFT DOWN EVENT: Check for left mouse button (button === 0) for dragging
+                else if (event.domEvent.button === 0) {
+                    if (this.dragHandler && this.flags.isActive) {
+                        // Prevent map drag, default behavior
+                        event.domEvent?.stopPropagation();
+                        event.domEvent?.preventDefault();
+
+                        // Tell the drag handler to start dragging this specific marker
+                        this.dragHandler._handleDragStart(marker, event);
+                    }
+                }
+            }
+        }
+    };
+
+
+    /**
      * 
      * @param {LeafletInputHandler} inputHandler 
      * @param {LeafletDragHandler} dragHandler 
@@ -114,44 +147,14 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
             this.measure.coordinates = this.coordsCache; // when cache changed groups will be changed due to reference by address
         }
 
-        const markerListener = {
-            // Add any specific marker options here if needed
-            // Pass the mousedown listener
-            listeners: {
-                mousedown: (marker, event) => {
-                    if (event.domEvent) {
-                        // MIDDLE CLICK EVENT: Check for middle mouse button (button === 1)
-                        if (event.domEvent.button === 1) {
-                            // Prevent map drag, default behavior
-                            event.domEvent.stopPropagation();
-                            event.domEvent.preventDefault();
-
-                            this.map?.dragging.disable();
-                            this._removePointInfo(marker); // Call removePointInfo for middle click
-                            this.map?.dragging.enable();
-                        }
-                        // LEFT DOWN EVENT: Check for left mouse button (button === 0) for dragging
-                        else if (event.domEvent.button === 0) {
-                            if (this.dragHandler && this.flags.isActive) {
-                                // Prevent map drag, default behavior
-                                event.domEvent?.stopPropagation();
-                                event.domEvent?.preventDefault();
-
-                                // Tell the drag handler to start dragging this specific marker
-                                this.dragHandler._handleDragStart(marker, event);
-                            }
-                        }
-                    }
-                }
-            },
-        };
-
         // -- Create point marker --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
-            ...markerListener
+            interactive: true, // Make the point marker interactive
+            listeners: this.#markerListeners,
         });
+
         if (!point) return;
         point.status = "completed"; // Set status to pending
 
@@ -244,6 +247,10 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const position = this.dragHandler.coordinate;
 
         // -- Handle label --
@@ -265,6 +272,10 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const position = this.dragHandler.coordinate;
 
         // -- Finalize Label Graphics --
@@ -460,13 +471,19 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Clear cache
-        this.coordsCache = [];
-
+        // Clear coordinate info overlay if it exists
         if (this.#coordinateInfoOverlay) {
             this.#coordinateInfoOverlay.remove();
             this.#coordinateInfoOverlay = null;
         };
+
+        // Reset variables
+        this.coordsCache = [];
+        this.#coordinate = null;
+        this.#interactiveAnnotations.labels = [];
+
+        // Reset measure to default
+        this.measure = this._createDefaultMeasure(); // Reset measure to default state
     }
 }
 

@@ -1,5 +1,5 @@
 import dataPool from "../data/DataPool.js";
-import { getVectorByPosition, findMeasureByCoordinate } from "../helper/leafletHelper.js";
+import { getVectorByPosition, findMeasureByCoordinate, convertToLatLng } from "../helper/leafletHelper.js";
 
 
 /** @typedef {import('../input/LeafletInputHandler.js')} LeafletInputHandler */
@@ -105,8 +105,9 @@ class LeafletDragHandler {
             return;
         }
 
-        // Set status to pending
-        this.measure.status = "pending";
+        // -- Handle Measure Data -- 
+        this.measure.status = "pending"; // set status to pending
+        this.measure.coordinates = this.measure.coordinates.map(coord => convertToLatLng(coord)); // Convert coordinates to Leaflet LatLng format
 
         // Disable map dragging during annotation drag
         this.map?.dragging.disable();
@@ -126,6 +127,11 @@ class LeafletDragHandler {
         this.draggedObjectInfo.lines = polylines;
         this.draggedObjectInfo.labels = labelMarkers;
         this.draggedObjectInfo.polygons = polygons;
+
+        // -- Store total label primitive reference --
+        // Assume total label should have only one per measure
+        const totalLabel = this.labelCollection.getLayers().find(label => label.id === `annotate_${this.activeModeInstance.mode}_total_label_${this.measure.id}`)
+        if (totalLabel) this.draggedObjectInfo.totalLabels = [totalLabel] // Store total label if exists
 
         // Update data pool
         dataPool.updateOrAddMeasure({ ...this.measure });
@@ -185,7 +191,6 @@ class LeafletDragHandler {
         // Update metadata in the marker object
         this.draggedObjectInfo.beginPoint.positions = [{ ...this.#coordinate }]; // Update the position data in the marker object
         this.draggedObjectInfo.beginPoint.status = "completed"; // Update status to completed
-
         // -- Finalize Associated Geometry --
         this.activeModeInstance?.finalizeDrag(this.measure);
 
@@ -202,6 +207,7 @@ class LeafletDragHandler {
         this.lastDragEndTs = Date.now();
 
         // Reset values
+        this.activeModeInstance?.resetValuesModeSpecific(); // Call mode specific reset values
         this._resetValue(); // Reset state variables and flags
     }
 
@@ -213,14 +219,16 @@ class LeafletDragHandler {
             /** @type {{lat: number, lng: number} | null} */
             beginPosition: null, // The position where dragging started
             // beginScreenPoint: null, // Optional
+            /** @type {L.Polyline[]} */
             lines: [], // Less relevant for Google's update approach
+            /** @type {L.Marker[]} */
             labels: [], // Less relevant for Google's update approach
+            /** @type {L.Marker[]} */
+            totalLabels: [],
+            /** @type {L.Polygon[]} */
+            polygons: [],
             /** @type {{lat: number, lng: number} | null} */
             endPosition: null, // The position where dragging ended
-            /** @type {google.maps.Marker | google.maps.marker.AdvancedMarkerElement | null} */
-            endPoint: null, // The marker where dragging ended
-            // endLines: [], // Less relevant
-            // endLabels: [], // Less relevant
         };
     }
 

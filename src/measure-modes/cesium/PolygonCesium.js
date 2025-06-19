@@ -5,11 +5,11 @@ import {
 import {
     editableLabel,
     updatePointerOverlay,
-    getPickedObjectType,
     computePolygonArea,
     formatArea,
     calculateMiddlePos,
-    areCoordinatesEqual
+    areCoordinatesEqual,
+    getRankedPickedObjectType
 } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
@@ -122,8 +122,7 @@ class PolygonCesium extends MeasureModeCesium {
         const cartesian = this.#coordinate
         if (!defined(cartesian)) return;
 
-        const pickedObject = eventData.pickedFeature[0];
-        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
@@ -243,7 +242,7 @@ class PolygonCesium extends MeasureModeCesium {
         switch (true) {
             case isMeasuring:
                 // moving coordinate data
-                const positions = [...this.coordsCache, cartesian];
+                const positions = [...this.coordsCache, this.#coordinate];
 
                 // Moving polygon: remove if existed, create if not existed
                 this._createOrUpdatePolygonGraphics(positions, this.#interactiveAnnotations.polygons, {
@@ -357,6 +356,10 @@ class PolygonCesium extends MeasureModeCesium {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (draggedPositionIndex === -1) return; // No dragged position found
         const positions = [...measure.coordinates];
@@ -386,6 +389,10 @@ class PolygonCesium extends MeasureModeCesium {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (draggedPositionIndex === -1) return; // No dragged position found
         const positions = [...measure.coordinates];

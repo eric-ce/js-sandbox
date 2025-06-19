@@ -1,6 +1,6 @@
 import { Cartesian2, Cartesian3, Color, defined } from "cesium";
 import dataPool from "../data/DataPool.js";
-import { getPrimitiveByPointPosition } from "../helper/cesiumHelper";
+import { convertToCartesian3, getPrimitiveByPointPosition } from "../helper/cesiumHelper";
 
 
 // --Cesium types --
@@ -153,7 +153,8 @@ class CesiumDragHandler {
 
         // -- Handle Measure Data --
         // find the measure data and update the status and update data pool
-        this.measure = this.activeModeInstance._findMeasureByCoordinate(this.draggedObjectInfo.beginPosition);
+        const measureId = Number(isPoint.primitive.id.split('_').slice(-1)[0]); // Extract the measure ID from the point primitive ID
+        this.measure = this.activeModeInstance._findMeasureById(measureId); // Find the measure data by ID
         if (!this.measure) return;
 
         // Update status to pending
@@ -173,8 +174,6 @@ class CesiumDragHandler {
         // Store the dragged related point, line, label, and polygon primitives by the dragged point position
         const { linePrimitives, labelPrimitives, polygonPrimitives } = getPrimitiveByPointPosition(
             this.draggedObjectInfo.beginPosition,
-            `annotate_${this.activeModeInstance.mode}`,
-            this.viewer.scene,
             this.pointCollection,
             this.labelCollection,
             this.polylineCollection,
@@ -287,6 +286,7 @@ class CesiumDragHandler {
         })
 
         // Reset values
+        this.activeModeInstance?.resetValuesModeSpecific(); // Call mode specific reset values
         this._resetValue(); // Reset the dragged object info and flags
     }
 

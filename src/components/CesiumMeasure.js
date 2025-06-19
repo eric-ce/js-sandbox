@@ -3,7 +3,7 @@ import {
     BlendOption,
 } from "cesium";
 
-import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive } from "../lib/helper/cesiumHelper.js";
+import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual } from "../lib/helper/cesiumHelper.js";
 // import { LogTable } from './shared/LogTable.js';
 // import { HelpTable } from './shared/HelpTable.js';
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
@@ -452,6 +452,179 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return polygonOutlinePrimitive;
     };
 
+    /*****************
+     * FIND GRAPHICS *
+     *****************/
+    /**
+     * Finds a point primitive by its position in the point collection.
+     * @param {Cartesian3} position - The position to find the point primitive 
+     * @returns {PointPrimitive | null} - The point primitive if found, otherwise null
+     */
+    _getPointByPosition(position) {
+        if (!this.#polylineCollection || !position) return null;
+
+        let foundPoint = null
+        const pointsLength = this.#pointCollection.length;
+        for (let i = 0; i < pointsLength; i++) {
+            const point = this.#pointCollection.get(i);
+            if (point && areCoordinatesEqual(point.position, position)) {
+                foundPoint = point;
+                break;
+            }
+        }
+        return foundPoint || null; // Return the found point or null if not found
+    }
+
+    /**
+     * Finds a polyline primitive by its positions in the polyline collection.
+     * Find lines exact match for two points, or line for any match for one point.
+     * @param {Cartesian3[]} positions - The positions to find the polyline primitive
+     * @returns {Primitive[] | null} - The polyline primitive if found, otherwise null
+     */
+    _getLineByPositions(positions) {
+        if (!this.#polylineCollection || !positions || positions.length === 0) return null;
+
+        const foundLine = [];
+
+        // Case1: the positions is one point, find the lines that has some position matched
+        if (positions.length === 1) {
+            const targetPosition = positions[0];
+            const matchingLines = this.#polylineCollection.filter(polyline =>
+                polyline.positions && polyline.positions.some(pos => areCoordinatesEqual(pos, targetPosition))
+            );
+            if (matchingLines.length > 0) {
+                foundLine.push(...matchingLines);
+            }
+        }
+        // Case2: the positions is two points, find the line that exactly matches the two points
+        else if (positions.length === 2) {
+            const pos1 = positions[0];
+            const pos2 = positions[1];
+            // Find returns the first matching polyline or undefined
+            const matchingLine = this.#polylineCollection.find(polyline => {
+                // Check if the polyline has exactly two positions
+                if (polyline.positions && polyline.positions.length === 2) {
+                    // Compare the positions of the polyline with the provided positions
+                    return areCoordinatesEqual(polyline.positions[0], pos1) &&
+                        areCoordinatesEqual(polyline.positions[1], pos2);
+                }
+                return false; // Not a match
+            });
+            if (matchingLine) {
+                foundLine.push(matchingLine); // Add the single found primitive to the array
+            }
+        }
+
+        // Return the array of found primitives if any were found, otherwise return null.
+        return foundLine.length > 0 ? foundLine : null;
+    }
+
+    /**
+     * Finds label primitives by their associated position(s).
+     * If `positions` is a single Cartesian3, it matches `label.position`.
+     * If `positions` is an array of 1 Cartesian3, it matches any label where `label.positions` contains that point.
+     * If `positions` is an array of 2 Cartesian3s, it matches any label where `label.positions` exactly matches those two points in order.
+     * @param {Cartesian3 | Cartesian3[]} positions - The Cartesian3 position or an array of Cartesian3 positions to find the label primitive(s).
+     * @returns {Label[] | null} - An array of matching label primitives if found, otherwise null.
+     */
+    _getLabelByPosition(positions) {
+        if (!this.#labelCollection || !positions) return null;
+
+        const foundLabels = []; // Changed variable name for clarity
+
+        const isArrayPosition = Array.isArray(positions);
+        const labelsLength = this.#labelCollection.length;
+
+        for (let i = 0; i < labelsLength; i++) {
+            const label = this.#labelCollection.get(i);
+            if (!label) continue; // Skip if label is somehow null
+
+            if (isArrayPosition) {
+                // Ensure label.positions exists and is an array before trying to access it
+                if (!label.positions || !Array.isArray(label.positions)) continue;
+
+                // Case 1: Input `positions` is an array of one point.
+                // Find labels where `label.positions` contains this point.
+                if (positions.length === 1) {
+                    if (label.positions.some(pos => areCoordinatesEqual(pos, positions[0]))) {
+                        foundLabels.push(label);
+                    }
+                }
+                // Case 2: Input `positions` is an array of two points.
+                // Find labels where `label.positions` exactly matches these two points in order.
+                else if (positions.length === 2) {
+                    const pos1 = positions[0];
+                    const pos2 = positions[1];
+
+                    // Ensure label.positions has at least two points for comparison
+                    if (label.positions.length === 2 &&
+                        areCoordinatesEqual(label.positions[0], pos1) &&
+                        areCoordinatesEqual(label.positions[1], pos2)
+                    ) {
+                        foundLabels.push(label);
+                        break; // If you only want the first match, break here
+                    }
+                }
+            } else {
+                // Case 3: Input `positions` is a single Cartesian3 object.
+                // Match against `label.position` (singular).
+                if (label.position && areCoordinatesEqual(label.position, positions)) {
+                    foundLabels.push(label);
+                    break; // If you only want the first match, break here
+                }
+            }
+        }
+
+        // Return the array of found labels if any were found, otherwise return null.
+        return foundLabels;
+    }
+
+    _getRelatedPrimitivesByMeasureId(measureId) {
+        if (!measureId) return null;
+        // convert measureId to string if it is not
+        if (typeof measureId !== "string") {
+            measureId = String(measureId);
+        }
+
+        const relatedPrimitives = {
+            pointPrimitives: [],
+            labelPrimitives: [],
+            polylinePrimitives: [],
+            polygonPrimitives: []
+        };
+
+        // Find related point primitives
+        const pointsLength = this.#pointCollection.length;
+        for (let i = 0; i < pointsLength; i++) {
+            const point = this.#pointCollection.get(i);
+            if (!point) continue; // Skip if point is somehow null
+            if (point.id && point.id.includes(measureId)) {
+                relatedPrimitives.pointPrimitives.push(point);
+            }
+        }
+
+        // Find related label primitives
+        const labelsLength = this.#labelCollection.length;
+        for (let i = 0; i < labelsLength; i++) {
+            const label = this.#labelCollection.get(i);
+            if (!label) continue; // Skip if label is somehow null
+            if (label.id && label.id.includes(measureId)) {
+                relatedPrimitives.labelPrimitives.push(label);
+            }
+        }
+
+        // Find related polyline primitives
+        relatedPrimitives.polylinePrimitives = this.#polylineCollection.filter(polyline => polyline.id.includes(measureId));
+
+        // Find related polygon primitives
+        relatedPrimitives.polygonPrimitives = this.#polygonCollection.filter(polygon => polygon.id.includes(measureId));
+
+        return relatedPrimitives;
+    }
+
+    /******************
+     * REMOVE FEATURE *
+     ******************/
     /**
      * Removes a point marker from its point collection.
      * @param {PointPrimitive} pointPrimitive - The point primitive to remove

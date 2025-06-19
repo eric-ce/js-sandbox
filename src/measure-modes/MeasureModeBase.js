@@ -231,7 +231,10 @@ class MeasureModeBase {
      * Subclasses can override and call super._resetValues() to add specific resets.
      */
     _resetValues() {
-        this.resetValuesModeSpecific();
+        this.resetValuesModeSpecific(); // each mode can reset its specific values
+
+        if (typeof this._destroyChart === 'function') this._destroyChart(); // Reset the chart if exists
+        if (typeof this.removeChartHoveredPoint === 'function') this.removeChartHoveredPoint(); // Remove hovered point from chart
     }
 
     resetValuesModeSpecific() {

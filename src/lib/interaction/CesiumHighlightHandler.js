@@ -1,4 +1,4 @@
-import { getPickedObjectType } from "../helper/cesiumHelper";
+import { getRankedPickedObjectType } from "../helper/cesiumHelper";
 import { Color } from "cesium";
 
 
@@ -84,10 +84,9 @@ class CesiumHighlightHandler {
      */
     handleMoveOverHightlight = async (eventData) => {
         // -- Validate dependencies --
-        const { pickedFeature } = eventData;
-        if (!Array.isArray(pickedFeature)) return; // No picked feature, exit early
+        if (!Array.isArray(eventData.pickedFeature)) return; // No picked feature, exit early
 
-        if (pickedFeature.length === 0) {
+        if (eventData.pickedFeature.length === 0) {
             // reset highlighting
             this._resetAllHighlights();
         }
@@ -99,10 +98,8 @@ class CesiumHighlightHandler {
         ) return;
 
         // -- Picked object -- 
-        const pickedObject = pickedFeature[0];
-
-        const newHoveredPrimitive = pickedObject?.primitive;
-        const newHoveredObjectType = getPickedObjectType(pickedObject, this.activeModeInstance.mode);
+        const { type: newHoveredObjectType, object } = getRankedPickedObjectType(eventData.pickedFeature, this.activeModeInstance.mode);
+        const newHoveredPrimitive = object?.primitive;
 
         const oldHoveredPrimitive = this.currentlyHoveredPrimitive;
         const oldHoveredObjectType = this.currentHoverType;

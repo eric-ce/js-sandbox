@@ -53,6 +53,24 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
     coordsCache = [];
 
     /**
+     * Listeners for point markers.
+     * @private
+     */
+    #markerListeners = {
+        mousedown: (marker, event) => {
+            // Check if drag handler exists and is active
+            if (this.dragHandler && this.flags.isActive) {
+                // Prevent map drag, default behavior
+                event.domEvent?.stopPropagation();
+                event.domEvent?.preventDefault();
+
+                // Tell the drag handler to start dragging this specific marker
+                this.dragHandler._handleDragStart(marker, event);
+            }
+        },
+    };
+
+    /**
      * Creates an instance of TwoPointsDistanceGoogle.
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {DragHandler} dragHandler
@@ -123,29 +141,12 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             this.measure.coordinates = this.coordsCache; // when cache changed groups will be changed due to reference by address
         }
 
-        const markerListener = {
-            // Add any specific marker options here if needed
-            // Pass the mousedown listener
-            listeners: {
-                mousedown: (marker, event) => {
-                    // Check if drag handler exists and is active
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
-
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
-                    }
-                },
-            }
-        };
-
         // -- Create point marker --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
-            ...markerListener
+            clickable: true, // Make the point clickable
+            listeners: this.#markerListeners, // Add listeners for the point marker
         });
         if (!point) return;
         point.status = "pending"; // Set status to pending
@@ -181,7 +182,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             // Update this.measure
             this.measure._records.push(distance);
             this.measure.status = "completed";
-
             // Update to data pool
             dataPool.updateOrAddMeasure({ ...this.measure });
 
@@ -212,35 +212,20 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         switch (true) {
             case isMeasuring:
-                if (this.coordsCache.length === 1) {
-                    // moving positions
-                    const positions = [convertToLatLng(this.coordsCache[0]), this.#coordinate].filter(Boolean);
+                const positions = [this.coordsCache[0], this.#coordinate];
 
-                    // Validate google positions
-                    if (positions.length < 2) {
-                        console.error("Google positions are empty or invalid:", positions);
-                        return;
-                    }
+                // Moving line: update if existed, create if not existed
+                this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
+                    status: "moving",
+                    color: this.stateManager.getColorState("move"),
+                    clickable: false
+                });
 
-                    // validate positions
-                    if (!positions || positions.length === 0 || positions.some(pos => pos === null)) {
-                        console.error("Google positions are empty or invalid:", positions);
-                        return;
-                    }
-
-                    // Moving line: update if existed, create if not existed
-                    this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                        status: "moving",
-                        color: this.stateManager.getColorState("move"),
-                        clickable: false
-                    });
-
-                    // Moving label: update if existed, create if not existed
-                    this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                        status: "moving",
-                        clickable: false
-                    });
-                }
+                // Moving label: update if existed, create if not existed
+                this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
+                    status: "moving",
+                    clickable: false
+                });
                 break;
             default:
                 // this.handleHoverHighlighting();
@@ -258,6 +243,10 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
             console.warn("GoogleDragHandler: Could not find other position for polyline update.");
@@ -285,6 +274,10 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
             console.warn("GoogleDragHandler: Could not find other position for polyline update.");
@@ -386,7 +379,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // -- Handle Metadata Update --
         lineInstance.status = status; // Set status
         lineInstance.positions = positions.map(p => ({ ...p })); // Store a copy of positions
-
         return lineInstance; // Return the instance
     }
 
@@ -485,11 +477,15 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Reset temporary coordinate cache
+        // Reset variables
         this.#coordinate = null;
-
         this.coordsCache = []; // Clear cache
+        this.#interactiveAnnotations.polylines = []; // Clear polylines
+        this.#interactiveAnnotations.labels = []; // Clear labels
+
+        // Reset measure to default
+        this.measure = this._createDefaultMeasure(); // Reset measure to default
     }
-}
+};
 
 export { TwoPointsDistanceGoogle };

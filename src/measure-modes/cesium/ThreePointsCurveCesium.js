@@ -7,10 +7,10 @@ import {
     calculateDistance,
     editableLabel,
     updatePointerOverlay,
-    getPickedObjectType,
     formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
+    getRankedPickedObjectType,
 } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
@@ -85,10 +85,10 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
     constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, cesiumPkg) {
         // Validate input parameters
         if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("TwoPointsDistanceCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+            throw new Error("ThreePointsCurveCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
-        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("curve", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -126,8 +126,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         const cartesian = this.#coordinate
         if (!defined(cartesian)) return;
 
-        const pickedObject = eventData.pickedFeature[0];
-        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
@@ -274,7 +273,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         switch (true) {
             case isMeasuring:
                 // moving coordinate data
-                const positions = [...this.coordsCache, cartesian];
+                const positions = [...this.coordsCache, this.#coordinate];
 
                 // Moving line: remove if existed, create if not existed
                 this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
@@ -304,6 +303,10 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (draggedPositionIndex === -1) return; // No dragged position found
         const positions = [...measure.coordinates];
@@ -328,6 +331,10 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (draggedPositionIndex === -1) return; // No dragged position found
         const positions = [...measure.coordinates];

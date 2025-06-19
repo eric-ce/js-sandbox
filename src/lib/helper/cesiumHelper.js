@@ -24,24 +24,6 @@ import {
  * HELPER  FOR GENERAL *
  ***********************/
 /**
- * Get the neighboring values of an array at a given index.
- * @param {array} array - the array to get the neighboring values from
- * @param {number} index - the index of the array
- * @returns {{previous: any, current: any, next: any}} - the previous, current and next value of the array
- */
-export function getNeighboringValues(array, index) {
-    if (index < 0 || index >= array.length) {
-        throw new Error("Index out of bounds");
-    }
-
-    return {
-        previous: index > 0 ? array[index - 1] : undefined,
-        current: array[index],
-        next: index < array.length - 1 ? array[index + 1] : undefined,
-    };
-}
-
-/**
  * calculate the distance between two points
  * @param {Cartesian3} startPoint - the cartesian coordinates
  * @param {Cartesian3} endPoint - the cartesian coordinates
@@ -513,9 +495,9 @@ export function createPolylinePrimitive(Primitive, coordinateArray, options = {}
 
     // --- Geometry Instance ---
     // Create the line GeometryInstance
-    const lineGeometryInstance = new Cesium.GeometryInstance({
+    const lineGeometryInstance = new GeometryInstance({
         geometry: lineGeometry,
-        id: id, // Use the destructured id
+        id,
         ...geometryInstanceOptions // User options override defaults
     });
 
@@ -623,7 +605,7 @@ export function createGroundPolylinePrimitive(GroundPolylinePrimitive, coordinat
     } = options;
 
     // Convert the coordinates to Cartesian3
-    const cartesianArray = coordinateArray.map(convertToCartesian3);
+    const cartesianArray = coordinateArray.map((pos) => convertToCartesian3(pos)).filter(Boolean);
     if (!Array.isArray(cartesianArray) || cartesianArray.length < 2) {
         console.error("Convert Cartesian3 failed");
         return null;
@@ -664,8 +646,8 @@ export function createGroundPolylinePrimitive(GroundPolylinePrimitive, coordinat
     if (!groundPolylinePrimitive) return null;
 
     // Add metadata to the polyline primitive
-    groundPolylinePrimitive.id = id;
     groundPolylinePrimitive.positions = cartesianArray;
+    groundPolylinePrimitive.id = id;
     // groundPolylinePrimitive.isSubmitted = false; // for fireTrail mode
 
     return groundPolylinePrimitive;
@@ -915,47 +897,112 @@ export function removeInputActions(handler) {
     return handler;
 }
 
+
+
 /**
- * Get the type of the Cesium picked object.
- * @param {*} pickedObject - The result from viewer.scene.pick
- * @param {string} modeString - The mode string to filter the picked object, e.g., "multi_distance"
- * @returns {string|null} - The type of the picked object ("point", "line", "label", "other") or null if it doesn't match
+ * Determines the type of a single picked Cesium object and returns it along with the object itself.
+ * Considers 'moving' status and filters by modeString if provided.
+ * @param {object} pickedObject - A single picked object with id, primitive, and status properties.
+ * @param {string} [modeString] - Optional mode string to filter the object.
+ * @returns {{objectType: string|null, pickedObject: object|null}} - An object containing the determined type
+ *                                                                  and the pickedObject. `objectType` will be null
+ *                                                                  if no type is determined or if the object is 'moving'.
+ *                                                                  `pickedObject` will be null if the input `pickedObject`
+ *                                                                  itself was invalid (e.g., null or missing id).
  */
-export function getPickedObjectType(pickedObject, modeString) {
-    // Check if pickedObject is defined and has a string 'id' property
-    if (!Cesium.defined(pickedObject) || typeof pickedObject.id !== 'string') {
-        return null;
+function _getSinglePickedObjectType(pickedObject, modeString) {
+    if (!pickedObject || typeof pickedObject.id !== 'string') {
+        return { objectType: null, pickedObject: null }; // Handle invalid input
     }
 
     const { id, primitive, status } = pickedObject;
+    let determinedObjectType = null;
 
-    const searchString = modeString ? `annotate_${modeString}` : `annotate_`;
-
-    // Return null if status is a string and contains 'moving' 
+    // Ignore objects with 'moving' status
     if (typeof status === 'string' && status.includes('moving')) {
-        return null;
+        // 'moving' objects are valid but won't have a type for ranking
+        return { objectType: null, pickedObject: pickedObject };
     }
 
-    // Determine the type based on the suffix of the 'id'
-    const isPoint = modeString ? id.startsWith(`${searchString}_point`) : (id.startsWith(`${searchString}`) && id.includes('_point'));
-    const isLine = modeString ? id.startsWith(`${searchString}_line`) : (id.startsWith(`${searchString}`) && id.includes('_line'));
-    const isLabel = modeString ? id.startsWith(`${searchString}_label`) : (id.startsWith(`${searchString}`) && id.includes('_label'));
-    const isPolygon = modeString ? id.startsWith(`${searchString}_polygon`) : (id.startsWith(`${searchString}`) && id.includes('_polygon'));
+    const effectiveModeString = (typeof modeString === 'string' && modeString.length > 0) ? modeString : null;
+    const searchString = effectiveModeString ? `annotate_${effectiveModeString}` : `annotate_`;
 
-    // return the type based on the conditions
-    if (isPoint) {
-        return 'point';
-    } else if (isLine) {
-        return 'line';
-    } else if (id.includes("tileId") && primitive?.feature?.type === "fireTrail") {
-        return 'line'
-    } else if (isLabel) {
-        return 'label';
-    } else if (isPolygon) {
-        return 'polygon';
+    // Determine the type based on the ID structure and modeString
+    if (effectiveModeString) {
+        // Specific mode search: id should start with "annotate_MODE_type"
+        if (id.startsWith(`${searchString}_point`)) determinedObjectType = 'point';
+        else if (id.startsWith(`${searchString}_line`)) determinedObjectType = 'line';
+        else if (id.startsWith(`${searchString}_label`)) determinedObjectType = 'label';
+        else if (id.startsWith(`${searchString}_polygon`)) determinedObjectType = 'polygon';
     } else {
-        return null; // Return null if none of the conditions match
+        // General search (no modeString or empty modeString): id starts with "annotate_" and includes "_type"
+        if (id.startsWith(searchString) && id.includes('_point')) determinedObjectType = 'point';
+        else if (id.startsWith(searchString) && id.includes('_line')) determinedObjectType = 'line';
+        else if (id.startsWith(searchString) && id.includes('_label')) determinedObjectType = 'label';
+        else if (id.startsWith(searchString) && id.includes('_polygon')) determinedObjectType = 'polygon';
     }
+
+    // Special case for fireTrail, this check happens regardless of modeString match for type,
+    // consistent with the original function's structure.
+    if (id.includes("tileId") && primitive?.feature?.type === "fireTrail") {
+        determinedObjectType = 'line';
+    }
+
+    // If no type was determined after all checks, ensure objectType is null
+    if (!determinedObjectType) {
+        return { objectType: null, pickedObject: pickedObject };
+    }
+
+    return { objectType: determinedObjectType, pickedObject: pickedObject };
+}
+
+/**
+ * Gets the highest priority picked object and its type from an array of Cesium picked objects.
+ * The ranking is: "point" > "line" > "label" > "polygon".
+ *
+ * @param {object[]} pickedObjects - An array of picked objects from `viewer.scene.pick()`
+ * @param {string} [modeString] - the mode identifier to filter the picked objects. e.g: "multi_distance", "distance", etc.
+ * @returns {{type: string|null, object: object|null}} 
+ */
+export function getRankedPickedObjectType(pickedObjects, modeString) {
+    // Initialize with null properties, fulfilling the requirement to always return this structure.
+    let highestRankedResult = { type: null, object: null };
+
+    if (!Array.isArray(pickedObjects) || pickedObjects.length === 0) {
+        return highestRankedResult; // Return initial {type: null, object: null}
+    }
+
+    const priorityMap = { "point": 0, "line": 1, "label": 2, "polygon": 3 };
+    let minPriorityIndex = Infinity;
+
+    for (const currentPickedObject of pickedObjects) {
+        const typeCheckResult = _getSinglePickedObjectType(currentPickedObject, modeString);
+
+        // Ensure typeCheckResult is not null itself (meaning currentPickedObject was valid),
+        // its objectType is a string (not null, so not 'moving' or unrecognized type pattern),
+        // and it's a rankable type (present in priorityMap).
+        if (typeCheckResult && typeof typeCheckResult.objectType === 'string' && priorityMap.hasOwnProperty(typeCheckResult.objectType)) {
+            const currentPriorityIndex = priorityMap[typeCheckResult.objectType];
+
+            if (currentPriorityIndex < minPriorityIndex) {
+                minPriorityIndex = currentPriorityIndex;
+                // Update highestRankedResult with the found type and object
+                highestRankedResult.type = typeCheckResult.objectType;
+                highestRankedResult.object = typeCheckResult.pickedObject;
+
+                // Optimization: if "point" is found, it's the highest priority, so we can stop.
+                if (minPriorityIndex === 0) {
+                    break;
+                }
+            }
+        }
+        // No 'else' block needed here to reset highestRankedResult.
+        // If an object doesn't meet criteria, we just continue.
+        // highestRankedResult will only be updated if a qualifying higher-priority object is found.
+    }
+
+    // highestRankedResult will either contain the best match or its initial {type: null, object: null}
+    return highestRankedResult;
 }
 
 /**
@@ -1180,19 +1227,16 @@ export function calculateDistanceFromArray(cartesianArray) {
 
 /**
  * Get relevant point primitive, line primitive, and label primitive filtered by the position
- * @param {Cesium.Cartesian3} position 
- * @param {string} startsWithMeasureMode - the string of the id starts with, example "annotation_multi_distance"
- * @param {object} scene - The Cesium scene containing the primitives
+ * Exclude total or moving label primitives.
+ * @param {Cartesian3} position 
  * @param {object} pointCollection - The point collection to search in
  * @param {object} labelCollection - The label collection to search in
- * @param {Cesium.Primitive[]} lineCollection - An array containing line Primitive objects.
- * @param {Cesium.Primitive[]} polygonCollection - An array containing polygon Primitive objects.
- * @returns {{pointPrimitive: PointPrimitive | undefined, linePrimitives: Primitive[], labelPrimitives: Label[], polygonPrimitives: Primitive[]}} An object containing the found primitives.
+ * @param {Primitive[]} lineCollection - An array containing line Primitive objects.
+ * @param {Primitive[]} polygonCollection - An array containing polygon Primitive objects.
+ * @returns {{pointPrimitive: PointPrimitive|undefined, linePrimitives: Primitive[], labelPrimitives: Label[], polygonPrimitives: Primitive[]}} An object containing the found primitives.
  */
 export function getPrimitiveByPointPosition(
     position,
-    startsWithMeasureMode,
-    scene, // Removed unused parameter
     pointCollection,
     labelCollection,
     polylineCollection,
@@ -1207,11 +1251,11 @@ export function getPrimitiveByPointPosition(
     if (pointCollection) {
         for (let i = 0; i < pointCollection.length; i++) {
             const p = pointCollection.get(i);
-            if (p && p.id && typeof p.id === 'string' &&
-                p.id.startsWith(startsWithMeasureMode) &&
-                !p.id.includes("moving") && // Exclude temporary moving points
-                p.show && // Check if the primitive is visible/active
-                areCoordinatesEqual(p.position, position)) {
+            if (
+                typeof p.id === 'string' &&
+                p.id.startsWith("annotate") &&
+                areCoordinatesEqual(p.position, position)
+            ) {
                 foundPointPrimitive = p;
                 break; // Found the point, no need to check further points
             }
@@ -1222,9 +1266,8 @@ export function getPrimitiveByPointPosition(
     // Assuming lineCollection is a plain array of Cesium.Primitive objects
     if (Array.isArray(polylineCollection) && polylineCollection.length > 0) {
         foundLinePrimitives = polylineCollection.filter(p =>
-            p && p.id && typeof p.id === 'string' &&
-            p.id.startsWith(startsWithMeasureMode) &&
-            !p.id.includes("moving") &&
+            typeof p.id === 'string' &&
+            p.id.startsWith("annotate") &&
             Array.isArray(p.positions) && // Ensure positions array exists
             p.positions.some(cart => areCoordinatesEqual(cart, position))
         );
@@ -1237,27 +1280,25 @@ export function getPrimitiveByPointPosition(
         for (let i = 0; i < labelCollection.length; i++) {
             const l = labelCollection.get(i);
             // Ensure 'positions' property exists and is an array before using .some()
-            if (l && l.id && typeof l.id === 'string' &&
-                l.id.startsWith(startsWithMeasureMode) &&
-                !l.id.includes("moving") &&
-                l.show && // Check if the primitive is visible/active
+            if (
+                typeof l.id === 'string' &&
+                l.id.startsWith("annotate") &&
+                !l.id.includes("total_label") &&
                 Array.isArray(l.positions) &&
-                l.positions.some(cart => areCoordinatesEqual(cart, position))) {
+                l.positions.some(cart => areCoordinatesEqual(cart, position))
+            ) {
                 matchingLabels.push(l);
             }
         }
         foundLabelPrimitives = matchingLabels;
     }
 
-
     // --- Find the polygon primitives ---
     // Assuming polygonCollection is a plain array of Cesium.Primitive objects
     if (Array.isArray(polygonCollection) && polygonCollection.length > 0) {
         foundPolygonPrimitives = polygonCollection.filter(p =>
-            p && p.id && typeof p.id === 'string' &&
-            p.id.startsWith(startsWithMeasureMode) &&
-            !p.id.includes("moving") &&
-            p.show && // Check if the primitive is visible/active
+            typeof p.id === 'string' &&
+            p.id.startsWith("annotate") &&
             Array.isArray(p.positions) && // Ensure positions array exists
             p.positions.some(cart => areCoordinatesEqual(cart, position))
         );
@@ -1415,21 +1456,32 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
     // const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
     // cesium api update for world position to WindowCoordinates
     // const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+
+    // Convert Map coordinates to the screen position 
     let screenPosition;
     if (Cesium.SceneTransforms.worldToWindowCoordinates) {
         screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
     } else if (Cesium.SceneTransforms.wgs84ToWindowCoordinates) {
         screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
     }
+    // Validate pointerOverlay and screenPosition
+    if (!pointerOverlay || !screenPosition) return;
 
-    if (!pointerOverlay) return;
-    pointerOverlay.style.display = 'block';
-    pointerOverlay.style.left = `${screenPosition.x - 5}px`;
-    pointerOverlay.style.top = `${screenPosition.y - 5}px`;
-    pointerOverlay.style.borderRadius = "50%";
-    pointerOverlay.style.width = "1px";
-    pointerOverlay.style.height = "1px";
+    // Set the style properties for pointerOverlay
+    Object.assign(pointerOverlay.style, {
+        display: 'block',
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        pointerEvents: 'none',
+        borderRadius: '50%',
+        width: '1px',
+        height: '1px',
+        zIndex: '1000',
+        transform: `translate(${screenPosition.x - 5}px, ${screenPosition.y - 5}px)` // Translate uses GPU, makes pointerOverlay moving smoother
+    });
 
+    // Set the background color based on the pickedObjects
     if (pickedObjects.length === 0) {
         pointerOverlay.style.backgroundColor = "yellow";
     } else {
@@ -1982,3 +2034,47 @@ export function showCustomNotification(message, viewerContainer) {
 //     }
 //     return linePrimitive;
 // }
+
+/**
+ * Get the type of the Cesium picked object.
+ * @param {object[]} pickedObjects - The array of picked objects from viewer.scene.pick
+ * @param {string} modeString - The mode string to filter the picked object, e.g., "multi_distance"
+ * @returns {string|null} - The type of the picked object ("point", "line", "label", "other") or null if it doesn't match
+ */
+export function getPickedObjectType(pickedObjects, modeString) {
+    // Validate input parameters
+    if (!Array.isArray(pickedObjects) || pickedObjects.length === 0 || typeof modeString !== 'string') {
+        return null;
+    }
+
+
+    const { id, primitive, status } = pickedObject;
+
+    const searchString = modeString ? `annotate_${modeString}` : `annotate_`;
+
+    // Return null if status is a string and contains 'moving' 
+    if (typeof status === 'string' && status.includes('moving')) {
+        return null;
+    }
+
+    // Determine the type based on the suffix of the 'id'
+    const isPoint = modeString ? id.startsWith(`${searchString}_point`) : (id.startsWith(`${searchString}`) && id.includes('_point'));
+    const isLine = modeString ? id.startsWith(`${searchString}_line`) : (id.startsWith(`${searchString}`) && id.includes('_line'));
+    const isLabel = modeString ? id.startsWith(`${searchString}_label`) : (id.startsWith(`${searchString}`) && id.includes('_label'));
+    const isPolygon = modeString ? id.startsWith(`${searchString}_polygon`) : (id.startsWith(`${searchString}`) && id.includes('_polygon'));
+
+    // return the type based on the conditions
+    if (isPoint) {
+        return 'point';
+    } else if (isLine) {
+        return 'line';
+    } else if (id.includes("tileId") && primitive?.feature?.type === "fireTrail") {
+        return 'line'
+    } else if (isLabel) {
+        return 'label';
+    } else if (isPolygon) {
+        return 'polygon';
+    } else {
+        return null; // Return null if none of the conditions match
+    }
+}

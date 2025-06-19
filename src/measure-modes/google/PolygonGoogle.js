@@ -56,6 +56,24 @@ class PolygonGoogle extends MeasureModeGoogle {
     coordsCache = [];
 
     /**
+     * Listeners for point markers.
+     * @private
+     */
+    #markerListeners = {
+        mousedown: (marker, event) => { // Use mousedown for drag
+            // Check if drag handler exists and is active
+            if (this.dragHandler && this.flags.isActive) {
+                // Prevent map drag, default behavior
+                event.domEvent?.stopPropagation();
+                event.domEvent?.preventDefault();
+
+                // Tell the drag handler to start dragging this specific marker
+                this.dragHandler._handleDragStart(marker, event);
+            }
+        },
+    };
+
+    /**
      * Creates an instance of PolygonGoogle.
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {DragHandler} dragHandler
@@ -125,40 +143,12 @@ class PolygonGoogle extends MeasureModeGoogle {
             this.measure.coordinates = this.coordsCache; // when cache changed groups will be changed due to reference by address
         }
 
-        const markerListener = {
-            // Add any specific marker options here if needed
-            // Pass the mousedown listener
-            listeners: {
-                mousedown: (marker, event) => {
-                    // Check if drag handler exists and is active
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
-
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
-                    }
-                },
-                // --- ADD MOUSEUP LISTENER HERE ---
-                // mouseup: (event) => { // 'event' here is google.maps.MapMouseEvent
-                //     // Check if a drag sequence was potentially active
-                //     if (this.dragHandler && this.dragHandler.isDragging) {
-                //         event.domEvent?.stopPropagation(); // Avoid stopping propagation here too
-                //         event.domEvent?.preventDefault(); // Prevent potential text selection, etc.
-
-                //         // Directly call the drag handler's end method
-                //         this.dragHandler._handleDragEnd(event);
-                //     }
-                // }
-            }
-        };
-
         // -- Create point marker --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_area_point_${this.measure.id}`,
-            ...markerListener
+            clickable: true, // Make the point clickable
+            listeners: this.#markerListeners
         });
         if (!point) return;
         point.status = "pending"; // Set status to pending
@@ -238,30 +228,13 @@ class PolygonGoogle extends MeasureModeGoogle {
             }
         });
 
+
         // -- Create final point --
-        const markerListener = {
-            // Add any specific marker options here if needed
-            // Pass the mousedown listener
-            listeners: {
-                mousedown: (marker, event) => {
-                    // Check if drag handler exists and is active
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
-
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
-                    }
-                }
-            }
-        };
-
-        // create final point
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: "#FF0000",
             id: `annotate_area_point_${this.measure.id}`,
-            ...markerListener,
+            clickable: true, // Make the point clickable
+            listeners: this.#markerListeners
         });
         if (!point) return;
         point.status = "completed"; // Set status to completed
@@ -294,6 +267,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         this.#interactiveAnnotations.labels = []; // Clear the moving labels reference
     }
 
+
     /******************
      * EVENT HANDLING *
      *    FOR DRAG    *
@@ -303,6 +277,10 @@ class PolygonGoogle extends MeasureModeGoogle {
      * @param {MeasurementGroup} measure - The measure object data from drag operation.
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (draggedPositionIndex === -1) return; // No dragged position found
         const positions = [...measure.coordinates];
@@ -329,6 +307,10 @@ class PolygonGoogle extends MeasureModeGoogle {
     * @param {MeasurementGroup} measure - The measure object data from drag operation.
     */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const draggedPositionIndex = measure.coordinates.findIndex(cart => areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (draggedPositionIndex === -1) return; // No dragged position found
         const positions = [...measure.coordinates];
@@ -356,6 +338,7 @@ class PolygonGoogle extends MeasureModeGoogle {
 
         return measure;
     }
+
 
     /**********
      * HELPER *
@@ -523,10 +506,14 @@ class PolygonGoogle extends MeasureModeGoogle {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Reset temporary coordinate cache
+        // Reset variables
         this.#coordinate = null;
-
         this.coordsCache = []; // Clear cache
+        this.#interactiveAnnotations.polygons = []; // Clear the polygon reference
+        this.#interactiveAnnotations.labels = []; // Clear the moving labels reference
+
+        // Reset measure to default
+        this.measure = super._createDefaultMeasure(); // Reset measure to default structure
     }
 };
 

@@ -42,6 +42,25 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
     coordsCache = [];
 
     /**
+     * Listeners for point markers.
+     * @private
+     */
+    #markerListeners = {
+        mousedown: (marker, event) => {
+            // Check if drag handler exists and is active
+            if (this.dragHandler && this.flags.isActive) {
+                // Prevent map drag, default behavior
+                event.domEvent?.stopPropagation();
+                event.domEvent?.preventDefault();
+
+                // Tell the drag handler to start dragging this specific marker
+                this.dragHandler._handleDragStart(marker, event);
+            }
+        },
+    };
+
+
+    /**
      * 
      * @param {LeafletInputHandler} inputHandler 
      * @param {LeafletDragHandler} dragHandler 
@@ -105,29 +124,12 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             this.measure.coordinates = this.coordsCache; // when cache changed groups will be changed due to reference by address
         }
 
-        const markerListener = {
-            // Add any specific marker options here if needed
-            // Pass the mousedown listener
-            listeners: {
-                mousedown: (marker, event) => {
-                    // Check if drag handler exists and is active
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
-
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
-                    }
-                },
-            }
-        };
-
         // -- Create point marker --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
-            ...markerListener
+            interactive: true, // Make the point interactive
+            listeners: this.#markerListeners,
         });
         if (!point) return;
         point.status = "pending"; // Set status to pending
@@ -198,29 +200,21 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
 
         switch (true) {
             case isMeasuring:
-                if (this.coordsCache.length === 1) {
-                    const positions = [this.coordsCache[0], pos].filter(Boolean); // Filter out any null value
+                const positions = [this.coordsCache[0], this.#coordinate];
 
-                    // Validate leaflet positions
-                    if (positions.length < 2) {
-                        console.error("Leaflet positions are empty or invalid:", positions);
-                        return;
-                    }
+                // Moving line: remove if existed, create if not existed
+                this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
+                    status: "moving",
+                    color: this.stateManager.getColorState("move"),
+                    interactive: false
+                });
 
-                    // Moving line: remove if existed, create if not existed
-                    this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                        status: "moving",
-                        color: this.stateManager.getColorState("move"),
-                        interactive: false
-                    });
-
-                    // Moving label: update if existed, create if not existed
-                    this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                        status: "moving",
-                        // showBackground: false
-                        interactive: false
-                    });
-                }
+                // Moving label: update if existed, create if not existed
+                this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
+                    status: "moving",
+                    // showBackground: false
+                    interactive: false
+                });
                 break;
             default:
                 // this.handleHoverHighlighting(pickedObjects[0]);
@@ -239,6 +233,10 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
             console.warn("LeafletDragHandler: Could not find other position for polyline update.");
@@ -275,6 +273,10 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) {
             console.warn("GoogleDragHandler: Could not find other position for polyline update.");
@@ -342,8 +344,8 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
 
         // Default options
         const {
-            status = null,
-            color = this.stateManager.getColorState("move"), // Default color if not provided
+            status = "pending", // Default pending status
+            color = this.stateManager.getColorState("move"), // Default color 
             interactive = false,
             ...rest
         } = options;
@@ -514,10 +516,14 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
+        // Reset variables
         this.#coordinate = null;
-
-        // Clear cache
         this.coordsCache = [];
+        this.#interactiveAnnotations.labels = [];
+        this.#interactiveAnnotations.polylines = [];
+
+        // Reset the measure data
+        this.measure = this._createDefaultMeasure(); // Reset measure to default state
     }
 }
 

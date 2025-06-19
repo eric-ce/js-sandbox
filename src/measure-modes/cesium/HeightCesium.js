@@ -6,7 +6,14 @@ import {
 } from "cesium";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium";
-import { areCoordinatesEqual, calculateMiddlePos, convertToCartographicDegrees, formatDistance, getGroundPosition, getHeight, getPickedObjectType, updatePointerOverlay } from "../../lib/helper/cesiumHelper.js";
+import {
+    areCoordinatesEqual,
+    calculateMiddlePos,
+    formatDistance,
+    getGroundPosition,
+    getHeight,
+    getRankedPickedObjectType,
+} from "../../lib/helper/cesiumHelper.js";
 
 // -- Cesium types --
 /** @typedef {import('cesium').Primitive} Primitive */
@@ -123,8 +130,7 @@ class HeightCesium extends MeasureModeCesium {
         const cartesian = this.#coordinate
         if (!defined(cartesian)) return;
 
-        const pickedObject = eventData.pickedFeature[0];
-        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
@@ -244,8 +250,8 @@ class HeightCesium extends MeasureModeCesium {
         // this.stateManager.setOverlayState("pointer", pointerOverlay);
 
         // Get the positions
-        const groundPosition = getGroundPosition(this.map.scene, cartesian);
-        const positions = [cartesian, groundPosition];
+        const groundPosition = getGroundPosition(this.map.scene, this.#coordinate);
+        const positions = [this.#coordinate, groundPosition];
         // update the coordinates cache
         this.coordsCache = positions.map(pos => ({ ...pos }))
 
@@ -304,6 +310,10 @@ class HeightCesium extends MeasureModeCesium {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const groundPosition = getGroundPosition(this.map.scene, this.dragHandler.coordinate);
         const positions = [this.dragHandler.coordinate, groundPosition];
 
@@ -337,6 +347,10 @@ class HeightCesium extends MeasureModeCesium {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const groundPosition = getGroundPosition(this.map.scene, this.dragHandler.coordinate);
         const positions = [this.dragHandler.coordinate, groundPosition];
 

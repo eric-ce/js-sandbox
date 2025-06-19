@@ -16,6 +16,19 @@ import { Chart } from "chart.js/auto";
 /** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
 /** @typedef {import('../../components/CesiumMeasure.js').CesiumMeasure} CesiumMeasure */
 
+// Measure data 
+/**
+ * @typedef MeasurementGroup
+ * @property {string} id - Unique identifier for the measurement
+ * @property {string} mode - Measurement mode (e.g., "distance")
+ * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
+ * @property {number} labelNumberIndex - Index used for sequential labeling
+ * @property {'pending'|'completed'} status - Current state of the measurement
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ */
+
 
 /**
  * Shared functionality between modes in Cesium.
@@ -24,9 +37,13 @@ import { Chart } from "chart.js/auto";
  */
 class MeasureModeCesium extends MeasureModeBase {
     /** @type {import("chart.js/auto").Chart} */
-    chartInstance = null;
+    chartInstance;
     /** @type {HTMLElement} */
-    chartDiv = null;
+    chartDiv;
+
+    /** @type {HTMLElement} */
+    contextMenu;
+
     /**
      * 
      * @param {string} modeName - The name of the mode (e.g., "Point", "Line", "Polygon")
@@ -41,10 +58,30 @@ class MeasureModeCesium extends MeasureModeBase {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
     }
 
+    /**
+     * Finds a measure by its ID.
+     * @param {number} measureId - The ID of the measure to find.
+     * @returns {MeasurementGroup|null} - The found measure or null if not found.
+     */
+    _findMeasureById(measureId) {
+        if (typeof measureId !== "number") {
+            console.warn("Invalid measureId provided. It should be a number.");
+            return null; // Return null if measureId is not a number
+        }
 
-    /*******************
-     * UTILITY FEATURE *
-     *******************/
+        const measure = dataPool.getMeasureById(measureId); // Get the measure data by ID
+        if (!measure) return; // If no measure found, exit the function
+
+        // Convert cartographic degrees to Cartesian3 coordinates
+        measure.coordinates = measure.coordinates.map(coord => convertToCartesian3(coord)); // Ensure coordinates are in Cartesian3 format
+        return measure;
+    }
+
+    /**
+     * Finds a measure by its coordinate.
+     * @param {Cartesian3|Cartographic|{latitude:number, longitude:number, height: number}} coordinate - The coordinate to find the measure.
+     * @returns {MeasurementGroup|null} - The found measure or null if not found.
+     */
     _findMeasureByCoordinate(coordinate) {
         if (!coordinate) return null;
 
@@ -101,7 +138,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
 
     /********************
-     * CLEANNING METHOD *
+     * CLEANING METHOD *
      ********************/
     removeAnnotationsAndListeners() {
         this.drawingHelper.clearCollections();
@@ -191,7 +228,7 @@ class MeasureModeCesium extends MeasureModeBase {
                 maintainAspectRatio: false,
                 onHover: (event, chartElements) => {
                     if (onHoverCallback && typeof onHoverCallback === 'function') {
-                        onHoverCallback(event, chartElements, this._chartInstance);
+                        onHoverCallback(event, chartElements, this.chartInstance);
                     }
                 },
                 scales: {
@@ -244,7 +281,7 @@ class MeasureModeCesium extends MeasureModeBase {
         closeButton.className = className;
 
         const originalButtonColor = "#333";
-        const hoverButtonColor = "#4488bb";
+        const hoverButtonColor = "#aaddff";
 
         Object.assign(closeButton.style, {
             position: "absolute",
@@ -262,7 +299,7 @@ class MeasureModeCesium extends MeasureModeBase {
             textAlign: "center",
             cursor: "pointer",
             zIndex: "1001", // Ensure it's above the canvas
-            transition: "color 0.2s ease-in-out"
+            transition: "all 0.2s ease-in-out 0.1s"
         });
 
         // Event listener for click
@@ -273,9 +310,13 @@ class MeasureModeCesium extends MeasureModeBase {
         // Event listeners for hover effect
         closeButton.addEventListener("mouseenter", () => {
             closeButton.style.color = hoverButtonColor;
+            closeButton.style.transform = "scale(1.3) rotate(180deg)"; // Slightly enlarge on hover
+            // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
         });
         closeButton.addEventListener("mouseleave", () => {
             closeButton.style.color = originalButtonColor;
+            closeButton.style.transform = "scale(1) rotate(0deg)"; // Reset size on mouse leave
+            // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
         });
 
         return closeButton;
@@ -323,6 +364,128 @@ class MeasureModeCesium extends MeasureModeBase {
         }
     }
 
+    // TODO: new feature: context menu to replace complicated left or middle click events
+    _setupContextMenu(container, itemOptions = [], options = {}) {
+        const {
+            show = true,
+            x = 0,
+            y = 0
+        } = options;
+
+        if (!container) {
+            console.warn("Container is not provided for context menu setup.");
+            return;
+        }
+
+        // Create the context menu element
+        this.contextMenu = document.createElement("div");
+        this.contextMenu.classList.add("an-context-menu");
+
+        // Apply styles directly to the element
+        Object.assign(this.contextMenu.style, {
+            background: "white",
+            border: "1px solid #ddd",
+            borderRadius: "4px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            padding: "4px 0",
+            minWidth: "120px",
+            display: show ? 'block' : 'none',
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            zIndex: "1000"
+        });
+
+        // list of menu items using ul li 
+        const menuList = document.createElement("ul");
+        menuList.className = "an-context-menu-list";
+        Object.assign(menuList.style, {
+            listStyle: "none",
+            margin: "0",
+            padding: "0"
+        });
+
+        // Add menu items with direct styling
+        itemOptions.forEach(item => {
+            const menuItem = document.createElement("li");
+            menuItem.classList.add("an-context-menu-list-item");
+            menuItem.textContent = item.text;
+
+            Object.assign(menuItem.style, {
+                padding: "8px 12px",
+                cursor: "pointer",
+                borderBottom: "1px solid #eee"
+            });
+
+            // Add hover effects
+            menuItem.addEventListener("mouseenter", () => {
+                menuItem.style.backgroundColor = "#f5f5f5";
+            });
+            menuItem.addEventListener("mouseleave", () => {
+                menuItem.style.backgroundColor = "transparent";
+            });
+
+            menuItem.addEventListener("click", event => {
+                item.event(event);
+                this._setContextMenuVisibility(false);
+            });
+            menuList.appendChild(menuItem);
+        });
+
+        // Remove border from last item
+        if (menuList.lastElementChild) {
+            menuList.lastElementChild.style.borderBottom = "none";
+        }
+        this.contextMenu.appendChild(menuList);
+
+        // Append the context menu to the specified container
+        container.appendChild(this.contextMenu);
+
+        return this.contextMenu;
+    }
+
+    /**
+     * Update the context menu with new items and position. Fallbacks to setup context menu if not exists.
+     * @param {HTMLElement} container - the map container where the context menu should be displayed
+     * @param {{x:number, y:number}} position - the position where the context menu should be displayed
+     * @param {*} itemOptions - the context menu items options
+     *      e.g: [{text: "remove point", event: function() { }},{text: "remove line", event: function() { }}]
+     * @param {*} options - additional options for the context menu
+     * @returns {HTMLElement|null} - the updated context menu element or null if not created
+     */
+    _updateContextMenu(container, position, itemOptions = [], options = {}) {
+        if (!this.contextMenu) return;
+
+        // FIXME: the position needs to located at the mouse position.
+        // Update the position of the context menu
+        this.contextMenu.style.left = `${position.x}px`;
+        this.contextMenu.style.top = `${position.y}px`;
+
+        // Clear existing items
+        const menuList = this.contextMenu.querySelector(".an-context-menu-list");
+        if (menuList) {
+            menuList.innerHTML = ""; // Clear existing items
+            // Add new items
+            itemOptions.forEach(item => {
+                const menuItem = document.createElement("li");
+                menuItem.textContent = item.text;
+                menuItem.addEventListener("click", item.event);
+                menuList.appendChild(menuItem);
+            });
+        } else {
+            console.warn("Menu list not found in context menu.");
+        }
+
+        return this.contextMenu || null;
+    }
+
+    _setContextMenuVisibility(visible) {
+        if (this.contextMenu) {
+            this.contextMenu.style.display = visible ? 'block' : 'none';
+        } else {
+            console.warn("Context menu is not initialized.");
+        }
+    }
 }
 
 export { MeasureModeCesium };

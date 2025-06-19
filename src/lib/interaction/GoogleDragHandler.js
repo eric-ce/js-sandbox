@@ -126,13 +126,17 @@ class GoogleDragHandler {
             this.polylineCollection,
             this.polygonCollection
         ); // Get associated graphics
+
         this.draggedObjectInfo.lines = polylines; // Store associated lines
         this.draggedObjectInfo.labels = labelMarkers; // Store associated labels
         this.draggedObjectInfo.polygons = polygons; // Store associated polygons
 
-        // Set status to pending (consistency)
-        this.measure.status = "pending";
-        // Update data pool (consistency)
+        // -- Store total label primitive reference --
+        // Assume total label should have only one per measure
+        const totalLabel = this.labelCollection.find(label => label.id === `annotate_${this.activeModeInstance.mode}_total_label_${this.measure.id}`)
+        if (totalLabel) this.draggedObjectInfo.totalLabels = [totalLabel] // Store total label if exists
+
+        // Update data pool
         dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Attach mousemove and mouseup listeners via the InputHandler
@@ -200,6 +204,7 @@ class GoogleDragHandler {
         // Update metadata in the marker object
         this.draggedObjectInfo.beginPoint.positions = [{ ...this.#coordinate }]; // Update the position data in the marker object
         this.draggedObjectInfo.beginPoint.status = "completed"; // Update status to completed
+        this.draggedObjectInfo.beginPoint.clickable = true; // Make the marker clickable again
 
         // -- Finalize Associated Geometry --
         this.activeModeInstance?.finalizeDrag(this.measure);
@@ -220,6 +225,7 @@ class GoogleDragHandler {
         this.lastDragEndTs = Date.now();
 
         // Reset values
+        this.activeModeInstance?.resetValuesModeSpecific(); // Call mode specific reset values
         this._resetValue(); // Reset state variables and flags
     }
 
@@ -235,14 +241,16 @@ class GoogleDragHandler {
             /** @type {{lat: number, lng: number} | null} */
             beginPosition: null, // The position where dragging started
             // beginScreenPoint: null, // Optional
-            lines: [], // Less relevant for Google's update approach
-            labels: [], // Less relevant for Google's update approach
+            /** @type {google.maps.Polyline[]} */
+            lines: [],
+            /** @type {google.maps.Marker[]} */
+            labels: [],
+            /** @type {google.maps.Marker[]} */
+            totalLabels: [],
+            /** @type {google.maps.Polygon[]} */
+            polygons: [],
             /** @type {{lat: number, lng: number} | null} */
             endPosition: null, // The position where dragging ended
-            /** @type {google.maps.Marker | google.maps.marker.AdvancedMarkerElement | null} */
-            endPoint: null, // The marker where dragging ended
-            // endLines: [], // Less relevant
-            // endLabels: [], // Less relevant
         };
     }
 

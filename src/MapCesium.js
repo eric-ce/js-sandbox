@@ -1,6 +1,7 @@
 import * as Cesium from "cesium";
 
 import "cesiumStyle";
+
 import { MeasureToolbox } from "./components/MeasureToolbox.js";
 import {
     PointPrimitiveCollection,
@@ -57,7 +58,7 @@ export class MapCesium extends HTMLElement {
     get viewer() {
         return this._viewer;
     }
-  
+
 
     /*************************************************
      *             DO NOT COPY BELOW             *

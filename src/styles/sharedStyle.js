@@ -7,10 +7,8 @@ sharedStyleSheet.replaceSync(`
         padding: 0;
         box-sizing: border-box;
     }
-    .measure-toolbar{ 
-        display: flex;
-        flex-direction: row;
-    }
+
+    /* General Styles */
     .measure-toolbar button.active, 
     .fire-trail-toolbar button.active {
         background-color: #adf;
@@ -25,6 +23,12 @@ sharedStyleSheet.replaceSync(`
     .fire-trail-toolbar button:hover,
     .fly-through-toolbar button:hover{
         transform: scale(1.05);
+    }
+
+    /* Toolbar Styles */
+    .measure-toolbar{ 
+        display: flex;
+        flex-direction: row;
     }
     .measure-tools{
         display: flex;
@@ -58,6 +62,8 @@ sharedStyleSheet.replaceSync(`
         display: flex;
         flex-direction: row;
     }
+
+    /* info box and log box styles */
     .info-box {
         padding: 5px;
         font-size: 0.8rem;
@@ -107,6 +113,8 @@ sharedStyleSheet.replaceSync(`
         pointer-events: auto; /* Enable interaction when visible */
         transition: opacity 0.2s ease-in-out, transform 0.2s ease-in;
     }
+
+    /* Annotation Buttons Styles */
     .annotate-button{
         display: flex;
         flex-direction: row;
@@ -148,6 +156,8 @@ sharedStyleSheet.replaceSync(`
     .disabled-button:hover{
         cursor: not-allowed;
     }
+
+    /* Animation Styles */
     @keyframes jumpIn {
         0% {
             transform: translateY(15px);

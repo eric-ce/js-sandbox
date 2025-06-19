@@ -3,14 +3,14 @@ import {
     defined,
 } from "cesium";
 import {
-    calculateDistance,
     editableLabel,
     updatePointerOverlay,
-    getPickedObjectType,
     formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
     calculateClampedDistance,
+    getRankedPickedObjectType,
+    convertToCartesian3,
 } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
@@ -20,6 +20,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 /** @typedef {import('cesium').Label} Label*/
 /** @typedef {import('cesium').Cartesian3} Cartesian3 */
 /** @typedef {import('cesium').Cartesian2} Cartesian2 */
+/** @typedef {import('cesium').PointPrimitive} PointPrimitive */
 
 // -- Data types -- 
 /** @typedef {{polylines: Primitive[], labels: Label[]}} InteractiveAnnotationsState */
@@ -63,7 +64,9 @@ class ProfileCesium extends MeasureModeCesium {
     /** @type {InteractiveAnnotationsState} - References to temporary primitive objects used for interactive drawing*/
     #interactiveAnnotations = {
         polylines: [],
-        labels: []
+        labels: [],
+        chartHoveredPoint: null, // For hover interaction on chart
+        chartHoveredPoints: [], // For hover interaction on chart, multiple points
     };
 
     /** @type {MeasurementGroup} */
@@ -71,6 +74,7 @@ class ProfileCesium extends MeasureModeCesium {
 
     /** @type {Cartesian3[]} */
     coordCache = [];
+
 
     /**
      * 
@@ -96,7 +100,6 @@ class ProfileCesium extends MeasureModeCesium {
 
         this.cesiumPkg = cesiumPkg;
 
-        this.coordsCache = [];
         this.measure = super._createDefaultMeasure();
     }
 
@@ -124,8 +127,7 @@ class ProfileCesium extends MeasureModeCesium {
         const cartesian = this.#coordinate
         if (!defined(cartesian)) return;
 
-        const pickedObject = eventData.pickedFeature[0];
-        const pickedObjectType = getPickedObjectType(pickedObject, this.mode);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
@@ -269,38 +271,84 @@ class ProfileCesium extends MeasureModeCesium {
         const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
         this.stateManager.setOverlayState("pointer", pointerOverlay);
 
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
+
         // Handle different scenarios based on the state of the tool
         // the condition to determine if it is measuring
         const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete
 
-        switch (true) {
-            case isMeasuring:
-                // if (this.coordsCache.length === 1) {
-                const positions = [this.coordsCache[0], cartesian].filter(Boolean); // Filter out any undefined values
+        switch (pickedObjectType) {
+            case "label":
+                break; // Do nothing, label is handled by the event handler
+            case "point":
+                break; // Do nothing, point is handled by the event handler
+            case "line":
+                const linePrimitive = pickedObject.primitive;
+                if (linePrimitive.status === "moving") return;
+                // hide the pointer overlay 
+                const pointerElement = this.stateManager.getOverlayState("pointer");
+                pointerElement && (pointerElement.style.display = "none");
 
-                // Validate cesium positions
-                if (positions.length < 2) {
-                    console.error("Cesium positions are empty or invalid:", positions);
-                    return;
-                }
+                this._handleLineHover(linePrimitive, cartesian);
 
-                // Moving line: remove if existed, create if not existed
-                this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                    status: "moving",
-                    color: this.stateManager.getColorState("move")
-                });
-
-                // Moving label: update if existed, create if not existed
-                this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                    status: "moving",
-                    showBackground: false
-                });
-                // }
-                break;
+                break; // Do nothing, line is handled by the event handler
             default:
-                // this.handleHoverHighlighting(pickedObjects[0]);
-                break;
+                if (isMeasuring) {
+                    const positions = [this.coordsCache[0], this.#coordinate]
+
+                    // Moving line: remove if existed, create if not existed
+                    this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
+                        status: "moving",
+                        color: this.stateManager.getColorState("move")
+                    });
+
+                    // Moving label: update if existed, create if not existed
+                    this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
+                        status: "moving",
+                        showBackground: false
+                    });
+                }
         }
+    }
+
+    _handleLineHover(linePrimitive, position) {
+        // Validate input parameters
+        if (!this.chartDiv || !this.chartInstance) {
+            this.removeChartHoveredPoint();
+            return;
+        };
+
+        // Set the position
+        const cartesian = position;
+
+        // Find the associated measure by ID
+        const measureId = Number(linePrimitive.id.split("_").slice(-1)[0]); // Extract the measure ID from the polyline ID
+        const measure = this._findMeasureById(measureId);
+        if (!measure) {
+            console.warn(`Measure with ID ${measureId} not found.`);
+            return;
+        }
+        const interpolatedPoints = measure.interpolatedPoints;
+
+        // minimal check: if interpolatedPoints matched the chart data by length.
+        const isPointsMatchedChartData = this.chartInstance.data.datasets[0].data.length === interpolatedPoints.length;
+        if (!isPointsMatchedChartData) return; // If the interpolated points do not match the chart data, do not proceed
+
+        // Find the closest point in the interpolated points to the picked position
+        const closestPosition = interpolatedPoints.reduce((closest, current) => {
+            const currentDistance = Cartesian3.distance(current, cartesian);
+            const closestDistance = Cartesian3.distance(closest, cartesian);
+            return currentDistance < closestDistance ? current : closest;
+        }, interpolatedPoints[0]);
+
+        this._createOrUpdateHoveredPoint(closestPosition, {
+            id: `annotate_${this.mode}_hovered_point_${measure.id}`,
+            status: "completed"
+        });
+
+        const closestPositionIndex = interpolatedPoints.findIndex(pos => areCoordinatesEqual(pos, closestPosition));
+        if (closestPositionIndex === -1) return;
+        this._activateTooltipAtPointIndex(closestPositionIndex); // Activate tooltip at the closest point index
     }
 
 
@@ -314,6 +362,10 @@ class ProfileCesium extends MeasureModeCesium {
      * @returns {void}
      */
     updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) return;
         const positions = [anchorPosition, this.dragHandler.coordinate];
@@ -337,6 +389,10 @@ class ProfileCesium extends MeasureModeCesium {
      * @returns {void}
      */
     finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition) return;
         const positions = [anchorPosition, this.dragHandler.coordinate];
@@ -487,6 +543,35 @@ class ProfileCesium extends MeasureModeCesium {
         return { distance, clampedPositions, clampedPositionsCartographic, labelPrimitive };
     }
 
+    _createOrUpdateHoveredPoint(position, options = {}) {
+        const {
+            color = this.stateManager.getColorState("pointColor"),
+            status = "pending",
+        } = options;
+
+        if (this.#interactiveAnnotations.chartHoveredPoints.length > 0) {
+            const hoveredPoints = this.#interactiveAnnotations.chartHoveredPoints;
+            hoveredPoints.forEach(point => {
+                this.drawingHelper._removePointMarker(point);
+            });
+            // Clear the reference
+            this.#interactiveAnnotations.chartHoveredPoints.length = 0;
+        }
+
+        // Create a new point marker at the closest position
+        const hoveredPoint = this.drawingHelper._addPointMarker(position, {
+            color,
+            id: `annotate_${this.mode}_hovered_point_${this.measure.id}`,
+            status
+        });
+        if (!hoveredPoint) {
+            console.warn("_createOrUpdateHoveredPoint: Failed to create hovered point primitive.");
+            return null;
+        }
+        this.#interactiveAnnotations.chartHoveredPoints = [hoveredPoint]
+        return hoveredPoint;
+    }
+
     /**
      * Creates or updates the chart based on the provided positions and options.
      * @param {Cartesian3[]} clampedPositions 
@@ -507,7 +592,7 @@ class ProfileCesium extends MeasureModeCesium {
 
         // check if the chart is already created
         if (!this.charDiv) {
-            this._createChart();
+            this._createChart({}, {}, (event, chartElements, chartInstance) => this._addPointAtChartHoveredPoint(event, chartElements, chartInstance));
             this._setChartVisibility(show);
         }
 
@@ -520,13 +605,70 @@ class ProfileCesium extends MeasureModeCesium {
             // Cumulative distance: previous cumulative distance + current segment distance (rounded)
             labels[i + 1] = labels[i] + Math.round(segmentDistance);
         }
-
-        // y-axis label: the height of the points
-        const heights = clampedPositionsCartographic.map(pos => pos.height);
+        // y-axis label: the height of the points (also store x label and metadata)
+        const formattedData = clampedPositionsCartographic.map((pos, index) => ({ "x": `${labels[index]}m`, "y": pos.height, position: [pos] }));
 
         // -- Update chart data --
-        const data = { labels, datasets: [{ label: "Terrain Profile", data: [...heights] }] };
-        this._updateChartData(data);
+        const chartData = {
+            labels: labels.map(label => `${label}m`), // Convert to string with 'm' suffix
+            datasets: [{ label: "Terrain Profile", data: formattedData }]
+        };
+
+        this._updateChartData(chartData);
+    }
+
+    /**
+     * Add a point in the map at the hovered point on the chart.
+     * @param {object} event - The event object from the chart.js interaction.
+     * @param {object[]} chartElements - The chart elements that were interacted with on chart.js.
+     * @param {import("chart.js").Chart} chartInstance - The chart.js Chart instance.
+     * @returns {PointPrimitive}
+     */
+    _addPointAtChartHoveredPoint(event, chartElements, chartInstance) {
+        // Validate input parameters
+        if (!chartElements || !chartElements.length || !chartInstance) {
+            return null;
+        }
+
+        const chartHoveredPoint = chartElements[0];
+        const chartHoveredPointIndex = chartHoveredPoint.index;
+        const datasetIndex = chartHoveredPoint.datasetIndex;
+
+        // Add minimal bounds checking
+        const datasets = chartInstance.data.datasets;
+        if (datasetIndex >= datasets.length || chartHoveredPointIndex >= datasets[datasetIndex]?.data?.length) {
+            return null;
+        }
+        // Get the data point that contains your metadata
+        const dataPoint = datasets[datasetIndex].data[chartHoveredPointIndex];
+        if (!dataPoint?.position?.[0]) {
+            return null;
+        }
+        // Access the metadata you stored in the 'position' property
+        const pointCartographic = dataPoint.position[0];
+        const pointCartesian = convertToCartesian3(pointCartographic); // convert to Cartesian3
+        if (!pointCartesian) return null;
+
+        this._createOrUpdateHoveredPoint(pointCartesian, {
+            id: `annotate_${this.mode}_chart_hovered_point`,
+            status: "completed"
+        });
+    }
+
+    _activateTooltipAtPointIndex(index) {
+        if (!this.chartInstance) return;
+        this.chartInstance.tooltip.setActiveElements([{ datasetIndex: 0, index: index }], this.chartInstance.getDatasetMeta(0).data[1].element);
+        this.chartInstance.update();
+    }
+
+    removeChartHoveredPoint() {
+        const hoveredPoints = this.#interactiveAnnotations.chartHoveredPoints;
+        if (hoveredPoints.length > 0) {
+            hoveredPoints.forEach(point => {
+                this.drawingHelper._removePointMarker(point); // Remove the point primitive
+            });
+            this.#interactiveAnnotations.chartHoveredPoints = []; // Clear the reference
+        }
     }
 
     resetValuesModeSpecific() {
@@ -534,11 +676,18 @@ class ProfileCesium extends MeasureModeCesium {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Clear cache
+        // Reset variables
         this.coordsCache = [];
+        this.#coordinate = null; // Clear the coordinate
+        this.#interactiveAnnotations.polylines = [];
+        this.#interactiveAnnotations.labels = [];
+        this.#interactiveAnnotations.chartHoveredPoint = null;
+
+        // Reset the measure data
+        this.measure = super._createDefaultMeasure(); // Reset measure to default state
 
         // Clear chart
-        this._destroyChart();
+        // this._destroyChart();
     }
 }
 

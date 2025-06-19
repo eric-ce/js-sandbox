@@ -26,7 +26,7 @@ export function checkLayerType(layer) {
 /**
  * Creates a circle marker object with specific position and options.
  * Does NOT add the marker to the map.
- * @param {{latitude: number, longitude: number}} position - The marker's position.
+ * @param {{lat:number,lng:number}} position - The marker's position.
  * @param {Object} [options={}] - Additional options for the circle marker.
  * @returns {L.CircleMarker|null} The created circle marker.
  */
@@ -55,13 +55,14 @@ export function createCircleMarker(position, options = {}) {
         fillOpacity = 0.8,
         pane = 'markerPane',
         id = "annotate_marker",
+        interactive = false,
         ...rest
     } = options;
 
     // Create a circle marker (dot)
     const marker = L.circleMarker(
         latLng,
-        { radius, fillColor, color, weight, opacity, fillOpacity, pane, ...rest }
+        { radius, fillColor, color, weight, opacity, fillOpacity, pane, interactive, ...rest }
     );
 
     if (!marker) {
@@ -70,7 +71,7 @@ export function createCircleMarker(position, options = {}) {
     }
 
     // -- Handle Metadata --
-    marker.positions = { ...position }; // Store original positions
+    marker.positions = [{ ...position }]; // Store original positions
     marker.id = id; // Store the ID
 
     return marker;
@@ -96,7 +97,8 @@ export function getVectorByPosition(
     // --- Find Point Marker ---
     if (Array.isArray(pointCollection.getLayers())) {
         for (const marker of pointCollection.getLayers()) {
-            if (marker && Array.isArray(marker.positions) && marker.positions.some(pos => areCoordinatesEqual(pos, position))) {
+            if (marker && Array.isArray(marker.positions) &&
+                marker.positions.some(pos => areCoordinatesEqual(pos, position))) {
                 foundPointMarker = marker;
                 break; // Stop searching after finding the first match
             }
@@ -107,7 +109,8 @@ export function getVectorByPosition(
     // Checks if the search position matches any coordinate in the label's 'positions' property.
     if (Array.isArray(labelCollection.getLayers())) {
         foundLabelMarkers = labelCollection.getLayers().filter(label =>
-            label && Array.isArray(label.positions) && label.positions.some(p => areCoordinatesEqual(p, position))
+            label && Array.isArray(label.positions) &&
+            label.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
@@ -115,7 +118,8 @@ export function getVectorByPosition(
     // Checks if the search position matches any coordinate in the polyline's 'positions' property.
     if (Array.isArray(polylineCollection.getLayers())) {
         foundPolylines = polylineCollection.getLayers().filter(polyline =>
-            polyline && Array.isArray(polyline.positions) && polyline.positions.some(p => areCoordinatesEqual(p, position))
+            polyline && Array.isArray(polyline.positions) &&
+            polyline.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
@@ -123,7 +127,8 @@ export function getVectorByPosition(
     // Checks if the search position matches any coordinate in the polygon's 'positions' property.
     if (Array.isArray(polygonCollection.getLayers())) {
         foundPolygons = polygonCollection.getLayers().filter(polygon =>
-            polygon && Array.isArray(polygon.positions) && polygon.positions.some(p => areCoordinatesEqual(p, position))
+            polygon && Array.isArray(polygon.positions) &&
+            polygon.positions.some(p => areCoordinatesEqual(p, position))
         );
     }
 
@@ -138,7 +143,7 @@ export function getVectorByPosition(
 /**
  * Creates a polyline on the provided map connecting points.
  *
- * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
+ * @param {{lat:number,lng:number}[]} positions - Array of position objects.
  * @param {Object} [options={}] - Additional options for the polyline
  * @returns {L.Polyline|undefined} The created polyline if valid; otherwise, undefined.
  */
@@ -239,18 +244,19 @@ export function createPolygon(positions, options = {}) {
  */
 export function createLabelTooltip(positions, value, unit = "meter", options = {}) {
     // -- Validate dependencies --
-    if (!positions || !value) return null;
+    if (!positions) return null;
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
 
     // -- Handle positions -- 
     const latLngArray = positions.map(pos => convertToLatLng(pos)).filter(Boolean);
 
     const numPos = latLngArray.length;
     const middlePos = numPos === 1 ? latLngArray[0] : calculateMiddlePos(latLngArray);
-
     if (!middlePos) {
         console.error("Failed to calculate middle position for tooltip.");
         return null;
     }
+    const middlePosLatLng = convertToLatLng(middlePos);
 
     // -- Handle value --
     const textContent = formatMeasurementValue(value, unit);
@@ -284,7 +290,7 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
         interactive,
         ...rest,
     })
-        .setLatLng(middlePos) // Set the position
+        .setLatLng(middlePosLatLng) // Set the position
         .setContent(contentElement); // Set the content
 
     if (!tooltip) {
@@ -594,10 +600,10 @@ export function addPopupToMarker(marker, content) {
  * Creates multiple circle markers on the provided map from an array of positions.
  *
  * @param {L.Map} map - The Leaflet Map instance.
- * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
+ * @param {{lat:number,lng:number}[]} positions - Array of position objects.
  * @param {string} [color="#FF0000"] - The color for the markers.
  * @param {Object} [options={}] - Additional options for the circle markers.
- * @returns {Array<L.CircleMarker>|undefined} An array of circle marker elements.
+ * @returns {L.CircleMarker[]|undefined} An array of circle marker elements.
  */
 export function createCircleMarkers(positions, options = {}) {
     // Removed map parameter and check
@@ -612,10 +618,10 @@ export function createCircleMarkers(positions, options = {}) {
  * Creates multiple polylines on the provided map by connecting consecutive position pairs.
  *
  * @param {L.Map} map - The Leaflet Map instance.
- * @param {Array<{latitude: number, longitude: number}>} positions - Array of position objects.
+ * @param {{lat:number,lng:number}[]} positions - Array of position objects.
  * @param {string} [color="#A52A2A"] - Stroke color for the polylines.
  * @param {Object} [options={}] - Additional options for the polylines
- * @returns {Array<L.Polyline>|undefined} An array of created polylines if valid; otherwise, undefined.
+ * @returns {L.Polyline[]|undefined} An array of created polylines if valid; otherwise, undefined.
  */
 export function createPolylines(positions, options = {}) {
     if (!positions || positions.length < 2) return;
@@ -636,9 +642,9 @@ export function createPolylines(positions, options = {}) {
  * Creates multiple tooltip labels on the map for each consecutive pair of positions using corresponding values.
  * @param {L.Map} map - The Leaflet map instance.
  * @param {Array} positions - An array of position objects with { latitude, longitude }.
- * @param {Array<number>} valueArray - An array of values to display for each tooltip label.
+ * @param {nubmer[]} valueArray - An array of values to display for each tooltip label.
  * @param {Object} [options={}] - Optional tooltip options.
- * @returns {Array<L.Tooltip>} An array of created tooltip labels.
+ * @returns {L.Tooltip[]} An array of created tooltip labels.
  */
 export function createLabelTooltips(map, positions, valueArray, unit = "meter", options = {}) {
     // Validate input parameters
