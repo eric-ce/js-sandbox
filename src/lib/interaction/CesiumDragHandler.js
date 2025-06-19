@@ -126,7 +126,6 @@ class CesiumDragHandler {
         if (!this.activeModeInstance || this.isDragging) return;
 
         const pickedObjects = eventData.pickedFeature;
-
         if (!Array.isArray(pickedObjects) && pickedObjects.length === 0) {
             return;
         }
@@ -156,18 +155,17 @@ class CesiumDragHandler {
         const measureId = Number(isPoint.primitive.id.split('_').slice(-1)[0]); // Extract the measure ID from the point primitive ID
         this.measure = this.activeModeInstance._findMeasureById(measureId); // Find the measure data by ID
         if (!this.measure) return;
-
         // Update status to pending
         this.measure.status = "pending";
 
         // Update to data pool
         dataPool.updateOrAddMeasure({ ...this.measure });
 
-
         // -- Store position reference --
         // Store the bottom point relative to the dragged point - ONLY for height mode
-        if (typeof this.activeModeInstance?.setAnchorPoint === 'function') {
-            this.activeModeInstance?.setAnchorPoint(this.measure);
+        if (typeof this.activeModeInstance?.findAnchorPoint === 'function') {
+            const anchorPoint = this.activeModeInstance?.findAnchorPoint(this.measure);
+            this.draggedObjectInfo.points = [this.draggedObjectInfo.beginPoint, anchorPoint];
         }
 
         // -- Store primitives reference --
@@ -304,6 +302,7 @@ class CesiumDragHandler {
             beginScreenPoint: null, // The screen position where dragging started
             /** @type {PointPrimitive} */
             anchorPoint: null, // The anchor position for height mode
+            points: [],
             /** @type {Primitive[]} */
             lines: [],
             /** @type {Label[]} */

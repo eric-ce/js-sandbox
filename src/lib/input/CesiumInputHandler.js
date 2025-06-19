@@ -96,7 +96,7 @@ export class CesiumInputHandler {
                     // Cesium movement object doesn't directly expose the DOM event
                     domEvent: undefined,
                     // Result from scene.pick()
-                    pickedFeature: this.viewer.scene.drillPick(screenPos, 3, 1, 1) || null
+                    pickedFeature: this.viewer.scene.drillPick(screenPos, 4, 1, 1) || null
                 };
 
                 // Call all registered callbacks for this event type

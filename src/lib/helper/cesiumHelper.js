@@ -915,11 +915,12 @@ function _getSinglePickedObjectType(pickedObject, modeString) {
         return { objectType: null, pickedObject: null }; // Handle invalid input
     }
 
-    const { id, primitive, status } = pickedObject;
+    const { id, primitive } = pickedObject;
+
     let determinedObjectType = null;
 
     // Ignore objects with 'moving' status
-    if (typeof status === 'string' && status.includes('moving')) {
+    if (typeof pickedObject?.primitive.status === 'string' && pickedObject.primitive.status.includes('moving')) {
         // 'moving' objects are valid but won't have a type for ranking
         return { objectType: null, pickedObject: pickedObject };
     }
