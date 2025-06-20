@@ -188,14 +188,9 @@ class PolygonCesium extends MeasureModeCesium {
         // Update the coordinates cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
 
-        // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
-
-
         // -- Handle Polygon --
         // If three points create the polygon primitive
         if (this.coordsCache.length > 2) {
-
             // -- Handle Polygon Graphics --
             this._createOrUpdatePolygonGraphics(this.coordsCache, this.#interactiveAnnotations.polygons, {
                 status: "pending",
@@ -207,11 +202,16 @@ class PolygonCesium extends MeasureModeCesium {
                 }
             });
             // -- Handle Label Graphics --
-            this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
+            const { area } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "pending",
                 showBackground: false,
             });
+
+            this.measure._records = [area]; // Store records with the area of the polygon
         }
+
+        // -- Update dataPool --
+        dataPool.updateOrAddMeasure({ ...this.measure });
     }
 
     /***********************
@@ -330,7 +330,7 @@ class PolygonCesium extends MeasureModeCesium {
             });
 
             // -- Update data --
-            this.measure._records.push(area);
+            this.measure._records = [area];
             this.measure.status = "completed";
 
             // Update to data pool

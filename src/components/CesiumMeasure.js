@@ -215,6 +215,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
      */
     _addPolylinesFromArray(positions, options = {}) {
         if (!this.cesiumPkg || !this.map || !this.stateManager) return null; // Ensure dependencies are available
+        console.log('positions', positions)
 
         // Get the line positions, use clamp position if height is 0
         const noHeight = positions.some(pos => pos.height === 0);
@@ -223,14 +224,11 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // Create the polyline primitives
         const addedPolylines = [];
-
         // Iterate through the positions array, 2 positions as a pair
-        for (let i = 0; i < positions.length - 1; i += 2) {
+        for (let i = 0; i < positions.length - 1; i++) {
             const positionsPair = positions.slice(i, i + 2); // Get two positions for the polyline
             const polyline = this._addPolyline(positionsPair, options);
-            if (polyline) {
-                addedPolylines.push(polyline);
-            }
+            polyline && addedPolylines.push(polyline);
         }
 
         return addedPolylines; // Return the array of successfully added polylines
@@ -317,27 +315,28 @@ export default class CesiumMeasure extends MeasureComponentBase {
      * @param {string[]|number[]} valueArray 
      * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
      * @param {object} options - Options for the label primitives
-     * @returns {LabelPrimitive[]} The created label primitives or null if an error occurs.
+     * @returns {LabelPrimitive[]|[]} The created label primitives.
      */
-    _addLabelsFromArray(positionsArray, valueArray, unit, options = {}) {
-        if (!this.#labelCollection || !Array.isArray(positionsArray) || positionsArray.length === 0) {
-            console.warn("CesiumMeasure: Invalid label collection or positionsArray.");
-            return null;
-        }
+    _addLabelsFromArray(positions, valueArray, unit, options = {}) {
+        if (!this.#labelCollection ||
+            !Array.isArray(positions) ||
+            positions.length === 0 ||
+            !Array.isArray(valueArray) ||
+            valueArray.length === 0
+        ) return [];
 
         // Get the label positions, use clamp position if height is 0
-        const noHeight = positionsArray.some(pos => pos.height === 0);
-        const labelPositions = noHeight ? this._getClampedPositions(positionsArray) : positionsArray;
-        if (!labelPositions || labelPositions.length === 0) return null;
+        const noHeight = positions.some(pos => pos.height === 0);
+        const labelPositions = noHeight ? this._getClampedPositions(positions) : positions;
+        if (!labelPositions || labelPositions.length === 0) return [];
 
         // Create the label primitives
         const addedLabels = [];
         // Iterate through the positions array, 2 positions as a pair
-        for (let i = 0; i < positionsArray.length - 1; i += 2) {
-            const label = this._addLabel([positionsArray[i], positionsArray[i + 1]], valueArray[i], unit, options);
-            if (label) {
-                addedLabels.push(label);
-            }
+        for (let i = 0; i < positions.length - 1; i++) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the label
+            const label = this._addLabel(positionsPair, valueArray[i], unit, options);
+            label && addedLabels.push(label);
         }
 
         return addedLabels; // Return the array of successfully added labels

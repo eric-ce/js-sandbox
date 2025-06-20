@@ -156,9 +156,6 @@ class PolygonGoogle extends MeasureModeGoogle {
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
 
-        // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
-
         // -- Handle Polygon --
         // If three points create the polygon
         if (this.coordsCache.length > 2) {
@@ -168,10 +165,15 @@ class PolygonGoogle extends MeasureModeGoogle {
                 clickable: false
             });
 
-            this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
+            const { area } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "pending",
             });
+
+            this.measure._records = [area]; // Store records with the area of the polygon
         }
+
+        // -- Update dataPool --
+        dataPool.updateOrAddMeasure({ ...this.measure }); // Update the measure in the data pool
     }
 
     /**
@@ -252,7 +254,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         });
 
         // -- Update data --
-        this.measure._records = [area ?? null]; // Store the area in the measure object
+        this.measure._records = [area]; // Store the area in the measure object
         this.measure.status = "completed"; // Update the measure status
 
         // Update to data pool
@@ -432,6 +434,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         } = options;
 
         const area = calculateArea(positions);
+        console.log('area', area)
         const formattedText = formatMeasurementValue(area, "squareMeter");
         const middlePos = calculateMiddlePos(positions); // Calculate the middle position for the label
 

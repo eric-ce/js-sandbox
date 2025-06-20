@@ -60,7 +60,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
  * Handles multiple distance measurement specifically for Cesium Map.
  * @extends {MeasureModeCesium}
  */
-class MultiDistanceClampedCesium extends MeasureModeCesium {
+class MultiDistancesClampedCesium extends MeasureModeCesium {
     // -- Public fields: dependencies --
     /** @type {any} The Cesium package instance. */
     cesiumPkg;
@@ -97,10 +97,10 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
     constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, cesiumPkg) {
         // Validate input parameters
         if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("MultiDistanceClampedCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+            throw new Error("MultiDistancesClampedCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
-        super("multi_distance_clamped", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("multi_distances_clamped", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -1406,4 +1406,4 @@ class MultiDistanceClampedCesium extends MeasureModeCesium {
     }
 }
 
-export { MultiDistanceClampedCesium };
+export { MultiDistancesClampedCesium };

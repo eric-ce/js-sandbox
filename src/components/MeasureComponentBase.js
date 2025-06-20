@@ -20,7 +20,7 @@ import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
-import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistanceCesium, MultiDistanceClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
+import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
 
 
 /**
@@ -387,7 +387,7 @@ export class MeasureComponentBase extends HTMLElement {
                 mapAvailability: ['cesium', 'google', 'leaflet'],
                 getClass: (type) => {
                     if (type === 'google') return MultiDistanceGoogle;
-                    if (type === 'cesium') return MultiDistanceCesium; // Use specific for now
+                    if (type === 'cesium') return MultiDistancesCesium; // Use specific for now
                     if (type === 'leaflet') return MultiDistanceLeaflet;
                     return null;
                 },
@@ -397,7 +397,7 @@ export class MeasureComponentBase extends HTMLElement {
                 name: "Multi Distance Clamped",
                 icon: multiDClampedIcon,
                 mapAvailability: ["cesium"],
-                getClass: (type) => (type === 'cesium' ? MultiDistanceClampedCesium : null)
+                getClass: (type) => (type === 'cesium' ? MultiDistancesClampedCesium : null)
             },
             {
                 id: "polygon",
@@ -922,6 +922,7 @@ Lng:${data.coordinates[0].longitude.toFixed(6)}`,
             case "profile_distances":
                 annotations.markers = this._addPointMarkersFromArray(data.coordinates);
                 annotations.polylines = this._addPolylinesFromArray(data.coordinates);
+
                 annotations.labels = this._addLabelsFromArray(
                     data.coordinates,
                     data._records[0]?.distances,

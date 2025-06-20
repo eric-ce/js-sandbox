@@ -139,9 +139,6 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
 
-        // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
-
         // -- Handle Polygon --
         // If three points create the polygon
         if (this.coordsCache.length > 2) {
@@ -151,11 +148,16 @@ class PolygonLeaflet extends MeasureModeLeaflet {
                 interactive: false // Disable interactivity for the polygon
             });
 
-            this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
+            const { area } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "pending",
                 interactive: false // Disable interactivity for the label
             });
+
+            this.measure._records = [area]; // Store the area in the measure object
         }
+
+        // -- Update dataPool --
+        dataPool.updateOrAddMeasure({ ...this.measure });
     }
 
     /**
@@ -239,7 +241,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         });
 
         // -- Update data --
-        this.measure._records = [area ?? null]; // Store the area in the measure object
+        this.measure._records = [area]; // Store the area in the measure object
         this.measure.status = "completed"; // Update the measure status
 
         // Update to data pool
