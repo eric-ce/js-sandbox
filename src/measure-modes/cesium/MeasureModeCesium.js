@@ -1,8 +1,9 @@
 import { Cartesian3 } from "cesium";
 import { MeasureModeBase } from "../MeasureModeBase.js";
-import { areCoordinatesEqual, convertToCartesian3, convertToCartographicDegrees, isCartesian3 } from "../../lib/helper/cesiumHelper.js";
+import { areCoordinatesEqual, convertToCartesian3, convertToCartographicDegrees, createPointerOverlay, isCartesian3, updatePointerOverlay } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { Chart } from "chart.js/auto";
+import { createCloseButton } from "../../lib/helper/helper.js";
 
 // Cesium types
 /** @typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection */
@@ -136,6 +137,15 @@ class MeasureModeCesium extends MeasureModeBase {
         });
     }
 
+    _setupPointerOverlay() {
+        // update pointerOverlay: the moving dot with mouse
+        let pointerElement = this.stateManager.getOverlayState("pointer");
+        if (!pointerElement) {
+            pointerElement = createPointerOverlay(this.map.container); // Create pointer overlay if not exists
+        }
+        this.stateManager.setOverlayState("pointer", pointerElement);
+        return pointerElement;
+    }
 
     /********************
      * CLEANING METHOD *
@@ -175,7 +185,13 @@ class MeasureModeCesium extends MeasureModeBase {
 
 
         // -- Create and add the close button --
-        const closeButton = this._createCloseButton("cesium-chart-close-button"); // Call the new method
+        // const closeButton = this._createCloseButton(); // Call the new method
+        const closeButton = createCloseButton({
+            click: (event) => {
+                event.preventDefault();
+                this._destroyChart()
+            },
+        });
         this.chartDiv.appendChild(closeButton);
 
 
@@ -275,9 +291,15 @@ class MeasureModeCesium extends MeasureModeBase {
     * @param {string} [className="close-button"] - The CSS class name for the button.
     * @returns {HTMLButtonElement} The created button element.
     */
-    _createCloseButton(className = "close-button") {
+    _createCloseButton(options = {}) {
+        const {
+            className = "close-button",
+            title = "close"
+        } = options;
+
         const closeButton = document.createElement("button");
         closeButton.textContent = "×"; // Unicode 'X' (multiplication sign)
+        closeButton.title = title;
         closeButton.className = className;
 
         const originalButtonColor = "#333";

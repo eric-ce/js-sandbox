@@ -434,7 +434,6 @@ class PolygonGoogle extends MeasureModeGoogle {
         } = options;
 
         const area = calculateArea(positions);
-        console.log('area', area)
         const formattedText = formatMeasurementValue(area, "squareMeter");
         const middlePos = calculateMiddlePos(positions); // Calculate the middle position for the label
 

@@ -1447,6 +1447,20 @@ function setupEditableModal(viewerContainer) {
 }
 
 /**
+ * Creates a pointer overlay element for the map container.
+ * @param {HTMLElement} container - The map container element where the pointer overlay will be created.
+ * @returns {HTMLElement} - The created pointer overlay element.
+ */
+export function createPointerOverlay(container) {
+    const pointer = document.createElement("div");
+    pointer.className = "backdrop";
+    pointer.style.cssText =
+        "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
+    container.appendChild(pointer);
+    return pointer;
+}
+
+/**
  * update the pointer overlay position and color based on the pickedObjects
  * @param {Cesium.Viewer} viewer 
  * @param {HTMLElement} pointerOverlay 

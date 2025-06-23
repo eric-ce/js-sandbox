@@ -235,6 +235,13 @@ class MeasureModeBase {
 
         if (typeof this._destroyChart === 'function') this._destroyChart(); // Reset the chart if exists
         if (typeof this.removeChartHoveredPoint === 'function') this.removeChartHoveredPoint(); // Remove hovered point from chart
+
+        // reset pointer overlay
+        const pointer = this.stateManager.getOverlayState('pointer');
+        if (pointer) {
+            pointer.remove();
+            this.stateManager.setOverlayState('pointer', null);
+        }
     }
 
     resetValuesModeSpecific() {
