@@ -95,11 +95,11 @@ sharedStyleSheet.replaceSync(`
     .log-box table, 
     .help-box table{
         width: 100%;
+        border-collapse: collapse;
     }
     .log-box td, 
     .help-box td{
-        padding: 5px 0;
-        border: none;
+        padding: 0.35rem;
     }
     .hidden {
         opacity: 0;

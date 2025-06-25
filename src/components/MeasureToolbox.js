@@ -9,6 +9,7 @@ import { CesiumMeasure } from "./CesiumMeasure.js";
 import { GoogleMeasure } from "./GoogleMeasure.js";
 import { LeafletMeasure } from "./LeafletMeasure.js";
 import dataPool from "../lib/data/DataPool.js";
+// import { map } from "leaflet";
 
 
 
@@ -145,6 +146,7 @@ export class MeasureToolbox {
         this.cesiumMeasure.stateManager = this.stateManager;
 
         const mapCesium = document.querySelector("map-cesium");
+        mapCesium.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapCesium) return;
         mapCesium.shadowRoot.appendChild(this.cesiumMeasure);
     }
@@ -163,6 +165,7 @@ export class MeasureToolbox {
         this.googleMeasure.stateManager = this.stateManager;
 
         const mapGoogle = document.querySelector("map-google");
+        mapGoogle.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapGoogle) return;
         mapGoogle.shadowRoot.appendChild(this.googleMeasure);
     }
@@ -182,6 +185,7 @@ export class MeasureToolbox {
         this.leafletMeasure.stateManager = this.stateManager;
 
         const mapLeaflet = document.querySelector("map-leaflet");
+        mapLeaflet.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapLeaflet) return;
         mapLeaflet.shadowRoot.appendChild(this.leafletMeasure);
     }

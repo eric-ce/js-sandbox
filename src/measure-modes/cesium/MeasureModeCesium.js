@@ -1,9 +1,9 @@
 import { Cartesian3 } from "cesium";
 import { MeasureModeBase } from "../MeasureModeBase.js";
-import { areCoordinatesEqual, convertToCartesian3, convertToCartographicDegrees, createPointerOverlay, isCartesian3, updatePointerOverlay } from "../../lib/helper/cesiumHelper.js";
+import { areCoordinatesEqual, convertToCartesian3, createPointerOverlay } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { Chart } from "chart.js/auto";
-import { createCloseButton } from "../../lib/helper/helper.js";
+import { createCloseButton, makeDraggable } from "../../lib/helper/helper.js";
 
 // Cesium types
 /** @typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection */
@@ -209,9 +209,9 @@ class MeasureModeCesium extends MeasureModeBase {
         // Apply styles via CSS classes or make them configurable
         Object.assign(this.chartDiv.style, {
             position: "absolute",
-            top: "10px",
-            left: "10px",
-            // transform: "translate(-50%, -50%)",
+            top: "0px",
+            left: "0px",
+            transform: "translate(10px, 10px)", // Offset from the top-left corner
             width: "400px",
             height: "200px",
             backgroundColor: "white", // Corrected property name
@@ -282,6 +282,9 @@ class MeasureModeCesium extends MeasureModeBase {
         // Storing custom data directly on chartInstance.customData is fine if needed,
         // but often the mode itself will hold the relevant source data.
         // this.chartInstance.customData = { /* ... */ };
+
+        // -- Make the chart draggable --
+        makeDraggable(this.chartDiv, this.drawingHelper.map.container);
 
         return this.chartInstance;
     }

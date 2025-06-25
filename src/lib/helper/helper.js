@@ -1,4 +1,4 @@
-import { Cartesian3, Cartographic, Math } from "cesium";
+import { Cartesian3, Cartographic, Math as CesiumMath } from "cesium";
 
 /**
  * Get the neighboring values of an array at a given index.
@@ -34,12 +34,12 @@ export function generateIdByTimestamp() {
  * @returns {function} Cleanup function.
  */
 export function makeDraggable(element, container, onDragStateChange) {
-    if (!element || !container) return; // Exit early if element or container is not defined
+    if (!element || !container) return () => { }; // Return empty cleanup function
 
     let isDragging = false;
     let dragStarted = false;
     let startX = 0, startY = 0;
-    const threshold = 5;
+    const threshold = 3;
     let resizeDebounceTimer = null;
 
     // Initialize transform values
@@ -54,25 +54,32 @@ export function makeDraggable(element, container, onDragStateChange) {
         if (!containerRect || !elementRect ||
             containerRect.width === 0 || containerRect.height === 0) return;
 
-        // Default positioning - this positions the element at the bottom left of the container
-        const defaultX = 0; // Left edge of container
-        const defaultY = 0; // Bottom edge of container (negative values move up)
-
-        // Calculate offsets if element is already positioned
+        // Parse existing transform values more robustly
         const style = window.getComputedStyle(element);
         const transform = style.transform;
 
         if (transform && transform !== 'none') {
-            const matrix = transform.match(/matrix\((.+)\)/)?.[1]?.split(', ');
-            if (matrix && matrix.length >= 6) {
-                currentX = parseFloat(matrix[4]);
-                currentY = parseFloat(matrix[5]);
+            // Handle both matrix() and translate() formats
+            let matrix = transform.match(/matrix\(([^)]+)\)/);
+            if (matrix) {
+                const values = matrix[1].split(',').map(v => parseFloat(v.trim()));
+                if (values.length >= 6) {
+                    currentX = values[4]; // translateX
+                    currentY = values[5]; // translateY
+                }
+            } else {
+                // Try to parse translate() format directly
+                const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+                if (translateMatch) {
+                    currentX = parseFloat(translateMatch[1]) || 0;
+                    currentY = parseFloat(translateMatch[2]) || 0;
+                }
             }
         } else {
-            // Apply initial positioning if no transform exists
-            updateTransform(defaultX, defaultY);
-            currentX = defaultX;
-            currentY = defaultY;
+            // No existing transform - use default top-left positioning
+            currentX = 0;
+            currentY = 0;
+            updateTransform(currentX, currentY);
         }
     };
 
@@ -104,12 +111,10 @@ export function makeDraggable(element, container, onDragStateChange) {
             let newY = currentY + deltaY;
 
             // Apply boundaries to keep element inside container
-            // For X: 0 to containerWidth-elementWidth
-            // For Y: -(containerHeight-elementHeight) to 0 (negative values move up)
             const minX = 0;
             const maxX = containerRect.width - elementRect.width;
-            const minY = -(containerRect.height); // Negative value to move up to top
-            const maxY = 0 - elementRect.height; // Bottom of container
+            const minY = 0;
+            const maxY = containerRect.height - elementRect.height;
 
             newX = clamp(newX, minX, maxX);
             newY = clamp(newY, minY, maxY);
@@ -141,6 +146,20 @@ export function makeDraggable(element, container, onDragStateChange) {
 
     const onMouseDown = (e) => {
         e.preventDefault();
+        e.stopPropagation();
+
+        // Capture current position at the start of drag
+        const style = window.getComputedStyle(element);
+        const transform = style.transform;
+
+        if (transform && transform !== 'none') {
+            const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+            if (translateMatch) {
+                currentX = parseFloat(translateMatch[1]) || 0;
+                currentY = parseFloat(translateMatch[2]) || 0;
+            }
+        }
+
         startX = e.clientX;
         startY = e.clientY;
 
@@ -177,8 +196,8 @@ export function makeDraggable(element, container, onDragStateChange) {
                 // Recalculate boundaries
                 const minX = 0;
                 const maxX = containerRect.width - elementRect.width;
-                const minY = -(containerRect.height);
-                const maxY = 0 - elementRect.height;
+                const minY = 0;
+                const maxY = containerRect.height - elementRect.height;
 
                 // Ensure element stays within boundaries after resize
                 currentX = clamp(currentX, minX, maxX);
@@ -225,7 +244,6 @@ export function makeDraggable(element, container, onDragStateChange) {
         window.removeEventListener('resize', handleResize);
     };
 }
-
 
 /**
  * Shows a custom notification message
@@ -334,8 +352,8 @@ export function convertToUniversalCoordinate(coordinate) {
                 return null;
             }
             return {
-                latitude: Math.toDegrees(cartographic.latitude),
-                longitude: Math.toDegrees(cartographic.longitude),
+                latitude: CesiumMath.toDegrees(cartographic.latitude),
+                longitude: CesiumMath.toDegrees(cartographic.longitude),
                 height: cartographic.height
             };
         } catch (error) {
@@ -381,4 +399,66 @@ export function areCoordinatesEqual(coordinate1, coordinate2, options = {}) {
     const heightEqual = Math.abs((cartographicDegrees1.height ?? 0) - (cartographicDegrees2.height ?? 0)) < heightEpsilon;
 
     return latEqual && lonEqual && heightEqual;
+}
+
+/**
+ * Creates and styles a close button for a UI component.
+ * @param {object} [options={}] - The options for the close button.
+ * @returns {HTMLButtonElement} The created button element.
+ */
+export function createCloseButton(options = {}) {
+    const {
+        className = "close-button",
+        title = "close",
+        color = "#333333",
+        click = (event) => { console.log("click event for close button", event) },
+        top = "5px",
+        right = "5px",
+    } = options;
+
+    const closeButton = document.createElement("button");
+    closeButton.textContent = "×"; // Unicode 'X' (multiplication sign)
+    closeButton.title = title;
+    closeButton.className = className;
+
+    const originalButtonColor = color;
+    const hoverButtonColor = "#aaddff";
+
+    Object.assign(closeButton.style, {
+        position: "absolute",
+        top: top,
+        right: right,
+        width: "20px",
+        height: "20px",
+        padding: "0",
+        border: "none",
+        background: "transparent",
+        color: originalButtonColor,
+        fontSize: "16px",
+        fontWeight: "bold",
+        lineHeight: "20px",
+        textAlign: "center",
+        cursor: "pointer",
+        zIndex: "1001", // Ensure it's above the canvas
+        transition: "all 0.2s ease-in-out 0.1s"
+    });
+
+    // Event listener for click
+    closeButton.addEventListener("click", (event) => {
+        click(event);
+    });
+
+    // Event listeners for hover effect
+    closeButton.addEventListener("mouseenter", () => {
+        closeButton.style.color = hoverButtonColor;
+        closeButton.style.transform = "scale(1.3) rotate(180deg)"; // Slightly enlarge on hover
+        // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
+    });
+    closeButton.addEventListener("mouseleave", () => {
+        closeButton.style.color = originalButtonColor;
+        closeButton.style.transform = "scale(1) rotate(0deg)"; // Reset size on mouse leave
+        // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
+    });
+
+    return closeButton;
 }
