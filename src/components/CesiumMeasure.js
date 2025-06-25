@@ -3,7 +3,7 @@ import {
     BlendOption,
 } from "cesium";
 
-import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual } from "../lib/helper/cesiumHelper.js";
+import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual, createPointerOverlay } from "../lib/helper/cesiumHelper.js";
 // import { LogTable } from './shared/LogTable.js';
 // import { HelpTable } from './shared/HelpTable.js';
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
@@ -57,7 +57,8 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this._initializeCesiumCollections();
 
         // setup moving dot with mouse
-        this._setupPointerOverlay();
+        // const pointer = createPointerOverlay(this.map.container);
+        // this.stateManager.setOverlayState("pointer", pointer);
     }
     /**
      * Initializes Cesium collections for point and label primitives for cesium specific.
@@ -71,32 +72,15 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // Create new collections using the provided Cesium package
         const pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
-        const labelCollection = new this.cesiumPkg.LabelCollection();
         pointCollection.blendOption = BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
-        labelCollection.blendOption = BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
         pointCollection.id = "annotate_point_collection";
+        const labelCollection = new this.cesiumPkg.LabelCollection();
+        labelCollection.blendOption = BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
         labelCollection.id = "annotate_label_collection";
 
         // Assign to private fields
         this.#pointCollection = this.map.scene.primitives.add(pointCollection);
         this.#labelCollection = this.map.scene.primitives.add(labelCollection);
-    }
-
-    /**
-     * Setup the moving yellow dot to show the mouse pointer position
-     */
-    _setupPointerOverlay() {
-        if (!this.stateManager) {
-            console.warn("CesiumMeasure: StateManager not available for _setupPointerOverlay.");
-            return;
-        }
-
-        const pointer = document.createElement("div");
-        pointer.className = "backdrop";
-        pointer.style.cssText =
-            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
-        this.map.container.appendChild(pointer);
-        this.stateManager.setOverlayState("pointer", pointer);
     }
 
     /**

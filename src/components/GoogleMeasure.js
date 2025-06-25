@@ -237,7 +237,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @returns {AdvancedMarkerElement | Marker | null} The created marker.
      */
     _addLabel(positions, value, unit, options = {}) {
-        if (!this.map || !Array.isArray(positions) || positions.length === 1) return null;
+        if (!this.map || !Array.isArray(positions)) return null;
 
         const {
             status = null,
@@ -493,7 +493,6 @@ export default class GoogleMeasure extends MeasureComponentBase {
         // remove the overlay from the map
         removeOverlay(marker);
 
-        // FIXME: remove the listeners from the marker
         if (marker && marker.listeners) {
             for (const eventName in marker.listeners) {
                 marker.removeListener(eventName, marker.listeners[eventName]);

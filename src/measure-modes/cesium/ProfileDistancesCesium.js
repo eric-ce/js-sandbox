@@ -940,8 +940,8 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         this.#distances = []; // Clear the distances cache
         dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
 
-        // FIXME: destroy the chart if it is relevant to the line
-        this.chartDiv && this._destroyChart(); // Destroy the chart if it exists
+        // Destroy the chart if it exists
+        this.chartDiv && this._destroyChart();
     }
 
     /**
@@ -980,8 +980,8 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         // remove the measure data from dataPool
         dataPool.removeMeasureById(measureId);
 
-        // FIXME: destroy the chart if it is relevant to the line
-        this.chartDiv && this._destroyChart(); // Destroy the chart if it exists
+        // Destroy the chart if it exists
+        this.chartDiv && this._destroyChart();
     }
 
 
