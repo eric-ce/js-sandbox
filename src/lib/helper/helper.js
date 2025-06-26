@@ -440,7 +440,8 @@ export function createCloseButton(options = {}) {
         textAlign: "center",
         cursor: "pointer",
         zIndex: "1001", // Ensure it's above the canvas
-        transition: "all 0.2s ease-in-out 0.1s"
+        transition: "all 0.2s ease-in-out 0.1s",
+        transformOrigin: "center center"
     });
 
     // Event listener for click
@@ -451,7 +452,7 @@ export function createCloseButton(options = {}) {
     // Event listeners for hover effect
     closeButton.addEventListener("mouseenter", () => {
         closeButton.style.color = hoverButtonColor;
-        closeButton.style.transform = "scale(1.3) rotate(180deg)"; // Slightly enlarge on hover
+        closeButton.style.transform = "scale(1.2) rotate(180deg)"; // Slightly enlarge on hover
         // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
     });
     closeButton.addEventListener("mouseleave", () => {

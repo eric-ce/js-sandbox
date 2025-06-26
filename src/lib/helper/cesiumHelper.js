@@ -712,7 +712,7 @@ export function createLabelPrimitive(coordinates, value, unit = "meter", options
         pixelOffset: new Cesium.Cartesian2(0, -20),
         font: "14px Roboto, sans-serif",
         fillColor: Cesium.Color.fromCssColorString(fillColor),
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         showBackground,
         backgroundColor: Cesium.Color.fromCssColorString(backgroundColor),
