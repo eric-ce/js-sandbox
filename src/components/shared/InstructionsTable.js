@@ -1,19 +1,39 @@
 import { sharedStyleSheet } from '../../styles/sharedStyle.js'
-import { helpBoxIcon } from '../../assets/icons.js';
+import { instructionsBoxIcon } from '../../assets/icons.js';
 import { createCloseButton, makeDraggable } from '../../lib/helper/helper.js';
 
-export class HelpTable extends HTMLElement {
-    _dragCleanup = null;
-
-    _helpBox = null; // The help box that contains the help table
-    _table = null;
-    _helpIconButton = null;
-
-    _isExpanded = false;
-    _helpVisible = false;
-
+export class InstructionsTable extends HTMLElement {
+    // External references
+    /** @type {string} */
     _modeId = null;
-    _container = null; // The map html container where the help table will be placed
+    /** @type {HTMLDivElement} */
+    _container = null; // The map html container where the instructions table will be placed
+
+    // Flags and state
+    /** @type {boolean} */
+    _isExpanded = false;
+
+    // Table related variables
+    /** @type {HTMLDivElement} */
+    _instructionsBox = null; // The instructions box that contains the instructions table
+    /** @type {HTMLTableElement} */
+    _table = null;
+    /** @type {HTMLButtonElement} */
+    _instructionsIconButton = null;
+    /** @type {DocumentFragment} */
+    _fragment = null;
+    /** @type {HTMLDivElement} */
+    _instructionsTableContainer = null;
+    /** @type {string} */
+    _header = null;
+    /** @type {Object.<string, string[]>} */
+    _modeMessages = null;
+
+    // Events
+    /** @type {function(): void} */
+    _dragCleanup = null;
+    /** @type {function(): void} */
+    _closeButtonCleanup;
 
     constructor() {
         super();
@@ -109,7 +129,7 @@ export class HelpTable extends HTMLElement {
 
     disconnectedCallback() {
         // Clean up event listeners and references
-        this._destroyHelpTable();
+        this._destroyInstructionsTable();
     }
 
 
@@ -117,14 +137,14 @@ export class HelpTable extends HTMLElement {
      * UI CREATION *
      ***************/
     /**
-     * Creates the UI structure for the help table
+     * Creates the UI structure for the instructions table
      */
     _createUI() {
-        this._createHelpTableContainer();
+        this._createInstructionTableContainer();
 
-        this._createHelpIcon();
+        this._createInstructionsIcon();
 
-        this._createHelpBox();
+        this._createInstructionsBox();
 
         // Set default content
         this.updateContent("default");
@@ -133,10 +153,10 @@ export class HelpTable extends HTMLElement {
     /**
      * Creates and configures the container element
      */
-    _createHelpTableContainer() {
-        this._helpTableContainer = document.createElement("div");
-        this._helpTableContainer.classList.add("help-table-container");
-        Object.assign(this._helpTableContainer.style, {
+    _createInstructionTableContainer() {
+        this._instructionsTableContainer = document.createElement("div");
+        this._instructionsTableContainer.classList.add("instructions-table-container");
+        Object.assign(this._instructionsTableContainer.style, {
             position: "absolute",
             top: "0",
             left: "0",
@@ -147,66 +167,64 @@ export class HelpTable extends HTMLElement {
         // set the initial size of the container
         this._updateContainerSize();
 
-        this.shadowRoot.appendChild(this._helpTableContainer);
+        this.shadowRoot.appendChild(this._instructionsTableContainer);
     }
 
-    _createHelpIcon() {
-        // Create a button to toggle the help box.
-        this._helpIconButton = document.createElement("button");
-        this._helpIconButton.className = "annotate-button animate-on-show visible";
-        this._helpIconButton.style.position = "absolute";
-        this._helpIconButton.innerHTML = `<img src="${helpBoxIcon}" alt="help box icon" style="width: 30px; height: 30px;" aria-hidden="true">`;
-        this._helpIconButton.setAttribute("type", "button");
-        this._helpIconButton.setAttribute("aria-label", "Toggle help box for instructions");
-        this._helpIconButton.setAttribute("aria-pressed", "false");
+    _createInstructionsIcon() {
+        // Create a button to toggle the instructions box.
+        this._instructionsIconButton = document.createElement("button");
+        this._instructionsIconButton.className = "annotate-button animate-on-show visible";
+        this._instructionsIconButton.style.position = "absolute";
+        this._instructionsIconButton.innerHTML = `<img src="${instructionsBoxIcon}" alt="instructions box icon" style="width: 30px; height: 30px;" aria-hidden="true">`;
+        this._instructionsIconButton.setAttribute("type", "button");
+        this._instructionsIconButton.setAttribute("aria-label", "Toggle box for instructions");
+        this._instructionsIconButton.setAttribute("aria-pressed", "false");
 
-        this._helpIconButton.addEventListener("click", (e) => {
+        this._instructionsIconButton.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this._showHelpBox();
+            this._showInstructionsBox();
         });
         // Append to container initially
-        this._helpTableContainer.appendChild(this._helpIconButton);
+        this._instructionsTableContainer.appendChild(this._instructionsIconButton);
     }
 
     /**
-     * Creates the help box and table elements
+     * Creates the instructions box and table elements
      */
-    _createHelpBox() {
-        // Create the help box container.
-        this._helpBox = document.createElement("div");
-        this._helpBox.className = "info-box help-box hidden";
-        this._helpBox.style.position = "absolute";
+    _createInstructionsBox() {
+        // Create the instructions box container.
+        this._instructionsBox = document.createElement("div");
+        this._instructionsBox.className = "info-box instructions-box hidden";
+        this._instructionsBox.style.position = "absolute";
 
-        this._helpBox.addEventListener("click", (e) => {
+        this._instructionsBox.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this._hideHelpBox();
+            this._hideInstructionsBox();
         });
 
-        // Create a table for the help instructions.
+        // Create a table for the instructions.
         this._table = document.createElement("table");
         this._table.style.display = "table";
         this._table.style.width = "100%";
         this._table.style.paddingTop = "5px";
-        // Append table to help box
-        this._helpBox.appendChild(this._table);
+        // Append table to instructions box
+        this._instructionsBox.appendChild(this._table);
 
-        // Create close button for the help box
-        const closeButton = createCloseButton({
+        // Create close button for the instructions box
+        const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
             color: "#edffff",
             top: "2px",
             right: "0px",
-            click: (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                this._destroyHelpTable();
+            clickCallback: () => {
+                this._destroyInstructionsTable();
             }
         });
-        this._helpBox.appendChild(closeButton); // Add close button to help box
-
+        this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function
+        this._instructionsBox.appendChild(closeButton); // Add close button to instructions box
         // Store in fragment initially
-        this._fragment.appendChild(this._helpBox);
+        this._fragment.appendChild(this._instructionsBox);
     }
 
 
@@ -214,24 +232,24 @@ export class HelpTable extends HTMLElement {
      * TOGGLE LOGIC *
      ****************/
     /**
-     * Shows the help box and hides the icon
+     * Shows the instructions box and hides the icon
      */
-    _showHelpBox() {
+    _showInstructionsBox() {
         // Update state
         this._isExpanded = true;
 
-        this._helpBox.classList.add("visible");
-        this._helpBox.classList.remove("hidden");
+        this._instructionsBox.classList.add("visible");
+        this._instructionsBox.classList.remove("hidden");
 
         // Store icon in fragment
-        if (this._helpIconButton.parentNode === this._helpTableContainer) {
-            this._fragment.appendChild(this._helpIconButton);
+        if (this._instructionsIconButton.parentNode === this._instructionsTableContainer) {
+            this._fragment.appendChild(this._instructionsIconButton);
         }
 
-        // Move helpBox to container if it's in the fragment
-        if (this._helpBox.parentNode !== this._helpTableContainer) {
-            this._helpTableContainer.appendChild(this._helpBox);
-            // set help table container width and height for drag position usage
+        // Move instructionsBox to container if it's in the fragment
+        if (this._instructionsBox.parentNode !== this._instructionsTableContainer) {
+            this._instructionsTableContainer.appendChild(this._instructionsBox);
+            // set instructions table container width and height for drag position usage
             this._updateContainerSize();
         }
         // Only constrain to bounds if expanded table exceeds container
@@ -239,38 +257,38 @@ export class HelpTable extends HTMLElement {
             this._constrainToContainer();
         });
         // Update ARIA state
-        this._helpIconButton.setAttribute("aria-pressed", "true");
+        this._instructionsIconButton.setAttribute("aria-pressed", "true");
     }
 
     /**
-     * Hides the help box and shows the icon
+     * Hides the instructions box and shows the icon
      */
-    _hideHelpBox() {
+    _hideInstructionsBox() {
         // Update state
         this._isExpanded = false;
 
         // Update element classes
-        this._helpBox.classList.add("hidden");
-        this._helpBox.classList.remove("visible");
+        this._instructionsBox.classList.add("hidden");
+        this._instructionsBox.classList.remove("visible");
 
-        // Store helpBox in fragment
-        if (this._helpBox.parentNode === this._helpTableContainer) {  // ensure helpBox is in the container
-            this._fragment.appendChild(this._helpBox);
+        // Store instructionsBox in fragment
+        if (this._instructionsBox.parentNode === this._instructionsTableContainer) {  // ensure instructionsBox is in the container
+            this._fragment.appendChild(this._instructionsBox);
         }
 
         // Move icon to container if it's in the fragment
-        if (this._helpIconButton.parentNode !== this._helpTableContainer) { // ensure icon is not already in the container
-            this._helpTableContainer.appendChild(this._helpIconButton);
+        if (this._instructionsIconButton.parentNode !== this._instructionsTableContainer) { // ensure icon is not already in the container
+            this._instructionsTableContainer.appendChild(this._instructionsIconButton);
 
-            // set help table container width and height for drag position usage
+            // set instructions table container width and height for drag position usage
             this._updateContainerSize();
         }
 
-        this._helpIconButton.classList.add("visible");
-        this._helpIconButton.classList.remove("hidden");
+        this._instructionsIconButton.classList.add("visible");
+        this._instructionsIconButton.classList.remove("hidden");
 
         // Update ARIA state
-        this._helpIconButton.setAttribute("aria-pressed", "false");
+        this._instructionsIconButton.setAttribute("aria-pressed", "false");
     }
 
     /**********************************
@@ -280,17 +298,17 @@ export class HelpTable extends HTMLElement {
      * Updates container size based on expanded state
      */
     _updateContainerSize() {
-        const elementToMeasure = this._isExpanded ? this._helpBox : this._helpIconButton;
+        const elementToMeasure = this._isExpanded ? this._instructionsBox : this._instructionsIconButton;
         if (elementToMeasure && elementToMeasure.isConnected) {
             const rect = elementToMeasure.getBoundingClientRect();
-            this._helpTableContainer.style.width = `${rect.width}px`;
-            this._helpTableContainer.style.height = `${rect.height}px`;
+            this._instructionsTableContainer.style.width = `${rect.width}px`;
+            this._instructionsTableContainer.style.height = `${rect.height}px`;
 
-            this._helpTableContainer.dataset.state = this._isExpanded ? "expanded" : "collapsed";
+            this._instructionsTableContainer.dataset.state = this._isExpanded ? "expanded" : "collapsed";
         } else {
             // Fallback dimensions if measurement fails
-            this._helpTableContainer.style.width = "45px";
-            this._helpTableContainer.style.height = "40px";
+            this._instructionsTableContainer.style.width = "45px";
+            this._instructionsTableContainer.style.height = "40px";
         }
     }
 
@@ -299,15 +317,15 @@ export class HelpTable extends HTMLElement {
      * @private
      */
     _constrainToContainer() {
-        if (!this._container || !this._helpTableContainer) return;
+        if (!this._container || !this._instructionsTableContainer) return;
 
         const containerRect = this._container.getBoundingClientRect();
-        const helpTableRect = this._helpTableContainer.getBoundingClientRect();
+        const instructionsTableRect = this._instructionsTableContainer.getBoundingClientRect();
 
-        if (containerRect.width === 0 || helpTableRect.width === 0) return;
+        if (containerRect.width === 0 || instructionsTableRect.width === 0) return;
 
         // Get current position
-        const style = window.getComputedStyle(this._helpTableContainer);
+        const style = window.getComputedStyle(this._instructionsTableContainer);
         const transform = style.transform;
         let currentX = 0, currentY = 0;
 
@@ -331,8 +349,8 @@ export class HelpTable extends HTMLElement {
         }
 
         // Calculate max allowed position
-        const maxX = containerRect.width - helpTableRect.width;
-        const maxY = containerRect.height - helpTableRect.height;
+        const maxX = containerRect.width - instructionsTableRect.width;
+        const maxY = containerRect.height - instructionsTableRect.height;
 
         // Only reposition if out of bounds
         const newX = Math.max(0, Math.min(currentX, maxX));
@@ -340,7 +358,7 @@ export class HelpTable extends HTMLElement {
 
         // Apply correction only if needed
         if (newX !== currentX || newY !== currentY) {
-            this._helpTableContainer.style.transform = `translate(${newX}px, ${newY}px)`;
+            this._instructionsTableContainer.style.transform = `translate(${newX}px, ${newY}px)`;
         }
     }
 
@@ -350,23 +368,23 @@ export class HelpTable extends HTMLElement {
      * @private
      */
     _enableDragging() {
-        if (!this._helpTableContainer || !this._container) return;
+        if (!this._instructionsTableContainer || !this._container) return;
 
-        this._dragCleanup = makeDraggable(this._helpTableContainer, this._container);
+        this._dragCleanup = makeDraggable(this._instructionsTableContainer, this._container);
     }
 
     /**
-     * Updates the help table initial position based on viewer dimensions
+     * Updates the instructions table initial position based on viewer dimensions
      */
     _updatePositions() {
         const containerRect = this.container.getBoundingClientRect();
-        const helpTableContainer = this._helpTableContainer.getBoundingClientRect();
-        if (!containerRect || !this._helpTableContainer || containerRect.width === 0 || helpTableContainer.width === 0) return;
+        const instructionsTableContainer = this._instructionsTableContainer.getBoundingClientRect();
+        if (!containerRect || !this._instructionsTableContainer || containerRect.width === 0 || instructionsTableContainer.width === 0) return;
 
-        const x = containerRect.width - helpTableContainer.width - 5;
+        const x = containerRect.width - instructionsTableContainer.width - 5;
         const y = 130;
 
-        this._helpTableContainer.style.transform = `translate(${x}px, ${y}px)`;
+        this._instructionsTableContainer.style.transform = `translate(${x}px, ${y}px)`;
     }
 
 
@@ -374,7 +392,7 @@ export class HelpTable extends HTMLElement {
      * TABLE LOGIC *
      ***************/
     /**
-     * Updates the help table content based on the mode key
+     * Updates the instructions table content based on the mode key
      * @param {String} modeKey - The key for the mode to display instructions for
      */
     updateContent(modeKey) {
@@ -404,16 +422,16 @@ export class HelpTable extends HTMLElement {
     /*********
      * RESET *
      *********/
-    _destroyHelpTable() {
+    _destroyInstructionsTable() {
         // this._fragment.remove();
-        // this._helpTableContainer.remove();
+        // this._instructionsTableContainer.remove();
         this.remove();
 
         this._container = null;
-        this._helpBox = null;
+        this._instructionsBox = null;
         this._table = null;
-        this._helpIconButton = null;
-        this._helpTableContainer = null;
+        this._instructionsIconButton = null;
+        this._instructionsTableContainer = null;
 
         this._modeMessages = null;
         this._header = null;
@@ -423,14 +441,19 @@ export class HelpTable extends HTMLElement {
         this.shadowRoot.innerHTML = ""; // Clear the shadow DOM
         this.shadowRoot.adoptedStyleSheets = []; // Clear the adopted stylesheets
         this._isExpanded = false;
-        this._helpVisible = false;
 
         // Clean up dragging
         if (this._dragCleanup) {
             this._dragCleanup();
             this._dragCleanup = null;
         }
+
+        // Clean up close button
+        if (this._closeButtonCleanup) {
+            this._closeButtonCleanup();
+            this._closeButtonCleanup = null;
+        }
     }
 }
 
-customElements.define("help-table", HelpTable);
+customElements.define("instructions-table", InstructionsTable);

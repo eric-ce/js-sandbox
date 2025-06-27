@@ -34,7 +34,6 @@ import dataPool from "../../lib/data/DataPool.js";
  */
 class MeasureModeGoogle extends MeasureModeBase {
     /**
-     * 
      * @param {string} modeName - The name of the mode (e.g., "Point", "Line", "Polygon")
      * @param {GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
      * @param {GoogleDragHandler} dragHandler - The drag handler abstraction (can be null if not used).

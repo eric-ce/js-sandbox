@@ -21,8 +21,8 @@ import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
 import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
-import { HelpTable } from "./shared/HelpTable.js";
-import { LogTable } from "./shared/LogTable.js";
+import { InstructionsTable } from "./shared/InstructionsTable.js";
+import { DataLogTable } from "./shared/DataLogTable.js";
 import { makeDraggable } from "../lib/helper/helper.js";
 
 
@@ -101,9 +101,9 @@ export class MeasureComponentBase extends HTMLElement {
     /** @type {{string: HTMLElement}} */
     uiButtons = {};
     /** @type {HTMLElement | null} */
-    logTable = null;
+    dataLogTable = null;
     /** @type {HTMLElement | null} */
-    helpTable = null;
+    instructionsTable = null;
     /** @type {Array<object>} */ // Consider a more specific type for mode configs
     availableModeConfigs = [];
     /** @type {{ [modeId: string]: object }} */
@@ -752,13 +752,13 @@ export class MeasureComponentBase extends HTMLElement {
 
             // show help table 
 
-            this._showHelpTable();
-            this._showLogTable();
+            this._showInstructionsTable();
+            this._showDataLogTable();
             requestAnimationFrame(() => {
-                this.helpTable._updatePositions(); // One-time initial positioning after render
-                this.helpTable._enableDragging();   // Enable dragging with built-in resize handling
-                this.logTable._updatePositions(); // One-time initial positioning after render
-                this.logTable._enableDragging();   // Enable dragging with built-in resize handling
+                // this.instructionsTable._updatePositions(); // One-time initial positioning after render
+                this.instructionsTable._enableDragging();   // Enable dragging with built-in resize handling
+                // this.dataLogTable._updatePositions(); // One-time initial positioning after render
+                this.dataLogTable._enableDragging();   // Enable dragging with built-in resize handling
             });
         } catch (error) {
             console.error(`Error activating mode ${modeId}:`, error);
@@ -860,54 +860,53 @@ export class MeasureComponentBase extends HTMLElement {
     /****************************
      * HELP TABLE AND LOG TABLE *
      ****************************/
-    _showHelpTable() {
+    _showInstructionsTable() {
         // Clear reference if element was removed
-        if (this.helpTable && !this.helpTable.isConnected) {
-            this.helpTable = null;
+        if (this.instructionsTable && !this.instructionsTable.isConnected) {
+            this.instructionsTable = null;
         }
 
         // Create if doesn't exist
-        if (!this.helpTable) {
-            this._createHelpTable();
+        if (!this.instructionsTable) {
+            this._createInstructionsTable();
+            this.instructionsTable._updatePositions();
         }
 
-        this.helpTable.modeId = this.activeModeId;
-        this.helpTable._updatePositions();
+        this.instructionsTable.modeId = this.activeModeId;
     }
 
-    _createHelpTable() {
-        this.helpTable = document.createElement("help-table");
-        // set properties for help table
+    _createInstructionsTable() {
+        this.instructionsTable = document.createElement("instructions-table");
+        // set properties for instructions table
         const mapContainer = this._getContainer();
-        this.helpTable.container = mapContainer;
-        this.helpTable.modeId = this.activeModeId;
+        this.instructionsTable.container = mapContainer;
+        this.instructionsTable.modeId = this.activeModeId;
 
-        mapContainer.appendChild(this.helpTable);
+        mapContainer.appendChild(this.instructionsTable);
     }
 
-    _showLogTable() {
+    _showDataLogTable() {
         // Clear reference if element was removed
-        if (this.logTable && !this.logTable.isConnected) {
-            this.logTable = null;
+        if (this.dataLogTable && !this.dataLogTable.isConnected) {
+            this.dataLogTable = null;
         }
 
         // Create if doesn't exist
-        if (!this.logTable) {
-            this._createLogTable();
+        if (!this.dataLogTable) {
+            this._createDataLogTable();
+            this.dataLogTable._updatePositions();
         }
-
-        this.logTable._updatePositions();
     }
 
-    _createLogTable() {
-        this.logTable = document.createElement("log-table");
+    _createDataLogTable() {
+        this.dataLogTable = document.createElement("data-log-table");
         // set properties for log table
-        this.logTable.stateManager = this.stateManager;
-        this.logTable.emitter = this.emitter;
+        this.dataLogTable.stateManager = this.stateManager;
+        this.dataLogTable.emitter = this.emitter;
         const mapContainer = this._getContainer();
-        this.logTable.container = mapContainer;
+        this.dataLogTable.container = mapContainer;
 
-        mapContainer.appendChild(this.logTable);
+        mapContainer.appendChild(this.dataLogTable);
     }
 
     _getContainer() {

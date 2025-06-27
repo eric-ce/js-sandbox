@@ -1,21 +1,56 @@
 import { sharedStyleSheet } from '../../styles/sharedStyle.js';
-import { logBoxIcon } from '../../assets/icons.js';
+import { dataLogBoxIcon } from '../../assets/icons.js';
 import { createCloseButton, makeDraggable } from '../../lib/helper/helper.js';
+import dataPool from '../../lib/data/DataPool.js';
 
-export class LogTable extends HTMLElement {
+/**@typedef {import('../../lib/state/StateManager.js')} StateManager */
+/**@typedef {import('../../lib/events/ShareEmitter.js')} Emitter */
+
+/**
+ * @typedef MeasurementGroup
+ * @property {string} id - Unique identifier for the measurement
+ * @property {string} mode - Measurement mode (e.g., "distance")
+ * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
+ * @property {number} labelNumberIndex - Index used for sequential labeling
+ * @property {'pending'|'completed'} status - Current state of the measurement
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
+ * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
+ */
+
+export class DataLogTable extends HTMLElement {
+    // Events
+    /** @type {function(): void} */
     _dragCleanup = null;
+    /** @type {function(): void} */
+    _closeButtonCleanup;
+    /** @type {Set<{button: HTMLButtonElement, handler: function}>} */
+    _copyButtonCleanupSet; // Renamed from _copyButtonHandlers
 
-    _records = [];
+    // External references
+    /** @type {Emitter} */
     _emitter = null;
+    /** @type {StateManager} */
     _stateManager = null;
-
+    /** @type {HTMLElement} */
     _container = null;
+
+    // Table related variables
+    /** @type {string[]} */
+    _records = [];
+    /** @type {DocumentFragment} */
     _fragment = null;
-    _logBox = null;
-    _logTableContainer = null;
-    _logIconButton = null;
+    /** @type {HTMLDivElement} */
+    _dataLogBox = null;
+    /** @type {HTMLDivElement} */
+    _dataLogTableContainer = null;
+    /** @type {HTMLButtonElement} */
+    _dataLogIconButton = null;
+    /** @type {HTMLTableElement} */
     _table = null;
 
+    // Flags and state
+    /** @type {boolean} */
     _isExpanded = false;
 
     constructor() {
@@ -25,7 +60,7 @@ export class LogTable extends HTMLElement {
         // Initialize document fragment
         this._fragment = document.createDocumentFragment();
 
-        // create log table UI
+        // create data log table UI
         this._createUI();
     }
 
@@ -39,11 +74,18 @@ export class LogTable extends HTMLElement {
     set emitter(emitter) {
         this._emitter = emitter;
 
+        // Initial data load when emitter is set
+        this._loadInitialData();
+
         // listen for data:updated
-        this._emitter.on('data:updated', (data) => this._handleDataAdded(data));
+        this._emitter.on('data:updated', () => {
+            const data = dataPool.data;
+            if (data.length === 0) return; // No data to process
+            this._handleData(data);
+        });
 
         // listen for mode:selected
-        this._emitter.on('selected:info', (info) => this._handleModeSelected(info));
+        // this._emitter.on('selected:info', (info) => this._handleModeSelected(info));
     }
 
     get stateManager() {
@@ -72,7 +114,7 @@ export class LogTable extends HTMLElement {
     }
 
     disconnectedCallback() {
-        this._destroyLogTable();
+        this._destroyDataLogTable();
     }
 
 
@@ -80,73 +122,74 @@ export class LogTable extends HTMLElement {
      * UI CREATION *
      ***************/
     /**
-     * Creates the UI structure for the log table
+     * Creates the UI structure for the data log table
      */
     _createUI() {
         // Create the container to wrap the whole components
-        this._createTableContainer();
-        // Create the log table icon to toggle the log box
-        this._createTableIcon();
-        // Create the log box that contains the table
-        this._createTable();
+        this._createDataTableContainer();
+        // Create the data log table icon to toggle the data log box
+        this._createDataTableIcon();
+        // Create the data log box that contains the table
+        this._createDataTable();
     }
 
     /**
      * Creates and configures the container element
      */
-    _createTableContainer() {
-        this._logTableContainer = document.createElement("div");
-        this._logTableContainer.classList.add("log-table-container");
-        this._logTableContainer.style.position = "absolute";
-        this._logTableContainer.style.top = "0";
-        this._logTableContainer.style.left = "0";
-        this._logTableContainer.style.zIndex = "1000"; // Ensure it appears above other elements
+    _createDataTableContainer() {
+        this._dataLogTableContainer = document.createElement("div");
+        this._dataLogTableContainer.classList.add("data-log-table-container");
+        this._dataLogTableContainer.style.position = "absolute";
+        this._dataLogTableContainer.style.top = "0";
+        this._dataLogTableContainer.style.left = "0";
+        this._dataLogTableContainer.style.zIndex = "1000"; // Ensure it appears above other elements
 
         // set the initial size of the container
         this._updateContainerSize();
 
-        this.shadowRoot.appendChild(this._logTableContainer);
+        this.shadowRoot.appendChild(this._dataLogTableContainer);
     }
 
     /**
-     * Creates the toggle button for showing the log table
+     * Creates the toggle button for showing the datalog table
      * Initially stored in the fragment, toggle to show or hide when clicked
      */
-    _createTableIcon() {
-        // Button that toggles the log box
-        this._logIconButton = document.createElement("button");
-        this._logIconButton.className = "annotate-button animate-on-show visible";
-        this._logIconButton.style.position = "absolute";
-        this._logIconButton.innerHTML = `<img src="${logBoxIcon}" alt="log" style="width: 30px; height: 30px;" aria-hidden="true">`;
-        this._logIconButton.setAttribute("type", "button");
-        this._logIconButton.setAttribute("aria-label", "Toggle log table");
-        this._logIconButton.setAttribute("aria-pressed", "false");
+    _createDataTableIcon() {
+        // Button that toggles the data log box
+        this._dataLogIconButton = document.createElement("button");
+        this._dataLogIconButton.className = "annotate-button animate-on-show visible";
+        this._dataLogIconButton.style.position = "absolute";
+        this._dataLogIconButton.innerHTML = `<img src="${dataLogBoxIcon}" alt="data log icon" style="width: 30px; height: 30px;" aria-hidden="true">`;
+        this._dataLogIconButton.setAttribute("type", "button");
+        this._dataLogIconButton.setAttribute("aria-label", "Toggle data log table");
+        this._dataLogIconButton.setAttribute("aria-pressed", "false");
+        this._dataLogIconButton.title = "Toggle data log table";
 
-        // Toggle the log box on click
-        this._logIconButton.addEventListener("click", (e) => {
+        // Toggle the data log box on click
+        this._dataLogIconButton.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this._showLogBox();
+            this._showDataLogBox();
         });
 
         // Store in fragment initially
-        this._fragment.appendChild(this._logIconButton);
+        this._fragment.appendChild(this._dataLogIconButton);
     }
 
     /**
-     * Creates the log box and table elements
+     * Creates the data log box and table elements
      */
-    _createTable() {
-        // Create container div for the log table
-        this._logBox = document.createElement("div");
-        this._logBox.className = "info-box log-box visible";
-        this._logBox.style.position = "absolute";
+    _createDataTable() {
+        // Create container div for the data log table
+        this._dataLogBox = document.createElement("div");
+        this._dataLogBox.className = "info-box data-log-box visible";
+        this._dataLogBox.style.position = "absolute";
 
         // Add click handler to close log box when clicked
-        this._logBox.addEventListener("click", (e) => {
+        this._dataLogBox.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this._hideLogBox();
+            this._hideDataLogBox();
         });
 
         // Create the table element 
@@ -158,24 +201,21 @@ export class LogTable extends HTMLElement {
 
         // Create a header row
         this._table.appendChild(this._createRow("Actions"));
-        // Append table to logBox
-        this._logBox.appendChild(this._table);
+        // Append table to dataLogBox
+        this._dataLogBox.appendChild(this._table);
 
         // Create close button 
-        const closeButton = createCloseButton({
+        const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
             color: "#edffff",
             top: "2px",
             right: "0px",
-            click: (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                this._destroyLogTable();
-            }
+            clickCallback: () => this._destroyDataLogTable()
         });
-        this._logBox.appendChild(closeButton); // Add close button to log box
+        this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function
+        this._dataLogBox.appendChild(closeButton); // Add close button to data log box
 
         // Append to container initially
-        this._logTableContainer.appendChild(this._logBox);
+        this._dataLogTableContainer.appendChild(this._dataLogBox);
     }
 
 
@@ -183,26 +223,26 @@ export class LogTable extends HTMLElement {
      * TOGGLE LOGIC *
      ****************/
     /**
-     * Shows the log box and hides the icon
+     * Shows the data log box and hides the icon
      */
-    _showLogBox() {
+    _showDataLogBox() {
         // Update state
         this._isExpanded = true;
 
         // Update element classes
-        this._logBox.classList.add("visible");
-        this._logBox.classList.remove("hidden");
+        this._dataLogBox.classList.add("visible");
+        this._dataLogBox.classList.remove("hidden");
 
         // Store icon in fragment
-        if (this._logIconButton.parentNode === this._logTableContainer) {    // ensure icon is in the container
-            this._fragment.appendChild(this._logIconButton);
+        if (this._dataLogIconButton.parentNode === this._dataLogTableContainer) {    // ensure icon is in the container
+            this._fragment.appendChild(this._dataLogIconButton);
         }
 
-        // Move logBox to container if it's in the fragment
-        if (this._logBox.parentNode !== this._logTableContainer) {   // ensure logBox is not already in the container
-            this._logTableContainer.appendChild(this._logBox);
+        // Move data logBox to container if it's in the fragment
+        if (this._dataLogBox.parentNode !== this._dataLogTableContainer) {   // ensure logBox is not already in the container
+            this._dataLogTableContainer.appendChild(this._dataLogBox);
 
-            // set log table container width and height for drag position usage
+            // set data log table container width and height for drag position usage
             this._updateContainerSize();
         }
         // Only constrain to bounds if expanded table exceeds container
@@ -210,38 +250,38 @@ export class LogTable extends HTMLElement {
             this._constrainToContainer();
         });
         // Update ARIA state
-        this._logIconButton.setAttribute("aria-pressed", "true");
+        this._dataLogIconButton.setAttribute("aria-pressed", "true");
     }
 
     /**
-     * Hides the log box and shows the icon
+     * Hides the data log box and shows the icon
      */
-    _hideLogBox() {
+    _hideDataLogBox() {
         // Update state
         this._isExpanded = false;
 
         // Update element classes
-        this._logBox.classList.add("hidden");
-        this._logBox.classList.remove("visible");
+        this._dataLogBox.classList.add("hidden");
+        this._dataLogBox.classList.remove("visible");
 
-        // Store logBox in fragment
-        if (this._logBox.parentNode === this._logTableContainer) {  // ensure logBox is in the container
-            this._fragment.appendChild(this._logBox);
+        // Store data logBox in fragment
+        if (this._dataLogBox.parentNode === this._dataLogTableContainer) {  // ensure data logBox is in the container
+            this._fragment.appendChild(this._dataLogBox);
         }
 
         // Move icon to container if it's in the fragment
-        if (this._logIconButton.parentNode !== this._logTableContainer) { // ensure icon is not already in the container
-            this._logTableContainer.appendChild(this._logIconButton);
+        if (this._dataLogIconButton.parentNode !== this._dataLogTableContainer) { // ensure icon is not already in the container
+            this._dataLogTableContainer.appendChild(this._dataLogIconButton);
 
-            // set log table container width and height for drag position usage
+            // set data log table container width and height for drag position usage
             this._updateContainerSize();
         }
 
-        this._logIconButton.classList.add("visible");
-        this._logIconButton.classList.remove("hidden");
+        this._dataLogIconButton.classList.add("visible");
+        this._dataLogIconButton.classList.remove("hidden");
 
         // Update ARIA state
-        this._logIconButton.setAttribute("aria-pressed", "false");
+        this._dataLogIconButton.setAttribute("aria-pressed", "false");
     }
 
 
@@ -252,17 +292,17 @@ export class LogTable extends HTMLElement {
      * Updates container size based on expanded state
      */
     _updateContainerSize() {
-        const elementToMeasure = this._isExpanded ? this._logBox : this._logIconButton;
+        const elementToMeasure = this._isExpanded ? this._dataLogBox : this._dataLogIconButton;
         if (elementToMeasure && elementToMeasure.isConnected) {
             const rect = elementToMeasure.getBoundingClientRect();
-            this._logTableContainer.style.width = `${rect.width}px`;
-            this._logTableContainer.style.height = `${rect.height}px`;
+            this._dataLogTableContainer.style.width = `${rect.width}px`;
+            this._dataLogTableContainer.style.height = `${rect.height}px`;
 
-            this._logTableContainer.dataset.state = this._isExpanded ? "expanded" : "collapsed";
+            this._dataLogTableContainer.dataset.state = this._isExpanded ? "expanded" : "collapsed";
         } else {
             // Fallback dimensions if measurement fails
-            this._logTableContainer.style.width = "250px";
-            this._logTableContainer.style.height = "250px";
+            this._dataLogTableContainer.style.width = "250px";
+            this._dataLogTableContainer.style.height = "250px";
         }
     }
 
@@ -271,15 +311,15 @@ export class LogTable extends HTMLElement {
     * @private
     */
     _constrainToContainer() {
-        if (!this._container || !this._logTableContainer) return;
+        if (!this._container || !this._dataLogTableContainer) return;
 
         const containerRect = this._container.getBoundingClientRect();
-        const logTableRect = this._logTableContainer.getBoundingClientRect();
+        const dataLogTableRect = this._dataLogTableContainer.getBoundingClientRect();
 
-        if (containerRect.width === 0 || logTableRect.width === 0) return;
+        if (containerRect.width === 0 || dataLogTableRect.width === 0) return;
 
         // Get current position
-        const style = window.getComputedStyle(this._logTableContainer);
+        const style = window.getComputedStyle(this._dataLogTableContainer);
         const transform = style.transform;
         let currentX = 0, currentY = 0;
 
@@ -303,8 +343,8 @@ export class LogTable extends HTMLElement {
         }
 
         // Calculate max allowed position
-        const maxX = containerRect.width - logTableRect.width;
-        const maxY = containerRect.height - logTableRect.height;
+        const maxX = containerRect.width - dataLogTableRect.width;
+        const maxY = containerRect.height - dataLogTableRect.height;
 
         // Only reposition if out of bounds
         const newX = Math.max(0, Math.min(currentX, maxX));
@@ -312,7 +352,7 @@ export class LogTable extends HTMLElement {
 
         // Apply correction only if needed
         if (newX !== currentX || newY !== currentY) {
-            this._logTableContainer.style.transform = `translate(${newX}px, ${newY}px)`;
+            this._dataLogTableContainer.style.transform = `translate(${newX}px, ${newY}px)`;
         }
     }
 
@@ -322,10 +362,10 @@ export class LogTable extends HTMLElement {
      * @private
      */
     _enableDragging() {
-        if (!this._logTableContainer || !this._container) return;
+        if (!this._dataLogTableContainer || !this._container) return;
 
         this._dragCleanup = makeDraggable(
-            this._logTableContainer,
+            this._dataLogTableContainer,
             this._container
         );
     }
@@ -335,13 +375,13 @@ export class LogTable extends HTMLElement {
      */
     _updatePositions() {
         const containerRect = this.container.getBoundingClientRect();
-        const logTableContainer = this._logTableContainer.getBoundingClientRect();
-        if (!containerRect || !this._logTableContainer || containerRect.width === 0 || logTableContainer.width === 0) return;
+        const logTableContainer = this._dataLogTableContainer.getBoundingClientRect();
+        if (!containerRect || !this._dataLogTableContainer || containerRect.width === 0 || logTableContainer.width === 0) return;
 
         const x = containerRect.width - logTableContainer.width - 5;
         const y = 300;
 
-        this._logTableContainer.style.transform = `translate(${x}px, ${y}px)`;
+        this._dataLogTableContainer.style.transform = `translate(${x}px, ${y}px)`;
     }
 
 
@@ -368,9 +408,22 @@ export class LogTable extends HTMLElement {
         buttonCell.style.width = "30px";
         buttonCell.style.textAlign = "center";
 
-        // Copy button that is in the button cell
+        // Create the copy button
+        const copyButton = this._createCopyButton(text);
+
+        // if text == "Actions", don't append the copy button
+        row.appendChild(textCell);
+        if (text !== "Actions") {
+            buttonCell.appendChild(copyButton);
+        }
+        row.appendChild(buttonCell);
+
+        return row;
+    }
+
+    _createCopyButton(text) {
         const copyButton = document.createElement("button");
-        copyButton.innerHTML = "📋"; // Copy icon
+        copyButton.innerHTML = "📋";
         Object.assign(copyButton.style, {
             background: "transparent",
             border: "1px solid #ccc",
@@ -384,18 +437,19 @@ export class LogTable extends HTMLElement {
         copyButton.setAttribute("aria-label", `Copy "${text}"`);
         copyButton.setAttribute("title", "Copy to clipboard");
 
-        // Copy functionality
-        copyButton.addEventListener("click", async (e) => {
+        if (!this._copyButtonCleanupSet) {
+            this._copyButtonCleanupSet = new Set();
+        }
+
+        const copyHandler = async (e) => {
             e.preventDefault();
-            e.stopPropagation(); // Prevent triggering parent click handlers
+            e.stopPropagation();
 
             try {
-                // extract only the numbers from the text but keep the , - symbol
                 const formattedText = text.replace(/[^0-9,.\s-]/g, '').trim();
-                const textToCopy = formattedText.replace(/\s+/g, ' '); // Replace multiple spaces with a single space
+                const textToCopy = formattedText.replace(/\s+/g, ' ');
                 await navigator.clipboard.writeText(textToCopy);
 
-                // Visual feedback
                 const originalText = copyButton.innerHTML;
                 copyButton.innerHTML = "✓";
                 copyButton.style.color = "#4CAF50";
@@ -407,52 +461,54 @@ export class LogTable extends HTMLElement {
 
             } catch (err) {
                 console.warn('Failed to copy text:', err);
-
-                // Fallback: select text for manual copy
-                const range = document.createRange();
-                range.selectNodeContents(textCell);
-                const selection = window.getSelection();
-                selection.removeAllRanges();
-                selection.addRange(range);
             }
-        });
+        };
 
-        // if text == "Actions", don't append the copy button
-        row.appendChild(textCell);
-        if (text !== "Actions") {
-            buttonCell.appendChild(copyButton);
-        }
-        row.appendChild(buttonCell);
+        // Fix: Use the actual handler, not undefined _copyButtonHandler
+        copyButton.addEventListener("click", copyHandler);
 
-        return row;
+        // Store for cleanup
+        this._copyButtonCleanupSet.add({ button: copyButton, handler: copyHandler });
+
+        return copyButton;
     }
 
     /**
-     * Handles the "data:updated" event from the emitter.
-     * @param {Object} record - The measure record to be processed. 
-     * @returns  
+     * Handles dataPool data and triggered by "data:updated" event from the emitter.
+     * @param {MeasurementGroup[]} data - The dataPool data to be processed. 
+     * @returns {void} 
      */
-    _handleDataAdded(data) {
-        // Only process if the data’s status is "completed"
-        if (!data || data.status !== "completed") return;
+    _handleData(data) {
+        // Handle array of measurements from dataPool
+        if (!Array.isArray(data) || data.length === 0) return;
 
-        // Convert the record into an array of formatted strings.
-        const formattedLines = this._formatRecordsToStrings(data);
+        // Process only completed measurements
+        const completedMeasurements = data.filter(measurement =>
+            measurement && measurement.status === "completed"
+        );
 
-        // Append each formatted line to the internal _records array.
-        formattedLines.forEach(line => {
-            this._records.push(line);
+        if (completedMeasurements.length === 0) return;
+
+        // Clear existing records to show current state
+        this._records = [];
+
+        // Process each completed measurement
+        completedMeasurements.forEach(measurement => {
+            const formattedLines = this._formatRecordsToStrings(measurement);
+            formattedLines.forEach(line => {
+                this._records.push(line);
+            });
         });
 
-        // Update the table UI.
+        // Update the table UI
         this._updateTable();
     }
 
     /**
- * Converts the received record's _records value into an array of display strings.
- * @param {object} data - The update of measure data object
- * @returns {string[]} An array of formatted strings.
- */
+     * Converts the received record's _records value into an array of display strings.
+     * @param {object} data - The update of measure data object
+     * @returns {string[]} An array of formatted strings.
+     */
     _formatRecordsToStrings(data) {
         const { mode, _records } = data;
 
@@ -533,23 +589,23 @@ export class LogTable extends HTMLElement {
         return lines;
     }
 
-    _handleModeSelected(record) {
-        if (!Array.isArray(record)) return;
+    // _handleModeSelected(record) {
+    //     if (!Array.isArray(record)) return;
 
-        const modeObject = record[0];
-        Object.entries(modeObject).forEach(([key, value]) => {
-            this._records.push(`${key}: ${value}`);
-        });
+    //     const modeObject = record[0];
+    //     Object.entries(modeObject).forEach(([key, value]) => {
+    //         this._records.push(`${key}: ${value}`);
+    //     });
 
-        this._updateTable();
-    }
+    //     this._updateTable();
+    // }
 
     /**
-     * Updates the table UI based on the current log records.
+     * Updates the table UI based on the current data log records.
      * Assumes that this._records is an array of objects with "key" and "string" properties.
      */
     _updateTable() {
-        if (!this._logBox || !this._table) return;
+        if (!this._dataLogBox || !this._table) return;
         // Clear all rows except the header (assuming header is the first row).
         while (this._table.rows.length > 1) {
             this._table.deleteRow(1);
@@ -561,30 +617,40 @@ export class LogTable extends HTMLElement {
         });
 
         // Auto-scroll to the bottom for smooth UX.
-        this._logBox.scrollTo({ top: this._logBox.scrollHeight, behavior: 'smooth' });
+        this._dataLogBox.scrollTo({ top: this._dataLogBox.scrollHeight, behavior: 'smooth' });
     }
 
+    /**
+     * Loads initial data from dataPool when component is first set up
+     * @private
+     */
+    _loadInitialData() {
+        const data = dataPool.data;
+        if (data && data.length > 0) {
+            this._handleData(data);
+        }
+    }
 
     /*********
      * RESET *
      *********/
-    _destroyLogTable() {
+    _destroyDataLogTable() {
         this.remove();
 
         this.shadowRoot.adoptedStyleSheets = [];
 
         this._records = [];  // Clear the records
         this._isExpanded = false;  // Reset the expanded state
-        this._logTableContainer = null;
-        this._logIconButton = null;
-        this._logBox = null;
+        this._dataLogTableContainer = null;
+        this._dataLogIconButton = null;
+        this._dataLogBox = null;
         this._table = null;
         this._container = null;  // Clear the container reference
         this._fragment = null;  // Reset the fragment
         this._stateManager = null;  // Clear the state manager reference
         if (this._emitter) {
-            this._emitter.off('data:updated', (data) => this._handleDataAdded(data));
-            this._emitter.off('selected:info', (info) => this._handleModeSelected(info));
+            this._emitter.off('data:updated', this._handleData);
+            // this._emitter.off('selected:info', (info) => this._handleModeSelected(info));
         }
         this._emitter = null;  // Clear the emitter reference
 
@@ -593,7 +659,22 @@ export class LogTable extends HTMLElement {
             this._dragCleanup();
             this._dragCleanup = null;
         }
+
+        // Clean up close button
+        if (this._closeButtonCleanup) {
+            this._closeButtonCleanup();
+            this._closeButtonCleanup = null;
+        }
+
+        // Clean up copy button handlers
+        if (this._copyButtonCleanupSet) {
+            this._copyButtonCleanupSet.forEach(({ button, handler }) => {
+                button.removeEventListener("click", handler);
+            });
+            this._copyButtonCleanupSet.clear();
+            this._copyButtonCleanupSet = null;
+        }
     }
 }
 
-customElements.define('log-table', LogTable);
+customElements.define('data-log-table', DataLogTable);

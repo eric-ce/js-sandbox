@@ -37,16 +37,21 @@ import { createCloseButton, makeDraggable } from "../../lib/helper/helper.js";
  * Common shared helper function should be declared in `cesiumHelper.js`, This is mainly for logic override when needed.
  */
 class MeasureModeCesium extends MeasureModeBase {
+    // Chart related
     /** @type {import("chart.js/auto").Chart} */
     chartInstance;
     /** @type {HTMLElement} */
     chartDiv;
 
+    // Events cleanup
+    /** @type {function(): void} */
+    _closeButtonCleanup;
+
+    // UI components
     /** @type {HTMLElement} */
     contextMenu;
 
     /**
-     * 
      * @param {string} modeName - The name of the mode (e.g., "Point", "Line", "Polygon")
      * @param {CesiumInputHandler} inputHandler - The map input event handler abstraction.
      * @param {CesiumDragHandler} dragHandler - The drag handler abstraction (can be null if not used).
@@ -185,14 +190,13 @@ class MeasureModeCesium extends MeasureModeBase {
 
 
         // -- Create and add the close button --
-        // const closeButton = this._createCloseButton(); // Call the new method
-        const closeButton = createCloseButton({
-            click: (event) => {
-                event.preventDefault();
+        const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
+            clickCallback: () => {
                 this._destroyChart()
             },
         });
-        this.chartDiv.appendChild(closeButton);
+        this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function    
+        this.chartDiv.appendChild(closeButton); // Add close button to chart div
 
 
         // -- Create the canvas element --
@@ -289,63 +293,63 @@ class MeasureModeCesium extends MeasureModeBase {
         return this.chartInstance;
     }
 
-    /**
-    * Creates and styles a close button for the chart.
-    * @param {string} [className="close-button"] - The CSS class name for the button.
-    * @returns {HTMLButtonElement} The created button element.
-    */
-    _createCloseButton(options = {}) {
-        const {
-            className = "close-button",
-            title = "close"
-        } = options;
+    // /**
+    // * Creates and styles a close button for the chart.
+    // * @param {string} [className="close-button"] - The CSS class name for the button.
+    // * @returns {HTMLButtonElement} The created button element.
+    // */
+    // _createCloseButton(options = {}) {
+    //     const {
+    //         className = "close-button",
+    //         title = "close"
+    //     } = options;
 
-        const closeButton = document.createElement("button");
-        closeButton.textContent = "×"; // Unicode 'X' (multiplication sign)
-        closeButton.title = title;
-        closeButton.className = className;
+    //     const closeButton = document.createElement("button");
+    //     closeButton.textContent = "×"; // Unicode 'X' (multiplication sign)
+    //     closeButton.title = title;
+    //     closeButton.className = className;
 
-        const originalButtonColor = "#333";
-        const hoverButtonColor = "#aaddff";
+    //     const originalButtonColor = "#333";
+    //     const hoverButtonColor = "#aaddff";
 
-        Object.assign(closeButton.style, {
-            position: "absolute",
-            top: "5px",
-            right: "5px",
-            width: "20px",
-            height: "20px",
-            padding: "0",
-            border: "none",
-            background: "transparent",
-            color: originalButtonColor,
-            fontSize: "16px",
-            fontWeight: "bold",
-            lineHeight: "20px",
-            textAlign: "center",
-            cursor: "pointer",
-            zIndex: "1001", // Ensure it's above the canvas
-            transition: "all 0.2s ease-in-out 0.1s"
-        });
+    //     Object.assign(closeButton.style, {
+    //         position: "absolute",
+    //         top: "5px",
+    //         right: "5px",
+    //         width: "20px",
+    //         height: "20px",
+    //         padding: "0",
+    //         border: "none",
+    //         background: "transparent",
+    //         color: originalButtonColor,
+    //         fontSize: "16px",
+    //         fontWeight: "bold",
+    //         lineHeight: "20px",
+    //         textAlign: "center",
+    //         cursor: "pointer",
+    //         zIndex: "1001", // Ensure it's above the canvas
+    //         transition: "all 0.2s ease-in-out 0.1s"
+    //     });
 
-        // Event listener for click
-        closeButton.addEventListener("click", () => {
-            this._destroyChart();
-        });
+    //     // Event listener for click
+    //     closeButton.addEventListener("click", () => {
+    //         this._destroyChart();
+    //     });
 
-        // Event listeners for hover effect
-        closeButton.addEventListener("mouseenter", () => {
-            closeButton.style.color = hoverButtonColor;
-            closeButton.style.transform = "scale(1.3) rotate(180deg)"; // Slightly enlarge on hover
-            // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
-        });
-        closeButton.addEventListener("mouseleave", () => {
-            closeButton.style.color = originalButtonColor;
-            closeButton.style.transform = "scale(1) rotate(0deg)"; // Reset size on mouse leave
-            // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
-        });
+    //     // Event listeners for hover effect
+    //     closeButton.addEventListener("mouseenter", () => {
+    //         closeButton.style.color = hoverButtonColor;
+    //         closeButton.style.transform = "scale(1.3) rotate(180deg)"; // Slightly enlarge on hover
+    //         // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
+    //     });
+    //     closeButton.addEventListener("mouseleave", () => {
+    //         closeButton.style.color = originalButtonColor;
+    //         closeButton.style.transform = "scale(1) rotate(0deg)"; // Reset size on mouse leave
+    //         // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
+    //     });
 
-        return closeButton;
-    }
+    //     return closeButton;
+    // }
 
     _destroyChart() {
         if (this.chartInstance) {
@@ -355,6 +359,11 @@ class MeasureModeCesium extends MeasureModeBase {
         if (this.chartDiv) {
             this.chartDiv.remove();
             this.chartDiv = null;
+        }
+
+        if (this._closeButtonCleanup) {
+            this._closeButtonCleanup();
+            this._closeButtonCleanup = null;
         }
     }
 

@@ -411,7 +411,7 @@ export function createCloseButton(options = {}) {
         className = "close-button",
         title = "close",
         color = "#333333",
-        click = (event) => { console.log("click event for close button", event) },
+        clickCallback = (event) => { console.log("click event for close button", event) },
         top = "5px",
         right = "5px",
     } = options;
@@ -440,26 +440,42 @@ export function createCloseButton(options = {}) {
         textAlign: "center",
         cursor: "pointer",
         zIndex: "1001", // Ensure it's above the canvas
-        transition: "all 0.2s ease-in-out 0.1s",
+        transition: "all 0.1s ease-in-out 0.05s",
         transformOrigin: "center center"
     });
 
+    // Events listeners for close button
     // Event listener for click
     closeButton.addEventListener("click", (event) => {
-        click(event);
+        event.stopPropagation(); // Prevent click from propagating to parent elements
+        event.preventDefault(); // Prevent default button behavior
+        clickCallback(event);
     });
 
     // Event listeners for hover effect
-    closeButton.addEventListener("mouseenter", () => {
+    const mouseEnterHandler = () => {
         closeButton.style.color = hoverButtonColor;
-        closeButton.style.transform = "scale(1.2) rotate(180deg)"; // Slightly enlarge on hover
+        closeButton.style.transform = "scale(1.3)"; // Slightly enlarge on hover
         // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
-    });
-    closeButton.addEventListener("mouseleave", () => {
-        closeButton.style.color = originalButtonColor;
-        closeButton.style.transform = "scale(1) rotate(0deg)"; // Reset size on mouse leave
-        // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
-    });
+    }
+    closeButton.addEventListener("mouseenter", mouseEnterHandler);
 
-    return closeButton;
+    // Event listener for mouse leave
+    const mouseLeaveHandler = () => {
+        closeButton.style.color = originalButtonColor;
+        closeButton.style.transform = "scale(1)"; // Reset size on mouse leave
+        // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
+    }
+    closeButton.addEventListener("mouseleave", mouseLeaveHandler);
+
+
+    // Return both button and cleanup function
+    return {
+        button: closeButton,
+        cleanup: () => {
+            closeButton.removeEventListener("click", clickCallback);
+            closeButton.removeEventListener("mouseenter", mouseEnterHandler);
+            closeButton.removeEventListener("mouseleave", mouseLeaveHandler);
+        }
+    };
 }
