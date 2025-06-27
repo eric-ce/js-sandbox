@@ -28,6 +28,12 @@ module.exports = {
                 test: /\.(png|gif|jpg|jpeg|svg|xml|json)$/i,
                 type: 'asset/resource',
             },
+            {
+                test: /\.m?js$/,
+                resolve: {
+                    fullySpecified: false, // Disable fully specified for better compatibility
+                }
+            }
         ]
     },
     plugins: [
@@ -56,7 +62,7 @@ module.exports = {
     mode: 'development',
     devtool: 'eval-source-map', // Faster rebuilds with good enough debugging
     resolve: {
-        extensions: [".js", ".css"],
+        extensions: [".js", ".mjs", ".css"],
         modules: ["src", "node_modules"],
         alias: {
             cesium: path.resolve(__dirname, cesiumSource, "Cesium.js"),
