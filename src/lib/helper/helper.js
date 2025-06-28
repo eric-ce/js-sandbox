@@ -1,4 +1,5 @@
 import { Cartesian3, Cartographic, Math as CesiumMath } from "cesium";
+import { shrinkIcon, closeIcon } from "../../assets/icons.js"
 
 /**
  * Get the neighboring values of an array at a given index.
@@ -400,37 +401,48 @@ export function areCoordinatesEqual(coordinate1, coordinate2, options = {}) {
 
     return latEqual && lonEqual && heightEqual;
 }
-
 /**
- * Creates and styles a close button for a UI component.
- * @param {object} [options={}] - The options for the close button.
- * @returns {HTMLButtonElement} The created button element.
+ * Creates a base styled button with common functionality.
+ * @param {object} options - Button configuration options
+ * @returns {{button: HTMLButtonElement, cleanup: function}} Button and cleanup function
+ * @private
  */
-export function createCloseButton(options = {}) {
+function _createBaseButton(options) {
     const {
-        className = "close-button",
-        title = "close",
+        className,
+        title,
         color = "#333333",
-        clickCallback = (event) => { console.log("click event for close button", event) },
-        top = "5px",
+        clickCallback,
+        top = "2px",
         right = "5px",
+        textContent,
+        image,
     } = options;
 
-    const closeButton = document.createElement("button");
-    closeButton.textContent = "×"; // Unicode 'X' (multiplication sign)
-    closeButton.title = title;
-    closeButton.className = className;
+    const button = document.createElement("button");
+    button.title = title;
+    button.className = className;
+
+    if (image) {
+        const imgElement = document.createElement("img");
+        imgElement.src = image;
+        imgElement.alt = title;
+        imgElement.style.width = "100%";
+        imgElement.style.height = "100%";
+        button.appendChild(imgElement);
+    } else {
+        button.textContent = textContent;
+    }
 
     const originalButtonColor = color;
     const hoverButtonColor = "#aaddff";
 
-    Object.assign(closeButton.style, {
+    Object.assign(button.style, {
         position: "absolute",
         top: top,
         right: right,
-        width: "20px",
-        height: "20px",
-        padding: "0",
+        width: "10px",
+        height: "10px",
         border: "none",
         background: "transparent",
         color: originalButtonColor,
@@ -439,43 +451,70 @@ export function createCloseButton(options = {}) {
         lineHeight: "20px",
         textAlign: "center",
         cursor: "pointer",
-        zIndex: "1001", // Ensure it's above the canvas
+        zIndex: "1001",
         transition: "all 0.1s ease-in-out 0.05s",
-        transformOrigin: "center center"
     });
 
-    // Events listeners for close button
-    // Event listener for click
-    closeButton.addEventListener("click", (event) => {
-        event.stopPropagation(); // Prevent click from propagating to parent elements
-        event.preventDefault(); // Prevent default button behavior
+    // Event handlers
+    const clickHandler = (event) => {
+        event.stopPropagation();
+        event.preventDefault();
         clickCallback(event);
-    });
+    };
 
-    // Event listeners for hover effect
     const mouseEnterHandler = () => {
-        closeButton.style.color = hoverButtonColor;
-        closeButton.style.transform = "scale(1.3)"; // Slightly enlarge on hover
-        // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
-    }
-    closeButton.addEventListener("mouseenter", mouseEnterHandler);
+        button.style.color = hoverButtonColor;
+        button.style.transform = "scale(1.2)";
+    };
 
-    // Event listener for mouse leave
     const mouseLeaveHandler = () => {
-        closeButton.style.color = originalButtonColor;
-        closeButton.style.transform = "scale(1)"; // Reset size on mouse leave
-        // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
-    }
-    closeButton.addEventListener("mouseleave", mouseLeaveHandler);
+        button.style.color = originalButtonColor;
+        button.style.transform = "scale(1)";
+    };
 
+    // Attach listeners
+    button.addEventListener("click", clickHandler);
+    button.addEventListener("mouseenter", mouseEnterHandler);
+    button.addEventListener("mouseleave", mouseLeaveHandler);
 
-    // Return both button and cleanup function
     return {
-        button: closeButton,
+        button,
         cleanup: () => {
-            closeButton.removeEventListener("click", clickCallback);
-            closeButton.removeEventListener("mouseenter", mouseEnterHandler);
-            closeButton.removeEventListener("mouseleave", mouseLeaveHandler);
+            button.removeEventListener("click", clickHandler);
+            button.removeEventListener("mouseenter", mouseEnterHandler);
+            button.removeEventListener("mouseleave", mouseLeaveHandler);
         }
     };
+}
+
+/**
+ * Creates and styles a close button for a UI component.
+ * @param {object} [options={}] - The options for the close button.
+ * @returns {{button: HTMLButtonElement, cleanup: function}} The created button element and cleanup function.
+ */
+export function createCloseButton(options = {}) {
+    const defaults = {
+        className: "close-button",
+        title: "close",
+        image: closeIcon,
+        clickCallback: (event) => { console.log("click event for close button", event) },
+    };
+    console.log(closeIcon)
+    return _createBaseButton({ ...defaults, ...options });
+}
+
+/**
+ * Creates and styles an expand/collapse button for a UI component.
+ * @param {object} [options={}] - The options for the expand/collapse button.
+ * @returns {{button: HTMLButtonElement, cleanup: function}} The created button element and cleanup function.
+ */
+export function createExpandCollapseButton(options = {}) {
+    const defaults = {
+        className: "expand-collapse-button",
+        title: "Expand/Collapse",
+        image: shrinkIcon,
+        clickCallback: (event) => { console.log("click event for expand/collapse button", event) },
+    };
+
+    return _createBaseButton({ ...defaults, ...options });
 }

@@ -1,6 +1,6 @@
 import { sharedStyleSheet } from '../../styles/sharedStyle.js';
 import { dataLogBoxIcon } from '../../assets/icons.js';
-import { createCloseButton, makeDraggable } from '../../lib/helper/helper.js';
+import { createCloseButton, createExpandCollapseButton, makeDraggable } from '../../lib/helper/helper.js';
 import dataPool from '../../lib/data/DataPool.js';
 
 /**@typedef {import('../../lib/state/StateManager.js')} StateManager */
@@ -180,23 +180,16 @@ export class DataLogTable extends HTMLElement {
      * Creates the data log box and table elements
      */
     _createDataTable() {
-        // Create container div for the data log table
+        // -- Create the data log box container --
         this._dataLogBox = document.createElement("div");
         this._dataLogBox.className = "info-box data-log-box visible";
         this._dataLogBox.style.position = "absolute";
 
-        // Add click handler to close log box when clicked
-        this._dataLogBox.addEventListener("click", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this._hideDataLogBox();
-        });
-
-        // Create the table element 
+        // -- Create a table -- 
         this._table = document.createElement("table");
         this._table.style.display = "table";
         this._table.style.width = "100%";
-        this._table.style.paddingTop = "5px";
+        this._table.style.marginTop = "7px";
         this._table.style.borderCollapse = "collapse";
 
         // Create a header row
@@ -204,15 +197,27 @@ export class DataLogTable extends HTMLElement {
         // Append table to dataLogBox
         this._dataLogBox.appendChild(this._table);
 
-        // Create close button 
+
+        // -- Create close button --
         const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
             color: "#edffff",
-            top: "2px",
-            right: "0px",
             clickCallback: () => this._destroyDataLogTable()
         });
         this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function
         this._dataLogBox.appendChild(closeButton); // Add close button to data log box
+
+
+        // -- Create expand/collapse button for the data log box --
+        const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
+            color: "#edffff",
+            right: "22px",
+            clickCallback: () => {
+                this._hideDataLogBox();
+                expandCollapseButton.style.transform = "scale(1.0)"; // Reset scale on collapse 
+            }
+        });
+        this._expandCollapseButtonCleanup = expandCollapseCleanup; // Store cleanup function
+        this._dataLogBox.appendChild(expandCollapseButton); // Add expand/collapse button to data log box
 
         // Append to container initially
         this._dataLogTableContainer.appendChild(this._dataLogBox);

@@ -15,3 +15,5 @@ export { default as dataLogBoxIcon } from './data-log-box-icon.svg';
 export { default as recordIcon } from './record-icon.svg';
 export { default as playIcon } from './play-icon.svg';
 export { default as stopIcon } from './stop-icon.svg';
+export { default as shrinkIcon } from './shrink-icon.svg';
+export { default as closeIcon } from './close-icon.svg';

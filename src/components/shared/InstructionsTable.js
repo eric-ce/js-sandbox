@@ -1,6 +1,6 @@
 import { sharedStyleSheet } from '../../styles/sharedStyle.js'
 import { instructionsBoxIcon } from '../../assets/icons.js';
-import { createCloseButton, makeDraggable } from '../../lib/helper/helper.js';
+import { createCloseButton, createExpandCollapseButton, makeDraggable } from '../../lib/helper/helper.js';
 
 export class InstructionsTable extends HTMLElement {
     // External references
@@ -34,6 +34,8 @@ export class InstructionsTable extends HTMLElement {
     _dragCleanup = null;
     /** @type {function(): void} */
     _closeButtonCleanup;
+    /** @type {function(): void} */
+    _expandCollapseButtonCleanup;
 
     constructor() {
         super();
@@ -193,36 +195,42 @@ export class InstructionsTable extends HTMLElement {
      * Creates the instructions box and table elements
      */
     _createInstructionsBox() {
-        // Create the instructions box container.
+        // -- Create the instructions box container --
         this._instructionsBox = document.createElement("div");
         this._instructionsBox.className = "info-box instructions-box hidden";
         this._instructionsBox.style.position = "absolute";
 
-        this._instructionsBox.addEventListener("click", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this._hideInstructionsBox();
-        });
-
-        // Create a table for the instructions.
+        // -- Create a table -- 
         this._table = document.createElement("table");
         this._table.style.display = "table";
         this._table.style.width = "100%";
-        this._table.style.paddingTop = "5px";
+        this._table.style.marginTop = "7px";
+        this._table.style.borderCollapse = "collapse";
         // Append table to instructions box
         this._instructionsBox.appendChild(this._table);
 
-        // Create close button for the instructions box
+        // -- Create close button for the instructions box --
         const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
             color: "#edffff",
-            top: "2px",
-            right: "0px",
             clickCallback: () => {
                 this._destroyInstructionsTable();
             }
         });
         this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function
         this._instructionsBox.appendChild(closeButton); // Add close button to instructions box
+
+        // -- Create expand/collapse button for the instructions box --
+        const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
+            color: "#edffff",
+            right: "22px",
+            clickCallback: () => {
+                this._hideInstructionsBox();
+                expandCollapseButton.style.transform = "scale(1.0)"; // Reset scale on collapse 
+            }
+        });
+        this._expandCollapseButtonCleanup = expandCollapseCleanup; // Store cleanup function
+        this._instructionsBox.appendChild(expandCollapseButton); // Add expand/collapse button to instructions box
+
         // Store in fragment initially
         this._fragment.appendChild(this._instructionsBox);
     }
@@ -452,6 +460,12 @@ export class InstructionsTable extends HTMLElement {
         if (this._closeButtonCleanup) {
             this._closeButtonCleanup();
             this._closeButtonCleanup = null;
+        }
+
+        // Clean up expand/collapse button
+        if (this._expandCollapseButtonCleanup) {
+            this._expandCollapseButtonCleanup();
+            this._expandCollapseButtonCleanup = null;
         }
     }
 }
