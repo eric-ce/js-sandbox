@@ -480,13 +480,8 @@ export class MeasureComponentBase extends HTMLElement {
             btn.setAttribute("aria-pressed", "false"); // Accessibility
 
             btn.addEventListener("click", (e) => {
+                e.preventDefault(); // Prevent default button behavior
                 e.stopPropagation(); // Prevent map click through button
-                // When button is clicked, tell StateManager the desired mode ID
-                // check if the button is inactive if so activate it
-                // if (btn.classList.contains("active")) {
-                //     btn.classList.remove("active");
-                //     btn.setAttribute("aria-pressed", "false");
-                // }
 
                 // activate the mode
                 this._handleModeButtonClick(modeId);
@@ -669,22 +664,16 @@ export class MeasureComponentBase extends HTMLElement {
 
     _handleClearButtonClick() {
         // this.log.info(`${this.constructor.name}: Clear button clicked.`);
-        // // 1. Deactivate any active measurement mode
+        // 1.. Remove annotations from the map for data associated within this component/map
+        // this.clearCollections();
+
+        // 2. Deactivate active mode 
         // this._activateMode(null);
 
-        // // 2. Remove annotations from the map for data associated within this component/map
-        // this.pointCollection?.removeAll(); // Assuming pointCollection is used for annotations
-        // this.polylineCollection?.removeAll(); // Assuming polylineCollection is used for polylines
-        // this.labelCollection?.removeAll(); // Assuming labelCollection is used for labels
-        // this.polygonCollection?.removeAll(); // Assuming polygonCollection is used for polygons
+        // 3. reset its internal properties
+        // this._activeModeInstance.resetValues();
 
-        // // 3. Clear the internal #data array for this component
-        // dataPool.removeAllByMapName(this.mapName);
-
-        // // 4. reset the current active mode variables
-        // this.resetValues();
-
-        // // 5. Emit an event indicating measurements were cleared for this component
+        // optional: 4. Emit an event indicating measurements were cleared for this component
         // if (this.emitter) {
         //     this.emitter.emit("measurementsCleared", { mapName: this.mapName, component: this });
         // }
@@ -1173,5 +1162,9 @@ Lng:${data.coordinates[0].longitude.toFixed(6)}`,
 
     _removeLabel(label) {
         throw new Error("_removeLabel must be implemented by subclass");
+    }
+
+    clearCollections() {
+        throw new Error("clearCollections must be implemented by subclass");
     }
 }

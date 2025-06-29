@@ -567,6 +567,20 @@ export default class LeafletMeasure extends MeasureComponentBase {
             this.#labelCollection.removeLayer(label);
         }
     }
+
+    clearCollections() {
+        // Clear all collections
+        this.#pointCollection.clearLayers();
+        this.#polylineCollection.clearLayers();
+        this.#labelCollection.clearLayers();
+        this.#polygonCollection.clearLayers();
+
+        // Reset collections to null
+        this.#pointCollection = null;
+        this.#polylineCollection = null;
+        this.#labelCollection = null;
+        this.#polygonCollection = null;
+    }
 }
 
 customElements.define("leaflet-measure", LeafletMeasure);
