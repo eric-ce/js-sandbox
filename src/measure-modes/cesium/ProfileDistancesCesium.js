@@ -435,9 +435,11 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         if (!defined(pickedObjects)) return;
 
         // update pointerOverlay: the moving dot with mouse
-        const pointerElement = this.stateManager.getOverlayState("pointer");
-        const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
-        this.stateManager.setOverlayState("pointer", pointerOverlay);
+        const pointerElement = this._setupPointerOverlay();
+        if (pointerElement) {
+            const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
+            this.stateManager.setOverlayState("pointer", pointerOverlay);
+        }
 
         const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
@@ -938,8 +940,8 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         this.#distances = []; // Clear the distances cache
         dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
 
-        // FIXME: destroy the chart if it is relevant to the line
-        this.chartDiv && this._destroyChart(); // Destroy the chart if it exists
+        // Destroy the chart if it exists
+        this.chartDiv && this._destroyChart();
     }
 
     /**
@@ -978,8 +980,8 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         // remove the measure data from dataPool
         dataPool.removeMeasureById(measureId);
 
-        // FIXME: destroy the chart if it is relevant to the line
-        this.chartDiv && this._destroyChart(); // Destroy the chart if it exists
+        // Destroy the chart if it exists
+        this.chartDiv && this._destroyChart();
     }
 
 

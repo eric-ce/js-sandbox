@@ -212,8 +212,8 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return polyline;
     }
 
-    _addPolylinesFromArray(positionsArray, options = {}) {
-        if (!this.map || !Array.isArray(positionsArray) || positionsArray.length === 0) {
+    _addPolylinesFromArray(positions, options = {}) {
+        if (!this.map || !Array.isArray(positions) || positions.length === 0) {
             console.warn("LeafletMeasure: Invalid or empty positions array for _addPolylinesFromArray.");
             return [];
         }
@@ -221,12 +221,10 @@ export default class LeafletMeasure extends MeasureComponentBase {
         // Create the polyline
         const addedPolylines = [];
         // Iterate over the positions array in pairs, 2 positions as a pair
-        for (let i = 0; i < positionsArray.length - 1; i += 2) {
-            const positions = positionsArray.slice(i, i + 2); // Get two positions for the polyline
-            const polyline = this._addPolyline(positions, options);
-            if (polyline) {
-                addedPolylines.push(polyline);
-            }
+        for (let i = 0; i < positions.length - 1; i++) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the polyline
+            const polyline = this._addPolyline(positionsPair, options);
+            polyline && addedPolylines.push(polyline);
         }
 
         return addedPolylines;
@@ -297,20 +295,22 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return label;
     }
 
-    _addLabelsFromArray(positionsArray, valueArray, unit, options = {}) {
-        if (!this.map || !Array.isArray(positionsArray) || !Array.isArray(valueArray)) {
-            console.warn("LeafletMeasure: Invalid or mismatched positions/value arrays for _addLabelsFromArray.");
-            return [];
-        }
+    _addLabelsFromArray(positions, valueArray, unit, options = {}) {
+        if (
+            !this.map ||
+            !Array.isArray(positions) ||
+            positions.length === 0 ||
+            !Array.isArray(valueArray) ||
+            valueArray.length === 0
+        ) return [];
 
         // Create the label
         const addedLabels = [];
         // Iterate over the positions array in pairs, 2 positions as a pair
-        for (let i = 0; i < positionsArray.length - 1; i += 2) {
-            const label = this._addLabel([positionsArray[i], positionsArray[i + 1]], valueArray[i], unit, options);
-            if (label) {
-                addedLabels.push(label);
-            }
+        for (let i = 0; i < positions.length - 1; i++) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the label
+            const label = this._addLabel(positionsPair, valueArray[i], unit, options);
+            label && addedLabels.push(label);
         }
 
         return addedLabels; // Return the array of successfully added polylines
@@ -566,6 +566,20 @@ export default class LeafletMeasure extends MeasureComponentBase {
         if (this.#labelCollection && label) {
             this.#labelCollection.removeLayer(label);
         }
+    }
+
+    clearCollections() {
+        // Clear all collections
+        this.#pointCollection.clearLayers();
+        this.#polylineCollection.clearLayers();
+        this.#labelCollection.clearLayers();
+        this.#polygonCollection.clearLayers();
+
+        // Reset collections to null
+        this.#pointCollection = null;
+        this.#polylineCollection = null;
+        this.#labelCollection = null;
+        this.#polygonCollection = null;
     }
 }
 

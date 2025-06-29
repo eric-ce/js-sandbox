@@ -3,7 +3,7 @@ import {
     BlendOption,
 } from "cesium";
 
-import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual } from "../lib/helper/cesiumHelper.js";
+import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual, createPointerOverlay } from "../lib/helper/cesiumHelper.js";
 // import { LogTable } from './shared/LogTable.js';
 // import { HelpTable } from './shared/HelpTable.js';
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
@@ -57,7 +57,8 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this._initializeCesiumCollections();
 
         // setup moving dot with mouse
-        this._setupPointerOverlay();
+        // const pointer = createPointerOverlay(this.map.container);
+        // this.stateManager.setOverlayState("pointer", pointer);
     }
     /**
      * Initializes Cesium collections for point and label primitives for cesium specific.
@@ -71,32 +72,15 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // Create new collections using the provided Cesium package
         const pointCollection = new this.cesiumPkg.PointPrimitiveCollection();
-        const labelCollection = new this.cesiumPkg.LabelCollection();
         pointCollection.blendOption = BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
-        labelCollection.blendOption = BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
         pointCollection.id = "annotate_point_collection";
+        const labelCollection = new this.cesiumPkg.LabelCollection();
+        labelCollection.blendOption = BlendOption.TRANSLUCENT; // choose either OPAQUE or TRANSLUCENT, performance improve 2x
         labelCollection.id = "annotate_label_collection";
 
         // Assign to private fields
         this.#pointCollection = this.map.scene.primitives.add(pointCollection);
         this.#labelCollection = this.map.scene.primitives.add(labelCollection);
-    }
-
-    /**
-     * Setup the moving yellow dot to show the mouse pointer position
-     */
-    _setupPointerOverlay() {
-        if (!this.stateManager) {
-            console.warn("CesiumMeasure: StateManager not available for _setupPointerOverlay.");
-            return;
-        }
-
-        const pointer = document.createElement("div");
-        pointer.className = "backdrop";
-        pointer.style.cssText =
-            "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
-        this.map.container.appendChild(pointer);
-        this.stateManager.setOverlayState("pointer", pointer);
     }
 
     /**
@@ -215,6 +199,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
      */
     _addPolylinesFromArray(positions, options = {}) {
         if (!this.cesiumPkg || !this.map || !this.stateManager) return null; // Ensure dependencies are available
+        console.log('positions', positions)
 
         // Get the line positions, use clamp position if height is 0
         const noHeight = positions.some(pos => pos.height === 0);
@@ -223,14 +208,11 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // Create the polyline primitives
         const addedPolylines = [];
-
         // Iterate through the positions array, 2 positions as a pair
-        for (let i = 0; i < positions.length - 1; i += 2) {
+        for (let i = 0; i < positions.length - 1; i++) {
             const positionsPair = positions.slice(i, i + 2); // Get two positions for the polyline
             const polyline = this._addPolyline(positionsPair, options);
-            if (polyline) {
-                addedPolylines.push(polyline);
-            }
+            polyline && addedPolylines.push(polyline);
         }
 
         return addedPolylines; // Return the array of successfully added polylines
@@ -317,27 +299,28 @@ export default class CesiumMeasure extends MeasureComponentBase {
      * @param {string[]|number[]} valueArray 
      * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
      * @param {object} options - Options for the label primitives
-     * @returns {LabelPrimitive[]} The created label primitives or null if an error occurs.
+     * @returns {LabelPrimitive[]|[]} The created label primitives.
      */
-    _addLabelsFromArray(positionsArray, valueArray, unit, options = {}) {
-        if (!this.#labelCollection || !Array.isArray(positionsArray) || positionsArray.length === 0) {
-            console.warn("CesiumMeasure: Invalid label collection or positionsArray.");
-            return null;
-        }
+    _addLabelsFromArray(positions, valueArray, unit, options = {}) {
+        if (!this.#labelCollection ||
+            !Array.isArray(positions) ||
+            positions.length === 0 ||
+            !Array.isArray(valueArray) ||
+            valueArray.length === 0
+        ) return [];
 
         // Get the label positions, use clamp position if height is 0
-        const noHeight = positionsArray.some(pos => pos.height === 0);
-        const labelPositions = noHeight ? this._getClampedPositions(positionsArray) : positionsArray;
-        if (!labelPositions || labelPositions.length === 0) return null;
+        const noHeight = positions.some(pos => pos.height === 0);
+        const labelPositions = noHeight ? this._getClampedPositions(positions) : positions;
+        if (!labelPositions || labelPositions.length === 0) return [];
 
         // Create the label primitives
         const addedLabels = [];
         // Iterate through the positions array, 2 positions as a pair
-        for (let i = 0; i < positionsArray.length - 1; i += 2) {
-            const label = this._addLabel([positionsArray[i], positionsArray[i + 1]], valueArray[i], unit, options);
-            if (label) {
-                addedLabels.push(label);
-            }
+        for (let i = 0; i < positions.length - 1; i++) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the label
+            const label = this._addLabel(positionsPair, valueArray[i], unit, options);
+            label && addedLabels.push(label);
         }
 
         return addedLabels; // Return the array of successfully added labels

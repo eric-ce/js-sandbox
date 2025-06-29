@@ -236,9 +236,11 @@ class PointInfoCesium extends MeasureModeCesium {
         if (!defined(pickedObjects)) return;
 
         // update pointerOverlay: the moving dot with mouse
-        const pointerElement = this.stateManager.getOverlayState("pointer");
-        const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
-        this.stateManager.setOverlayState("pointer", pointerOverlay);
+        const pointerElement = this._setupPointerOverlay();
+        if (pointerElement) {
+            const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
+            this.stateManager.setOverlayState("pointer", pointerOverlay);
+        }
 
         // update coordinateInfoOverlay
         if (this.#coordinateInfoOverlay) {
@@ -374,9 +376,9 @@ class PointInfoCesium extends MeasureModeCesium {
 
         const cartographicDegrees = convertToCartographicDegrees(positions[0]);
         const formattedText =
-            `Lat: ${cartographicDegrees.latitude.toFixed(6)}
-Lng: ${cartographicDegrees.longitude.toFixed(6)}
-Alt: ${cartographicDegrees.height.toFixed(2)}`;
+            `lat: ${cartographicDegrees.latitude.toFixed(6)}\u00B0` +
+            `\nlng: ${cartographicDegrees.longitude.toFixed(6)}\u00B0` +
+            `\nelv: ${cartographicDegrees.height.toFixed(2)}m`;
 
         let labelPrimitive = null;
 
@@ -434,7 +436,7 @@ Alt: ${cartographicDegrees.height.toFixed(2)}`;
             fontSize: "14px",
             lineHeight: "1.5",
             zIndex: "1001",
-            whiteSpace: "nowrap",
+            whiteSpace: "pre-line",
             boxShadow: "0px 1px 2px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15)" // M3 Dark theme elevation 2 shadow (approx)
         };
 
@@ -457,8 +459,11 @@ Alt: ${cartographicDegrees.height.toFixed(2)}`;
         const cartographicDegrees = convertToCartographicDegrees(cartesian);
         if (!cartographicDegrees) return null;
         // -- Update overlay content --
-        const displayInfo = `Lat: ${cartographicDegrees.latitude.toFixed(6)}<br>Lng: ${cartographicDegrees.longitude.toFixed(6)} <br>Alt: ${cartographicDegrees.height.toFixed(2)}`;
-        this.#coordinateInfoOverlay.innerHTML = displayInfo;
+        const displayInfo =
+            `lat: ${cartographicDegrees.latitude.toFixed(6)}\u00B0` +
+            `\nlng: ${cartographicDegrees.longitude.toFixed(6)}\u00B0` +
+            `\nelv: ${cartographicDegrees.height.toFixed(2)}m`;
+        this.#coordinateInfoOverlay.textContent = displayInfo;
 
         // -- Handle screen position --
         let screenPosition;

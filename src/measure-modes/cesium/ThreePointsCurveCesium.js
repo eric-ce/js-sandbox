@@ -263,9 +263,11 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         if (!defined(pickedObjects)) return;
 
         // update pointerOverlay: the moving dot with mouse
-        const pointerElement = this.stateManager.getOverlayState("pointer");
-        const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
-        this.stateManager.setOverlayState("pointer", pointerOverlay);
+        const pointerElement = this._setupPointerOverlay();
+        if (pointerElement) {
+            const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
+            this.stateManager.setOverlayState("pointer", pointerOverlay);
+        }
 
         // Handle different scenarios based on the state of the tool
         // the condition to determine if it is measuring

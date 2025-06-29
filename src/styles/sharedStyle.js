@@ -63,7 +63,7 @@ sharedStyleSheet.replaceSync(`
         flex-direction: row;
     }
 
-    /* info box and log box styles */
+    /* info box styles */
     .info-box {
         padding: 5px;
         font-size: 0.8rem;
@@ -76,8 +76,8 @@ sharedStyleSheet.replaceSync(`
         box-shadow: 0 0 10px 1px #000;
         opacity: 0; /* Hidden by default */
     }
-    .log-box,
-    .help-box{
+    .data-log-box,
+    .instructions-box{
         width: 250px;
         max-width: 250px;
         max-height: 250px;
@@ -89,17 +89,17 @@ sharedStyleSheet.replaceSync(`
         z-index: 2;
         overflow: scroll; 
     }
-    .help-box{
+    .instructions-box{
         max-height: 150px;
     }
-    .log-box table, 
-    .help-box table{
+    .data-log-box table, 
+    .instructions-box table{
         width: 100%;
+        border-collapse: collapse;
     }
-    .log-box td, 
-    .help-box td{
-        padding: 5px 0;
-        border: none;
+    .data-log-box td, 
+    .instructions-box td{
+        padding: 0.35rem;
     }
     .hidden {
         opacity: 0;

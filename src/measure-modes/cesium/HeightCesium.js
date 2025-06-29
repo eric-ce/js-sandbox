@@ -1,7 +1,6 @@
 import {
     Cartesian3,
     defined,
-    SceneTransforms,
     Color,
 } from "cesium";
 import dataPool from "../../lib/data/DataPool.js";
@@ -9,10 +8,13 @@ import { MeasureModeCesium } from "./MeasureModeCesium";
 import {
     areCoordinatesEqual,
     calculateMiddlePos,
+    convertToCartographicDegrees,
+    editableLabel,
     formatDistance,
     getGroundPosition,
     getHeight,
     getRankedPickedObjectType,
+    updatePointerOverlay,
 } from "../../lib/helper/cesiumHelper.js";
 
 // -- Cesium types --
@@ -68,7 +70,8 @@ class HeightCesium extends MeasureModeCesium {
     #interactiveAnnotations = {
         points: [],
         polylines: [],
-        labels: []
+        labels: [],
+        movingPoints: [], // For the moving point during mouse move
     };
 
     /** @type {MeasurementGroup} */
@@ -135,6 +138,7 @@ class HeightCesium extends MeasureModeCesium {
         // Try to handle click on an existing primitive first
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
 
+
         // If the click was not on a handled primitive and not in drag mode, start measuring
         if (!handled && !this.flags.isDragMode) {
             this._startMeasure();
@@ -150,11 +154,8 @@ class HeightCesium extends MeasureModeCesium {
         // Handle different scenarios based on the clicked primitive type and the state of the tool
         switch (pickedObjectType) {
             case "label":
-                // only when it is not during measuring can edit the label. 
-                if (this.coordsCache.length === 0) {
-                    // DO NOT use the flag isMeasurementComplete because reset will reset the flag
-                    editableLabel(this.map.container, pickedObject.primitive);
-                }
+                // DO NOT use the flag isMeasurementComplete because reset will reset the flag
+                editableLabel(this.map.container, pickedObject.primitive);
                 return true;
             case "point":
                 return false;   // False mean do not handle point click 
@@ -184,7 +185,6 @@ class HeightCesium extends MeasureModeCesium {
 
             this._createOrUpdatePoints(this.coordsCache, this.interactiveAnnotations.points, {
                 color: this.stateManager.getColorState("pointColor"),
-                id: `annotate_${this.mode}_point_${this.measure.id}`,
                 status: "completed"
             });
 
@@ -245,20 +245,21 @@ class HeightCesium extends MeasureModeCesium {
         if (!defined(pickedObjects)) return;
 
         // update pointerOverlay: the moving dot with mouse
-        // const pointerElement = this.stateManager.getOverlayState("pointer");
-        // const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
-        // this.stateManager.setOverlayState("pointer", pointerOverlay);
+        const pointerElement = this._setupPointerOverlay();
+        if (pointerElement) {
+            const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
+            this.stateManager.setOverlayState("pointer", pointerOverlay);
+        }
 
         // Get the positions
         const groundPosition = getGroundPosition(this.map.scene, this.#coordinate);
         const positions = [this.#coordinate, groundPosition];
         // update the coordinates cache
-        this.coordsCache = positions.map(pos => ({ ...pos }))
+        this.coordsCache = positions
 
-        // Create or update the points - the position and the ground position
+        // Create or update the moving points
         this._createOrUpdatePoints(this.coordsCache, this.interactiveAnnotations.points, {
             color: this.stateManager.getColorState("move"),
-            id: `annotate_${this.mode}_point_${this.measure.id}`,
             status: "moving"
         });
 
@@ -282,9 +283,13 @@ class HeightCesium extends MeasureModeCesium {
      * EVENT HANDLING *
      *    FOR DRAG    *
      ******************/
-    setAnchorPoint(measure) {
+    findAnchorPoint(measure) {
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
-        if (!anchorPosition || !this.pointCollection) return null;
+        if (!anchorPosition || !this.pointCollection) {
+            console.warn("anchorPosition not found or pointCollection is not defined.");
+
+            return null;
+        }
 
         // find the anchor point from the point collection
         let anchorPoint = null;
@@ -296,13 +301,9 @@ class HeightCesium extends MeasureModeCesium {
                 break;
             }
         }
-        if (!anchorPoint) return null;
-
-        // set anchor point 
-        this.dragHandler.draggedObjectInfo.anchorPoint = anchorPoint;
-
-        return anchorPoint;
+        return anchorPoint || null;
     }
+
 
     /**
      * Handle graphics updates during dragging operation.
@@ -318,14 +319,10 @@ class HeightCesium extends MeasureModeCesium {
         const positions = [this.dragHandler.coordinate, groundPosition];
 
         // -- Handle Point --
-        // Drag point is updated by the drag handler already
-        // Update the anchor point position
-        const anchorPoint = this.dragHandler.draggedObjectInfo.anchorPoint;
-        if (anchorPoint) {
-            anchorPoint.position = groundPosition;
-            anchorPoint.status = "moving"; // Set status to moving
-            anchorPoint.color = Color.fromCssColorString(this.stateManager.getColorState("move")); // Set color to moving color
-        }
+        this._createOrUpdatePoints(positions, this.dragHandler.draggedObjectInfo.points, {
+            status: "moving",
+            color: this.stateManager.getColorState("move"),
+        });
 
         // -- Handle polyline --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
@@ -354,15 +351,11 @@ class HeightCesium extends MeasureModeCesium {
         const groundPosition = getGroundPosition(this.map.scene, this.dragHandler.coordinate);
         const positions = [this.dragHandler.coordinate, groundPosition];
 
-        // -- Handle Point --
-        // Drag point is updated by the drag handler already
-        // Finalize the anchor point position
-        const anchorPoint = this.dragHandler.draggedObjectInfo.anchorPoint;
-        if (anchorPoint) {
-            anchorPoint.position = groundPosition;
-            anchorPoint.status = "completed"; // Set status to moving
-            anchorPoint.color = Color.fromCssColorString(this.stateManager.getColorState("pointColor")); // Set color to moving color
-        }
+        // -- Finalize Point Graphics--
+        this._createOrUpdatePoints(positions, this.dragHandler.draggedObjectInfo.points, {
+            status: "completed",
+            color: this.stateManager.getColorState("pointColor"),
+        });
 
         // -- Finalize Line Graphics --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
@@ -392,7 +385,8 @@ class HeightCesium extends MeasureModeCesium {
         // default options
         const {
             status = null,
-            color = this.stateManager.getColorState("point")
+            color = this.stateManager.getColorState("point"),
+            id = `annotate_${this.mode}_point_${this.measure.id}`
         } = options
 
         const [topPosition, bottomPosition] = positions;
@@ -404,12 +398,14 @@ class HeightCesium extends MeasureModeCesium {
                     console.warn("_createOrUpdatePoints: Invalid object found in pointsArray. Attempting to remove and recreate.");
                     pointsArray.length = 0; // Clear the array to trigger creation below
                 } else {
-                    // Update point position
+                    // Update point 
                     pointPrimitive.position = index === 0 ? topPosition : bottomPosition;
+                    pointPrimitive.color = Color.fromCssColorString(color); // Update color
                     pointPrimitive.status = status; // Set status on the new primitive
+                    pointPrimitive.id = id; // Update ID to match the new measure
                 }
             });
-        };
+        }
 
         // Create new points if not existed
         if (pointsArray.length === 0) {
@@ -417,7 +413,7 @@ class HeightCesium extends MeasureModeCesium {
                 // create a new point primitive
                 const pointPrimitive = this.drawingHelper._addPointMarker(position, {
                     color,
-                    id: `annotate_${this.mode}_point_${this.measure.id}`,
+                    id,
                 });
                 if (!pointPrimitive) return; // If point creation fails, exit
                 pointPrimitive.status = status; // Set status to pending for the point primitive
@@ -429,12 +425,12 @@ class HeightCesium extends MeasureModeCesium {
     }
 
     /**
-   * Updates line primitive by removing the existing one and creating a new one.
-   * @param {Cartesian3[]} positions - Array of positions to create or update the line.
-   * @param {Primitive[]} polylinesArray - Array to store the line primitive reference of the operation not the polyline collection.
-   * @param {object} options - Options for line creation or update.
-   * @returns {void}
-   */
+    * Updates line primitive by removing the existing one and creating a new one.
+    * @param {Cartesian3[]} positions - Array of positions to create or update the line.
+    * @param {Primitive[]} polylinesArray - Array to store the line primitive reference of the operation not the polyline collection.
+    * @param {object} options - Options for line creation or update.
+    * @returns {void}
+    */
     _createOrUpdateLine(positions, polylinesArray, options = {}) {
         // default options
         const {
@@ -496,7 +492,8 @@ class HeightCesium extends MeasureModeCesium {
             showBackground = true,
         } = options;
 
-        const height = getHeight(this.map.scene, positions[0]); // Assume positions[0] is the top position
+        const cartographicDegreesPositions = positions.map(pos => convertToCartographicDegrees(pos));
+        const height = cartographicDegreesPositions.length === 2 ? (cartographicDegreesPositions[0].height - cartographicDegreesPositions[1].height) : null;
         const formattedText = formatDistance(height); // Assume height unit is in meters
         const middlePos = calculateMiddlePos(positions);
 
@@ -545,13 +542,47 @@ class HeightCesium extends MeasureModeCesium {
         return { height, labelPrimitive };
     }
 
+    /**
+     * Cleans up interactive annotations by removing all temporary primitives on map.
+     * It did not reset the interactiveAnnotations object.
+     * @returns {void}
+     */
+    _removeInteractiveAnnotations() {
+        // remove points
+        if (this.#interactiveAnnotations.points) {
+            this.#interactiveAnnotations.points.forEach(point => {
+                point && this.drawingHelper._removePointMarker(point);
+            });
+        }
+        // remove polylines
+        if (this.#interactiveAnnotations.polylines) {
+            this.#interactiveAnnotations.polylines.forEach(polyline => {
+                polyline && this.drawingHelper._removePolyline(polyline);
+            });
+        }
+        // remove labels
+        this.#interactiveAnnotations.labels.forEach(label => {
+            label && this.drawingHelper._removeLabel(label);
+        });
+    }
+
     resetValuesModeSpecific() {
         // Reset flags
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Clear cache
+        // Reset variables
         this.coordsCache = [];
+        this.#coordinate = null;
+
+        // Clean up interactive annotations and reset the interactiveAnnotations object
+        this._removeInteractiveAnnotations(); // Clean up interactive annotations on map only
+        this.#interactiveAnnotations.points = [];
+        this.#interactiveAnnotations.polylines = [];
+        this.#interactiveAnnotations.labels = [];
+
+        // Reset measure to default state
+        this.measure = super._createDefaultMeasure();
     }
 }
 

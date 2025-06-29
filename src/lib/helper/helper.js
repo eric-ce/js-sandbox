@@ -1,4 +1,5 @@
-import { Cartesian3, Cartographic, Math } from "cesium";
+import { Cartesian3, Cartographic, Math as CesiumMath } from "cesium";
+import { shrinkIcon, closeIcon } from "../../assets/icons.js"
 
 /**
  * Get the neighboring values of an array at a given index.
@@ -34,12 +35,12 @@ export function generateIdByTimestamp() {
  * @returns {function} Cleanup function.
  */
 export function makeDraggable(element, container, onDragStateChange) {
-    if (!element || !container) return; // Exit early if element or container is not defined
+    if (!element || !container) return () => { }; // Return empty cleanup function
 
     let isDragging = false;
     let dragStarted = false;
     let startX = 0, startY = 0;
-    const threshold = 5;
+    const threshold = 3;
     let resizeDebounceTimer = null;
 
     // Initialize transform values
@@ -54,25 +55,32 @@ export function makeDraggable(element, container, onDragStateChange) {
         if (!containerRect || !elementRect ||
             containerRect.width === 0 || containerRect.height === 0) return;
 
-        // Default positioning - this positions the element at the bottom left of the container
-        const defaultX = 0; // Left edge of container
-        const defaultY = 0; // Bottom edge of container (negative values move up)
-
-        // Calculate offsets if element is already positioned
+        // Parse existing transform values more robustly
         const style = window.getComputedStyle(element);
         const transform = style.transform;
 
         if (transform && transform !== 'none') {
-            const matrix = transform.match(/matrix\((.+)\)/)?.[1]?.split(', ');
-            if (matrix && matrix.length >= 6) {
-                currentX = parseFloat(matrix[4]);
-                currentY = parseFloat(matrix[5]);
+            // Handle both matrix() and translate() formats
+            let matrix = transform.match(/matrix\(([^)]+)\)/);
+            if (matrix) {
+                const values = matrix[1].split(',').map(v => parseFloat(v.trim()));
+                if (values.length >= 6) {
+                    currentX = values[4]; // translateX
+                    currentY = values[5]; // translateY
+                }
+            } else {
+                // Try to parse translate() format directly
+                const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+                if (translateMatch) {
+                    currentX = parseFloat(translateMatch[1]) || 0;
+                    currentY = parseFloat(translateMatch[2]) || 0;
+                }
             }
         } else {
-            // Apply initial positioning if no transform exists
-            updateTransform(defaultX, defaultY);
-            currentX = defaultX;
-            currentY = defaultY;
+            // No existing transform - use default top-left positioning
+            currentX = 0;
+            currentY = 0;
+            updateTransform(currentX, currentY);
         }
     };
 
@@ -104,12 +112,10 @@ export function makeDraggable(element, container, onDragStateChange) {
             let newY = currentY + deltaY;
 
             // Apply boundaries to keep element inside container
-            // For X: 0 to containerWidth-elementWidth
-            // For Y: -(containerHeight-elementHeight) to 0 (negative values move up)
             const minX = 0;
             const maxX = containerRect.width - elementRect.width;
-            const minY = -(containerRect.height); // Negative value to move up to top
-            const maxY = 0 - elementRect.height; // Bottom of container
+            const minY = 0;
+            const maxY = containerRect.height - elementRect.height;
 
             newX = clamp(newX, minX, maxX);
             newY = clamp(newY, minY, maxY);
@@ -141,6 +147,20 @@ export function makeDraggable(element, container, onDragStateChange) {
 
     const onMouseDown = (e) => {
         e.preventDefault();
+        e.stopPropagation();
+
+        // Capture current position at the start of drag
+        const style = window.getComputedStyle(element);
+        const transform = style.transform;
+
+        if (transform && transform !== 'none') {
+            const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+            if (translateMatch) {
+                currentX = parseFloat(translateMatch[1]) || 0;
+                currentY = parseFloat(translateMatch[2]) || 0;
+            }
+        }
+
         startX = e.clientX;
         startY = e.clientY;
 
@@ -177,8 +197,8 @@ export function makeDraggable(element, container, onDragStateChange) {
                 // Recalculate boundaries
                 const minX = 0;
                 const maxX = containerRect.width - elementRect.width;
-                const minY = -(containerRect.height);
-                const maxY = 0 - elementRect.height;
+                const minY = 0;
+                const maxY = containerRect.height - elementRect.height;
 
                 // Ensure element stays within boundaries after resize
                 currentX = clamp(currentX, minX, maxX);
@@ -225,7 +245,6 @@ export function makeDraggable(element, container, onDragStateChange) {
         window.removeEventListener('resize', handleResize);
     };
 }
-
 
 /**
  * Shows a custom notification message
@@ -334,8 +353,8 @@ export function convertToUniversalCoordinate(coordinate) {
                 return null;
             }
             return {
-                latitude: Math.toDegrees(cartographic.latitude),
-                longitude: Math.toDegrees(cartographic.longitude),
+                latitude: CesiumMath.toDegrees(cartographic.latitude),
+                longitude: CesiumMath.toDegrees(cartographic.longitude),
                 height: cartographic.height
             };
         } catch (error) {
@@ -381,4 +400,121 @@ export function areCoordinatesEqual(coordinate1, coordinate2, options = {}) {
     const heightEqual = Math.abs((cartographicDegrees1.height ?? 0) - (cartographicDegrees2.height ?? 0)) < heightEpsilon;
 
     return latEqual && lonEqual && heightEqual;
+}
+/**
+ * Creates a base styled button with common functionality.
+ * @param {object} options - Button configuration options
+ * @returns {{button: HTMLButtonElement, cleanup: function}} Button and cleanup function
+ * @private
+ */
+function _createBaseButton(options) {
+    const {
+        className,
+        title,
+        color = "#333333",
+        clickCallback,
+        top = "2px",
+        right = "5px",
+        textContent,
+        image,
+    } = options;
+
+    const button = document.createElement("button");
+    button.title = title;
+    button.className = className;
+
+    if (image) {
+        const imgElement = document.createElement("img");
+        imgElement.src = image;
+        imgElement.alt = title;
+        imgElement.style.width = "100%";
+        imgElement.style.height = "100%";
+        button.appendChild(imgElement);
+    } else {
+        button.textContent = textContent;
+    }
+
+    const originalButtonColor = color;
+    const hoverButtonColor = "#aaddff";
+
+    Object.assign(button.style, {
+        position: "absolute",
+        top: top,
+        right: right,
+        width: "10px",
+        height: "10px",
+        border: "none",
+        background: "transparent",
+        color: originalButtonColor,
+        fontSize: "16px",
+        fontWeight: "bold",
+        lineHeight: "20px",
+        textAlign: "center",
+        cursor: "pointer",
+        zIndex: "1001",
+        transition: "all 0.1s ease-in-out 0.05s",
+    });
+
+    // Event handlers
+    const clickHandler = (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        clickCallback(event);
+    };
+
+    const mouseEnterHandler = () => {
+        button.style.color = hoverButtonColor;
+        button.style.transform = "scale(1.2)";
+    };
+
+    const mouseLeaveHandler = () => {
+        button.style.color = originalButtonColor;
+        button.style.transform = "scale(1)";
+    };
+
+    // Attach listeners
+    button.addEventListener("click", clickHandler);
+    button.addEventListener("mouseenter", mouseEnterHandler);
+    button.addEventListener("mouseleave", mouseLeaveHandler);
+
+    return {
+        button,
+        cleanup: () => {
+            button.removeEventListener("click", clickHandler);
+            button.removeEventListener("mouseenter", mouseEnterHandler);
+            button.removeEventListener("mouseleave", mouseLeaveHandler);
+        }
+    };
+}
+
+/**
+ * Creates and styles a close button for a UI component.
+ * @param {object} [options={}] - The options for the close button.
+ * @returns {{button: HTMLButtonElement, cleanup: function}} The created button element and cleanup function.
+ */
+export function createCloseButton(options = {}) {
+    const defaults = {
+        className: "close-button",
+        title: "close",
+        image: closeIcon,
+        clickCallback: (event) => { console.log("click event for close button", event) },
+    };
+    console.log(closeIcon)
+    return _createBaseButton({ ...defaults, ...options });
+}
+
+/**
+ * Creates and styles an expand/collapse button for a UI component.
+ * @param {object} [options={}] - The options for the expand/collapse button.
+ * @returns {{button: HTMLButtonElement, cleanup: function}} The created button element and cleanup function.
+ */
+export function createExpandCollapseButton(options = {}) {
+    const defaults = {
+        className: "expand-collapse-button",
+        title: "Expand/Collapse",
+        image: shrinkIcon,
+        clickCallback: (event) => { console.log("click event for expand/collapse button", event) },
+    };
+
+    return _createBaseButton({ ...defaults, ...options });
 }

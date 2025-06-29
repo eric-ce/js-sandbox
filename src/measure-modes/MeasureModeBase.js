@@ -231,10 +231,22 @@ class MeasureModeBase {
      * Subclasses can override and call super._resetValues() to add specific resets.
      */
     _resetValues() {
+        // FIXME: remove pending annotations for safely exit or switching modes
         this.resetValuesModeSpecific(); // each mode can reset its specific values
 
+        // -- Reset common elements and variables --
+        // Reset charts
         if (typeof this._destroyChart === 'function') this._destroyChart(); // Reset the chart if exists
+
+        // Reset chart hovered point
         if (typeof this.removeChartHoveredPoint === 'function') this.removeChartHoveredPoint(); // Remove hovered point from chart
+
+        // reset pointer overlay
+        const pointer = this.stateManager.getOverlayState('pointer');
+        if (pointer) {
+            pointer.remove();
+            this.stateManager.setOverlayState('pointer', null);
+        }
     }
 
     resetValuesModeSpecific() {

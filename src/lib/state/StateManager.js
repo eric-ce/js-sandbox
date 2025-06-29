@@ -25,9 +25,9 @@ export class StateManager {
                 isToolsExpanded: false,
             },
             element: {
-                helpTable: null,
-                logTable: null,
-                toolbar: null,
+                // helpTable: null,
+                // logTable: null,
+                // toolbar: null,
             },
             // position: {
             //     logBox: { top: "280px", right: "0px" },

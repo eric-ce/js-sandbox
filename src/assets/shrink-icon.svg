@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+  <g id="图层_3" data-name="图层 3">
+    <path d="M34,16V43H7V16H34m1-6H6a5,5,0,0,0-5,5V44a5,5,0,0,0,5,5H35a5,5,0,0,0,5-5V15a5,5,0,0,0-5-5Z" style="fill: #fff"/>
+  </g>
+  <g id="图层_4" data-name="图层 4">
+    <path d="M43,7V34H40a6,6,0,0,0-6,6v3H7V16h3a6,6,0,0,0,6-6V7H43m1-6H15a5,5,0,0,0-5,5v4H6a5,5,0,0,0-5,5V44a5,5,0,0,0,5,5H35a5,5,0,0,0,5-5V40h4a5,5,0,0,0,5-5V6a5,5,0,0,0-5-5Z" style="fill: #fff"/>
+  </g>
+</svg>

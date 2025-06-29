@@ -219,12 +219,10 @@ export default class GoogleMeasure extends MeasureComponentBase {
         const addedPolylines = [];
 
         // Iterate through the positions array, 2 positions as a pair
-        for (let i = 0; i < positions.length - 1; i += 2) {
+        for (let i = 0; i < positions.length - 1; i++) {
             const positionsPair = positions.slice(i, i + 2); // Get two positions for the polyline
             const polyline = this._addPolyline(positionsPair, options);
-            if (polyline) {
-                addedPolylines.push(polyline);
-            }
+            polyline && addedPolylines.push(polyline);
         }
 
         return addedPolylines; // Return the array of successfully added polylines
@@ -279,16 +277,21 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @returns {AdvancedMarkerElement[] | Marker[] | []} The created marker.
      */
     _addLabelsFromArray(positions, valueArray, unit, options = {}) {
-        if (!this.map || !Array.isArray(positions)) return [];
+        if (
+            !this.map ||
+            !Array.isArray(positions) ||
+            positions.length === 0 ||
+            !Array.isArray(valueArray) ||
+            valueArray.length === 0
+        ) return [];
 
         // Create the label primitives
         const addedLabels = [];
         // Iterate through the positions array, 2 positions as a pair
-        for (let i = 0; i < positions.length - 1; i += 2) {
-            const label = this._addLabel([positions[i], positions[i + 1]], valueArray[i], unit, options);
-            if (label) {
-                addedLabels.push(label);
-            }
+        for (let i = 0; i < positions.length - 1; i++) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the label
+            const label = this._addLabel(positionsPair, valueArray[i], unit, options);
+            label && addedLabels.push(label);
         }
 
         return addedLabels; // Return the array of successfully added labels
@@ -490,7 +493,6 @@ export default class GoogleMeasure extends MeasureComponentBase {
         // remove the overlay from the map
         removeOverlay(marker);
 
-        // FIXME: remove the listeners from the marker
         if (marker && marker.listeners) {
             for (const eventName in marker.listeners) {
                 marker.removeListener(eventName, marker.listeners[eventName]);
