@@ -66,11 +66,10 @@ class PointInfoCesium extends MeasureModeCesium {
     /** @type {Cartesian3[]} */
     coordCache = [];
 
-    /** @type {HTMLElement} */ // the overlay to show the coordinate info
+    /** @type {HTMLElement} - the overlay to show the coordinate info */
     #coordinateInfoOverlay;
 
     /**
-     * 
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
@@ -487,13 +486,19 @@ class PointInfoCesium extends MeasureModeCesium {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Clear cache
+        // Reset variables
         this.coordsCache = [];
+        this.coordinate = null;
+        this.#interactiveAnnotations.labels = [];
 
+        // Reset the measure data
+        this.measure = super._createDefaultMeasure();
+
+        // Reset coordinate tooltip overlay
         if (this.#coordinateInfoOverlay) {
             this.#coordinateInfoOverlay.remove();
             this.#coordinateInfoOverlay = null;
-        };
+        }
     }
 }
 

@@ -558,8 +558,14 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Clear cache
+        // Reset variables
         this.coordsCache = [];
+        this.#coordinate = null;
+        this.#interactiveAnnotations.polylines = [];
+        this.#interactiveAnnotations.labels = [];
+
+        // Reset the measure data
+        this.measure = super._createDefaultMeasure();
     }
 }
 

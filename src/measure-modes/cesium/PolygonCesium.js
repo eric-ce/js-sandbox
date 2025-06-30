@@ -560,6 +560,13 @@ class PolygonCesium extends MeasureModeCesium {
 
         // Clear cache
         this.coordsCache = [];
+        this.#coordinate = null;
+        this.#interactiveAnnotations.polygons = [];
+        this.#interactiveAnnotations.polygonOutlines = [];
+        this.#interactiveAnnotations.labels = [];
+
+        // Reset the measure data
+        this.measure = super._createDefaultMeasure();
     }
 }
 export { PolygonCesium };
