@@ -34,6 +34,8 @@ export class DataLogTable extends HTMLElement {
     _stateManager = null;
     /** @type {HTMLElement} */
     _container = null;
+    /** @type {"cesium"|"google"|"leaflet"} - The name of the map */
+    _mapName = null;
 
     // Table related variables
     /** @type {string[]} */
@@ -60,8 +62,7 @@ export class DataLogTable extends HTMLElement {
         // Initialize document fragment
         this._fragment = document.createDocumentFragment();
 
-        // create data log table UI
-        this._createUI();
+
     }
 
 
@@ -83,6 +84,13 @@ export class DataLogTable extends HTMLElement {
             if (data.length === 0) return; // No data to process
             this._handleData(data);
         });
+
+        this._emitter.on('data:removed', () => {
+            const data = dataPool.data;
+            if (data.length === 0) return; // No data to process
+            this._handleData(data);
+        });
+
 
         // listen for mode:selected
         // this._emitter.on('selected:info', (info) => this._handleModeSelected(info));
@@ -107,14 +115,25 @@ export class DataLogTable extends HTMLElement {
         this._container = container;
     }
 
+    get mapName() {
+        return this._mapName;
+    }
+
+    set mapName(mapName) {
+        this._mapName = mapName;
+    }
+
 
     connectedCallback() {
         // Apply shared styles.
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+
+        // create data log table UI
+        this._createUI();
     }
 
     disconnectedCallback() {
-        this._destroyDataLogTable();
+        this._destroy();
     }
 
 
@@ -185,15 +204,20 @@ export class DataLogTable extends HTMLElement {
         this._dataLogBox.className = "info-box data-log-box visible";
         this._dataLogBox.style.position = "absolute";
 
+        // -- Create title div --
+        const titleDiv = document.createElement("div");
+        const formatTitleText = this.mapName ? `${this.mapName.charAt(0).toUpperCase() + this.mapName.slice(1)} Data Log` : "Data Log";
+        titleDiv.textContent = formatTitleText;
+        titleDiv.style.fontWeight = "bold";
+        titleDiv.style.padding = "2px 0px 0px 2px";
+        this._dataLogBox.appendChild(titleDiv);
+
         // -- Create a table -- 
         this._table = document.createElement("table");
         this._table.style.display = "table";
         this._table.style.width = "100%";
         this._table.style.marginTop = "7px";
         this._table.style.borderCollapse = "collapse";
-
-        // Create a header row
-        this._table.appendChild(this._createRow("Actions"));
         // Append table to dataLogBox
         this._dataLogBox.appendChild(this._table);
 
@@ -201,7 +225,7 @@ export class DataLogTable extends HTMLElement {
         // -- Create close button --
         const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
             color: "#edffff",
-            clickCallback: () => this._destroyDataLogTable()
+            clickCallback: () => this._destroy()
         });
         this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function
         this._dataLogBox.appendChild(closeButton); // Add close button to data log box
@@ -210,7 +234,7 @@ export class DataLogTable extends HTMLElement {
         // -- Create expand/collapse button for the data log box --
         const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
             color: "#edffff",
-            right: "22px",
+            right: "1.8rem",
             clickCallback: () => {
                 this._hideDataLogBox();
                 expandCollapseButton.style.transform = "scale(1.0)"; // Reset scale on collapse 
@@ -415,12 +439,9 @@ export class DataLogTable extends HTMLElement {
 
         // Create the copy button
         const copyButton = this._createCopyButton(text);
+        buttonCell.appendChild(copyButton);
 
-        // if text == "Actions", don't append the copy button
         row.appendChild(textCell);
-        if (text !== "Actions") {
-            buttonCell.appendChild(copyButton);
-        }
         row.appendChild(buttonCell);
 
         return row;
@@ -428,7 +449,7 @@ export class DataLogTable extends HTMLElement {
 
     _createCopyButton(text) {
         const copyButton = document.createElement("button");
-        copyButton.innerHTML = "📋";
+        copyButton.textContent = "📋";
         Object.assign(copyButton.style, {
             background: "transparent",
             border: "1px solid #ccc",
@@ -437,6 +458,7 @@ export class DataLogTable extends HTMLElement {
             cursor: "pointer",
             width: "1.4rem",
             height: "1.4rem",
+            transition: "background-color 0.3s, color 0.3s",
         });
         copyButton.style.fontSize = "12px";
         copyButton.setAttribute("aria-label", `Copy "${text}"`);
@@ -469,11 +491,27 @@ export class DataLogTable extends HTMLElement {
             }
         };
 
-        // Fix: Use the actual handler, not undefined _copyButtonHandler
-        copyButton.addEventListener("click", copyHandler);
+        // Hover effect handlers
+        const mouseOverHandler = () => {
+            copyButton.style.backgroundColor = "rgba(170, 221, 255, 0.8)";
+        };
 
-        // Store for cleanup
-        this._copyButtonCleanupSet.add({ button: copyButton, handler: copyHandler });
+        const mouseOutHandler = () => {
+            copyButton.style.backgroundColor = "transparent";
+        };
+
+        // Attach event listeners
+        copyButton.addEventListener("click", copyHandler);
+        copyButton.addEventListener("mouseover", mouseOverHandler);
+        copyButton.addEventListener("mouseout", mouseOutHandler);
+
+        // Store all handlers for cleanup
+        this._copyButtonCleanupSet.add({
+            button: copyButton,
+            clickHandler: copyHandler,
+            mouseOverHandler: mouseOverHandler,
+            mouseOutHandler: mouseOutHandler
+        });
 
         return copyButton;
     }
@@ -611,10 +649,18 @@ export class DataLogTable extends HTMLElement {
      */
     _updateTable() {
         if (!this._dataLogBox || !this._table) return;
-        // Clear all rows except the header (assuming header is the first row).
-        while (this._table.rows.length > 1) {
-            this._table.deleteRow(1);
+
+        // Clear all rows (no header row to preserve)
+        while (this._table.rows.length > 0) {
+            this._table.deleteRow(0);
         }
+
+        // if (this._records.length === 0) {
+        //     // if no records, remove all rows
+        //     if (this._table.rows.length > 0) {
+        //         this._table.deleteRow(0);
+        //     }
+        // }
 
         // Iterate over each formatted record string.
         this._records.forEach(line => {
@@ -639,7 +685,7 @@ export class DataLogTable extends HTMLElement {
     /*********
      * RESET *
      *********/
-    _destroyDataLogTable() {
+    _destroy() {
         this.remove();
 
         this.shadowRoot.adoptedStyleSheets = [];
@@ -673,8 +719,10 @@ export class DataLogTable extends HTMLElement {
 
         // Clean up copy button handlers
         if (this._copyButtonCleanupSet) {
-            this._copyButtonCleanupSet.forEach(({ button, handler }) => {
-                button.removeEventListener("click", handler);
+            this._copyButtonCleanupSet.forEach(({ button, clickHandler, mouseOverHandler, mouseOutHandler }) => {
+                button.removeEventListener("click", clickHandler);
+                button.removeEventListener("mouseover", mouseOverHandler);
+                button.removeEventListener("mouseout", mouseOutHandler);
             });
             this._copyButtonCleanupSet.clear();
             this._copyButtonCleanupSet = null;

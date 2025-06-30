@@ -413,10 +413,11 @@ function _createBaseButton(options) {
         title,
         color = "#333333",
         clickCallback,
-        top = "2px",
-        right = "5px",
+        top = "0.5rem",
+        right = "0.5rem",
         textContent,
         image,
+        hoverColor = "rgba(170, 221, 255, 0.8)",
     } = options;
 
     const button = document.createElement("button");
@@ -427,15 +428,16 @@ function _createBaseButton(options) {
         const imgElement = document.createElement("img");
         imgElement.src = image;
         imgElement.alt = title;
-        imgElement.style.width = "100%";
+        imgElement.style.width = "auto";
         imgElement.style.height = "100%";
+        imgElement.style.display = "block";
+        imgElement.style.objectFit = "contain"; // Ensure the image fits well
         button.appendChild(imgElement);
     } else {
         button.textContent = textContent;
     }
 
-    const originalButtonColor = color;
-    const hoverButtonColor = "#aaddff";
+    const hoverButtonColor = hoverColor;
 
     Object.assign(button.style, {
         position: "absolute",
@@ -445,7 +447,7 @@ function _createBaseButton(options) {
         height: "10px",
         border: "none",
         background: "transparent",
-        color: originalButtonColor,
+        color,
         fontSize: "16px",
         fontWeight: "bold",
         lineHeight: "20px",
@@ -453,6 +455,9 @@ function _createBaseButton(options) {
         cursor: "pointer",
         zIndex: "1001",
         transition: "all 0.1s ease-in-out 0.05s",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
     });
 
     // Event handlers
@@ -463,13 +468,31 @@ function _createBaseButton(options) {
     };
 
     const mouseEnterHandler = () => {
-        button.style.color = hoverButtonColor;
-        button.style.transform = "scale(1.2)";
+        const imgElement = button.querySelector("img");
+        if (imgElement) {
+            Object.assign(imgElement.style, {
+                transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
+                filter: "brightness(1.5)",
+                transform: "scale(1.3) rotate(90deg)",
+                transformOrigin: "center",
+            });
+        } else {
+            button.style.transform = "scale(1.2)";
+        }
     };
 
     const mouseLeaveHandler = () => {
-        button.style.color = originalButtonColor;
-        button.style.transform = "scale(1)";
+        const imgElement = button.querySelector("img");
+        if (imgElement) {
+            Object.assign(imgElement.style, {
+                transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
+                filter: "brightness(1.0)",
+                transform: "scale(1) rotate(0deg)",
+                transformOrigin: "center",
+            });
+        } else {
+            button.style.transform = "scale(1)";
+        }
     };
 
     // Attach listeners
@@ -499,7 +522,6 @@ export function createCloseButton(options = {}) {
         image: closeIcon,
         clickCallback: (event) => { console.log("click event for close button", event) },
     };
-    console.log(closeIcon)
     return _createBaseButton({ ...defaults, ...options });
 }
 
@@ -515,6 +537,5 @@ export function createExpandCollapseButton(options = {}) {
         image: shrinkIcon,
         clickCallback: (event) => { console.log("click event for expand/collapse button", event) },
     };
-
     return _createBaseButton({ ...defaults, ...options });
 }

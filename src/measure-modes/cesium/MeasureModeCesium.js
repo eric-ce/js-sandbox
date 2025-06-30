@@ -4,6 +4,7 @@ import { areCoordinatesEqual, convertToCartesian3, createPointerOverlay } from "
 import dataPool from "../../lib/data/DataPool.js";
 import { Chart } from "chart.js/auto";
 import { createCloseButton, makeDraggable } from "../../lib/helper/helper.js";
+import { closeIconBlack } from "../../assets/icons.js";
 
 // Cesium types
 /** @typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection */
@@ -191,6 +192,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // -- Create and add the close button --
         const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
+            image: closeIconBlack,
             clickCallback: () => {
                 this._destroyChart()
             },
@@ -293,64 +295,10 @@ class MeasureModeCesium extends MeasureModeBase {
         return this.chartInstance;
     }
 
-    // /**
-    // * Creates and styles a close button for the chart.
-    // * @param {string} [className="close-button"] - The CSS class name for the button.
-    // * @returns {HTMLButtonElement} The created button element.
-    // */
-    // _createCloseButton(options = {}) {
-    //     const {
-    //         className = "close-button",
-    //         title = "close"
-    //     } = options;
-
-    //     const closeButton = document.createElement("button");
-    //     closeButton.textContent = "×"; // Unicode 'X' (multiplication sign)
-    //     closeButton.title = title;
-    //     closeButton.className = className;
-
-    //     const originalButtonColor = "#333";
-    //     const hoverButtonColor = "#aaddff";
-
-    //     Object.assign(closeButton.style, {
-    //         position: "absolute",
-    //         top: "5px",
-    //         right: "5px",
-    //         width: "20px",
-    //         height: "20px",
-    //         padding: "0",
-    //         border: "none",
-    //         background: "transparent",
-    //         color: originalButtonColor,
-    //         fontSize: "16px",
-    //         fontWeight: "bold",
-    //         lineHeight: "20px",
-    //         textAlign: "center",
-    //         cursor: "pointer",
-    //         zIndex: "1001", // Ensure it's above the canvas
-    //         transition: "all 0.2s ease-in-out 0.1s"
-    //     });
-
-    //     // Event listener for click
-    //     closeButton.addEventListener("click", () => {
-    //         this._destroyChart();
-    //     });
-
-    //     // Event listeners for hover effect
-    //     closeButton.addEventListener("mouseenter", () => {
-    //         closeButton.style.color = hoverButtonColor;
-    //         closeButton.style.transform = "scale(1.3) rotate(180deg)"; // Slightly enlarge on hover
-    //         // closeButton.style.backgroundColor = hoverButtonColor; // Light background on hover
-    //     });
-    //     closeButton.addEventListener("mouseleave", () => {
-    //         closeButton.style.color = originalButtonColor;
-    //         closeButton.style.transform = "scale(1) rotate(0deg)"; // Reset size on mouse leave
-    //         // closeButton.style.backgroundColor = "transparent"; // Reset background on mouse leave
-    //     });
-
-    //     return closeButton;
-    // }
-
+    /**
+     * Destroys the chart instance and cleans up the chart container.
+     * @returns {void}
+     */
     _destroyChart() {
         if (this.chartInstance) {
             this.chartInstance.destroy();
@@ -370,7 +318,8 @@ class MeasureModeCesium extends MeasureModeBase {
     /**
      * Updates the chart with new data.
      * @param {object} newData - Object containing new labels and datasets.
-     *                         Example: { labels: [...], datasets: [{ data: [...] }] }
+     * Example: { labels: [...], datasets: [{ data: [...] }] }
+     * @returns {void}
      */
     _updateChartData(newData) {
         if (this.chartInstance && newData) {
@@ -392,6 +341,11 @@ class MeasureModeCesium extends MeasureModeBase {
         }
     }
 
+    /**
+     * Sets the visibility of the chart container.
+     * @param {boolean} visible - Whether the chart should be visible.
+     * @returns {void}
+     */
     _setChartVisibility(visible) {
         if (this.chartDiv) {
             this.chartDiv.style.display = visible ? 'block' : 'none';

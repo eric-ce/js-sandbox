@@ -17,3 +17,4 @@ export { default as playIcon } from './play-icon.svg';
 export { default as stopIcon } from './stop-icon.svg';
 export { default as shrinkIcon } from './shrink-icon.svg';
 export { default as closeIcon } from './close-icon.svg';
+export { default as closeIconBlack } from './close-icon-black.svg';
