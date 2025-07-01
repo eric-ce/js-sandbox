@@ -664,14 +664,32 @@ export class MeasureComponentBase extends HTMLElement {
 
     _handleClearButtonClick() {
         // this.log.info(`${this.constructor.name}: Clear button clicked.`);
-        // 1.. Remove annotations from the map for data associated within this component/map
-        // this.clearCollections();
+        const userConfirmation = confirm("Do you want to clear all measurements?");
+        if (!userConfirmation) {
+            return; // User cancelled
+        }
 
-        // 2. Deactivate active mode 
-        // this._activateMode(null);
+        // 1. Deactivate active mode 
+        // clone mode id 
+        const cloneModeId = this.activeModeId;
+        this._activateMode(null);
+        this._activateMode(cloneModeId);
+
+        // 2. Remove annotations from the map for data associated within this component/map
+        this.clearCollections();
+
 
         // 3. reset its internal properties
         // this._activeModeInstance.resetValues();
+
+        // 4. clean all data in the dataPool 
+        dataPool.removeDataByMapName(this.mapName);
+
+        // 5. clean the log table 
+        if (this.dataLogTable) {
+            // this.dataLogTable._destroy();
+            // this.dataLogTable = null;
+        }
 
         // optional: 4. Emit an event indicating measurements were cleared for this component
         // if (this.emitter) {
@@ -892,6 +910,7 @@ export class MeasureComponentBase extends HTMLElement {
         // set properties for log table
         this.dataLogTable.stateManager = this.stateManager;
         this.dataLogTable.emitter = this.emitter;
+        this.dataLogTable.mapName = this.mapName;
         const mapContainer = this._getContainer();
         this.dataLogTable.container = mapContainer;
 

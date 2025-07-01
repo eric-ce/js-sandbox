@@ -153,13 +153,6 @@ class MeasureModeCesium extends MeasureModeBase {
         return pointerElement;
     }
 
-    /********************
-     * CLEANING METHOD *
-     ********************/
-    removeAnnotationsAndListeners() {
-        this.drawingHelper.clearCollections();
-    }
-
 
     /*****************************************
      *        CHART FEATURE SPECIFIC         *
@@ -473,6 +466,67 @@ class MeasureModeCesium extends MeasureModeBase {
         } else {
             console.warn("Context menu is not initialized.");
         }
+    }
+
+
+    /****************
+     * RESET METHOD *
+     ****************/
+    /**
+     * Resets all the collections, listeners, and internal state of cesium measure.
+     * This method is called when the tool is disconnected.
+     * @returns {void}
+     */
+    removeAnnotationsAndListeners() {
+        this.drawingHelper.clearCollections();
+    }
+
+    /**
+     * Removes all pending annotations in the current mode.
+     * This includes points, labels, polylines, and polygons that are not completed.
+     * It does not remove completed annotations.
+     * @returns {void}
+     */
+    removePendingAnnotations() {
+        const targetIdPrefix = `annotate_${this.mode}`;
+
+        // Helper function to check if annotation should be removed
+        const shouldRemove = (annotation) =>
+            annotation && annotation.id.includes(targetIdPrefix) && annotation.status !== "completed";
+
+        // Define collections with their access methods and removal methods
+        const collections = [
+            {
+                collection: this.pointCollection,
+                accessMethod: 'get',
+                removeMethod: '_removePointMarker'
+            },
+            {
+                collection: this.labelCollection,
+                accessMethod: 'get',
+                removeMethod: '_removeLabel'
+            },
+            {
+                collection: this.polylineCollection,
+                accessMethod: 'index',
+                removeMethod: '_removePolyline'
+            },
+            {
+                collection: this.polygonCollection,
+                accessMethod: 'index',
+                removeMethod: '_removePolygon'
+            }
+        ];
+
+        collections.forEach(({ collection, accessMethod, removeMethod }) => {
+            const length = collection.length;
+            for (let i = length - 1; i >= 0; i--) {
+                const item = accessMethod === 'get' ? collection.get(i) : collection[i];
+                if (shouldRemove(item)) {
+                    this.drawingHelper[removeMethod](item);
+                }
+            }
+        });
     }
 }
 

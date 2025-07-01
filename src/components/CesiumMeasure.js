@@ -634,11 +634,12 @@ export default class CesiumMeasure extends MeasureComponentBase {
     _removePolyline(polyline) {
         if (!this.#polylineCollection) return false;
 
+        // Remove from the polyline collection
+        const index = this.#polylineCollection.indexOf(polyline);
+
         // Remove the polyline primitive from the map
         this._removePrimitive(polyline);
 
-        // Remove from the polyline collection
-        const index = this.#polylineCollection.indexOf(polyline);
         if (index > -1) {
             this.#polylineCollection.splice(index, 1);
         }
@@ -696,6 +697,11 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return clampedPositions;
     };
 
+    /**
+     * Clear graphics only in the collection
+     * It will not reset the collection variables within cesium, so that the collection can be reused.
+     * @returns {void}
+     */
     clearCollections() {
         // Clear point collection
         if (this.#pointCollection) {
@@ -708,13 +714,24 @@ export default class CesiumMeasure extends MeasureComponentBase {
         }
 
         // Clear polyline collection
-        this.#polylineCollection.forEach(polyline => this._removePrimitive(polyline));
-        this.#polylineCollection = [];
+        for (let i = this.#polylineCollection.length - 1; i >= 0; i--) {
+            const polyline = this.#polylineCollection[i];
+            if (polyline) {
+                this._removePrimitive(polyline);
+            }
+        }
+        this.#polylineCollection.length = 0;
 
         // Clear polygon collection
-        this.#polygonCollection.forEach(polygon => this._removePrimitive(polygon));
-        this.#polygonCollection = [];
+        for (let i = this.#polygonCollection.length - 1; i >= 0; i--) {
+            const polygon = this.#polygonCollection[i];
+            if (polygon) {
+                this._removePrimitive(polygon);
+            }
+        }
+        this.#polygonCollection.length = 0;
     }
 }
 
 customElements.define("cesium-measure", CesiumMeasure);
+

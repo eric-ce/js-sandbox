@@ -420,9 +420,6 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         if (Array.isArray(polylinesArray) && polylinesArray.length > 0) {
             const existingLinePrimitive = polylinesArray[0]; // Get reference to the existing primitive
             if (existingLinePrimitive) {
-                console.log("🚀 existingLinePrimitive:", existingLinePrimitive.id);
-                console.log('this.polylineCollection', this.polylineCollection)
-
                 this.drawingHelper._removePolyline(existingLinePrimitive);
             }
             // Clear the array passed by reference. This modifies the original array (e.g., this.#interactiveAnnotations.polylines)

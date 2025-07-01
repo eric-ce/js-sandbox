@@ -1,3 +1,6 @@
+import { generateIdByTimestamp } from '../lib/helper/helper.js';
+
+
 /** @typedef {import('../lib/input/CesiumInputHandler.js').CesiumInputHandler} CesiumInputHandler */
 /** @typedef {import('../lib/interaction/CesiumDragHandler.js').CesiumDragHandler} CesiumDragHandler */
 /** @typedef {import('../lib/interaction/CesiumHighlightHandler.js').CesiumHighlightHandler} CesiumHighlightHandler */
@@ -9,7 +12,11 @@
 /** @typedef {import('../lib/interaction/GoogleHighlightHandler.js').GoogleHighlightHandler} GoogleHighlightHandler */
 /** @typedef {import('../components/GoogleMeasure.js').GoogleMeasure} GoogleMeasure */
 
-import { generateIdByTimestamp } from '../lib/helper/helper.js';
+// -- Cesium types --
+/**@typedef {import('cesium').LabelCollection} LabelCollection - the collection of label primitives in cesium map*/
+/**@typedef {import('cesium').Primitive} Primitive - the primitive object in cesium map*/
+/**@typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection - the collection of point primitives in cesium map*/
+
 
 /**
  * MeasureModeBase class is to share the common functionality between all mode based classes
@@ -32,7 +39,7 @@ class MeasureModeBase {
     stateManager;
     /** @type {EventEmitter} The event emitter instance. */
     emitter;
-    /** @type {cesium | google | leaflet} The name of the map */
+    /** @type {"cesium"|"google"|"leaflet"} The name of the map */
     mapName;
 
     // -- Public Fields For state and data --
@@ -41,19 +48,14 @@ class MeasureModeBase {
         isActive: false,
     };
 
-    // coords = {
-    //     groups: [], // Array to store measurement groups
-    //     measureCounter: 0, // Counter for labeling or indexing measurements
-    // }
-
-    /** @type {google.map.Marker[] | import('cesium').PointPrimitiveCollection}  */
+    /** @type {google.map.Marker[]|L.FeatureGroup|PointPrimitiveCollection}  */
     pointCollection = []; // Array to store points
-    /** @type {google.map.Polyline[] | import('cesium').Primitive[]}  */
+    /** @type {google.map.Polyline[]|L.FeatureGroup|Primitive[]}  */
     polylineCollection = []; // Array to store lines
-    /** @type {google.map.Polygon[] | import('cesium').Primitive[]}  */
+    /** @type {google.map.Polygon[]|L.FeatureGroup|Primitive[]}  */
     polygonCollection = []; // Array to store polygons
-    /** @type {google.map.Marker[] | import('cesium').LabelCollection}  */
-    labelCollection = []; // Array to store polygons
+    /** @type {google.map.Marker[]|L.FeatureGroup|LabelCollection}  */
+    labelCollection = []; // Array to store labels
 
     /**
      * 
@@ -98,6 +100,10 @@ class MeasureModeBase {
         this.labelCollection = this.drawingHelper.labelCollection; // Array to store polygons
     }
 
+
+    /***********************************
+     * ACTIVATE AND DEACTIVATE METHODS *
+     ***********************************/
     /**
      * Activates the mode: attaches common listeners, resets state.
      * Subclasses should call super.activate() if overriding.
@@ -161,8 +167,11 @@ class MeasureModeBase {
         this.inputHandler.setCursor('default');
     }
 
-    // --- Abstract or Base Event Handlers (to be implemented/overridden by subclasses) ---
 
+    /***********************************
+     * ABSTRACT OR BASE EVENT HANDLERS *
+     *    OVERRIDDEN BY SUBCLASSES     *
+     ***********************************/
     /**
      * Handles left click events. Must be implemented by subclasses.
      * @param {object} eventData - Normalized event data from InputHandler.
@@ -204,44 +213,28 @@ class MeasureModeBase {
         // throw new Error(`handleMiddleClick must be implemented by subclass ${this.constructor.name}`);
     }
 
-    /**
-     * Removes temporary graphics displayed during mouse movement (e.g., rubber-band line).
-     * Must be implemented by map-specific subclasses.
-     * @abstract
-     */
-    _removeMovingAnnotations() {
-        // console.warn(`_removeMovingAnnotations not implemented in ${this.constructor.name}`);
-        // No-op in base, implementation is map-specific
-    }
 
-    /**
-     * Removes graphics associated with an incomplete measurement (e.g., first point placed).
-     * Must be implemented by map-specific subclasses.
-     * @abstract
-     */
-    _removePendingAnnotations() {
-        // console.warn(`_removePendingAnnotations not implemented in ${this.constructor.name}`);
-        // No-op in base, implementation is map-specific
-    }
-
-    // --- Common Helper Methods ---
-
+    /*****************
+     * RESET METHODS *
+     *****************/
     /**
      * Resets the internal state of the mode, excluding completed measurements (`coords.groups`).
      * Subclasses can override and call super._resetValues() to add specific resets.
      */
     _resetValues() {
-        // FIXME: remove pending annotations for safely exit or switching modes
+        // -- Reset mode-specific values --
         this.resetValuesModeSpecific(); // each mode can reset its specific values
 
-        // -- Reset common elements and variables --
-        // Reset charts
+        // -- Reset pending or moving annotations --
+        this.removePendingAnnotations(); // Remove any non-completed annotations
+
+        // -- Reset charts if exists --
         if (typeof this._destroyChart === 'function') this._destroyChart(); // Reset the chart if exists
 
-        // Reset chart hovered point
+        // -- Reset chart hovered point if exists --
         if (typeof this.removeChartHoveredPoint === 'function') this.removeChartHoveredPoint(); // Remove hovered point from chart
 
-        // reset pointer overlay
+        // -- Reset pointer overlay element --
         const pointer = this.stateManager.getOverlayState('pointer');
         if (pointer) {
             pointer.remove();
@@ -251,6 +244,15 @@ class MeasureModeBase {
 
     resetValuesModeSpecific() {
         console.warn("resetValuesModeSpecific: needs to override this method in the subclass");
+    }
+
+    /**
+     * Removes graphics associated with an incomplete measurement (e.g., first point placed).
+     * Must be implemented by map-specific subclasses.
+     * @abstract
+     */
+    removePendingAnnotations() {
+        console.warn(`removePendingAnnotations not implemented in ${this.constructor.name}`);
     }
 
     /**
@@ -280,27 +282,6 @@ class MeasureModeBase {
     removeAnnotationsAndListeners() {
         console.warn(`removeAnnotationsAndListeners not implemented in ${this.constructor.name}`);
     }
-
-    // /**
-    //  * Finds a measurement group managed by this instance that contains the given coordinate.
-    //  * Assumes coordinate is in the map-specific format used in `group.coordinates`.
-    //  * @param {object} coordinate - The map-specific coordinate to search for.
-    //  * @returns {MeasurementGroup | undefined} - The found group or undefined.
-    //  * @protected
-    //  */
-    // _findMeasureByCoordinate(coordinate) {
-    //     if (!coordinate || !Array.isArray(this.coords?.groups)) {
-    //         return undefined;
-    //     }
-    //     return this.coords.groups.find(group =>
-    //         group.coordinates.some(cart => this._areCoordinatesEqual(cart, coordinate))
-    //     );
-    // }
-
-    // // Compares two coordinates to check if they are equal.
-    // _areCoordinatesEqual(coordinate1, coordinate2) {
-    //     console.warn(`_areCoordinatesEqual not implemented in ${this.constructor.name}`);
-    // }
 }
 
 export { MeasureModeBase };

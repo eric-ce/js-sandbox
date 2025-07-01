@@ -570,16 +570,12 @@ export default class LeafletMeasure extends MeasureComponentBase {
 
     clearCollections() {
         // Clear all collections
-        this.#pointCollection.clearLayers();
-        this.#polylineCollection.clearLayers();
-        this.#labelCollection.clearLayers();
-        this.#polygonCollection.clearLayers();
+        this.#pointCollection && this.#pointCollection.clearLayers();
+        this.#polylineCollection && this.#polylineCollection.clearLayers();
+        this.#labelCollection && this.#labelCollection.clearLayers();
+        this.#polygonCollection && this.#polygonCollection.clearLayers();
 
-        // Reset collections to null
-        this.#pointCollection = null;
-        this.#polylineCollection = null;
-        this.#labelCollection = null;
-        this.#polygonCollection = null;
+        // No need to reset the collections to null, as mode can continue using them
     }
 }
 

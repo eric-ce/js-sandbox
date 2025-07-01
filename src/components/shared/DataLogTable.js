@@ -39,7 +39,7 @@ export class DataLogTable extends HTMLElement {
 
     // Table related variables
     /** @type {string[]} */
-    _records = [];
+    _logRecords = [];
     /** @type {DocumentFragment} */
     _fragment = null;
     /** @type {HTMLDivElement} */
@@ -87,7 +87,8 @@ export class DataLogTable extends HTMLElement {
 
         this._emitter.on('data:removed', () => {
             const data = dataPool.data;
-            if (data.length === 0) return; // No data to process
+            console.log("🚀 data:", data);
+
             this._handleData(data);
         });
 
@@ -206,7 +207,7 @@ export class DataLogTable extends HTMLElement {
 
         // -- Create title div --
         const titleDiv = document.createElement("div");
-        const formatTitleText = this.mapName ? `${this.mapName.charAt(0).toUpperCase() + this.mapName.slice(1)} Data Log` : "Data Log";
+        const formatTitleText = this.mapName ? `All Data Log - ${this.mapName.charAt(0).toUpperCase() + this.mapName.slice(1)}` : "Data Log";
         titleDiv.textContent = formatTitleText;
         titleDiv.style.fontWeight = "bold";
         titleDiv.style.padding = "2px 0px 0px 2px";
@@ -522,24 +523,30 @@ export class DataLogTable extends HTMLElement {
      * @returns {void} 
      */
     _handleData(data) {
-        // Handle array of measurements from dataPool
-        if (!Array.isArray(data) || data.length === 0) return;
+        // Handle array of data from dataPool
+        if (!Array.isArray(data)) return;
 
-        // Process only completed measurements
-        const completedMeasurements = data.filter(measurement =>
-            measurement && measurement.status === "completed"
+        if (data.length === 0) {
+            while (this._table && this._table.rows.length > 0) {
+                this._table.deleteRow(0);
+            }
+        }
+
+        // Process only completed data
+        const completedData = data.filter(item =>
+            item && item.status === "completed"
         );
 
-        if (completedMeasurements.length === 0) return;
+        if (completedData.length === 0) return;
 
         // Clear existing records to show current state
-        this._records = [];
+        this._logRecords = [];
 
-        // Process each completed measurement
-        completedMeasurements.forEach(measurement => {
-            const formattedLines = this._formatRecordsToStrings(measurement);
+        // Process each completed data item
+        completedData.forEach(item => {
+            const formattedLines = this._formatDataToStrings(item);
             formattedLines.forEach(line => {
-                this._records.push(line);
+                this._logRecords.push(line);
             });
         });
 
@@ -552,7 +559,7 @@ export class DataLogTable extends HTMLElement {
      * @param {object} data - The update of measure data object
      * @returns {string[]} An array of formatted strings.
      */
-    _formatRecordsToStrings(data) {
+    _formatDataToStrings(data) {
         const { mode, _records } = data;
 
         if (!mode || !_records) return [];
@@ -663,7 +670,7 @@ export class DataLogTable extends HTMLElement {
         // }
 
         // Iterate over each formatted record string.
-        this._records.forEach(line => {
+        this._logRecords.forEach(line => {
             this._table.appendChild(this._createRow(line));
         });
 
@@ -690,7 +697,7 @@ export class DataLogTable extends HTMLElement {
 
         this.shadowRoot.adoptedStyleSheets = [];
 
-        this._records = [];  // Clear the records
+        this._logRecords = [];  // Clear the records
         this._isExpanded = false;  // Reset the expanded state
         this._dataLogTableContainer = null;
         this._dataLogIconButton = null;

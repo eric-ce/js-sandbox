@@ -413,8 +413,8 @@ function _createBaseButton(options) {
         title,
         color = "#333333",
         clickCallback,
-        top = "0.5rem",
-        right = "0.5rem",
+        top = "0.4rem",
+        right = "0.3rem",
         textContent,
         image,
         hoverColor = "rgba(170, 221, 255, 0.8)",
@@ -443,8 +443,9 @@ function _createBaseButton(options) {
         position: "absolute",
         top: top,
         right: right,
-        width: "10px",
-        height: "10px",
+        width: "1rem",
+        height: "1rem",
+        padding: "2px",
         border: "none",
         background: "transparent",
         color,
@@ -486,7 +487,7 @@ function _createBaseButton(options) {
         if (imgElement) {
             Object.assign(imgElement.style, {
                 transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
-                filter: "brightness(1.0)",
+                filter: "brightness(1)",
                 transform: "scale(1) rotate(0deg)",
                 transformOrigin: "center",
             });
