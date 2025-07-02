@@ -937,10 +937,10 @@ function _getSinglePickedObjectType(pickedObject, modeString) {
         else if (id.startsWith(`${searchString}_polygon`)) determinedObjectType = 'polygon';
     } else {
         // General search (no modeString or empty modeString): id starts with "annotate_" and includes "_type"
-        if (id.startsWith(searchString) && id.includes('_point')) determinedObjectType = 'point';
-        else if (id.startsWith(searchString) && id.includes('_line')) determinedObjectType = 'line';
-        else if (id.startsWith(searchString) && id.includes('_label')) determinedObjectType = 'label';
-        else if (id.startsWith(searchString) && id.includes('_polygon')) determinedObjectType = 'polygon';
+        if (id.startsWith(searchString) && id.includes('_point_')) determinedObjectType = 'point';
+        else if (id.startsWith(searchString) && id.includes('_line_')) determinedObjectType = 'line';
+        else if (id.startsWith(searchString) && id.includes('_label_')) determinedObjectType = 'label';
+        else if (id.startsWith(searchString) && id.includes('_polygon_')) determinedObjectType = 'polygon';
     }
 
     // Special case for fireTrail, this check happens regardless of modeString match for type,
@@ -982,7 +982,11 @@ export function getRankedPickedObjectType(pickedObjects, modeString) {
         // Ensure typeCheckResult is not null itself (meaning currentPickedObject was valid),
         // its objectType is a string (not null, so not 'moving' or unrecognized type pattern),
         // and it's a rankable type (present in priorityMap).
-        if (typeCheckResult && typeof typeCheckResult.objectType === 'string' && priorityMap.hasOwnProperty(typeCheckResult.objectType)) {
+        if (
+            typeCheckResult &&
+            typeof typeCheckResult.objectType === 'string' &&
+            priorityMap.hasOwnProperty(typeCheckResult.objectType)
+        ) {
             const currentPriorityIndex = priorityMap[typeCheckResult.objectType];
 
             if (currentPriorityIndex < minPriorityIndex) {
@@ -2062,8 +2066,9 @@ export function getPickedObjectType(pickedObjects, modeString) {
         return null;
     }
 
+    const { id, primitive, status } = pickedObjects[0];
 
-    const { id, primitive, status } = pickedObject;
+    let type = null;
 
     const searchString = modeString ? `annotate_${modeString}` : `annotate_`;
 
@@ -2080,16 +2085,18 @@ export function getPickedObjectType(pickedObjects, modeString) {
 
     // return the type based on the conditions
     if (isPoint) {
-        return 'point';
+        type = 'point';
     } else if (isLine) {
-        return 'line';
+        type = 'line';
     } else if (id.includes("tileId") && primitive?.feature?.type === "fireTrail") {
-        return 'line'
+        type = 'line';
     } else if (isLabel) {
-        return 'label';
+        type = 'label';
     } else if (isPolygon) {
-        return 'polygon';
+        type = 'polygon';
     } else {
-        return null; // Return null if none of the conditions match
+        type = null; // Return null if none of the conditions match
     }
+
+    return { type, object: pickedObjects[0] }; // Return the type and the object
 }

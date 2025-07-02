@@ -11,6 +11,7 @@ export { MultiDistancesClampedCesium } from "./cesium/MultiDistancesClampedCesiu
 export { PolygonCesium } from "./cesium/PolygonCesium.js"
 export { ProfileCesium } from "./cesium/ProfileCesium.js"
 export { ProfileDistancesCesium } from "./cesium/ProfileDistancesCesium.js";
+export { PickerCesium } from "./cesium/PickerCesium.js";
 // export { Picker } from "./Picker.js";
 
 // Special measure modes with nested folders

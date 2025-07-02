@@ -92,13 +92,15 @@ class CesiumHighlightHandler {
         }
 
         // -- Conditions to PREVENT highlight --
-        if (this.activeModeInstance.flags.isDragMode ||
-            this.activeModeInstance.flags.isAddMode ||
-            (!this.activeModeInstance.flags.isMeasurementComplete && this.activeModeInstance.coordsCache.length > 0)
+        if (this.activeModeInstance.flags?.isDragMode ||
+            this.activeModeInstance.flags?.isAddMode ||
+            (!this.activeModeInstance.flags?.isMeasurementComplete && this.activeModeInstance?.coordsCache?.length > 0)
         ) return;
 
-        // -- Picked object -- 
-        const { type: newHoveredObjectType, object } = getRankedPickedObjectType(eventData.pickedFeature, this.activeModeInstance.mode);
+        // -- Picked object with picker mode support --
+        // For picker mode, allow highlighting any annotation; for other modes, filter by mode
+        const modeFilter = this.activeModeInstance.mode === 'picker' ? null : this.activeModeInstance.mode;
+        const { type: newHoveredObjectType, object } = getRankedPickedObjectType(eventData.pickedFeature, modeFilter);
         const newHoveredPrimitive = object?.primitive;
 
         const oldHoveredPrimitive = this.currentlyHoveredPrimitive;
@@ -137,9 +139,9 @@ class CesiumHighlightHandler {
      */
     handleClickToSelect = (eventData) => {
         // -- Conditions to PREVENT highlight --
-        if (this.activeModeInstance.flags.isDragMode ||
-            this.activeModeInstance.flags.isAddMode ||
-            (!this.activeModeInstance.flags.isMeasurementComplete && this.activeModeInstance.coordsCache.length > 0)
+        if (this.activeModeInstance.flags?.isDragMode ||
+            this.activeModeInstance.flags?.isAddMode ||
+            (!this.activeModeInstance.flags?.isMeasurementComplete && this.activeModeInstance?.coordsCache?.length > 0)
         ) return;
 
         // TODO: Implement selection logic using this.currentlySelectedPrimitive,
@@ -148,6 +150,7 @@ class CesiumHighlightHandler {
         // If a hovered item is clicked, it should become selected, and hover style might be overridden by select style.
         console.log("handleClickToSelect - To be implemented");
     }
+
     /**
      * Ensure the original style of the primitive is stored in the map.
      * Helper method

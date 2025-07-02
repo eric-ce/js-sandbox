@@ -20,7 +20,7 @@ import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
-import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
+import { PickerCesium, TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
 import { InstructionsTable } from "./shared/InstructionsTable.js";
 import { DataLogTable } from "./shared/DataLogTable.js";
 import { makeDraggable } from "../lib/helper/helper.js";
@@ -670,32 +670,17 @@ export class MeasureComponentBase extends HTMLElement {
         }
 
         // 1. Deactivate active mode 
+        // This will also reset the mode internal properties
         // clone mode id 
         const cloneModeId = this.activeModeId;
         this._activateMode(null);
         this._activateMode(cloneModeId);
 
-        // 2. Remove annotations from the map for data associated within this component/map
+        // 2. Remove all annotations from the specific map
         this.clearCollections();
 
-
-        // 3. reset its internal properties
-        // this._activeModeInstance.resetValues();
-
-        // 4. clean all data in the dataPool 
+        // 3. clean all data in the dataPool by mapName
         dataPool.removeDataByMapName(this.mapName);
-
-        // 5. clean the log table 
-        if (this.dataLogTable) {
-            // this.dataLogTable._destroy();
-            // this.dataLogTable = null;
-        }
-
-        // optional: 4. Emit an event indicating measurements were cleared for this component
-        // if (this.emitter) {
-        //     this.emitter.emit("measurementsCleared", { mapName: this.mapName, component: this });
-        // }
-        // this.log.info(`${this.constructor.name}: Measurements cleared for map: ${this.mapName}.`);
     }
 
 
@@ -928,6 +913,7 @@ export class MeasureComponentBase extends HTMLElement {
             return this.map.getContainer(); // Leaflet uses getContainer()
         }
     }
+
 
     /******************************
      * SYNC DRAWING DATA FOR MAPS *
