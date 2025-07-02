@@ -147,7 +147,7 @@ class MeasureModeCesium extends MeasureModeBase {
         // update pointerOverlay: the moving dot with mouse
         let pointerElement = this.stateManager.getOverlayState("pointer");
         if (!pointerElement) {
-            pointerElement = createPointerOverlay(this.map.container); // Create pointer overlay if not exists
+            pointerElement = createPointerOverlay(this._container); // Create pointer overlay if not exists
         }
         this.stateManager.setOverlayState("pointer", pointerElement);
         return pointerElement;

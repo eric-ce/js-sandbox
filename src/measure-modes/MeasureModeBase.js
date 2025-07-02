@@ -41,6 +41,8 @@ class MeasureModeBase {
     emitter;
     /** @type {"cesium"|"google"|"leaflet"} The name of the map */
     mapName;
+    /** @type {HTMLElement} The map container element. */
+    _container;
 
     // -- Public Fields For state and data --
     /** @type {object} Flags to manage the state of the mode. */
@@ -93,6 +95,8 @@ class MeasureModeBase {
         this.emitter = emitter;
 
         this.mapName = drawingHelper.mapName; // Map name (e.g., "cesium", "google", "leaflet")
+
+        this._container = this.drawingHelper._getContainer();  // The specific map container element by mapName
 
         this.pointCollection = this.drawingHelper.pointCollection; // Array to store points
         this.polylineCollection = this.drawingHelper.polylineCollection; // Array to store lines

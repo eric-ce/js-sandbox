@@ -540,3 +540,16 @@ export function createExpandCollapseButton(options = {}) {
     };
     return _createBaseButton({ ...defaults, ...options });
 }
+
+/**
+ * Capitalizes the first letter of a string.
+ * @param {string} string - The string to capitalize.
+ * @returns {string} The capitalized string.
+ */
+export function capitalizeString(string) {
+    if (typeof string !== 'string') {
+        // convert it to string if it's not already
+        string = String(string);
+    }
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}

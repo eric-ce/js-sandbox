@@ -150,7 +150,7 @@ class ProfileCesium extends MeasureModeCesium {
                 // only when it is not during measuring can edit the label. 
                 if (this.coordsCache.length === 0) {
                     // DO NOT use the flag isMeasurementComplete because reset will reset the flag
-                    editableLabel(this.map.container, pickedObject.primitive);
+                    editableLabel(this._container, pickedObject.primitive);
                 }
                 return true;
             case "point":

@@ -555,27 +555,20 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * Clears all collections of points, polylines, labels, and polygons from the map.
      */
     clearCollections() {
-        // Clear point collection
-        for (const point of this.#pointCollection) {
-            removeOverlay(point);
-        }
-        this.#pointCollection.length = 0;
-        // Clear label collection
-        for (const polyline of this.#polylineCollection) {
-            removeOverlay(polyline);
-        }
-        this.#polylineCollection.length = 0;
-        // Clear polyline collection
-        for (const label of this.#labelCollection) {
-            removeOverlay(label);
-        }
-        this.#labelCollection.length = 0;
+        // Define collections with their names for better maintainability
+        const collections = [
+            { items: this.#pointCollection, name: 'point' },
+            { items: this.#polylineCollection, name: 'polyline' },
+            { items: this.#labelCollection, name: 'label' },
+            { items: this.#polygonCollection, name: 'polygon' }
+        ];
 
-        // Clear polygon collection
-        for (const polygon of this.#polygonCollection) {
-            removeOverlay(polygon);
-        }
-        this.#polygonCollection.length = 0;
+        collections.forEach(({ items }) => {
+            for (const item of items) {
+                removeOverlay(item);
+            }
+            items.length = 0;
+        });
     }
 
     // /**

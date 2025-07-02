@@ -713,23 +713,21 @@ export default class CesiumMeasure extends MeasureComponentBase {
             this.#labelCollection.removeAll();
         }
 
-        // Clear polyline collection
-        for (let i = this.#polylineCollection.length - 1; i >= 0; i--) {
-            const polyline = this.#polylineCollection[i];
-            if (polyline) {
-                this._removePrimitive(polyline);
-            }
-        }
-        this.#polylineCollection.length = 0;
+        // Clear polyline and polygon collections
+        const primitiveCollections = [
+            { collection: this.#polylineCollection, name: 'polyline' },
+            { collection: this.#polygonCollection, name: 'polygon' }
+        ];
 
-        // Clear polygon collection
-        for (let i = this.#polygonCollection.length - 1; i >= 0; i--) {
-            const polygon = this.#polygonCollection[i];
-            if (polygon) {
-                this._removePrimitive(polygon);
+        primitiveCollections.forEach(({ collection }) => {
+            for (let i = collection.length - 1; i >= 0; i--) {
+                const primitive = collection[i];
+                if (primitive) {
+                    this._removePrimitive(primitive);
+                }
             }
-        }
-        this.#polygonCollection.length = 0;
+            collection.length = 0;
+        });
     }
 }
 
