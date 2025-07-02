@@ -10,6 +10,7 @@ import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.js";
 
 // -- Cesium types --
 /** @typedef {import('cesium').Cartesian3} Cartesian3 */
+/** @typedef {import('cesium').Cartesian2} Cartesian2 */
 
 
 // -- Data types -- 
@@ -41,7 +42,7 @@ class PickerCesium extends MeasureModeCesium {
     cesiumPkg;
 
     /** @type {HTMLDivElement} - The overlay element for mode selection. */
-    #modeOverlay;
+    #modeInfoOverlay;
     /** @type {Cartesian3} - The coordinate of the picked feature. */
     #coordinate;
 
@@ -102,46 +103,62 @@ class PickerCesium extends MeasureModeCesium {
         showCustomNotification(`Activated ${capitalizeString(pickedObjectMode)} mode`, this._container)
     }
 
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
+    /**
+     * Handles mouse move events on the map.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
+     * @returns {Void}
+     */
     handleMouseMove = async (eventData) => {
+        const { mapPoint: cartesian, pickedFeature: pickedObjects, screenPoint } = eventData;
+
         // Update coordinate
-        const cartesian = eventData.mapPoint;
         if (!defined(cartesian)) return;
         this.#coordinate = cartesian;
 
-        const { object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature);
+        if (!defined(pickedObjects)) {
+            this._hideModeOverlay();
+            return;
+        }
+
+        const { object: pickedObject } = getRankedPickedObjectType(pickedObjects);
         if (!defined(pickedObject)) {
             this._hideModeOverlay();
             return;
         }
 
-        const isAnnotationId = typeof pickedObject.id === 'string' && pickedObject.id.startsWith('annotate_');
-        if (!isAnnotationId) {
-            this._hideModeOverlay();
-            return;
-        }
-
-        const pickedObjectMode = pickedObject.id.split('_')[1];
+        const pickedObjectId = pickedObject.id;
+        const [annotation, pickedObjectMode] = pickedObjectId.split('_');
         const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
-        if (!isMatchedMode) {
+        if (annotation !== 'annotate' || !isMatchedMode) {
             this._hideModeOverlay();
             return;
         }
 
-        // -- Create or Update mode overlay --
-        // Create mode overlay if it doesn't exist
-        if (!this.#modeOverlay) {
-            this.#modeOverlay = this._createModeOverlay();
+        // -- Mode info overlay --
+        // Create mode info overlay if it doesn't exist
+        if (!this.#modeInfoOverlay) {
+            this.#modeInfoOverlay = this._createModeOverlay();
         }
 
-        // Update mode overlay
-        this.updateModeOverlay(pickedObject, cartesian);
+        // Update mode info overlay if already exists
+        if (this.#modeInfoOverlay) {  // Still check if overlay exists before update - defensive programming
+            this._updateModeOverlay(pickedObjectId, screenPoint, cartesian);
+        }
     }
 
+    /**
+     * Creates the mode overlay element for displaying picked object information.
+     * @returns {HTMLDivElement} - The mode overlay element.
+     */
     _createModeOverlay() {
-        this.#modeOverlay = document.createElement('div');
-        this.#modeOverlay.className = 'picker-mode-overlay';
+        this.#modeInfoOverlay = document.createElement('div');
+        this.#modeInfoOverlay.className = 'picker-mode-overlay';
         // Apply styles for the overlay
-        Object.assign(this.#modeOverlay.style, {
+        Object.assign(this.#modeInfoOverlay.style, {
             position: "absolute",
             pointerEvents: "none",
             padding: "6px 12px",
@@ -153,53 +170,65 @@ class PickerCesium extends MeasureModeCesium {
             fontSize: "14px",
             lineHeight: "1.5",
             zIndex: "1001",
-            whiteSpace: "pre-line",
+            whiteSpace: "pre-line", // Preserve line breaks
             boxShadow: "0px 1px 2px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15)" // M3 Dark theme elevation 2 shadow (approx)
         });
 
-        this._container.appendChild(this.#modeOverlay);
-        return this.#modeOverlay;
+        this._container.appendChild(this.#modeInfoOverlay);
+        return this.#modeInfoOverlay;
     }
 
-    updateModeOverlay(pickedObject, cartesian) {
-        if (!this.#modeOverlay || !defined(cartesian)) return null;
+    /**
+     * Updates the mode overlay with the picked object's information.
+     * @param {string} pickedObjectId - The ID of the picked object, which contains mode and type information.
+     * @param {Cartesian2} screenPoint - The screen coordinates where the overlay should be displayed.
+     * @param {Cartesian3} cartesian - The current Cartesian3 coordinate.
+     * @returns {Void}
+     */
+    _updateModeOverlay(pickedObjectId, screenPoint, cartesian) {
+        if (!this.#modeInfoOverlay) return null;
 
         // -- Display content --
-        const pickedObjectMode = pickedObject.id.split('_')[1];
-        const pickedObjectType = pickedObject.id.split('_')[2];
-        this.#modeOverlay.textContent =
+        const [_, pickedObjectMode, pickedObjectType] = pickedObjectId.split('_');
+        this.#modeInfoOverlay.textContent =
             `Picked Mode: ${capitalizeString(pickedObjectMode)}` +
             `\nPicked Type: ${pickedObjectType}`;
 
         // -- Handle screen position --
-        let screenPosition;
-        if (SceneTransforms.worldToWindowCoordinates) {
-            screenPosition = SceneTransforms.worldToWindowCoordinates(this.map.scene, cartesian);
-        } else if (SceneTransforms.wgs84ToWindowCoordinates) {
-            screenPosition = SceneTransforms.wgs84ToWindowCoordinates(this.map.scene, cartesian);
-        } else {
-            console.error("SceneTransforms.worldToWindowCoordinates or SceneTransforms.wgs84ToWindowCoordinates is not available in the current version of Cesium.");
+        if (!screenPoint) {
+            const { scene } = this.map;
+            if (SceneTransforms.worldToWindowCoordinates) {
+                screenPoint = SceneTransforms.worldToWindowCoordinates(scene, cartesian);
+            } else if (SceneTransforms.wgs84ToWindowCoordinates) {
+                screenPoint = SceneTransforms.wgs84ToWindowCoordinates(scene, cartesian);
+            } else {
+                console.error("SceneTransforms.worldToWindowCoordinates or SceneTransforms.wgs84ToWindowCoordinates is not available in the current version of Cesium.");
+            }
         }
 
-        // -- Set overlay style and position --
-        this.#modeOverlay.style.display = 'block';
-        this.#modeOverlay.style.left = `${screenPosition.x + 20}px`;
-        this.#modeOverlay.style.top = `${screenPosition.y - 20}px`;
+        // -- Set overlay style and position using destructuring --
+        const { x, y } = screenPoint;
+        Object.assign(this.#modeInfoOverlay.style, {
+            display: 'block',
+            left: "0px",
+            top: "0px",
+            transform: `translate(${x + 20}px, ${y - 20}px)`,
+        });
     }
 
     _hideModeOverlay() {
-        if (this.#modeOverlay) {
-            this.#modeOverlay.style.display = 'none';
-            this.#modeOverlay.textContent = '';
+        if (this.#modeInfoOverlay) {
+            this.#modeInfoOverlay.style.display = 'none';
+            this.#modeInfoOverlay.textContent = '';
         }
     }
 
     resetValuesModeSpecific() {
         this.#coordinate = null;
 
-        if (this.#modeOverlay) {
-            this.#modeOverlay.remove();
-            this.#modeOverlay = null;
+        if (this.#modeInfoOverlay) {
+            this.#modeInfoOverlay.remove();
+            this.#modeInfoOverlay = null;
         }
     }
 }
