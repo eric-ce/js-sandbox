@@ -25,6 +25,7 @@ export { TwoPointsDistanceGoogle } from "./google/TwoPointsDistanceGoogle.js";
 export { PolygonGoogle } from "./google/PolygonGoogle.js";
 export { PointInfoGoogle } from "./google/PointInfoGoogle.js";
 export { MultiDistanceGoogle } from "./google/MultiDistanceGoogle.js";
+export { PickerGoogle } from "./google/PickerGoogle.js";
 
 /*************************
  * LEAFLET MEASURE MODES *

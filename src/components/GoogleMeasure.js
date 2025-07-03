@@ -49,288 +49,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
         return this.#polygonCollection;
     }
 
-    /**
-     * Adds a point marker to the map at the specified position.
-     * @param {{lat:number,lng:number}} position - The position where the marker will be added
-     * @param {object} [options={}] - Optional configuration for the marker
-     * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|null} The created marker or null if an error occurs.
-     */
-    _addPointMarker(position, options = {}) {
-        // console.log("GoogleMeasure._addPointMarker called with:", position, color, options);
-        if (!this.map || !position) return null;
-        try {
-            // Separate listeners from other marker options
-            const { listeners, ...markerOptions } = options;
-
-            const point = createPointMarker(this.map, position, markerOptions);
-            if (!point) return null;
-
-            // Highlight event listeners
-            if (this.highlightHandler) {
-                point.addListener('mouseover', () => {
-                    this.highlightHandler.applyHoverHighlight(point);
-                });
-                point.addListener('mouseout', () => {
-                    // highlightHandler's removeHoverHighlight should know which object was hovered
-                    this.highlightHandler.removeHoverHighlight();
-                });
-                // Optional: Add click listener for selection highlighting
-                // point.addListener('click', (event) => {
-                //     // Prevent click from propagating if it's part of a drag
-                //     // This check might be more robust if done within the highlightHandler or mode
-                //     if (event.domEvent && (event.domEvent.button !== 0 || event.domEvent.metaKey || event.domEvent.ctrlKey)) {
-                //         return;
-                //     }
-                //     // Assuming toggleSelectHighlight or similar method exists
-                //     if (typeof this.highlightHandler.toggleSelectHighlight === 'function') {
-                //         this.highlightHandler.toggleSelectHighlight(point, event);
-                //     } else if (typeof this.highlightHandler.handleClickToSelect === 'function') {
-                //         // If your method is named handleClickToSelect and needs eventData
-                //         const latLng = event.latLng;
-                //         const pixel = event.pixel;
-                //         const eventData = {
-                //             mapPoint: latLng ? { lat: latLng.lat(), lng: latLng.lng() } : null,
-                //             screenPoint: pixel ? { x: pixel.x, y: pixel.y } : { x: NaN, y: NaN },
-                //             domEvent: event.domEvent,
-                //             graphic: point // Pass the graphic itself
-                //         };
-                //         this.highlightHandler.handleClickToSelect(eventData);
-                //     }
-                // });
-            }
-
-            // Attach listeners if provided
-            if (listeners && typeof listeners === 'object') {
-                for (const eventName in listeners) {
-                    if (typeof listeners[eventName] === 'function') {
-                        // Use addListener for robust event handling on markers/overlays
-                        point.addListener(eventName, (event) => {
-                            const latLng = event.latLng;
-                            const pixel = event.pixel; // Note: pixel coords might not always be available depending on event/context
-
-                            const eventData = {
-                                mapPoint: latLng ? { lat: latLng.lat(), lng: latLng.lng() } : null,
-                                screenPoint: pixel ? { x: pixel.x, y: pixel.y } : { x: NaN, y: NaN }, // Provide fallback
-                                domEvent: event.domEvent // Pass original DOM event - CRUCIAL for button check
-                            };
-                            // Pass the marker itself and the event object to the callback
-                            listeners[eventName](point, eventData);
-                        });
-                    }
-                }
-            }
-
-            // Store the point in the collection
-            this.#pointCollection.push(point);
-
-            return point;
-        } catch (error) {
-            console.error("GoogleMeasure: Error in _addPointMarker:", error);
-            return null;
-        }
-    }
-
-    /**
-     * Adds multiple point markers to the map at the specified positions.
-     * @param {{lat:number,lng:number}[]} positions 
-     * @param {object} [options={}] - Optional configuration for the marker
-     * @returns {AdvancedMarkerElement[]|Marker[]|null} The created marker or null if an error occurs.
-     */
-    _addPointMarkersFromArray(positions, options = {}) {
-        if (!this.map || !Array.isArray(positions)) return null;
-
-        // const points = createPointMarkers(this.map, positions, options);
-        const pointsArray = positions.map((pos) => {
-            return this._addPointMarker(pos, options);
-        }).filter(Boolean);
-
-        return pointsArray;
-    }
-
-    /**
-     * Adds a polyline to the map at the specified positions.
-     * @param {{lat:number,lng:number}[]} positions - Array of position objects
-     * @param {object} [options={}] - Optional configuration for the polyline
-     * @returns {Polyline | null} The created polyline.
-     */
-    _addPolyline(positions, options = {}) {
-        if (!this.map || !Array.isArray(positions) || positions.length < 2) return null;
-        try {
-            // Separate listeners from other polyline options        
-            const { listeners, ...markerOptions } = options;
-
-            // Create the polyline
-            const polyline = createPolyline(this.map, positions, markerOptions);
-            if (!polyline) return null;
-
-            // Highlight event listeners
-            if (this.highlightHandler) {
-                polyline.addListener('mouseover', () => {
-                    this.highlightHandler.applyHoverHighlight(polyline);
-                });
-                polyline.addListener('mouseout', () => {
-                    // highlightHandler's removeHoverHighlight should know which object was hovered
-                    this.highlightHandler.removeHoverHighlight();
-                });
-            }
-
-            // Attach listeners if provided
-            if (polyline && listeners && typeof listeners === 'object') {
-                for (const eventName in listeners) {
-                    if (typeof listeners[eventName] === 'function') {
-                        // Use addListener for robust event handling on markers/overlays
-                        polyline.addListener(eventName, (event) => {
-                            // const latLng = event.latLng;
-                            // const pixel = event.pixel; // Note: pixel coords might not always be available depending on event/context
-
-                            const eventData = {
-                                //     mapPoint: latLng ? { lat: latLng.lat(), lng: latLng.lng() } : null,
-                                //     screenPoint: pixel ? { x: pixel.x, y: pixel.y } : { x: NaN, y: NaN }, // Provide fallback
-                                domEvent: event.domEvent // Pass original DOM event - CRUCIAL for button check
-                            };
-                            // Pass the marker itself and the event object to the callback
-                            listeners[eventName](polyline, eventData);
-                        });
-                    }
-                }
-            }
-
-            // Store the polyline in the collection
-            polyline && this.#polylineCollection.push(polyline);
-
-            return polyline;
-        } catch (error) {
-            console.error("GoogleMeasure: Error in _addPolyline:", error);
-            return null;
-        }
-    }
-
-    /**
-     * Adds multiple polylines to the map at the specified positions.
-     * @param {{lat:number,lng:number}[]} positions - Array of position objects
-     * @param {object} [options={}] - Optional configuration for the polyline
-     * @returns {Polyline[]|[]} The created polyline.
-     */
-    _addPolylinesFromArray(positions, options = {}) {
-        if (!this.map || !Array.isArray(positions) || positions.length < 2) return [];
-
-
-        // Create the polylines instance
-        const addedPolylines = [];
-
-        // Iterate through the positions array, 2 positions as a pair
-        for (let i = 0; i < positions.length - 1; i++) {
-            const positionsPair = positions.slice(i, i + 2); // Get two positions for the polyline
-            const polyline = this._addPolyline(positionsPair, options);
-            polyline && addedPolylines.push(polyline);
-        }
-
-        return addedPolylines; // Return the array of successfully added polylines
-    }
-
-    /**
-     * Creates a label marker on the provided map at the given position.
-     * @param {{lat:number,lng:number}[]}} positions - Array of position objects
-     * @param {number|string} value - The value to display on the label marker
-     * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
-     * @param {object} [options={}] - Optional configuration for the label marker
-     * @returns {AdvancedMarkerElement | Marker | null} The created marker.
-     */
-    _addLabel(positions, value, unit, options = {}) {
-        if (!this.map || !Array.isArray(positions)) return null;
-
-        const {
-            status = null,
-            ...rest
-        } = options;
-
-        // Create the label
-        const label = createLabelMarker(this.map, positions, value, unit, { ...rest });
-        if (!label) return null;
-
-        // Highlight event listeners
-        if (this.highlightHandler) {
-            label.addListener('mouseover', () => {
-                this.highlightHandler.applyHoverHighlight(label);
-            });
-            label.addListener('mouseout', () => {
-                // highlightHandler's removeHoverHighlight should know which object was hovered
-                this.highlightHandler.removeHoverHighlight();
-            });
-        }
-
-        // -- Handle metadata --
-        label.status = status;
-
-        // Store the label in the collection
-        this.#labelCollection.push(label);
-
-        return label;
-    }
-
-    /**
-     * Creates multiple label markers on the provided map at the given positions.
-     * @param {{lat:number,lng:number}[]} positions - Array of position objects
-     * @param {number[]|string[]} valueArray - Array of values to display on the label markers
-     * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
-     * @param {object} [options={}] - Optional configuration for the label markers
-     * @returns {AdvancedMarkerElement[] | Marker[] | []} The created marker.
-     */
-    _addLabelsFromArray(positions, valueArray, unit, options = {}) {
-        if (
-            !this.map ||
-            !Array.isArray(positions) ||
-            positions.length === 0 ||
-            !Array.isArray(valueArray) ||
-            valueArray.length === 0
-        ) return [];
-
-        // Create the label primitives
-        const addedLabels = [];
-        // Iterate through the positions array, 2 positions as a pair
-        for (let i = 0; i < positions.length - 1; i++) {
-            const positionsPair = positions.slice(i, i + 2); // Get two positions for the label
-            const label = this._addLabel(positionsPair, valueArray[i], unit, options);
-            label && addedLabels.push(label);
-        }
-
-        return addedLabels; // Return the array of successfully added labels
-    }
-
-    /**
-     * Adds a polygon to the map at the specified positions.
-     * @param {{lat:number,lng:number}[]} positions - Array of position objects
-     * @param {object} [options={}] = - Optional configuration for the polygon
-     * @returns {Polygon|null} The created polygon.
-     */
-    _addPolygon(positions, options = {}) {
-        if (!this.map || !Array.isArray(positions) || positions.length < 3) return null;
-
-        // Create the polygon
-        const polygon = createPolygon(this.map, positions, options);
-        if (!polygon) return null;
-
-        // Highlight event listeners
-        if (this.highlightHandler) {
-            polygon.addListener('mouseover', () => {
-                this.highlightHandler.applyHoverHighlight(polygon);
-            });
-            polygon.addListener('mouseout', () => {
-                // highlightHandler's removeHoverHighlight should know which object was hovered
-                this.highlightHandler.removeHoverHighlight();
-            });
-        }
-
-        // Store the polygon in the collection
-        polygon && this.#polygonCollection.push(polygon);
-
-        return polygon;
-    }
-
-
     /*****************
-     * FIND GRAPHICS *
-     *****************/
+        * FIND GRAPHICS *
+        *****************/
     /**
      * Finds a point primitive by its position in the point collection.
      * @param {{lat:number,lng:number}} position - The position to find the point primitive 
@@ -482,9 +203,289 @@ export default class GoogleMeasure extends MeasureComponentBase {
     }
 
 
-    /******************
-     * REMOVE FEATURE *
-     ******************/
+    /*****************************
+     * CREATE ANNOTATION FEATURE *
+     *****************************/
+    /**
+     * Adds a point marker to the map at the specified position.
+     * @param {{lat:number,lng:number}} position - The position where the marker will be added
+     * @param {object} [options={}] - Optional configuration for the marker
+     * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|null} The created marker or null if an error occurs.
+     */
+    _addPointMarker(position, options = {}) {
+        if (!this.map || !position) return null;
+        try {
+            const { listeners, ...markerOptions } = options;
+
+            const point = createPointMarker(this.map, position, markerOptions);
+            if (!point) return null;
+
+            // Add highlight event listeners
+            this._addHighlightEventListeners(point);
+
+            // Add Picker event listeners
+            this._addPickerEventListeners(point);
+
+            // Add custom event listeners
+            this._addCustomEventListeners(point, listeners);
+
+            this.#pointCollection.push(point);
+            return point;
+        } catch (error) {
+            console.error("GoogleMeasure: Error in _addPointMarker:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Adds multiple point markers to the map at the specified positions.
+     * @param {{lat:number,lng:number}[]} positions 
+     * @param {object} [options={}] - Optional configuration for the marker
+     * @returns {AdvancedMarkerElement[]|Marker[]|null} The created marker or null if an error occurs.
+     */
+    _addPointMarkersFromArray(positions, options = {}) {
+        if (!this.map || !Array.isArray(positions)) return null;
+
+        // const points = createPointMarkers(this.map, positions, options);
+        const pointsArray = positions.map((pos) => {
+            return this._addPointMarker(pos, options);
+        }).filter(Boolean);
+
+        return pointsArray;
+    }
+
+    /**
+     * Adds a polyline to the map at the specified positions.
+     * @param {{lat:number,lng:number}[]} positions - Array of position objects
+     * @param {object} [options={}] - Optional configuration for the polyline
+     * @returns {Polyline | null} The created polyline.
+     */
+    _addPolyline(positions, options = {}) {
+        if (!this.map || !Array.isArray(positions) || positions.length < 2) return null;
+        try {
+            // Separate listeners from other polyline options        
+            const { listeners, ...rest } = options;
+
+            // Create the polyline
+            const polyline = createPolyline(this.map, positions, { ...rest });
+            if (!polyline) return null;
+
+            // Add highlight event listeners
+            this._addHighlightEventListeners(polyline);
+
+            // Add Picker event listeners
+            this._addPickerEventListeners(polyline);
+
+            // Add custom event listeners
+            this._addCustomEventListeners(polyline, listeners);
+
+            // Store the polyline in the collection
+            polyline && this.#polylineCollection.push(polyline);
+
+            return polyline;
+        } catch (error) {
+            console.error("GoogleMeasure: Error in _addPolyline:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Adds multiple polylines to the map at the specified positions.
+     * @param {{lat:number,lng:number}[]} positions - Array of position objects
+     * @param {object} [options={}] - Optional configuration for the polyline
+     * @returns {Polyline[]|[]} The created polyline.
+     */
+    _addPolylinesFromArray(positions, options = {}) {
+        if (!this.map || !Array.isArray(positions) || positions.length < 2) return [];
+
+
+        // Create the polylines instance
+        const addedPolylines = [];
+
+        // Iterate through the positions array, 2 positions as a pair
+        for (let i = 0; i < positions.length - 1; i++) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the polyline
+            const polyline = this._addPolyline(positionsPair, options);
+            polyline && addedPolylines.push(polyline);
+        }
+
+        return addedPolylines; // Return the array of successfully added polylines
+    }
+
+    /**
+     * Creates a label marker on the provided map at the given position.
+     * @param {{lat:number,lng:number}[]}} positions - Array of position objects
+     * @param {number|string} value - The value to display on the label marker
+     * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
+     * @param {object} [options={}] - Optional configuration for the label marker
+     * @returns {AdvancedMarkerElement | Marker | null} The created marker.
+     */
+    _addLabel(positions, value, unit, options = {}) {
+        if (!this.map || !Array.isArray(positions)) return null;
+
+        const { status = null, ...rest } = options;
+
+        // Create the label
+        const label = createLabelMarker(this.map, positions, value, unit, { ...rest });
+        if (!label) return null;
+
+        // Add highlight event listeners
+        this._addHighlightEventListeners(label);
+
+        // Add Picker event listeners
+        this._addPickerEventListeners(label);
+
+        // Add custom event listeners
+        this._addCustomEventListeners(label, options.listeners);
+
+        // -- Handle metadata --
+        label.status = status;
+
+        // Store the label in the collection
+        this.#labelCollection.push(label);
+        return label;
+    }
+
+    /**
+     * Creates multiple label markers on the provided map at the given positions.
+     * @param {{lat:number,lng:number}[]} positions - Array of position objects
+     * @param {number[]|string[]} valueArray - Array of values to display on the label markers
+     * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
+     * @param {object} [options={}] - Optional configuration for the label markers
+     * @returns {AdvancedMarkerElement[] | Marker[] | []} The created marker.
+     */
+    _addLabelsFromArray(positions, valueArray, unit, options = {}) {
+        if (
+            !this.map ||
+            !Array.isArray(positions) ||
+            positions.length === 0 ||
+            !Array.isArray(valueArray) ||
+            valueArray.length === 0
+        ) return [];
+
+        // Create the label primitives
+        const addedLabels = [];
+        // Iterate through the positions array, 2 positions as a pair
+        for (let i = 0; i < positions.length - 1; i++) {
+            const positionsPair = positions.slice(i, i + 2); // Get two positions for the label
+            const label = this._addLabel(positionsPair, valueArray[i], unit, options);
+            label && addedLabels.push(label);
+        }
+
+        return addedLabels; // Return the array of successfully added labels
+    }
+
+    /**
+     * Adds a polygon to the map at the specified positions.
+     * @param {{lat:number,lng:number}[]} positions - Array of position objects
+     * @param {object} [options={}] = - Optional configuration for the polygon
+     * @returns {Polygon|null} The created polygon.
+     */
+    _addPolygon(positions, options = {}) {
+        if (!this.map || !Array.isArray(positions) || positions.length < 3) return null;
+
+        // Create the polygon
+        const polygon = createPolygon(this.map, positions, options);
+        if (!polygon) return null;
+
+        // Add highlight event listeners
+        this._addHighlightEventListeners(polygon);
+
+        // Add Picker event listeners
+        this._addPickerEventListeners(polygon);
+
+        // Add custom event listeners
+        this._addCustomEventListeners(polygon, options.listeners);
+
+        // Store the polygon in the collection
+        polygon && this.#polygonCollection.push(polygon);
+
+        return polygon;
+    }
+
+
+    /**************************
+     * EVENT HANDLING METHODS *
+     **************************/
+    /**
+     * Adds highlight event listeners to an overlay.
+     * @param {google.maps.Marker|google.maps.Polyline|google.maps.Polygon} overlay - The overlay to add listeners to
+     * @private
+     */
+    _addHighlightEventListeners(overlay) {
+        if (!overlay) return;
+
+        // Highlight event listeners
+        if (this.highlightHandler) {
+            overlay.addListener('mouseover', (event) => {
+                const eventData = this._createEventData(event, overlay);
+                this.highlightHandler.applyHoverHighlight(overlay);
+                // Emit the hover event with the event data
+                this.emitter.emit('annotation-hovered', eventData);
+            });
+            overlay.addListener('mouseout', (event) => {
+                const eventData = this._createEventData(event, null);
+                this.highlightHandler.removeHoverHighlight();
+                // Emit the hover event with null annotation to indicate mouse out
+                this.emitter.emit('annotation-hovered', eventData);
+            });
+        }
+    }
+
+    /**
+     * Adds picker event listeners to an overlay.
+     * @param {google.maps.Marker|google.maps.Polyline|google.maps.Polygon} overlay - The overlay to add listeners to
+     * @returns {void}
+     * @private
+     */
+    _addPickerEventListeners(overlay) {
+        if (!overlay) return;
+
+        overlay.addListener('click', (event) => {
+            const eventData = this._createEventData(event, overlay);
+            this.emitter.emit('annotation-clicked', eventData);
+        });
+    }
+
+    /**
+     * Adds custom event listeners to an overlay.
+     * @param {google.maps.Marker|google.maps.Polyline|google.maps.Polygon} overlay - The overlay to add listeners to
+     * @param {object} listeners - Custom listeners object
+     * @private
+     */
+    _addCustomEventListeners(overlay, listeners) {
+        if (!overlay || !listeners || typeof listeners !== 'object') return;
+
+        for (const eventName in listeners) {
+            if (typeof listeners[eventName] === 'function') {
+                overlay.addListener(eventName, (event) => {
+                    const eventData = this._createEventData(event);
+                    listeners[eventName](overlay, eventData);
+                });
+            }
+        }
+    }
+
+    /**
+     * Creates normalized event data from a Google Maps event.
+     * @param {google.maps.MapMouseEvent} event - The Google Maps event
+     * @param {google.maps.Marker|google.maps.Polyline|google.maps.Polygon} [annotation=null] - The annotation object
+     * @returns {object} Normalized event data
+     * @private
+     */
+    _createEventData(event, annotation = null) {
+        return {
+            mapPoint: event.latLng ? { lat: event.latLng.lat(), lng: event.latLng.lng() } : null,
+            screenPoint: this._getContainerRelativeCoords(event.domEvent),
+            domEvent: event.domEvent,
+            annotation
+        };
+    }
+
+
+    /*****************************
+     * REMOVE ANNOTATION FEATURE *
+     *****************************/
     /**
      * Removes a point marker from the map.
      * @param {AdvancedMarkerElement|Marker} marker 
@@ -571,23 +572,32 @@ export default class GoogleMeasure extends MeasureComponentBase {
         });
     }
 
-    // /**
-    //  * Emits an 'annotation:click' event when a managed graphic is clicked.
-    //  * @param {object} clickInfo - Details about the clicked annotation.
-    //  * @param {'marker'|'polyline'|'polygon'|'label'} clickInfo.type - The type of graphic clicked.
-    //  * @param {any} clickInfo.graphic - The map graphic object itself.
-    //  * @param {{lat: number, lng: number} | null} clickInfo.mapPoint - Click coordinates.
-    //  * @param {string | undefined} clickInfo.dataId - The ID of the associated measurement data.
-    //  * @param {google.maps.MapMouseEvent | google.maps.PolylineMouseEvent} clickInfo.event - The original event.
-    //  */
-    // _notifyAnnotationClicked(clickInfo) {
-    //     if (!this.emitter) {
-    //         console.warn("GoogleMeasure: Emitter not available, cannot emit annotation:click event.");
-    //         return;
-    //     }
-    //     console.log(`GoogleMeasure: Emitting annotation:click`, clickInfo);
-    //     this.emitter.emit('annotation:click', clickInfo);
-    // }
+
+    /******************
+     * HELPER METHODS *
+     ******************/
+    /**
+     * Converts viewport coordinates to map container relative coordinates.
+     * @param {MouseEvent} domEvent - The DOM mouse event
+     * @returns {{x: number, y: number}} Container-relative coordinates
+     * @private
+     */
+    _getContainerRelativeCoords(domEvent) {
+        if (!domEvent) return { x: NaN, y: NaN };
+
+        // Get the map container element
+        const container = this._getContainer();
+        if (!container) return { x: NaN, y: NaN };
+
+        // Get the bounding rectangle of the map container
+        const rect = container.getBoundingClientRect();
+        if (!rect || rect.width <= 10) return { x: NaN, y: NaN };
+
+        return {
+            x: domEvent.clientX - rect.left,
+            y: domEvent.clientY - rect.top
+        };
+    }
 }
 
 customElements.define("google-measure", GoogleMeasure);

@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { calculateMiddlePos, calculateDistance, formatMeasurementValue, areCoordinatesEqual, checkOverlayType, getOverlayByPosition, convertToLatLng, } from "../../lib/helper/googleHelper.js";
-import { getNeighboringValues } from "../../lib/helper/helper.js";
+import { getNeighboringValues, showCustomNotification } from "../../lib/helper/helper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /** @typedef {{lat: number, lng: number}} LatLng */
@@ -746,6 +746,9 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         // remove the measure data from dataPool
         dataPool.removeMeasureById(measureId);
+
+        // show notification
+        showCustomNotification(`remove line set, id: ${measureId}`, this._container)
     }
 
     /******************
