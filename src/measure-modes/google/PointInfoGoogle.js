@@ -78,7 +78,6 @@ class PointInfoGoogle extends MeasureModeGoogle {
 
 
     /**
-     * 
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {DragHandler} dragHandler
      * @param {HighlightHandler} highlightHandler

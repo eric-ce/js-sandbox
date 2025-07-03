@@ -508,9 +508,6 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         return { area, labelInstance };
     }
 
-    /*******************
-     * OVERRIDE METHOD *
-     *******************/
     /**
      * Resets values specific to the mode.
      */

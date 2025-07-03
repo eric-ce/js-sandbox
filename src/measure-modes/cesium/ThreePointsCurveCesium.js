@@ -553,6 +553,9 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         return distance;
     }
 
+    /**
+     * Resets values specific to the mode.
+     */
     resetValuesModeSpecific() {
         // Reset flags
         this.flags.isMeasurementComplete = false;

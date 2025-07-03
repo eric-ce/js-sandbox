@@ -553,6 +553,9 @@ class PolygonCesium extends MeasureModeCesium {
         return { area, labelPrimitive };
     }
 
+    /**
+     * Resets values specific to the mode.
+     */
     resetValuesModeSpecific() {
         // Reset flags
         this.flags.isMeasurementComplete = false;

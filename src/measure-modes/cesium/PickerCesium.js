@@ -223,6 +223,9 @@ class PickerCesium extends MeasureModeCesium {
         }
     }
 
+    /**
+     * Resets values specific to the mode.
+     */
     resetValuesModeSpecific() {
         this.#coordinate = null;
 
