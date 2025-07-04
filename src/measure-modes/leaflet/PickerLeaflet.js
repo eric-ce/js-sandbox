@@ -1,60 +1,63 @@
-import { showCustomNotification } from "../../lib/helper/cesiumHelper";
-import { capitalizeString } from "../../lib/helper/helper";
-import { MeasureModeGoogle } from "./MeasureModeGoogle";
+import { capitalizeString, showCustomNotification } from "../../lib/helper/helper";
+import { MeasureModeLeaflet } from "./MeasureModeLeaflet";
 
-
-/**
+/** 
  * @typedef NormalizedEventData
- * @property {object} domEvent - The original DOM event
- * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
- * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
- * @property {google.maps.Marker|google.maps.Polyline|google.maps.Polygon} annotation - The annotation graphics object
+ * @property {{lat: number, lng:number}} mapPoint - The map coordinates
+ * @property {{x:number,y:number}} screenPoint - The screen coordinates
+ * @property {object} domEvent - The DOM event object
+ * @property {object} leafletEvent - The Leaflet event object
+ * @property {object} target - The target of the event (e.g., map, marker, etc.)
+ * @property {object} layer - The Leaflet layer object
  */
 
-class PickerGoogle extends MeasureModeGoogle {
+// -- Dependencies types --
+/** @typedef {import('../../lib/data/DataPool.js').DataPool} DataPool */
+/** @typedef {import('../../lib/input/LeafletInputHandler.js').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/interaction/LeafletDragHandler.js').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.js').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
+/** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
+/** @typedef {import('../../components/LeafletMeasure.js').LeafletMeasure} LeafletMeasure */
+
+
+class PickerLeaflet extends MeasureModeLeaflet {
+    /** @type {HTMLDivElement} - Overlay to display picked object information */
     #modeInfoOverlay = null;
 
     /**
-     * @param {GoogleMapsInputHandler} inputHandler
-     * @param {DragHandler} dragHandler
-     * @param {HighlightHandler} highlightHandler
-     * @param {MeasureComponentBase} drawingHelper
-     * @param {StateManager} stateManager
-     * @param {EventEmitter} emitter
+     * @param {LeafletInputHandler} inputHandler 
+     * @param {LeafletDragHandler} dragHandler 
+     * @param {LeafletHighlightHandler} highlightHandler 
+     * @param {LeafletMeasure} drawingHelper 
+     * @param {StateManager} stateManager 
+     * @param {EventEmitter} emitter 
      */
     constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
         // Validate input parameters
         if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("PickerGoogle requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+            throw new Error("PickerLeaflet requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
         super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
     }
 
-    /**
-     * Activates the picker mode and sets up event listeners.
-     */
     activate() {
         super.activate();
 
-        this.inputHandler.off('leftclick', this.handleLeftClick);
-        this.inputHandler.off('mousemove', this.handleMouseMove);
+        this.inputHandler.off("leftclick", this.handleLeftClick);
+        this.inputHandler.off("mousemove", this.handleMouseMove);
 
-        // Add emitter listeners only when picker is active
         if (this.emitter) {
-            this.emitter.on('annotation-clicked-google', this.handleLeftClick);
-            this.emitter.on('annotation-hovered-google', this.handleMouseMove);
+            this.emitter.on("annotation-clicked-leaflet", this.handleLeftClick);
+            this.emitter.on("annotation-hovered-leaflet", this.handleMouseMove);
         }
     }
 
-    /**
-     * Deactivates the picker mode and cleans up event listeners.
-     */
     deactivate() {
-        // Remove emitter listeners when picker is deactivated
         if (this.emitter) {
-            this.emitter.off('annotation-clicked-google', this.handleLeftClick);
-            this.emitter.off('annotation-hovered-google', this.handleMouseMove);
+            this.emitter.off("annotation-clicked-leaflet", this.handleLeftClick);
+            this.emitter.off("annotation-hovered-leaflet", this.handleMouseMove);
         }
 
         super.deactivate();
@@ -65,12 +68,12 @@ class PickerGoogle extends MeasureModeGoogle {
      * EVENTS HANDLER *
      ******************/
     /**
-     * Handles left clicks, using normalized event data.
-     * @param {NormalizedEventData} eventData - Normalized data from input handler.
-     * @returns {Promise<void>}
+     * Handles left-click events on the map.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
+     * @returns {Void}
      */
     handleLeftClick = async (eventData) => {
-        const { annotation } = eventData;
+        const { target: annotation } = eventData;
         if (!annotation) return;
 
         const { id: pickedObjectId } = annotation;
@@ -82,7 +85,6 @@ class PickerGoogle extends MeasureModeGoogle {
         // validate mode name with available modes
         const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
         if (!isMatchedMode) return;
-
         // Activate the relevant mode using the drawing helper
         this.drawingHelper._activateMode(pickedObjectMode);
 
@@ -90,15 +92,14 @@ class PickerGoogle extends MeasureModeGoogle {
         showCustomNotification(`Activated ${capitalizeString(pickedObjectMode)} mode`, this._container);
     }
 
-
     /**
-     * Handles mouse move, using normalized event data.
-     * @param {NormalizedEventData} eventData - Normalized data from input handler.
-     * @returns {Promise<void>}
+     * Handles mouse move events on the map.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
+     * @returns {Void}
      */
     handleMouseMove = async (eventData) => {
         if (!eventData) return;
-        const { annotation, screenPoint } = eventData;
+        const { target: annotation, screenPoint } = eventData;
         if (!annotation || !screenPoint || !screenPoint.x || !screenPoint.y) {
             this._hideModeOverlay();
             return;
@@ -127,6 +128,7 @@ class PickerGoogle extends MeasureModeGoogle {
         }
     }
 
+
     /**
      * Creates the mode overlay element for displaying picked object information.
      * @returns {HTMLDivElement} - The mode overlay element.
@@ -136,7 +138,7 @@ class PickerGoogle extends MeasureModeGoogle {
         if (!this._container) return null;
 
         this.#modeInfoOverlay = document.createElement('div');
-        this.#modeInfoOverlay.className = 'picker-mode-overlay google-picker-mode-overlay';
+        this.#modeInfoOverlay.className = 'picker-mode-overlay leaflet-picker-mode-overlay';
         // Apply styles to the overlay
         Object.assign(this.#modeInfoOverlay.style, {
             position: "absolute",
@@ -183,7 +185,6 @@ class PickerGoogle extends MeasureModeGoogle {
         });
     }
 
-
     /**
      * Hides the mode overlay.
      */
@@ -204,5 +205,4 @@ class PickerGoogle extends MeasureModeGoogle {
         }
     }
 }
-
-export { PickerGoogle };
+export { PickerLeaflet };

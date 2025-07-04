@@ -8,7 +8,7 @@ export class LeafletInputHandler {
     /** @type {L.Map} */
     map;
     /** @type {HTMLElement | null} */
-    mapContainer;
+    _container;
     /** @type {Map<string, Map<Function, Function>>} */
     listenerRegistry; // Stores { eventTypeString: Map<originalCallback, leafletHandlerWrapper> }
 
@@ -21,7 +21,7 @@ export class LeafletInputHandler {
             throw new Error("Leaflet map instance is required for LeafletInputHandler.");
         }
         this.map = map;
-        this.mapContainer = map.getContainer();
+        this._container = map.getContainer();
         /** @type {Map<string, Map<Function, Function>>} */
         this.listenerRegistry = new Map();
         console.log("LeafletInputHandler created.");
@@ -73,7 +73,7 @@ export class LeafletInputHandler {
             eventData.screenPoint = { x: leafletEvent.containerPoint.x, y: leafletEvent.containerPoint.y };
         } else if (leafletEvent.originalEvent instanceof MouseEvent) {
             // Fallback for events that might not have containerPoint but have mouse coords
-            const rect = this.mapContainer?.getBoundingClientRect();
+            const rect = this._container?.getBoundingClientRect();
             if (rect) {
                 eventData.screenPoint = {
                     x: leafletEvent.originalEvent.clientX - rect.left,
@@ -167,8 +167,8 @@ export class LeafletInputHandler {
      * @param {string} cursorStyle - CSS cursor style (e.g., 'crosshair', 'grab', 'default').
      */
     setCursor(cursorStyle) {
-        if (this.mapContainer) {
-            this.mapContainer.style.cursor = cursorStyle || 'default';
+        if (this._container) {
+            this._container.style.cursor = cursorStyle || 'default';
         }
     }
 
@@ -194,7 +194,7 @@ export class LeafletInputHandler {
         } catch (e) { }
 
         this.map = null; // Release reference
-        this.mapContainer = null;
+        this._container = null;
         console.log("LeafletInputHandler instance destroyed.");
     }
 }

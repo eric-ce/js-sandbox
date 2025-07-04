@@ -20,7 +20,7 @@ import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
-import { PickerCesium, TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PickerGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
+import { PickerCesium, TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PickerGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet, PickerLeaflet } from "../measure-modes/index.js";
 import { InstructionsTable } from "./shared/InstructionsTable.js";
 import { DataLogTable } from "./shared/DataLogTable.js";
 import { makeDraggable } from "../lib/helper/helper.js";

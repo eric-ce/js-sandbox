@@ -156,7 +156,7 @@ class PickerCesium extends MeasureModeCesium {
      */
     _createModeOverlay() {
         this.#modeInfoOverlay = document.createElement('div');
-        this.#modeInfoOverlay.className = 'picker-mode-overlay';
+        this.#modeInfoOverlay.className = 'picker-mode-overlay cesium-picker-mode-overlay';
         // Apply styles for the overlay
         Object.assign(this.#modeInfoOverlay.style, {
             position: "absolute",

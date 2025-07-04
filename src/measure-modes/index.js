@@ -34,3 +34,4 @@ export { TwoPointsDistanceLeaflet } from "./leaflet/TwoPointsDistanceLeaflet.js"
 export { PolygonLeaflet } from "./leaflet/PolygonLeaflet.js";
 export { PointInfoLeaflet } from "./leaflet/PointInfoLeaflet.js";
 export { MultiDistanceLeaflet } from "./leaflet/MultiDistanceLeaflet.js";
+export { PickerLeaflet } from "./leaflet/PickerLeaflet.js";
