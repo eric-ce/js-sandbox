@@ -42,7 +42,7 @@ class GoogleHighlightHandler {
         }
 
         // Condition to mode state to prevent hover highlight when during measure, or drag
-        if (this.activeModeInstance.flags.isDragMode || (!this.activeModeInstance.flags.isMeasurementComplete && this.activeModeInstance.coordsCache.length > 0)) return;
+        if (this.activeModeInstance?.flags.isDragMode || (!this.activeModeInstance?.flags.isMeasurementComplete && this.activeModeInstance?.coordsCache?.length > 0)) return;
 
         // If another object is currently hovered, remove its highlight first
         if (this.#hoveredObject) {

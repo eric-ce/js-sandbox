@@ -2,17 +2,6 @@ import { MeasureModeBase } from "../MeasureModeBase.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
 
-/** @typedef {import('../../lib/data/DataPool.js').DataPool} DataPool */
-/** @typedef {import('../../lib/input/LeafletInputHandler.js').LeafletInputHandler} LeafletInputHandler */
-/** @typedef {import('../../lib/interaction/LeafletDragHandler.js').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.js').LeafletHighlightHandler} LeafletHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
-/** @typedef {import('../../components/LeafletMeasure.js').LeafletMeasure} LeafletMeasure */
-
-/** @typedef {lat:number, lng:number | latitude: number, longitude: number, height: number} Coordinate */
-
-// Measure data 
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -25,6 +14,15 @@ import { areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHe
  * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
  */
 
+/** @typedef {import('../../lib/data/DataPool.js').DataPool} DataPool */
+/** @typedef {import('../../lib/input/LeafletInputHandler.js').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/interaction/LeafletDragHandler.js').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.js').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
+/** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
+/** @typedef {import('../../components/LeafletMeasure.js').LeafletMeasure} LeafletMeasure */
+
+/** @typedef {lat:number, lng:number | latitude: number, longitude: number, height: number} Coordinate */
 
 /**
  * Shared functionality between modes in Leaflet Maps.
@@ -88,6 +86,37 @@ class MeasureModeLeaflet extends MeasureModeBase {
         return measure;
     }
 
+    /**
+     * Removes all pending annotations in the current mode.
+     * This includes points, labels, polylines, and polygons that are not completed.
+     * It does not remove completed annotations.
+     * @returns {void}
+     */
+    removePendingAnnotations() {
+        const targetId = `annotate_${this.mode}`;
+
+        // Get all layer groups from the drawing helper
+        const collections = [
+            this.pointCollection,
+            this.labelCollection,
+            this.polylineCollection,
+            this.polygonCollection
+        ].filter(Boolean); // Filter out any null/undefined collections
+
+        collections.forEach(collection => {
+            const layersToRemove = [];
+
+            // Iterate through layers to find pending annotations for this mode
+            collection.eachLayer(layer => {
+                if (layer.id.includes(targetId) && layer.status !== 'completed') {
+                    layersToRemove.push(layer);
+                }
+            });
+
+            // Remove the identified layers
+            layersToRemove.forEach(layer => collection.removeLayer(layer));
+        });
+    }
 }
 
 export { MeasureModeLeaflet };

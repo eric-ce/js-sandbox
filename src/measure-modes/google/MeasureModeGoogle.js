@@ -124,6 +124,37 @@ class MeasureModeGoogle extends MeasureModeBase {
             polygon.setMap(null); // Remove polygon from map
         });
     }
+
+    /**
+     * Removes all pending annotations in the current mode.
+     * This includes points, labels, polylines, and polygons that are not completed.
+     * It does not remove completed annotations.
+     * @returns {void}
+     */
+    removePendingAnnotations() {
+        const targetIdPrefix = `annotate_${this.mode}`;
+
+        // Helper function to check if annotation should be removed
+        const shouldRemove = (annotation) =>
+            annotation.id.includes(targetIdPrefix) && annotation.status !== "completed";
+
+        // Define collections with their removal methods
+        const collections = [
+            { items: this.pointCollection, removeMethod: '_removePointMarker' },
+            { items: this.labelCollection, removeMethod: '_removeLabel' },
+            { items: this.polylineCollection, removeMethod: '_removePolyline' },
+            { items: this.polygonCollection, removeMethod: '_removePolygon' }
+        ];
+
+        collections.forEach(({ items, removeMethod }) => {
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                if (shouldRemove(item)) {
+                    this.drawingHelper[removeMethod](item);
+                }
+            }
+        });
+    }
 }
 
 export { MeasureModeGoogle };

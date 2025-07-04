@@ -155,7 +155,7 @@ class HeightCesium extends MeasureModeCesium {
         switch (pickedObjectType) {
             case "label":
                 // DO NOT use the flag isMeasurementComplete because reset will reset the flag
-                editableLabel(this.map.container, pickedObject.primitive);
+                editableLabel(this._container, pickedObject.primitive);
                 return true;
             case "point":
                 return false;   // False mean do not handle point click 
@@ -566,6 +566,9 @@ class HeightCesium extends MeasureModeCesium {
         });
     }
 
+    /**
+     * Resets values specific to the mode.
+     */
     resetValuesModeSpecific() {
         // Reset flags
         this.flags.isMeasurementComplete = false;

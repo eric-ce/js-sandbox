@@ -24,8 +24,6 @@ export class InstructionsTable extends HTMLElement {
     _fragment = null;
     /** @type {HTMLDivElement} */
     _instructionsTableContainer = null;
-    /** @type {string} */
-    _header = null;
     /** @type {Object.<string, string[]>} */
     _modeMessages = null;
 
@@ -55,6 +53,7 @@ export class InstructionsTable extends HTMLElement {
             "Middle Click on point to remove line segment",
             "Middle Click on line to remove line set",
         ];
+
         this._modeMessages = {
             "default": [
                 "Left Click to start measure",
@@ -86,12 +85,6 @@ export class InstructionsTable extends HTMLElement {
                 "Hover on point to show on chart"
             ]
         };
-
-        // Header text
-        this._header = "How to use:";
-
-        // Create UI elements
-        this._createUI();
     }
 
     /*****************************
@@ -117,8 +110,8 @@ export class InstructionsTable extends HTMLElement {
     set modeId(modeId) {
         this._modeId = modeId;
 
-        if (this._container) {
-            // Update the content based on the modeId
+        // Update the content based on the modeId
+        if (this._table) {
             this.updateContent(modeId);
         }
     }
@@ -127,6 +120,9 @@ export class InstructionsTable extends HTMLElement {
     connectedCallback() {
         // Apply shared styles.
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
+
+        // Create UI elements
+        this._createUI();
     }
 
     disconnectedCallback() {
@@ -147,9 +143,6 @@ export class InstructionsTable extends HTMLElement {
         this._createInstructionsIcon();
 
         this._createInstructionsBox();
-
-        // Set default content
-        this.updateContent("default");
     }
 
     /**
@@ -177,7 +170,16 @@ export class InstructionsTable extends HTMLElement {
         this._instructionsIconButton = document.createElement("button");
         this._instructionsIconButton.className = "annotate-button animate-on-show visible";
         this._instructionsIconButton.style.position = "absolute";
-        this._instructionsIconButton.innerHTML = `<img src="${instructionsBoxIcon}" alt="instructions box icon" style="width: 30px; height: 30px;" aria-hidden="true">`;
+
+        // create icon image element
+        const img = document.createElement("img");
+        img.src = instructionsBoxIcon;
+        img.alt = "instructions box icon";
+        img.style.width = "30px";
+        img.style.height = "30px";
+        img.setAttribute("aria-hidden", "true");
+        this._instructionsIconButton.appendChild(img);
+
         this._instructionsIconButton.setAttribute("type", "button");
         this._instructionsIconButton.setAttribute("aria-label", "Toggle box for instructions");
         this._instructionsIconButton.setAttribute("aria-pressed", "false");
@@ -199,6 +201,14 @@ export class InstructionsTable extends HTMLElement {
         this._instructionsBox = document.createElement("div");
         this._instructionsBox.className = "info-box instructions-box hidden";
         this._instructionsBox.style.position = "absolute";
+
+        // -- Create title div --
+        const titleDiv = document.createElement("div");
+        const formatTitleText = this.mapName ? `${this.mapName.charAt(0).toUpperCase() + this.mapName.slice(1)} Instructions` : "Instructions";
+        titleDiv.textContent = formatTitleText;
+        titleDiv.style.fontWeight = "bold";
+        titleDiv.style.padding = "2px 0px 0px 2px";
+        this._instructionsBox.appendChild(titleDiv);
 
         // -- Create a table -- 
         this._table = document.createElement("table");
@@ -222,7 +232,7 @@ export class InstructionsTable extends HTMLElement {
         // -- Create expand/collapse button for the instructions box --
         const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
             color: "#edffff",
-            right: "22px",
+            right: "1.5rem",
             clickCallback: () => {
                 this._hideInstructionsBox();
                 expandCollapseButton.style.transform = "scale(1.0)"; // Reset scale on collapse 
@@ -405,8 +415,7 @@ export class InstructionsTable extends HTMLElement {
      */
     updateContent(modeKey) {
         const messages = this._modeMessages[modeKey] || this._modeMessages.default;
-        this._table.innerHTML = "";
-        this._table.appendChild(this._createRow(this._header));
+
         messages.forEach(msg => {
             this._table.appendChild(this._createRow(msg));
         });
@@ -431,8 +440,6 @@ export class InstructionsTable extends HTMLElement {
      * RESET *
      *********/
     _destroyInstructionsTable() {
-        // this._fragment.remove();
-        // this._instructionsTableContainer.remove();
         this.remove();
 
         this._container = null;
@@ -442,11 +449,12 @@ export class InstructionsTable extends HTMLElement {
         this._instructionsTableContainer = null;
 
         this._modeMessages = null;
-        this._header = null;
 
         this._fragment = null;
 
-        this.shadowRoot.innerHTML = ""; // Clear the shadow DOM
+        while (this.shadowRoot.firstChild) {
+            this.shadowRoot.removeChild(this.shadowRoot.firstChild);
+        }
         this.shadowRoot.adoptedStyleSheets = []; // Clear the adopted stylesheets
         this._isExpanded = false;
 

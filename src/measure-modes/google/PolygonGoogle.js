@@ -388,7 +388,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         if (!polygonInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             polygonInstance = this.drawingHelper._addPolygon(positions, {
                 color,
-                id: `annotate_area_${this.measure.id}`,
+                id: `annotate_area_polygon_${this.measure.id}`,
                 clickable,
                 ...rest
             });
@@ -496,10 +496,6 @@ class PolygonGoogle extends MeasureModeGoogle {
         return { area, labelInstance };
     }
 
-
-    /*******************
-     * OVERRIDE METHOD *
-     *******************/
     /**
      * Resets values specific to the mode.
      */

@@ -310,13 +310,13 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
      * HELPER *
      **********/
     /**
-      * Creates a new polyline or updates an existing one based on positions.
-      * Manages the reference within the provided polylinesArray.
-      * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
-      * @param {google.maps.Polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified.
-      * @param {Object} [options={}] - Options for the line.
-      * @returns {google.maps.Polyline | null} The created or updated polyline instance, or null if failed.
-      */
+     * Creates a new polyline or updates an existing one based on positions.
+     * Manages the reference within the provided polylinesArray.
+     * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
+     * @param {google.maps.Polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified.
+     * @param {Object} [options={}] - Options for the line.
+     * @returns {google.maps.Polyline | null} The created or updated polyline instance, or null if failed.
+     */
     _createOrUpdateLine(positions, polylinesArray, options = {}) {
         // Validate positions input
         if (!Array.isArray(positions) || positions.length < 2 || !positions[0] || !positions[1]) {
@@ -383,15 +383,15 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
     }
 
     /**
-      * Create or update the label (Google Maps Marker).
-      * If the label exists in labelsArray, update its position and text, else create a new one.
-      * Manages the reference within the provided labelsArray.
-      * @param {{lat:number,lng:number}[]} positions - Array of positions (expects 2) to calculate distance and middle point.
-      * @param {google.maps.Marker[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified.
-      * @param {Object} [options={}] - Options for the label.
-      * @param {string|null} [options.status=null] - Status to set on the label instance.
-      * @return {{ distance: number, labelInstance: google.maps.Marker | null }} - The calculated distance and the created/updated label instance, or null if failed.
-      */
+     * Create or update the label (Google Maps Marker).
+     * If the label exists in labelsArray, update its position and text, else create a new one.
+     * Manages the reference within the provided labelsArray.
+     * @param {{lat:number,lng:number}[]} positions - Array of positions (expects 2) to calculate distance and middle point.
+     * @param {google.maps.Marker[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified.
+     * @param {Object} [options={}] - Options for the label.
+     * @param {string|null} [options.status=null] - Status to set on the label instance.
+     * @return {{ distance: number, labelInstance: google.maps.Marker | null }} - The calculated distance and the created/updated label instance, or null if failed.
+     */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
         // Validate input
         if (!Array.isArray(positions) || !Array.isArray(labelsArray)) {

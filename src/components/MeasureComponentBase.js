@@ -20,7 +20,7 @@ import { CesiumInputHandler } from "../lib/input/CesiumInputHandler.js";
 import { GoogleMapsInputHandler } from "../lib/input/GoogleMapsInputHandler.js";
 import { LeafletInputHandler } from "../lib/input/LeafletInputHandler.js";
 import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHighlightHandler, LeafletDragHandler, LeafletHighlightHandler } from "../lib/interaction/index.js";
-import { TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet } from "../measure-modes/index.js";
+import { PickerCesium, TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PickerGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet, PickerLeaflet } from "../measure-modes/index.js";
 import { InstructionsTable } from "./shared/InstructionsTable.js";
 import { DataLogTable } from "./shared/DataLogTable.js";
 import { makeDraggable } from "../lib/helper/helper.js";
@@ -417,8 +417,8 @@ export class MeasureComponentBase extends HTMLElement {
                 getClass: (type) => (type === 'cesium' ? MultiDistancesClampedCesium : null)
             },
             {
-                id: "polygon",
-                name: "Polygon",
+                id: "area",
+                name: "Area",
                 icon: polygonIcon,
                 mapAvailability: ["cesium", "google", "leaflet"],
                 getClass: (type) => {
@@ -664,20 +664,23 @@ export class MeasureComponentBase extends HTMLElement {
 
     _handleClearButtonClick() {
         // this.log.info(`${this.constructor.name}: Clear button clicked.`);
-        // 1.. Remove annotations from the map for data associated within this component/map
-        // this.clearCollections();
+        const userConfirmation = confirm("Do you want to clear all measurements?");
+        if (!userConfirmation) {
+            return; // User cancelled
+        }
 
-        // 2. Deactivate active mode 
-        // this._activateMode(null);
+        // 1. Deactivate active mode 
+        // This will also reset the mode internal properties
+        // clone mode id 
+        const cloneModeId = this.activeModeId;
+        this._activateMode(null);
+        this._activateMode(cloneModeId);
 
-        // 3. reset its internal properties
-        // this._activeModeInstance.resetValues();
+        // 2. Remove all annotations from the specific map
+        this.clearCollections();
 
-        // optional: 4. Emit an event indicating measurements were cleared for this component
-        // if (this.emitter) {
-        //     this.emitter.emit("measurementsCleared", { mapName: this.mapName, component: this });
-        // }
-        // this.log.info(`${this.constructor.name}: Measurements cleared for map: ${this.mapName}.`);
+        // 3. clean all data in the dataPool by mapName
+        dataPool.removeDataByMapName(this.mapName);
     }
 
 
@@ -892,6 +895,7 @@ export class MeasureComponentBase extends HTMLElement {
         // set properties for log table
         this.dataLogTable.stateManager = this.stateManager;
         this.dataLogTable.emitter = this.emitter;
+        this.dataLogTable.mapName = this.mapName;
         const mapContainer = this._getContainer();
         this.dataLogTable.container = mapContainer;
 
@@ -909,6 +913,7 @@ export class MeasureComponentBase extends HTMLElement {
             return this.map.getContainer(); // Leaflet uses getContainer()
         }
     }
+
 
     /******************************
      * SYNC DRAWING DATA FOR MAPS *

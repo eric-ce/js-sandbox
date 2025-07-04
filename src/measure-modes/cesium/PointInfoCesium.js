@@ -66,11 +66,10 @@ class PointInfoCesium extends MeasureModeCesium {
     /** @type {Cartesian3[]} */
     coordCache = [];
 
-    /** @type {HTMLElement} */ // the overlay to show the coordinate info
+    /** @type {HTMLElement} - the overlay to show the coordinate info */
     #coordinateInfoOverlay;
 
     /**
-     * 
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
@@ -146,7 +145,7 @@ class PointInfoCesium extends MeasureModeCesium {
                 // only when it is not during measuring can edit the label. 
                 if (this.coordsCache.length === 0) {
                     // DO NOT use the flag isMeasurementComplete because reset will reset the flag
-                    editableLabel(this.map.container, pickedObject.primitive);
+                    editableLabel(this._container, pickedObject.primitive);
                 }
                 return true;
             case "point":
@@ -227,13 +226,18 @@ class PointInfoCesium extends MeasureModeCesium {
      * @returns {Void}
      */
     handleMouseMove = async (eventData) => {
+        const { mapPoint: cartesian, pickedFeature: pickedObjects, screenPoint } = eventData;
+
         // update coordinate
-        const cartesian = eventData.mapPoint;
         if (!defined(cartesian)) return;
         this.#coordinate = cartesian;
 
-        const pickedObjects = eventData.pickedFeature;
-        if (!defined(pickedObjects)) return;
+        // Validate picked objects
+        if (!defined(pickedObjects)) {
+            this._hideCoordinateInfoOverlay();
+            this._hidePointerOverlay();
+            return;
+        }
 
         // update pointerOverlay: the moving dot with mouse
         const pointerElement = this._setupPointerOverlay();
@@ -242,11 +246,15 @@ class PointInfoCesium extends MeasureModeCesium {
             this.stateManager.setOverlayState("pointer", pointerOverlay);
         }
 
-        // update coordinateInfoOverlay
-        if (this.#coordinateInfoOverlay) {
-            this.updateCoordinateInfoOverlay(this.#coordinate);
-        } else {
+        // -- Coordinate info overlay --
+        // Create the coordinate info overlay if it does not exist
+        if (!this.#coordinateInfoOverlay) {
             this.#coordinateInfoOverlay = this._createCoordinateInfoOverlay();
+        }
+
+        // Update coordinate info overlay if it already exists
+        if (this.#coordinateInfoOverlay) {  // Still check if overlay exists before update - defensive programming
+            this._updateCoordinateInfoOverlay(screenPoint, this.#coordinate);
         }
     }
 
@@ -422,14 +430,15 @@ class PointInfoCesium extends MeasureModeCesium {
 
     _createCoordinateInfoOverlay() {
         this.#coordinateInfoOverlay = document.createElement("div");
-        this.#coordinateInfoOverlay.className = "coordinate-info-overlay";
-        // Define styles as an object
-        const styles = {
+        this.#coordinateInfoOverlay.className = "coordinate-info-overlay cesium-coordinate-info-overlay";
+
+        // Apply styles for the overlay
+        Object.assign(this.#coordinateInfoOverlay.style, {
             position: "absolute",
             pointerEvents: "none",
             padding: "6px 12px",
             display: "none",
-            backgroundColor: "#1F1F1F", // M3 Dark theme surface color (approx)
+            backgroundColor: "rgba(31, 31, 31, 0.8)", // M3 Dark theme surface color (approx)
             color: "#E2E2E2",             // M3 Dark theme on-surface text color (approx)
             borderRadius: "12px",
             fontFamily: "'Roboto', Arial, sans-serif",
@@ -438,62 +447,91 @@ class PointInfoCesium extends MeasureModeCesium {
             zIndex: "1001",
             whiteSpace: "pre-line",
             boxShadow: "0px 1px 2px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15)" // M3 Dark theme elevation 2 shadow (approx)
-        };
+        });
 
-        // Apply styles using Object.assign
-        Object.assign(this.#coordinateInfoOverlay.style, styles);
-
-        this.map.container.appendChild(this.#coordinateInfoOverlay);
+        this._container.appendChild(this.#coordinateInfoOverlay);
         return this.#coordinateInfoOverlay;
     }
 
     /**
      * Updates the coordinate info overlay with the current coordinate information.
+     * @param {Cartesian2} screenPoint - The screen coordinates where the overlay should be displayed.
      * @param {Cartesian3} cartesian - The current Cartesian3 coordinate.
      */
-    updateCoordinateInfoOverlay(cartesian) {
+    _updateCoordinateInfoOverlay(screenPoint, cartesian) {
         // -- Check if the overlay is defined --
         if (!this.#coordinateInfoOverlay) return null;
 
         // -- Convert to cartographic degrees --
         const cartographicDegrees = convertToCartographicDegrees(cartesian);
         if (!cartographicDegrees) return null;
-        // -- Update overlay content --
+
+        // -- Update overlay content using destructuring --
+        const { latitude, longitude, height } = cartographicDegrees;
         const displayInfo =
-            `lat: ${cartographicDegrees.latitude.toFixed(6)}\u00B0` +
-            `\nlng: ${cartographicDegrees.longitude.toFixed(6)}\u00B0` +
-            `\nelv: ${cartographicDegrees.height.toFixed(2)}m`;
-        this.#coordinateInfoOverlay.textContent = displayInfo;
+            `lat: ${latitude.toFixed(6)}\u00B0` +
+            `\nlng: ${longitude.toFixed(6)}\u00B0` +
+            `\nelv: ${height.toFixed(2)}m`;
+        this.#coordinateInfoOverlay.textContent = displayInfo || " ";
 
         // -- Handle screen position --
-        let screenPosition;
-        if (SceneTransforms.worldToWindowCoordinates) {
-            screenPosition = SceneTransforms.worldToWindowCoordinates(this.map.scene, cartesian);
-        } else if (SceneTransforms.wgs84ToWindowCoordinates) {
-            screenPosition = SceneTransforms.wgs84ToWindowCoordinates(this.map.scene, cartesian);
-        } else {
-            console.error("SceneTransforms.worldToWindowCoordinates or SceneTransforms.wgs84ToWindowCoordinates is not available in the current version of Cesium.");
+        if (!screenPoint) {
+            const { scene } = this.map;
+            if (SceneTransforms.worldToWindowCoordinates) {
+                screenPoint = SceneTransforms.worldToWindowCoordinates(scene, cartesian);
+            } else if (SceneTransforms.wgs84ToWindowCoordinates) {
+                screenPoint = SceneTransforms.wgs84ToWindowCoordinates(scene, cartesian);
+            } else {
+                console.error("SceneTransforms.worldToWindowCoordinates or SceneTransforms.wgs84ToWindowCoordinates is not available in the current version of Cesium.");
+            }
         }
 
-        // -- Set overlay style and position --
-        this.#coordinateInfoOverlay.style.display = 'block';
-        this.#coordinateInfoOverlay.style.left = `${screenPosition.x + 20}px`;
-        this.#coordinateInfoOverlay.style.top = `${screenPosition.y - 20}px`;
+        // -- Set overlay style and position using destructuring --
+        const { x, y } = screenPoint;
+        Object.assign(this.#coordinateInfoOverlay.style, {
+            display: 'block',
+            left: `${x + 20}px`,
+            top: `${y - 20}px`
+        });
     }
 
 
+    _hideCoordinateInfoOverlay() {
+        // Hide the coordinate info overlay
+        if (this.#coordinateInfoOverlay) {
+            this.#coordinateInfoOverlay.style.display = 'none';
+            this.#coordinateInfoOverlay.textContent = '';
+        }
+    }
+
+    _hidePointerOverlay() {
+        const pointerOverlay = this.stateManager.getOverlayState("pointer");
+        if (pointerOverlay) {
+            pointerOverlay.style.display = 'none';
+        }
+    }
+
+    /**
+     * Resets values specific to the mode.
+     */
     resetValuesModeSpecific() {
         // Reset flags
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Clear cache
+        // Reset variables
         this.coordsCache = [];
+        this.coordinate = null;
+        this.#interactiveAnnotations.labels = [];
 
+        // Reset the measure data
+        this.measure = super._createDefaultMeasure();
+
+        // Reset coordinate tooltip overlay
         if (this.#coordinateInfoOverlay) {
             this.#coordinateInfoOverlay.remove();
             this.#coordinateInfoOverlay = null;
-        };
+        }
     }
 }
 

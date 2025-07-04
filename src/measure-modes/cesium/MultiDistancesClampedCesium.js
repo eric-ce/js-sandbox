@@ -168,7 +168,7 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
                 // only when it is not during measuring can edit the label. 
                 if (this.coordsCache.length === 0) {
                     // DO NOT use the flag isMeasurementComplete because reset will reset the flag
-                    editableLabel(this.map.container, pickedObject.primitive);
+                    editableLabel(this._container, pickedObject.primitive);
                 }
                 return true;
             case "point":
@@ -241,7 +241,7 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
         this.#interactiveAnnotations.totalLabels = [...this.drawingHelper._getLabelByPosition(this.coordsCache[this.coordsCache.length - 1])]; // Get the total label by the last position of the coordsCache
 
         // Show notification
-        showCustomNotification(`Add mode is enabled. Click on the map to add a new point for segment, measure id: ${measureId}`, this.map.container);
+        showCustomNotification(`Add mode is enabled. Click on the map to add a new point for segment, measure id: ${measureId}`, this._container);
     }
 
     _formsPerimeter(point) {
@@ -1388,6 +1388,9 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
         return { totalLabel, totalDistance };
     }
 
+    /**
+     * Resets values specific to the mode.
+     */
     resetValuesModeSpecific() {
         // Reset flags
         this.flags.isMeasurementComplete = false;

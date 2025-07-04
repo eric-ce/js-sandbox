@@ -11,6 +11,7 @@ export { MultiDistancesClampedCesium } from "./cesium/MultiDistancesClampedCesiu
 export { PolygonCesium } from "./cesium/PolygonCesium.js"
 export { ProfileCesium } from "./cesium/ProfileCesium.js"
 export { ProfileDistancesCesium } from "./cesium/ProfileDistancesCesium.js";
+export { PickerCesium } from "./cesium/PickerCesium.js";
 // export { Picker } from "./Picker.js";
 
 // Special measure modes with nested folders
@@ -24,6 +25,7 @@ export { TwoPointsDistanceGoogle } from "./google/TwoPointsDistanceGoogle.js";
 export { PolygonGoogle } from "./google/PolygonGoogle.js";
 export { PointInfoGoogle } from "./google/PointInfoGoogle.js";
 export { MultiDistanceGoogle } from "./google/MultiDistanceGoogle.js";
+export { PickerGoogle } from "./google/PickerGoogle.js";
 
 /*************************
  * LEAFLET MEASURE MODES *
@@ -32,3 +34,4 @@ export { TwoPointsDistanceLeaflet } from "./leaflet/TwoPointsDistanceLeaflet.js"
 export { PolygonLeaflet } from "./leaflet/PolygonLeaflet.js";
 export { PointInfoLeaflet } from "./leaflet/PointInfoLeaflet.js";
 export { MultiDistanceLeaflet } from "./leaflet/MultiDistanceLeaflet.js";
+export { PickerLeaflet } from "./leaflet/PickerLeaflet.js";

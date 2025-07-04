@@ -1,26 +1,30 @@
-// import { areCoordinatesEqual, convertToCartesian3, convertToCartographicDegrees } from "../helper/cesiumHelper.js";
-// import { convertToCartographicDegrees } from "../helper/googleHelper.js";
 import * as cesiumHelper from "../helper/cesiumHelper.js";
-import * as googleHelper from "../helper/googleHelper.js";
 import { convertToUniversalCoordinate } from "../helper/helper.js";
+
+/**
+ * @typedef MeasurementGroup
+ * @property {string} id - Unique identifier for the measurement
+ * @property {string} mode - Measurement mode (e.g., "distance")
+ * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
+ * @property {number} labelNumberIndex - Index used for sequential labeling
+ * @property {'pending'|'completed'} status - Current state of the measurement
+ * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ */
+
+
 /**
  * DataPool holds all measurement records in a unified structure.
- * Each record follows a structure similar to:
- * {
- *   id: timeStamp,
- *   mode: "distance",
- *   coordinates: [{lat, lon, height}, ...],
- *   supportedMaps: [ "cesium", "google", "leaflet" ]
- *   records: [48.141637595853204],
- *   status: "pending"
- * }
- * 
  * It uses a shared EventEmitter (set externally) to notify when data is added, updated, or removed.
  */
 class DataPool {
+    /** @type {Array<MeasurementGroup>} */
+    _data = [];
+    /** @type {import('events').EventEmitter | null} */
+    emitter = null;
+
     constructor() {
-        this._data = [];      // Holds measurement records
-        this._emitter = null; // Shared emitter; to be set via setEmitter()
     }
 
     // Getter and setter for the shared emitter.
@@ -36,6 +40,14 @@ class DataPool {
         return this._data;
     }
 
+
+    /*******************
+     * CRUD OPERATIONS *
+     *******************/
+
+    /*******************
+     * CREATE FEATURES *
+     *******************/
     /**
      * Adds a new measurement record.
      * @param {Object} measure - A measurement record.
@@ -61,6 +73,10 @@ class DataPool {
         }
     }
 
+
+    /*******************
+     * UPDATE FEATURES *
+     *******************/
     /**
      * Update or add a measurement record depends on the existence of the record.
      * @param {Object} measure - A measurement record. 
@@ -76,6 +92,59 @@ class DataPool {
         console.log(this._data);
     }
 
+    /**
+    * Update a measurement record by its id.
+    * @param {Number} id - The id of the measurement record. 
+    * @param {Object} newData - The new data to replace the existing record.
+    * @returns 
+    */
+    updateMeasureById(id, newData) {
+        const measureIndex = this._data.findIndex(measure => measure.id === id);
+        if (measureIndex === -1) {
+            console.warn("No measurement found containing the provided id.");
+            return;
+        }
+
+        // coordinates handling to convert to cartographicDegrees
+        newData.coordinates = this._coordToCartographicDegrees(newData.coordinates);
+
+        // Update the entire group with newData (you might also merge instead of replace)
+        this._data[measureIndex] = newData;
+
+        if (this.emitter) {
+            this.emitter.emit("data:updated", this._data[measureIndex]);
+            this.emitter.emit("data", this._data);
+        }
+
+        return this._data[measureIndex];
+    }
+
+    /**
+     * Updates a measurement record that contains a given coordinate.
+     * This method finds the measurement group by matching one coordinate (using areCoordinatesEqual).
+     * @param {Object} position - A coordinate to match.
+     * @param {Object} newData - The new data to replace the existing record.
+     */
+    updateMeasureByPosition(position, newData) {
+        const groupIndex = this._data.findIndex(group =>
+            group.coordinates.some(coord => cesiumHelper.areCoordinatesEqual(coord, position))
+        );
+        if (groupIndex === -1) {
+            console.warn("No measurement found containing the provided position.");
+            return;
+        }
+
+        // Update the entire group with newData (you might also merge instead of replace)
+        this._data[groupIndex] = newData;
+
+        if (this.emitter) {
+            this.emitter.emit("data:updated", this._data[groupIndex]);
+        }
+    }
+
+    /*****************
+     * READ FEATURES *
+     *****************/
     /**
      * 
      * @param {Number} id - The id of the measurement record. 
@@ -140,56 +209,10 @@ class DataPool {
         return [...this._data]
     }
 
-    /**
-     * Update a measurement record by its id.
-     * @param {Number} id - The id of the measurement record. 
-     * @param {Object} newData - The new data to replace the existing record.
-     * @returns 
-     */
-    updateMeasureById(id, newData) {
-        const measureIndex = this._data.findIndex(measure => measure.id === id);
-        if (measureIndex === -1) {
-            console.warn("No measurement found containing the provided id.");
-            return;
-        }
 
-        // coordinates handling to convert to cartographicDegrees
-        newData.coordinates = this._coordToCartographicDegrees(newData.coordinates);
-
-        // Update the entire group with newData (you might also merge instead of replace)
-        this._data[measureIndex] = newData;
-
-        if (this.emitter) {
-            this.emitter.emit("data:updated", this._data[measureIndex]);
-            this.emitter.emit("data", this._data);
-        }
-
-        return this._data[measureIndex];
-    }
-
-    /**
-     * Updates a measurement record that contains a given coordinate.
-     * This method finds the measurement group by matching one coordinate (using areCoordinatesEqual).
-     * @param {Object} position - A coordinate to match.
-     * @param {Object} newData - The new data to replace the existing record.
-     */
-    updateMeasureByPosition(position, newData) {
-        const groupIndex = this._data.findIndex(group =>
-            group.coordinates.some(coord => cesiumHelper.areCoordinatesEqual(coord, position))
-        );
-        if (groupIndex === -1) {
-            console.warn("No measurement found containing the provided position.");
-            return;
-        }
-
-        // Update the entire group with newData (you might also merge instead of replace)
-        this._data[groupIndex] = newData;
-
-        if (this.emitter) {
-            this.emitter.emit("data:updated", this._data[groupIndex]);
-        }
-    }
-
+    /*******************
+     * DELETE FEATURES *
+     *******************/
     /**
      * Removes a measurement record by its id.
      * @param {number} id - The id of the measurement record. 
@@ -211,6 +234,32 @@ class DataPool {
         }
         return removedMeasure; // Explicitly return the removed measure
     }
+
+    /**
+     * Removes all measurement records associated with a specific map name.
+     * @param {"cesium"|"google"|"leaflet"} mapName - The name of the map to filter the measurements.
+     * @returns {void}
+     */
+    removeDataByMapName(mapName) {
+        if (!mapName || typeof mapName !== "string") return;
+
+        const initialLength = this._data.length;
+        this._data = this._data.filter(measure => measure.mapName !== mapName);
+
+        if (this.emitter && this._data.length < initialLength) {
+            this.emitter.emit("data:removed", { mapName });
+            this.emitter.emit("data", this._data);
+        }
+    }
+
+    destroy() {
+        this._data = [];
+        if (this.emitter) {
+            this.emitter.emit("data:cleared");
+        }
+        console.log("DataPool: All data cleared.");
+    }
+
 
     /*******************
      * HELPER FEATURES *

@@ -1,4 +1,5 @@
 import dataPool from "../../lib/data/DataPool.js";
+import { showCustomNotification } from "../../lib/helper/helper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /**
@@ -43,7 +44,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
         labels: [],
     };
 
-    /** @type {HTMLElement} */ // the overlay to show the coordinate info
+    /** @type {HTMLDivElement} */ // the overlay to show the coordinate info
     #coordinateInfoOverlay;
 
     /**
@@ -77,7 +78,6 @@ class PointInfoGoogle extends MeasureModeGoogle {
 
 
     /**
-     * 
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {DragHandler} dragHandler
      * @param {HighlightHandler} highlightHandler
@@ -186,24 +186,25 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @returns {Promise<void>}
      */
     handleMouseMove = async (eventData) => {
-        if (!eventData || !eventData.mapPoint) return;
+        const { mapPoint, screenPoint } = eventData;
 
-        const pos = eventData.mapPoint; // Already {latitude, longitude}
-        const screenPos = eventData.screenPoint; // Screen coordinates {x, y}
-        if (!pos) return;
-
-        this.#coordinate = pos; // Store for later use
-
-        // -- Coordinate info overlay --
-        // Ensure the coordinate info overlay DOM element is created
-        if (!this.#coordinateInfoOverlay) {
-            this._createCoordinateInfoOverlay(); // This method still needs to run to create the div
+        // -- Validate input parameters and safety check --
+        if (!mapPoint || !screenPoint || this.flags.isDragMode) {
+            this._hideCoordinateInfoOverlay(); // Hide the overlay if no valid point
+            return;
         }
 
-        // Update Coordinate info overlay
-        if (this.#coordinateInfoOverlay) { // Check if creation was successful
-            // Pass both map coordinate (for display) and screen coordinate (for positioning)
-            this.updateCoordinateInfoOverlay(this.#coordinate, screenPos);
+        this.#coordinate = mapPoint; // Store for later use
+
+        // -- Coordinate info overlay --
+        // Create the coordinate info overlay if it does not exist
+        if (!this.#coordinateInfoOverlay) {
+            this._createCoordinateInfoOverlay();
+        }
+
+        // Update Coordinate info overlay if already exists
+        if (this.#coordinateInfoOverlay) { // Still check if overlay exists before update - defensive programming
+            this.updateCoordinateInfoOverlay(this.#coordinate, screenPoint);
         }
     }
 
@@ -232,6 +233,9 @@ class PointInfoGoogle extends MeasureModeGoogle {
 
         // -- Remove data --
         dataPool.removeMeasureById(measureId); // Remove data from data pool
+
+        // -- Show notification --
+        showCustomNotification(`removed point, id ${measureId}`, this._container);
     }
 
 
@@ -376,74 +380,77 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @returns {HTMLElement} - The coordinate info overlay element.
      */
     _createCoordinateInfoOverlay() {
+        // Validate that the map container is available
+        if (!this._container) return null;
+
         this.#coordinateInfoOverlay = document.createElement("div");
-        this.#coordinateInfoOverlay.className = "coordinate-info-overlay google-maps-info-overlay"; // Added specific class
-        // Define styles as an object
-        const styles = {
+        this.#coordinateInfoOverlay.className = "coordinate-info-overlay google-coordinate-info-overlay"; // Added specific class
+
+        // Apply styles to the overlay
+        Object.assign(this.#coordinateInfoOverlay.style, {
             position: "absolute",
             pointerEvents: "none",
             padding: "6px 12px",
             display: "none",
-            backgroundColor: "#1F1F1F", // M3 Dark theme surface color (approx)
-            color: "#E2E2E2",             // M3 Dark theme on-surface text color (approx)
+            backgroundColor: "rgba(31, 31, 31, 0.8)",
+            color: "#E2E2E2",
             borderRadius: "12px",
             fontFamily: "'Roboto', Arial, sans-serif",
             fontSize: "14px",
             lineHeight: "1.5",
             zIndex: "1001",
-            whiteSpace: "nowrap",
+            whiteSpace: "pre-line", // Preserve line breaks
             boxShadow: "0px 1px 2px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15)" // M3 Dark theme elevation 2 shadow (approx)
-        };
-
-        // Apply styles using Object.assign
-        Object.assign(this.#coordinateInfoOverlay.style, styles);
+        });
 
         // Append to the map's div container
-        if (this.map && typeof this.map.getDiv === 'function') {
-            this.map.getDiv().appendChild(this.#coordinateInfoOverlay);
-        } else {
-            console.error("PointInfoGoogle: Map div container not found for overlay.");
-            return null;
-        }
+        this._container.appendChild(this.#coordinateInfoOverlay);
 
         return this.#coordinateInfoOverlay;
     }
 
     /**
-      * Update and display the current coordinate info to the coordinateInfoOverlay.
-      * Content and position of the overlay are based on the provided mapPoint and screenPoint.
-      * @param {{lat:number, lng:number}} mapPoint - The current map coordinate ({lat, lng}) to display.
-      * @param {{x: number, y: number}} screenPoint - The current screen coordinate to position the overlay.
-      */
+     * Update and display the current coordinate info to the coordinateInfoOverlay.
+     * Content and position of the overlay are based on the provided mapPoint and screenPoint.
+     * @param {{lat:number, lng:number}} mapPoint - The current map coordinate ({lat, lng}) to display.
+     * @param {{x: number, y: number}} screenPoint - The current screen coordinate to position the overlay.
+     */
     updateCoordinateInfoOverlay(mapPoint, screenPoint) {
-        if (!this.#coordinateInfoOverlay) {
-            // console.warn("PointInfoGoogle: Coordinate info overlay div not created.");
-            return;
-        }
-        // No longer strictly need #mapProjection for positioning if using screenPoint directly
-        // but it might be useful if you ever need to convert back for other reasons.
+        if (!this.#coordinateInfoOverlay) return null;
 
+        // Validate mapPoint structure and values
         if (!mapPoint || typeof mapPoint.lat !== 'number' || typeof mapPoint.lng !== 'number') {
-            // console.warn("PointInfoGoogle: Invalid mapPoint provided for display.");
-            this.#coordinateInfoOverlay.style.display = 'none';
+            this._hideCoordinateInfoOverlay();
             return;
         }
+
+        // Validate screenPoint structure and values
         if (!screenPoint || typeof screenPoint.x !== 'number' || typeof screenPoint.y !== 'number') {
-            // console.warn("PointInfoGoogle: Invalid screenPoint provided for positioning.");
-            this.#coordinateInfoOverlay.style.display = 'none';
+            this._hideCoordinateInfoOverlay();
             return;
         }
 
-        // -- Update overlay content (uses mapPoint) --
-        const displayInfo = `Lat: ${mapPoint.lat.toFixed(6)}<br>Lng: ${mapPoint.lng.toFixed(6)}`;
-        this.#coordinateInfoOverlay.innerHTML = displayInfo;
+        // Update overlay content
+        const { lat, lng } = mapPoint;
+        this.#coordinateInfoOverlay.textContent =
+            `Lat: ${lat.toFixed(6)}` +
+            `\nLng: ${lng.toFixed(6)}`;
 
-        // -- Set overlay style and position (uses screenPoint) --
-        // Position the overlay relative to the map's container div using the mouse's screen coordinates
-        // Add some offset so it doesn't sit directly under the cursor
-        this.#coordinateInfoOverlay.style.left = `${screenPoint.x + 15}px`; // Offset from cursor
-        this.#coordinateInfoOverlay.style.top = `${screenPoint.y - 30}px`;  // Position above and to the right of cursor
-        this.#coordinateInfoOverlay.style.display = 'block';
+        // Position overlay using screen coordinates with offset to avoid cursor overlap
+        const { x, y } = screenPoint;
+        Object.assign(this.#coordinateInfoOverlay.style, {
+            display: 'block',
+            left: "0px",
+            top: "0px",
+            transform: `translate(${x + 20}px, ${y - 20}px)`
+        });
+    }
+
+    _hideCoordinateInfoOverlay() {
+        if (this.#coordinateInfoOverlay) {
+            this.#coordinateInfoOverlay.style.display = 'none';
+            this.#coordinateInfoOverlay.textContent = '';
+        }
     }
 
     /**

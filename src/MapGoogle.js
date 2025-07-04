@@ -195,7 +195,7 @@ export class MapGoogle extends HTMLElement {
         }
     }
 
-    // initialize measure toolbox for cesium
+    // initialize measure toolbox for google
     initializeMeasureToolbox() {
         if (!this.map) return; // Return if map is not initialized
 

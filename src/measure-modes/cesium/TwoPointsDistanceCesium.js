@@ -153,7 +153,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
                 // only when it is not during measuring can edit the label. 
                 if (this.coordsCache.length === 0) {
                     // DO NOT use the flag isMeasurementComplete because reset will reset the flag
-                    editableLabel(this.map.container, pickedObject.primitive);
+                    editableLabel(this._container, pickedObject.primitive);
                 }
                 return true;
             case "point":
@@ -367,41 +367,6 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
     /*******************
      * HELPER FEATURES *
      *******************/
-    // _removePendingAnnotations() {
-    //     // Remove pending annotations
-    //     const pendingPoints = this.pointCollection._pointPrimitives.filter(point => point.status === "pending");
-    //     if (Array.isArray(pendingPoints) && pendingPoints.length > 0) {
-    //         pendingPoints.forEach(point => this.drawingHelper._removePointMarker(point));
-    //     }
-
-    //     const pendingLines = this.viewer.scene.primitives._primitives.filter(line => line && line.status === "pending");
-    //     if (Array.isArray(pendingLines) && pendingLines.length > 0) {
-    //         pendingLines.forEach(line => this.drawingHelper._removePolyline(line));
-    //     }
-
-    //     const pendingLabels = this.labelCollection._labels.filter(label => label && label.status === "pending");
-    //     if (Array.isArray(pendingLabels) && pendingLabels.length > 0) {
-    //         pendingLabels.forEach(label => this.drawingHelper._removeLabel(label));
-    //     }
-    // }
-
-    // _removeMovingAnnotations() {
-    //     // Remove moving annotations
-    //     if (Array.isArray(this.interactivePrimitives.movingPolylines) && this.interactivePrimitives.movingPolylines.length > 0) {
-    //         this.interactivePrimitives.movingPolylines.forEach((line) => {
-    //             this.drawingHelper._removePolyline(line);
-    //         });
-    //         this.interactivePrimitives.movingPolylines.length = 0;
-    //     }
-
-    //     if (Array.isArray(this.interactivePrimitives.movingLabels) && this.interactivePrimitives.movingLabels.length > 0) {
-    //         this.interactivePrimitives.movingLabels.forEach((label) => {
-    //             this.drawingHelper._removeLabel(label);
-    //         });
-    //         this.interactivePrimitives.movingLabels.length = 0;
-    //     }
-    // }
-
     /**
      * Updates line primitive by removing the existing one and creating a new one.
      * @param {Cartesian3[]} positions - Array of positions to create or update the line.
@@ -519,13 +484,22 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         return { distance, labelPrimitive };
     }
 
+    /**
+     * Resets values specific to the mode.
+     */
     resetValuesModeSpecific() {
         // Reset flags
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        // Clear cache
+        // Reset variables
         this.coordsCache = [];
+        this.#coordinate = null;
+        this.#interactiveAnnotations.polylines = [];
+        this.#interactiveAnnotations.labels = [];
+
+        // Reset the measure data
+        this.measure = super._createDefaultMeasure();
     }
 }
 

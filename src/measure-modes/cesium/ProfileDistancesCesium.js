@@ -166,7 +166,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
                 // only when it is not during measuring can edit the label. 
                 if (this.coordsCache.length === 0) {
                     // DO NOT use the flag isMeasurementComplete because reset will reset the flag
-                    editableLabel(this.map.container, pickedObject.primitive);
+                    editableLabel(this._container, pickedObject.primitive);
                 }
                 return true;
             case "point":
@@ -239,7 +239,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         this.#interactiveAnnotations.totalLabels = [...this.drawingHelper._getLabelByPosition(this.coordsCache[this.coordsCache.length - 1])]; // Get the total label by the last position of the coordsCache
 
         // Show notification
-        showCustomNotification(`Add mode is enabled. Click on the map to add a new point for segment, measure id: ${measureId}`, this.map.container);
+        showCustomNotification(`Add mode is enabled. Click on the map to add a new point for segment, measure id: ${measureId}`, this._container);
     }
 
     _formsPerimeter(point) {
@@ -547,7 +547,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         //     { text: "remove point", event: () => this.testing2() }
         // ];
 
-        // this._setupContextMenu(this.map.container, contextItemList);
+        // this._setupContextMenu(this._container, contextItemList);
 
         // if during measuring, right click on empty space will finalize the measure, will not open the context menu
         if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) { // prevent user to right click on first action
@@ -1592,6 +1592,9 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         }
     }
 
+    /**
+     * Resets values specific to the mode.
+     */
     resetValuesModeSpecific() {
         // Reset flags
         this.flags.isMeasurementComplete = false;

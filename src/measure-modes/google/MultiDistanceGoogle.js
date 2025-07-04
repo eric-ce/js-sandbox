@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { calculateMiddlePos, calculateDistance, formatMeasurementValue, areCoordinatesEqual, checkOverlayType, getOverlayByPosition, convertToLatLng, } from "../../lib/helper/googleHelper.js";
-import { getNeighboringValues } from "../../lib/helper/helper.js";
+import { getNeighboringValues, showCustomNotification } from "../../lib/helper/helper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /** @typedef {{lat: number, lng: number}} LatLng */
@@ -631,6 +631,8 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             } else if (previous) {  // Case: The removing point is the last point
                 this.#distances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
             }
+
+            showCustomNotification(`removed point, id ${measureId}`, this._container);
         }
 
         // Case: Normal measure, it could be during measuring or measure completed or measure not yet started
@@ -746,6 +748,9 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         // remove the measure data from dataPool
         dataPool.removeMeasureById(measureId);
+
+        // show notification
+        showCustomNotification(`removed line set, id: ${measureId}`, this._container)
     }
 
     /******************
