@@ -235,7 +235,7 @@ export class DataLogTable extends HTMLElement {
         // -- Create expand/collapse button for the data log box --
         const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
             color: "#edffff",
-            right: "1.8rem",
+            right: "1.5rem",
             clickCallback: () => {
                 this._hideDataLogBox();
                 expandCollapseButton.style.transform = "scale(1.0)"; // Reset scale on collapse 

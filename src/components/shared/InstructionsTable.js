@@ -232,7 +232,7 @@ export class InstructionsTable extends HTMLElement {
         // -- Create expand/collapse button for the instructions box --
         const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
             color: "#edffff",
-            right: "1.8rem",
+            right: "1.5rem",
             clickCallback: () => {
                 this._hideInstructionsBox();
                 expandCollapseButton.style.transform = "scale(1.0)"; // Reset scale on collapse 
