@@ -430,7 +430,7 @@ class PointInfoCesium extends MeasureModeCesium {
 
     _createCoordinateInfoOverlay() {
         this.#coordinateInfoOverlay = document.createElement("div");
-        this.#coordinateInfoOverlay.className = "coordinate-info-overlay";
+        this.#coordinateInfoOverlay.className = "coordinate-info-overlay cesium-coordinate-info-overlay";
 
         // Apply styles for the overlay
         Object.assign(this.#coordinateInfoOverlay.style, {

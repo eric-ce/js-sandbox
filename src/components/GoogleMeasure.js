@@ -29,6 +29,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
     /**@type {google.maps.Polygon[]} */
     #polygonCollection = []; // Array to store polygons
 
+    // #customListeners = new Map();
+    // #listenerIdCounter = 0;
+
     constructor() {
         super();
     }
@@ -49,9 +52,105 @@ export default class GoogleMeasure extends MeasureComponentBase {
         return this.#polygonCollection;
     }
 
+
+
+    // TODO: refactor annotations to use data layer
+    // _initializeMapSpecifics() {
+    //     this._setupDataLayer();
+    // }
+
+    // /**
+    //  * Sets up the map's Data layer, including styling and event listeners.
+    //  * @private
+    //  */
+    // _setupDataLayer() {
+    //     if (!this.map || !this.map.data) return;
+
+    //     // Set a dynamic style for all features in the Data layer
+    //     this.map.data.setStyle(feature => {
+    //         return {
+    //             icon: {
+    //                 path: google.maps.SymbolPath.CIRCLE,
+    //                 scale: 5,
+    //                 fillColor: feature.getProperty('color') || 'red',
+    //                 fillOpacity: 1.0,
+    //                 strokeWeight: 0
+    //             },
+    //             strokeColor: feature.getProperty('color') || '#ADFF2F',
+    //             strokeWeight: feature.getProperty('weight') || 4,
+    //             strokeOpacity: feature.getProperty('opacity') || 1.0,
+    //             fillColor: feature.getProperty('fillColor') || 'red',
+    //             fillOpacity: feature.getProperty('opacity') || 0.35,
+    //             zIndex: feature.getProperty('zIndex') || 1,
+    //             clickable: feature.getProperty('clickable') ?? true
+    //         };
+    //     });
+
+    //     // -- Highlight Listeners --
+    //     this.map.data.addListener('mouseover', (event) => {
+    //         const eventData = this._createEventData(event, event.feature);
+    //         this.highlightHandler?.applyHoverHighlight(event.feature);
+    //         this.emitter.emit('annotation-hovered', eventData);
+    //     });
+
+    //     this.map.data.addListener('mouseout', (event) => {
+    //         const eventData = this._createEventData(event, null);
+    //         this.highlightHandler?.removeHoverHighlight();
+    //         this.emitter.emit('annotation-hovered', eventData);
+    //     });
+
+    //     // -- Picker Listeners --
+    //     this.map.data.addListener('click', (event) => {
+    //         const eventData = this._createEventData(event, event.feature);
+    //         console.log('eventData', eventData)
+    //         this.emitter.emit('annotation-clicked', eventData);
+    //     });
+
+    //     // -- Custom Event Listeners --
+    //     // Execute custom listener if it exists
+    //     const listenerId = event.feature.getProperty('listenerId');
+    //     if (listenerId && this.#customListeners.has(listenerId)) {
+    //         const listeners = this.#customListeners.get(listenerId);
+    //         if (typeof listeners.click === 'function') {
+    //             // Pass the feature and event data to the custom callback
+    //             listeners.click(event.feature, eventData);
+    //         }
+    //     }
+    // }
+
+    // /**
+    //  * Adds a point feature to the map's Data layer.
+    //  * @param {{lat:number,lng:number}} position
+    //  * @param {object} [options={}]
+    //  * @returns {Feature|null}
+    //  */
+    // _addPointMarkerTest(position, options = {}) {
+    //     if (!this.map || !position) return null;
+
+    //     const { listeners, id, ...rest } = options;
+    //     const feature = new google.maps.Data.Feature({
+    //         geometry: new google.maps.Data.Point(position),
+    //         properties: {
+    //             ...rest,
+    //             id: id || 'annotate_point',
+    //             positions: [{ ...position }] // Store original position
+    //         }
+    //     });
+
+    //     if (listeners) {
+    //         const listenerId = `feature_${this.#listenerIdCounter++}`;
+    //         feature.setProperty('listenerId', listenerId);
+    //         this.#customListeners.set(listenerId, listeners);
+    //     }
+
+    //     this.map.data.add(feature);
+    //     return feature;
+    // }
+
+
     /*****************
-        * FIND GRAPHICS *
-        *****************/
+     * FIND GRAPHICS *
+     *****************/
     /**
      * Finds a point primitive by its position in the point collection.
      * @param {{lat:number,lng:number}} position - The position to find the point primitive 
@@ -421,13 +520,13 @@ export default class GoogleMeasure extends MeasureComponentBase {
                 const eventData = this._createEventData(event, overlay);
                 this.highlightHandler.applyHoverHighlight(overlay);
                 // Emit the hover event with the event data
-                this.emitter.emit('annotation-hovered', eventData);
+                this.emitter.emit('annotation-hovered-google', eventData);
             });
             overlay.addListener('mouseout', (event) => {
                 const eventData = this._createEventData(event, null);
                 this.highlightHandler.removeHoverHighlight();
                 // Emit the hover event with null annotation to indicate mouse out
-                this.emitter.emit('annotation-hovered', eventData);
+                this.emitter.emit('annotation-hovered-google', eventData);
             });
         }
     }
@@ -443,7 +542,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
         overlay.addListener('click', (event) => {
             const eventData = this._createEventData(event, overlay);
-            this.emitter.emit('annotation-clicked', eventData);
+            this.emitter.emit('annotation-clicked-google', eventData);
         });
     }
 

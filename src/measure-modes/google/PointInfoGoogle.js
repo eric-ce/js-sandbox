@@ -235,7 +235,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
         dataPool.removeMeasureById(measureId); // Remove data from data pool
 
         // -- Show notification --
-        showCustomNotification(`Removed Point at id ${measureId}`, this._container);
+        showCustomNotification(`removed point, id ${measureId}`, this._container);
     }
 
 
@@ -384,7 +384,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
         if (!this._container) return null;
 
         this.#coordinateInfoOverlay = document.createElement("div");
-        this.#coordinateInfoOverlay.className = "coordinate-info-overlay google-maps-info-overlay"; // Added specific class
+        this.#coordinateInfoOverlay.className = "coordinate-info-overlay google-coordinate-info-overlay"; // Added specific class
 
         // Apply styles to the overlay
         Object.assign(this.#coordinateInfoOverlay.style, {

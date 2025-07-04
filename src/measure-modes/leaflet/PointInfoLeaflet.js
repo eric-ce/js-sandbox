@@ -13,13 +13,13 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet";
  * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
  */
 /** 
- * @typedef EventDataState
- * @property {object} domEvent - The DOM event object
- * @property {object} layer - The Leaflet layer object
- * @property {object} leafletEvent - The Leaflet event object
+ * @typedef NormalizedEventData
  * @property {{lat: number, lng:number}} mapPoint - The map coordinates
  * @property {{x:number,y:number}} screenPoint - The screen coordinates
- * @property {object} target - The target element of the event
+ * @property {object} domEvent - The DOM event object
+ * @property {object} leafletEvent - The Leaflet event object
+ * @property {object} target - The target of the event (e.g., map, marker, etc.)
+ * @property {object} layer - The Leaflet layer object
  */
 
 /** @typedef {import('../../lib/data/DataPool.js').DataPool} DataPool */
@@ -83,7 +83,6 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
 
     /**
-     * 
      * @param {LeafletInputHandler} inputHandler 
      * @param {LeafletDragHandler} dragHandler 
      * @param {LeafletHighlightHandler} highlightHandler 
@@ -121,7 +120,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      *****************/
     /**
      * Handles left-click events on the map.
-     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
      * @returns {Void}
      */
     handleLeftClick = async (eventData) => {
@@ -184,7 +183,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
     /**
     * Handles mouse move events on the map.
-    * @param {EventDataState} eventData - The event data containing information about the click event.
+    * @param {NormalizedEventData} eventData - The event data containing information about the click event.
     * @returns {Void}
     */
     handleMouseMove = async (eventData) => {
@@ -235,6 +234,9 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
         // -- Remove data --
         dataPool.removeMeasureById(measureId); // Remove data from data pool
+
+        // Show notification
+        showCustomNotification(`Point removed from measure ${measureId}`, this._container);
     }
 
     /******************
@@ -395,7 +397,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         if (!this._container) return null;
 
         this.#coordinateInfoOverlay = document.createElement("div");
-        this.#coordinateInfoOverlay.className = "coordinate-info-overlay google-maps-info-overlay"; // Added specific class
+        this.#coordinateInfoOverlay.className = "coordinate-info-overlay leaflet-coordinate-info-overlay"; // Added specific class
 
         // Apply styles to the overlay
         Object.assign(this.#coordinateInfoOverlay.style, {

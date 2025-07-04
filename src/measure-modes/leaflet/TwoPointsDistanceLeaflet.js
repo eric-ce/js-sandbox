@@ -13,6 +13,15 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
  * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
  */
+/** 
+ * @typedef NormalizedEventData
+ * @property {{lat: number, lng:number}} mapPoint - The map coordinates
+ * @property {{x:number,y:number}} screenPoint - The screen coordinates
+ * @property {object} domEvent - The DOM event object
+ * @property {object} leafletEvent - The Leaflet event object
+ * @property {object} target - The target of the event (e.g., map, marker, etc.)
+ * @property {object} layer - The Leaflet layer object
+ */
 
 // -- Dependencies types --
 /** @typedef {import('../../lib/data/DataPool.js').DataPool} DataPool */
@@ -23,7 +32,6 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 /** @typedef {import('../../lib/state/StateManager.js').StateManager} StateManager*/
 /** @typedef {import('../../components/LeafletMeasure.js').LeafletMeasure} LeafletMeasure */
 
-/** @typedef {{domEvent:object, layer: object, leafletEvent: object, mapPoint: {lat: number, lng:number}, screenPoint: {x:number,y:number}, target: object }} EventDataState */
 /** @typedef {{polylines: L.polyline[], labels: L.tooltip[]}} InteractiveAnnotationsState */
 /** @typedef {{lat:number, lng:number}} Coordinate*/
 
@@ -98,7 +106,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      *****************/
     /**
      * Handles left-click events on the map.
-     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
      * @returns {Void}
      */
     handleLeftClick = async (eventData) => {
@@ -183,7 +191,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
 
     /**
      * Handles mouse move events on the map.
-     * @param {EventDataState} eventData - The event data containing information about the click event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
      * @returns {Void}
      */
     handleMouseMove = async (eventData) => {

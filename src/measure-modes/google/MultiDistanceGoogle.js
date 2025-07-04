@@ -631,6 +631,8 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             } else if (previous) {  // Case: The removing point is the last point
                 this.#distances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
             }
+
+            showCustomNotification(`removed point, id ${measureId}`, this._container);
         }
 
         // Case: Normal measure, it could be during measuring or measure completed or measure not yet started
@@ -748,7 +750,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         dataPool.removeMeasureById(measureId);
 
         // show notification
-        showCustomNotification(`remove line set, id: ${measureId}`, this._container)
+        showCustomNotification(`removed line set, id: ${measureId}`, this._container)
     }
 
     /******************
