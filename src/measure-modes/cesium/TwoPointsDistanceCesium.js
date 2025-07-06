@@ -6,11 +6,11 @@ import {
     calculateDistance,
     editableLabel,
     updatePointerOverlay,
-    formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
     getRankedPickedObjectType,
 } from "../../lib/helper/cesiumHelper.js";
+import { formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -436,7 +436,7 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         } = options;
 
         const distance = calculateDistance(positions[0], positions[1]);
-        const formattedText = formatDistance(distance);
+        const formattedText = formatMeasurementValue(distance, "meter");
         const middlePos = calculateMiddlePos(positions);
 
         if (!middlePos) {

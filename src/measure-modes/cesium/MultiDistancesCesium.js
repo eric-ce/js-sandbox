@@ -6,7 +6,6 @@ import {
     calculateDistance,
     editableLabel,
     updatePointerOverlay,
-    formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
     getPrimitiveByPointPosition,
@@ -14,7 +13,7 @@ import {
     showCustomNotification,
     getRankedPickedObjectType
 } from "../../lib/helper/cesiumHelper.js";
-import { getNeighboringValues } from "../../lib/helper/helper.js";
+import { getNeighboringValues, formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -1209,7 +1208,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
                 positions.forEach((posSet, index) => {
                     labelPrimitives = labelsArray;
                     const segmentDistance = calculateDistance(posSet[0], posSet[1]);
-                    const segmentFormattedText = formatDistance(segmentDistance);
+                    const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
                     const segmentMiddlePos = calculateMiddlePos(posSet);
                     if (!segmentDistance || !segmentMiddlePos) return;
 
@@ -1230,7 +1229,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             // Case: update SINGLE LABEL, typically for moving operation 
             else {
                 const segmentDistance = calculateDistance(positions[0], positions[1]);
-                const segmentFormattedText = formatDistance(segmentDistance);
+                const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
                 const segmentMiddlePos = calculateMiddlePos(positions);
 
                 const labelPrimitive = labelsArray.find(label => label.status === "moving");
@@ -1305,7 +1304,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         } = options;
 
         const totalDistance = this.#distances.reduce((acc, val) => acc + val, 0);
-        const formattedText = `Total: ${formatDistance(totalDistance)}`;
+        const formattedText = `Total: ${formatMeasurementValue(totalDistance, "meter")}`; // Format the total distance text
         const labelPosition = positions[positions.length - 1];
 
 

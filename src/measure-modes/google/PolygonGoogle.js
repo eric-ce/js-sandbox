@@ -1,6 +1,7 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { MeasureModeGoogle } from "./MeasureModeGoogle";
-import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng, formatMeasurementValue } from "../../lib/helper/googleHelper.js";
+import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
+import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng } from "../../lib/helper/googleHelper.js";
 
 
 /** @typedef {{lat: number, lng: number}} LatLng */

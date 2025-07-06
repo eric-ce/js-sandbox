@@ -3,19 +3,18 @@ import {
     defined,
     Color,
 } from "cesium";
-import dataPool from "../../lib/data/DataPool.js";
-import { MeasureModeCesium } from "./MeasureModeCesium";
 import {
     areCoordinatesEqual,
     calculateMiddlePos,
     convertToCartographicDegrees,
     editableLabel,
-    formatDistance,
     getGroundPosition,
-    getHeight,
     getRankedPickedObjectType,
     updatePointerOverlay,
 } from "../../lib/helper/cesiumHelper.js";
+import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import dataPool from "../../lib/data/DataPool.js";
+import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
 // -- Cesium types --
 /** @typedef {import('cesium').Primitive} Primitive */
@@ -494,7 +493,7 @@ class HeightCesium extends MeasureModeCesium {
 
         const cartographicDegreesPositions = positions.map(pos => convertToCartographicDegrees(pos));
         const height = cartographicDegreesPositions.length === 2 ? (cartographicDegreesPositions[0].height - cartographicDegreesPositions[1].height) : null;
-        const formattedText = formatDistance(height); // Assume height unit is in meters
+        const formattedText = formatMeasurementValue(height, "meter"); // Assume height unit is in meters
         const middlePos = calculateMiddlePos(positions);
 
         if (!middlePos) {

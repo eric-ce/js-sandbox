@@ -1,7 +1,7 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng, formatMeasurementValue } from "../../lib/helper/leafletHelper.js";
+import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng } from "../../lib/helper/leafletHelper.js";
+import { formatMeasurementValue } from "../../lib/helper/helper.js";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
-
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement

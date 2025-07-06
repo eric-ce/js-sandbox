@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { calculateDistance, calculateMiddlePos, formatMeasurementValue, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
-import { getNeighboringValues } from "../../lib/helper/helper.js";
+import { calculateDistance, calculateMiddlePos, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
+import { getNeighboringValues, formatMeasurementValue } from "../../lib/helper/helper.js";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 import { showCustomNotification } from "../../lib/helper/cesiumHelper.js";
 
@@ -150,7 +150,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             throw new Error("MultiDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
-        super("multi_distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("multi_distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -1286,8 +1286,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
-                interactive,
                 id: `annotate_${this.mode}_total_label_${this.measure.id}`,
+                interactive,
                 ...rest
             });
 

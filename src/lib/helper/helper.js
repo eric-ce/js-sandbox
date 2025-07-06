@@ -1,6 +1,10 @@
 import { Cartesian3, Cartographic, Math as CesiumMath } from "cesium";
 import { shrinkIcon, closeIcon } from "../../assets/icons.js"
 
+
+/****************************
+ * GENERAL HELPER FUNCTIONS *
+ ****************************/
 /**
  * Get the neighboring values of an array at a given index.
  * @param {array} array - the array to get the neighboring values from
@@ -27,6 +31,221 @@ export function generateIdByTimestamp() {
     return new Date().getTime();
 }
 
+/**
+ * Capitalizes the first letter of a string.
+ * @param {string} string - The string to capitalize.
+ * @returns {string} The capitalized string.
+ */
+export function capitalizeString(string) {
+    if (typeof string !== 'string') {
+        // convert it to string if it's not already
+        string = String(string);
+    }
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+
+/**********************
+ * COMPONENTS HELPERS *
+ **********************/
+/**
+ * Shows a custom notification message
+ * @param {string} message - The message to display in the notification
+ * @param {HTMLElement} viewerContainer - the cesium viewer container to append the notification
+ * @returns {HTMLElement} - The notification element
+ */
+export function showCustomNotification(message, viewerContainer) {
+    // Create notification container
+    const notification = document.createElement('div');
+    notification.classList.add('custom-notification');
+    notification.textContent = message;
+
+    // Style the notification
+    Object.assign(notification.style, {
+        position: 'absolute',
+        top: '0px', // Position at the bottom
+        left: '50%',
+        padding: '14px 24px',
+        backgroundColor: '#323232', // Material Design dark background
+        color: '#FFFFFF', // White text color
+        borderRadius: '4px', // Slightly rounded corners
+        boxShadow: '0px 3px 5px rgba(0, 0, 0, 0.2)', // Soft shadow for elevation
+        zIndex: '1000',
+        opacity: '0',
+        transition: 'opacity 0.3s, transform 0.3s',
+        width: 'fit-content',
+        transform: 'translateX(-50%)', // Start slightly below
+        fontFamily: 'Roboto, Arial, sans-serif',
+        fontSize: '14px',
+        lineHeight: '20px',
+    });
+
+    // Add to the document
+    viewerContainer.appendChild(notification);
+
+    // Fade in
+    setTimeout(() => {
+        notification.style.opacity = '1';
+    }, 100);
+
+    // Fade out and remove after 5 seconds
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.parentElement.removeChild(notification);
+            }
+        }, 500);
+    }, 3000);
+
+    return notification;
+}
+
+/**
+ * Creates a base styled button with common functionality.
+ * @param {object} options - Button configuration options
+ * @returns {{button: HTMLButtonElement, cleanup: function}} Button and cleanup function
+ * @private
+ */
+function _createBaseButton(options) {
+    const {
+        className,
+        title,
+        color = "#333333",
+        clickCallback,
+        top = "0.5rem",
+        right = "0.3rem",
+        textContent,
+        image,
+        hoverColor = "rgba(170, 221, 255, 0.8)",
+    } = options;
+
+    const button = document.createElement("button");
+    button.title = title;
+    button.className = className;
+
+    if (image) {
+        const imgElement = document.createElement("img");
+        imgElement.src = image;
+        imgElement.alt = title;
+        imgElement.style.width = "auto";
+        imgElement.style.height = "100%";
+        imgElement.style.display = "block";
+        imgElement.style.objectFit = "contain"; // Ensure the image fits well
+        button.appendChild(imgElement);
+    } else {
+        button.textContent = textContent;
+    }
+
+    const hoverButtonColor = hoverColor;
+
+    Object.assign(button.style, {
+        position: "absolute",
+        top: top,
+        right: right,
+        width: "0.9rem",
+        height: "0.9rem",
+        padding: "2px",
+        border: "none",
+        background: "transparent",
+        color,
+        fontSize: "16px",
+        fontWeight: "bold",
+        lineHeight: "20px",
+        textAlign: "center",
+        cursor: "pointer",
+        zIndex: "1001",
+        transition: "all 0.1s ease-in-out 0.05s",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+    });
+
+    // Event handlers
+    const clickHandler = (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        clickCallback(event);
+    };
+
+    const mouseEnterHandler = () => {
+        const imgElement = button.querySelector("img");
+        if (imgElement) {
+            Object.assign(imgElement.style, {
+                transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
+                filter: "brightness(1.5)",
+                transform: "scale(1.3) rotate(90deg)",
+                transformOrigin: "center",
+            });
+        } else {
+            button.style.transform = "scale(1.2)";
+        }
+    };
+
+    const mouseLeaveHandler = () => {
+        const imgElement = button.querySelector("img");
+        if (imgElement) {
+            Object.assign(imgElement.style, {
+                transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
+                filter: "brightness(1)",
+                transform: "scale(1) rotate(0deg)",
+                transformOrigin: "center",
+            });
+        } else {
+            button.style.transform = "scale(1)";
+        }
+    };
+
+    // Attach listeners
+    button.addEventListener("click", clickHandler);
+    button.addEventListener("mouseenter", mouseEnterHandler);
+    button.addEventListener("mouseleave", mouseLeaveHandler);
+
+    return {
+        button,
+        cleanup: () => {
+            button.removeEventListener("click", clickHandler);
+            button.removeEventListener("mouseenter", mouseEnterHandler);
+            button.removeEventListener("mouseleave", mouseLeaveHandler);
+        }
+    };
+}
+
+/**
+ * Creates and styles a close button for a UI component.
+ * @param {object} [options={}] - The options for the close button.
+ * @returns {{button: HTMLButtonElement, cleanup: function}} The created button element and cleanup function.
+ */
+export function createCloseButton(options = {}) {
+    const defaults = {
+        className: "close-button",
+        title: "close",
+        image: closeIcon,
+        clickCallback: (event) => { console.log("click event for close button", event) },
+    };
+    return _createBaseButton({ ...defaults, ...options });
+}
+
+/**
+ * Creates and styles an expand/collapse button for a UI component.
+ * @param {object} [options={}] - The options for the expand/collapse button.
+ * @returns {{button: HTMLButtonElement, cleanup: function}} The created button element and cleanup function.
+ */
+export function createExpandCollapseButton(options = {}) {
+    const defaults = {
+        className: "expand-collapse-button",
+        title: "Expand/Collapse",
+        image: shrinkIcon,
+        clickCallback: (event) => { console.log("click event for expand/collapse button", event) },
+    };
+    return _createBaseButton({ ...defaults, ...options });
+}
+
+
+/***********************************
+ *        UTILITY FUNCTIONS        *
+ * HAVE RELATIONSHIP WITH THE TOOL *
+ ***********************************/
 /**
  * Makes an HTML element draggable within a specified container using CSS transforms.
  * @param {HTMLElement} element - The element to make draggable.
@@ -247,58 +466,42 @@ export function makeDraggable(element, container, onDragStateChange) {
 }
 
 /**
- * Shows a custom notification message
- * @param {string} message - The message to display in the notification
- * @param {HTMLElement} viewerContainer - the cesium viewer container to append the notification
- * @returns {HTMLElement} - The notification element
+ * Formats a measurement value based on the provided unit with automatic unit conversion.
+ * @param {number|string} value - The measurement value to format.
+ * @param {string} unit - The unit type:
+ *   - "meter": Displays as m, converts to km when ≥1000m, or cm when <1m
+ *   - "squareMeter": Displays as m², converts to km² when ≥1,000,000m², or cm² when <1m²
+ * @returns {string} The formatted measurement string with appropriate unit suffix.
  */
-export function showCustomNotification(message, viewerContainer) {
-    // Create notification container
-    const notification = document.createElement('div');
-    notification.classList.add('custom-notification');
-    notification.textContent = message;
-
-    // Style the notification
-    Object.assign(notification.style, {
-        position: 'absolute',
-        top: '0px', // Position at the bottom
-        left: '50%',
-        padding: '14px 24px',
-        backgroundColor: '#323232', // Material Design dark background
-        color: '#FFFFFF', // White text color
-        borderRadius: '4px', // Slightly rounded corners
-        boxShadow: '0px 3px 5px rgba(0, 0, 0, 0.2)', // Soft shadow for elevation
-        zIndex: '1000',
-        opacity: '0',
-        transition: 'opacity 0.3s, transform 0.3s',
-        width: 'fit-content',
-        transform: 'translateX(-50%)', // Start slightly below
-        fontFamily: 'Roboto, Arial, sans-serif',
-        fontSize: '14px',
-        lineHeight: '20px',
-    });
-
-    // Add to the document
-    viewerContainer.appendChild(notification);
-
-    // Fade in
-    setTimeout(() => {
-        notification.style.opacity = '1';
-    }, 100);
-
-    // Fade out and remove after 5 seconds
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-            if (notification.parentElement) {
-                notification.parentElement.removeChild(notification);
+export function formatMeasurementValue(value, unit) {
+    if (typeof value === "string" && unit === "meter") {
+        return value;
+    }
+    if (typeof value === "number") {
+        const numValue = Number(value);
+        if (unit === "meter") {
+            // Handle both meter and centimeter formatting
+            if (numValue >= 1000) {
+                return (numValue / 1000).toFixed(2) + "km";
+            } else if (numValue < 1) {
+                return (numValue * 100).toFixed(2) + "cm";
+            } else {
+                return numValue.toFixed(2) + "m";
             }
-        }, 500);
-    }, 3000);
-
-    return notification;
+        }
+        if (unit === "squareMeter") {
+            // Handle both square meter and square centimeter formatting
+            if (numValue >= 1000000) {
+                return (numValue / 1000000).toFixed(2) + "km²";
+            } else if (numValue < 1) {
+                return (numValue * 10000).toFixed(2) + "cm²";
+            } else {
+                return numValue.toFixed(2) + "m²";
+            }
+        }
+    }
+    return value.toString() || ""; // Fallback to string conversion if no unit matches
 }
-
 
 /**
  * Convert coordinate that used in cesium, google or leaflet map to universal coordinate (degrees).
@@ -401,155 +604,6 @@ export function areCoordinatesEqual(coordinate1, coordinate2, options = {}) {
 
     return latEqual && lonEqual && heightEqual;
 }
-/**
- * Creates a base styled button with common functionality.
- * @param {object} options - Button configuration options
- * @returns {{button: HTMLButtonElement, cleanup: function}} Button and cleanup function
- * @private
- */
-function _createBaseButton(options) {
-    const {
-        className,
-        title,
-        color = "#333333",
-        clickCallback,
-        top = "0.5rem",
-        right = "0.3rem",
-        textContent,
-        image,
-        hoverColor = "rgba(170, 221, 255, 0.8)",
-    } = options;
 
-    const button = document.createElement("button");
-    button.title = title;
-    button.className = className;
 
-    if (image) {
-        const imgElement = document.createElement("img");
-        imgElement.src = image;
-        imgElement.alt = title;
-        imgElement.style.width = "auto";
-        imgElement.style.height = "100%";
-        imgElement.style.display = "block";
-        imgElement.style.objectFit = "contain"; // Ensure the image fits well
-        button.appendChild(imgElement);
-    } else {
-        button.textContent = textContent;
-    }
 
-    const hoverButtonColor = hoverColor;
-
-    Object.assign(button.style, {
-        position: "absolute",
-        top: top,
-        right: right,
-        width: "0.9rem",
-        height: "0.9rem",
-        padding: "2px",
-        border: "none",
-        background: "transparent",
-        color,
-        fontSize: "16px",
-        fontWeight: "bold",
-        lineHeight: "20px",
-        textAlign: "center",
-        cursor: "pointer",
-        zIndex: "1001",
-        transition: "all 0.1s ease-in-out 0.05s",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-    });
-
-    // Event handlers
-    const clickHandler = (event) => {
-        event.stopPropagation();
-        event.preventDefault();
-        clickCallback(event);
-    };
-
-    const mouseEnterHandler = () => {
-        const imgElement = button.querySelector("img");
-        if (imgElement) {
-            Object.assign(imgElement.style, {
-                transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
-                filter: "brightness(1.5)",
-                transform: "scale(1.3) rotate(90deg)",
-                transformOrigin: "center",
-            });
-        } else {
-            button.style.transform = "scale(1.2)";
-        }
-    };
-
-    const mouseLeaveHandler = () => {
-        const imgElement = button.querySelector("img");
-        if (imgElement) {
-            Object.assign(imgElement.style, {
-                transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
-                filter: "brightness(1)",
-                transform: "scale(1) rotate(0deg)",
-                transformOrigin: "center",
-            });
-        } else {
-            button.style.transform = "scale(1)";
-        }
-    };
-
-    // Attach listeners
-    button.addEventListener("click", clickHandler);
-    button.addEventListener("mouseenter", mouseEnterHandler);
-    button.addEventListener("mouseleave", mouseLeaveHandler);
-
-    return {
-        button,
-        cleanup: () => {
-            button.removeEventListener("click", clickHandler);
-            button.removeEventListener("mouseenter", mouseEnterHandler);
-            button.removeEventListener("mouseleave", mouseLeaveHandler);
-        }
-    };
-}
-
-/**
- * Creates and styles a close button for a UI component.
- * @param {object} [options={}] - The options for the close button.
- * @returns {{button: HTMLButtonElement, cleanup: function}} The created button element and cleanup function.
- */
-export function createCloseButton(options = {}) {
-    const defaults = {
-        className: "close-button",
-        title: "close",
-        image: closeIcon,
-        clickCallback: (event) => { console.log("click event for close button", event) },
-    };
-    return _createBaseButton({ ...defaults, ...options });
-}
-
-/**
- * Creates and styles an expand/collapse button for a UI component.
- * @param {object} [options={}] - The options for the expand/collapse button.
- * @returns {{button: HTMLButtonElement, cleanup: function}} The created button element and cleanup function.
- */
-export function createExpandCollapseButton(options = {}) {
-    const defaults = {
-        className: "expand-collapse-button",
-        title: "Expand/Collapse",
-        image: shrinkIcon,
-        clickCallback: (event) => { console.log("click event for expand/collapse button", event) },
-    };
-    return _createBaseButton({ ...defaults, ...options });
-}
-
-/**
- * Capitalizes the first letter of a string.
- * @param {string} string - The string to capitalize.
- * @returns {string} The capitalized string.
- */
-export function capitalizeString(string) {
-    if (typeof string !== 'string') {
-        // convert it to string if it's not already
-        string = String(string);
-    }
-    return string.charAt(0).toUpperCase() + string.slice(1);
-}

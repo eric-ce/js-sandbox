@@ -6,11 +6,11 @@ import {
     editableLabel,
     updatePointerOverlay,
     computePolygonArea,
-    formatArea,
     calculateMiddlePos,
     areCoordinatesEqual,
     getRankedPickedObjectType
 } from "../../lib/helper/cesiumHelper.js";
+import { formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -505,7 +505,7 @@ class PolygonCesium extends MeasureModeCesium {
         } = options;
 
         const area = computePolygonArea(positions);
-        const formattedText = formatArea(area);
+        const formattedText = formatMeasurementValue(area, "squareMeter");
         const middlePos = calculateMiddlePos(positions); // Calculate the middle position of the polygon
 
         if (!middlePos) {

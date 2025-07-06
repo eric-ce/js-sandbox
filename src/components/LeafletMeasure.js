@@ -87,7 +87,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this._addPickerEventListeners(pointMarker);
 
         // Add custom event listeners
-        this._addCustomEventListeners(pointMarker, listeners);
+        listeners && this._addCustomEventListeners(pointMarker, listeners);
 
         // -- Add to the collection --
         this.#pointCollection.addLayer(pointMarker);
@@ -106,7 +106,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         positions.forEach(pos => {
             // Call the single marker method for each position
             // Pass the common options object
-            const marker = this._addPointMarker(pos, options);
+            const marker = this._addPointMarker(pos, { ...options });
             if (marker) {
                 addedMarkers.push(marker);
             }
@@ -149,7 +149,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this._addPickerEventListeners(polyline);
 
         // Add custom event listeners
-        this._addCustomEventListeners(polyline, listeners);
+        listeners && this._addCustomEventListeners(polyline, listeners);
 
         // -- Add to the collection --
         this.#polylineCollection.addLayer(polyline);
@@ -201,7 +201,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this._addPickerEventListeners(polygon);
 
         // Add custom event listeners
-        this._addCustomEventListeners(polygon, listeners);
+        listeners && this._addCustomEventListeners(polygon, listeners);
 
         // -- Add to the collection --
         this.#polygonCollection.addLayer(polygon);
@@ -209,7 +209,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return polygon;
     }
 
-    _addLabel(positions, value, unit, options) {
+    _addLabel(positions, value, unit, options = {}) {
         // -- Validate dependencies --
         if (!this.map || !Array.isArray(positions) || positions.length === 0) {
             console.error("Label collection is not initialized.");
@@ -235,14 +235,14 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this._addPickerEventListeners(label);
 
         // Add custom event listeners
-        this._addCustomEventListeners(label, listeners);
+        listeners && this._addCustomEventListeners(label, listeners);
 
         // -- Add to the collection --
         this.#labelCollection.addLayer(label);
         return label;
     }
 
-    _addLabelsFromArray(positions, valueArray, unit, options = {}) {
+    _addLabelsFromArray(positions, valueArray, unit = "meter", options = {}) {
         if (
             !this.map ||
             !Array.isArray(positions) ||

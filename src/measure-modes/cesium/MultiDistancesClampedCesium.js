@@ -5,7 +5,6 @@ import {
 import {
     editableLabel,
     updatePointerOverlay,
-    formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
     convertToCartesian3,
@@ -13,7 +12,7 @@ import {
     getRankedPickedObjectType,
     calculateClampedDistance
 } from "../../lib/helper/cesiumHelper.js";
-import { getNeighboringValues } from "../../lib/helper/helper.js";
+import { getNeighboringValues, formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -1247,7 +1246,7 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
                 positions.forEach((posSet, index) => {
                     labelPrimitives = labelsArray;
                     const { distance: segmentDistance, clampedPositions } = calculateClampedDistance([posSet[0], posSet[1]], this.map.scene);
-                    const segmentFormattedText = formatDistance(segmentDistance);
+                    const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
                     const segmentMiddlePos = calculateMiddlePos(posSet);
                     if (!segmentDistance || !segmentMiddlePos) return;
 
@@ -1269,7 +1268,7 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
             // Case: update SINGLE LABEL, typically for moving operation 
             else {
                 const { distance: segmentDistance, clampedPositions } = calculateClampedDistance([positions[0], positions[1]], this.map.scene);
-                const segmentFormattedText = formatDistance(segmentDistance);
+                const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
                 const segmentMiddlePos = calculateMiddlePos(positions);
 
                 const labelPrimitive = labelsArray.find(label => label.status === "moving");
@@ -1346,7 +1345,7 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
         } = options;
 
         const totalDistance = this.#distances.reduce((acc, val) => acc + val, 0);
-        const formattedText = `Total: ${formatDistance(totalDistance)}`;
+        const formattedText = `Total: ${formatMeasurementValue(totalDistance, "meter")}`;
         const labelPosition = positions[positions.length - 1];
 
 

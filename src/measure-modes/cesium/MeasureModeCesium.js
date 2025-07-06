@@ -492,7 +492,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // Helper function to check if annotation should be removed
         const shouldRemove = (annotation) =>
-            annotation && annotation.id.includes(targetIdPrefix) && annotation.status !== "completed";
+            annotation && annotation?.id?.includes(targetIdPrefix) && annotation.status !== "completed";
 
         // Define collections with their access methods and removal methods
         const collections = [
@@ -520,6 +520,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
         collections.forEach(({ collection, accessMethod, removeMethod }) => {
             const length = collection.length;
+            if (length === 0) return; // Skip if collection is empty
             for (let i = length - 1; i >= 0; i--) {
                 const item = accessMethod === 'get' ? collection.get(i) : collection[i];
                 if (shouldRemove(item)) {
