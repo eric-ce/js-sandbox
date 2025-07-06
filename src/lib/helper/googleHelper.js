@@ -1,5 +1,5 @@
 import { LatLng } from "@googlemaps/js-api-loader";
-
+import { formatMeasurementValue } from "./helper.js";
 /***********
  * OVERLAY *
  ***********/
@@ -771,32 +771,32 @@ export function calculateArea(positions) {
     return area ?? null; // Handle empty area
 }
 
-/**
- * Formats a measurement value based on the provided unit.
- *
- * @param {number|string} value - The measurement value.
- * @param {"meter"|"squareMeter"} unit - The unit type ("meter" or "squareMeter").
- * @returns {string} The formatted measurement string.
- */
-export function formatMeasurementValue(value, unit) {
-    if (typeof value === "string" && unit === "meter") {
-        return value;
-    }
-    if (typeof value === "number") {
-        const numValue = Number(value);
-        if (unit === "meter") {
-            return numValue >= 1000
-                ? (numValue / 1000).toFixed(2) + "km"
-                : numValue.toFixed(2) + "m";
-        }
-        if (unit === "squareMeter") {
-            return numValue >= 1000000
-                ? (numValue / 1000000).toFixed(2) + "km²"
-                : numValue.toFixed(2) + "m²";
-        }
-    }
-    return value ? value.toString() : "";
-}
+// /**
+//  * Formats a measurement value based on the provided unit.
+//  *
+//  * @param {number|string} value - The measurement value.
+//  * @param {"meter"|"squareMeter"} unit - The unit type ("meter" or "squareMeter").
+//  * @returns {string} The formatted measurement string.
+//  */
+// export function formatMeasurementValue(value, unit) {
+//     if (typeof value === "string" && unit === "meter") {
+//         return value;
+//     }
+//     if (typeof value === "number") {
+//         const numValue = Number(value);
+//         if (unit === "meter") {
+//             return numValue >= 1000
+//                 ? (numValue / 1000).toFixed(2) + "km"
+//                 : numValue.toFixed(2) + "m";
+//         }
+//         if (unit === "squareMeter") {
+//             return numValue >= 1000000
+//                 ? (numValue / 1000000).toFixed(2) + "km²"
+//                 : numValue.toFixed(2) + "m²";
+//         }
+//     }
+//     return value ? value.toString() : "";
+// }
 
 
 

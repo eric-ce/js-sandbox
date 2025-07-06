@@ -1,9 +1,10 @@
 // This is the cesium measure web component that will be used in the MapCesium component.
 import {
     BlendOption,
+    SceneTransforms
 } from "cesium";
 
-import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual, createPointerOverlay } from "../lib/helper/cesiumHelper.js";
+import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual, createPointerOverlay, convertToCartesian3 } from "../lib/helper/cesiumHelper.js";
 // import { LogTable } from './shared/LogTable.js';
 // import { HelpTable } from './shared/HelpTable.js';
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
@@ -16,7 +17,7 @@ import { MeasureComponentBase } from "./MeasureComponentBase.js";
 /**@typedef {import('cesium').PointPrimitive} PointPrimitive - the point primitive object in cesium map*/
 /**@typedef {import('cesium').LabelPrimitive} LabelPrimitive - the label primitive object in cesium map*/
 
-
+/**@typedef {{latitude: number, longitude: number, height?: number}} CartographicDegrees - CartographicDegrees */
 
 /**
  * CesiumMeasure class to provide measurement drawing functionalities in Cesium.
@@ -83,6 +84,10 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this.#labelCollection = this.map.scene.primitives.add(labelCollection);
     }
 
+
+    /*************************
+     * ADD GRAPHICS FEATURES *
+     *************************/
     /**
      * Adds a point marker to the map at the specified position.
      * @param {Cartesian3} position - The position where the marker will be added
@@ -199,7 +204,6 @@ export default class CesiumMeasure extends MeasureComponentBase {
      */
     _addPolylinesFromArray(positions, options = {}) {
         if (!this.cesiumPkg || !this.map || !this.stateManager) return null; // Ensure dependencies are available
-        console.log('positions', positions)
 
         // Get the line positions, use clamp position if height is 0
         const noHeight = positions.some(pos => pos.height === 0);
@@ -316,13 +320,13 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // Create the label primitives
         const addedLabels = [];
+
         // Iterate through the positions array, 2 positions as a pair
         for (let i = 0; i < positions.length - 1; i++) {
             const positionsPair = positions.slice(i, i + 2); // Get two positions for the label
             const label = this._addLabel(positionsPair, valueArray[i], unit, options);
             label && addedLabels.push(label);
         }
-
         return addedLabels; // Return the array of successfully added labels
     };
 
@@ -435,9 +439,10 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return polygonOutlinePrimitive;
     };
 
-    /*****************
-     * FIND GRAPHICS *
-     *****************/
+
+    /**************************
+     * FIND GRAPHICS FEATURES *
+     **************************/
     /**
      * Finds a point primitive by its position in the point collection.
      * @param {Cartesian3} position - The position to find the point primitive 
@@ -605,6 +610,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return relatedPrimitives;
     }
 
+
     /******************
      * REMOVE FEATURE *
      ******************/
@@ -673,30 +679,10 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this.map.scene.primitives.remove(primitive);
     };
 
-    /**
-     * Clamps positions to the ground and converts them to Cartographic degrees.
-     * @param {Cesium.Cartesian3[] | Cesium.Cartographic[]} positions 
-     * @returns {Cesium.Cartographic[]} clamped positions in degrees
-     */
-    _getClampedPositions(positions) {
-        const clampedPositions = positions.map(pos => {
-            // Convert to cartographic radians
-            const cartographic = convertToCartographicRadians(pos);
-            if (!cartographic) return null;
 
-            // Get ground height
-            const height = this.map.scene.sampleHeight(cartographic) || 0;
-
-            // Convert to cartographic degrees
-            const cartographicDegrees = convertToCartographicDegrees(pos);
-            // Set the height to the ground height
-            cartographicDegrees.height = height;
-            return cartographicDegrees;
-        }).filter(Boolean); // Filter out null values
-
-        return clampedPositions;
-    };
-
+    /*****************
+     * RESET FEATURE *
+     *****************/
     /**
      * Clear graphics only in the collection
      * It will not reset the collection variables within cesium, so that the collection can be reused.
@@ -728,6 +714,156 @@ export default class CesiumMeasure extends MeasureComponentBase {
             }
             collection.length = 0;
         });
+    }
+
+
+    /*********************************
+     * GET CLAMPED POSITIONS FEATURE *
+     *********************************/
+    /**
+     * Gets positions with fallback height, tries multiple methods
+     * @param {Cesium.Cartesian3[] | Cesium.Cartographic[]} positions 
+     * @returns {Cesium.Cartographic[]} positions with best available height
+     */
+    _getClampedPositions(positions) {
+        return positions.map(pos => {
+            const cartographicDegrees = convertToCartographicDegrees(pos);
+            if (!cartographicDegrees) return null;
+
+            // Use existing height if valid
+            if (cartographicDegrees.height !== undefined && cartographicDegrees.height !== 0) {
+                return cartographicDegrees;
+            }
+
+            let height = null;
+            // Approach 1: Globe height (fastest, most reliable)
+            if (height === null) {
+                height = this._getHeightUsingGlobe(cartographicDegrees);
+            }
+
+            // Approach 2: Pick-based height (more accurate but view-dependent)
+            if (height === null) {
+                height = this._getHeightUsingPick(cartographicDegrees);
+            }
+
+            // Approach 3: Async height update (non-blocking, fire-and-forget)
+            if (height === null) {
+                this._getHeightUsingSampleHeight(cartographicDegrees, pos);
+            }
+
+            // Fallback: Set the best available height or fallback to 0
+            cartographicDegrees.height = height !== null ? height : 0;
+
+            return cartographicDegrees;
+        }).filter(Boolean);
+    }
+
+    /**
+     * Gets height using pick API as fallback
+     * @private
+     * @param {CartographicDegrees} cartographicDegrees - Position in degrees
+     * @returns {number|null} Height or null if pick fails
+     */
+    _getHeightUsingPick(cartographicDegrees) {
+        try {
+            // Convert to Cartesian3 with approximate height for screen projection
+            const cartesian = convertToCartesian3(cartographicDegrees);
+            if (!cartesian) return null;
+
+            // Convert to screen coordinates
+            // -- Handle screen position --
+            let screenPoint;
+            const { scene } = this.map;
+            if (SceneTransforms.worldToWindowCoordinates) {
+                // latest screenPosition transform method
+                screenPoint = SceneTransforms.worldToWindowCoordinates(scene, cartesian);
+            } else if (SceneTransforms.wgs84ToWindowCoordinates) {
+                // fallback to use deprecated screenPosition transform method
+                screenPoint = SceneTransforms.wgs84ToWindowCoordinates(scene, cartesian);
+            } else {
+                console.error("SceneTransforms.worldToWindowCoordinates or SceneTransforms.wgs84ToWindowCoordinates is not available in the current version of Cesium.");
+            }
+            if (!screenPoint) return null;
+
+            // -- Pick position by screen coordinate --
+            const pickedCartesian = scene.pickPosition(screenPoint);
+            if (pickedCartesian) {
+                const pickedCartographic = convertToCartographicRadians(pickedCartesian);
+                const height = pickedCartographic ? pickedCartographic.height : null;
+
+                // Check if height is reasonable (same bounds as globe method)
+                if (height !== null && height >= -1000 && height <= 10000) {
+                    return height;
+                }
+            }
+
+            return null;
+        } catch (error) {
+            console.warn('Pick-based height sampling failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Gets height using globe elevation as fallback
+     * @private
+     * @param {CartographicDegrees} cartographicDegrees - Position in degrees
+     * @returns {number|null} Height or null if sampling fails
+     */
+    _getHeightUsingGlobe(cartographicDegrees) {
+        try {
+            const cartographicRadians = convertToCartographicRadians(cartographicDegrees);
+            if (!cartographicRadians) return null;
+
+            // Use globe.getHeight for basic terrain height
+            const height = this.map.scene.globe.getHeight(cartographicRadians);
+
+            // Check if height is reasonable (between reasonable Earth elevation bounds)
+            // Dead Sea: ~-430m, Everest: ~8848m, with some buffer for edge cases
+            if (height !== undefined && height >= -1000 && height <= 10000) {
+                return height;
+            }
+
+            // Return null for unreasonable heights to trigger next approach
+            return null;
+        } catch (error) {
+            console.warn('Globe height sampling failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Schedules async height update (fire-and-forget)
+     * @private
+     */
+    _getHeightUsingSampleHeight(cartographicDegrees, originalPos) {
+        const cartographic = convertToCartographicRadians(originalPos);
+        if (cartographic && this.map.scene.sampleHeight) {
+            try {
+                const heightResult = this.map.scene.sampleHeight(cartographic);
+
+                // Check if it returns a Promise
+                if (heightResult && typeof heightResult.then === 'function') {
+                    heightResult
+                        .then(height => {
+                            // Apply reasonableness check before updating
+                            if (height !== undefined && height >= -1000 && height <= 10000) {
+                                cartographicDegrees.height = height;
+                            }
+                        })
+                        .catch(error => {
+                            console.warn('Failed to update height:', error);
+                        });
+                } else if (typeof heightResult === 'number') {
+                    // Synchronous result - apply reasonableness check
+                    if (heightResult >= -1000 && heightResult <= 10000) {
+                        cartographicDegrees.height = heightResult;
+                    }
+                }
+            } catch (error) {
+                console.warn('sampleHeight not available or failed:', error);
+            }
+        }
     }
 }
 

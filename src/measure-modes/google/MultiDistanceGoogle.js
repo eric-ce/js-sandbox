@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { calculateMiddlePos, calculateDistance, formatMeasurementValue, areCoordinatesEqual, checkOverlayType, getOverlayByPosition, convertToLatLng, } from "../../lib/helper/googleHelper.js";
-import { getNeighboringValues, showCustomNotification } from "../../lib/helper/helper.js";
+import { calculateMiddlePos, calculateDistance, areCoordinatesEqual, checkOverlayType, getOverlayByPosition, convertToLatLng, } from "../../lib/helper/googleHelper.js";
+import { getNeighboringValues, showCustomNotification, formatMeasurementValue } from "../../lib/helper/helper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /** @typedef {{lat: number, lng: number}} LatLng */
@@ -156,7 +156,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("multi_distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter)
+        super("multi_distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;

@@ -7,11 +7,11 @@ import {
     calculateDistance,
     editableLabel,
     updatePointerOverlay,
-    formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
     getRankedPickedObjectType,
 } from "../../lib/helper/cesiumHelper.js";
+import { formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -452,7 +452,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         }
 
         const distance = curvePositions.length > 2 ? this._measureCurveDistance(curvePositions) : calculateDistance(positions[0], positions[1]);
-        const formattedText = formatDistance(distance);
+        const formattedText = formatMeasurementValue(distance, "meter"); // Format the distance value
         const middlePos = calculateMiddlePos(positions);
 
         if (!middlePos) {

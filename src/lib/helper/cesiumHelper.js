@@ -18,6 +18,7 @@ import {
     PolylineGeometry,
     PerInstanceColorAppearance
 } from "cesium";
+import { formatMeasurementValue } from "./helper.js";
 
 
 /***********************
@@ -210,41 +211,7 @@ export function checkCoordinateType(coordinate) {
     return null;
 };
 
-/**
- * Format the distance.
- * @param {number} distance - The distance in meters.
- * @returns {string} The formatted distance string.
- */
-export function formatDistance(distance) {
-    if (distance >= 1_000) {
-        // Convert to kilometers
-        return (distance / 1_000).toFixed(2) + " km";
-    } else if (distance >= 1) {
-        // Keep in meters
-        return distance.toFixed(2) + " m";
-    } else {
-        // Convert to centimeters
-        return (distance * 100).toFixed(2) + " cm";
-    }
-}
 
-/**
- * Format the area.
- * @param {number} area - The area in square meters.
- * @returns {string} The formatted area string.
- */
-export function formatArea(area) {
-    if (area >= 1_000_000) {
-        // Convert to square kilometers
-        return (area / 1_000_000).toFixed(2) + " km²";
-    } else if (area >= 1) {
-        // Keep in square meters
-        return area.toFixed(2) + " m²";
-    } else {
-        // Convert to square centimeters
-        return (area * 10_000).toFixed(2) + " cm²";
-    }
-}
 
 
 /**
@@ -694,18 +661,24 @@ export function createLabelPrimitive(coordinates, value, unit = "meter", options
     }
 
     // --- Text Formatting ---
-    let labelString;
-    if (unit === "meter") {
-        // Case 1: Distance in meters
-        labelString = formatDistance(value);
-    } else if (unit === "squareMeter") {
-        // Case 2: Area in square meters
-        labelString = formatArea(value);
-    } else {
-        // Case 3: Default case - use the text directly
-        labelString = value.toString();
-    }
+    // let labelString;
+    // if (typeof value === "string" && unit === "meter") {
+    //     return value;
+    // }
+    // if (typeof value === "number") {
+    //     if (unit === "meter") {
+    //         // Case 1: Distance in meters
+    //         labelString = formatDistance(value);
+    //     } else if (unit === "squareMeter") {
+    //         // Case 2: Area in square meters
+    //         labelString = formatArea(value);
 
+    //     } else {
+    //         labelString = value.toString(); // Default case if unit is not recognized
+    //     }
+    // }
+    // if (!labelString) labelString = value.toString(); // fallback to string conversion if labelString is not defined
+    const labelString = formatMeasurementValue(value, unit);
     return {
         position: position,
         text: labelString,
@@ -2100,3 +2073,39 @@ export function getPickedObjectType(pickedObjects, modeString) {
 
     return { type, object: pickedObjects[0] }; // Return the type and the object
 }
+
+// /**
+//  * Format the distance.
+//  * @param {number} distance - The distance in meters.
+//  * @returns {string} The formatted distance string.
+//  */
+// export function formatDistance(distance) {
+//     if (distance >= 1_000) {
+//         // Convert to kilometers
+//         return (distance / 1_000).toFixed(2) + " km";
+//     } else if (distance >= 1) {
+//         // Keep in meters
+//         return distance.toFixed(2) + " m";
+//     } else {
+//         // Convert to centimeters
+//         return (distance * 100).toFixed(2) + " cm";
+//     }
+// }
+
+// /**
+//  * Format the area.
+//  * @param {number} area - The area in square meters.
+//  * @returns {string} The formatted area string.
+//  */
+// export function formatArea(area) {
+//     if (area >= 1_000_000) {
+//         // Convert to square kilometers
+//         return (area / 1_000_000).toFixed(2) + " km²";
+//     } else if (area >= 1) {
+//         // Keep in square meters
+//         return area.toFixed(2) + " m²";
+//     } else {
+//         // Convert to square centimeters
+//         return (area * 10_000).toFixed(2) + " cm²";
+//     }
+// }

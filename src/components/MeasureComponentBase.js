@@ -23,7 +23,7 @@ import { CesiumDragHandler, CesiumHighlightHandler, GoogleDragHandler, GoogleHig
 import { PickerCesium, TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveCesium, PointInfoCesium, HeightCesium, ProfileCesium, MultiDistancesCesium, MultiDistancesClampedCesium, ProfileDistancesCesium, PointInfoGoogle, TwoPointsDistanceGoogle, PolygonGoogle, MultiDistanceGoogle, PickerGoogle, PointInfoLeaflet, TwoPointsDistanceLeaflet, PolygonLeaflet, MultiDistanceLeaflet, PickerLeaflet } from "../measure-modes/index.js";
 import { InstructionsTable } from "./shared/InstructionsTable.js";
 import { DataLogTable } from "./shared/DataLogTable.js";
-import { makeDraggable } from "../lib/helper/helper.js";
+import { makeDraggable, formatMeasurementValue } from "../lib/helper/helper.js";
 
 
 
@@ -992,52 +992,74 @@ export class MeasureComponentBase extends HTMLElement {
         }
 
         // Create new annotations based on the mode
-        switch (data.mode) {
-            case "area":
-                annotations.polygon = this._addPolygon(data.coordinates);
-                annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                annotations.labels = [
-                    this._addLabel(data.coordinates, data._records[0], "squareMeter"),
-                ];
-                break;
-            case "pointInfo":
-                annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                annotations.labels = [
-                    this._addLabel(
-                        [data.coordinates[0], data.coordinates[0]],
-                        `Lat:${data.coordinates[0].latitude.toFixed(6)} 
-Lng:${data.coordinates[0].longitude.toFixed(6)}`,
-                        null,
-                    ),
-                ];
-                break;
-            case "multi_distances":
-            case "multi_distances_clamped":
-            case "profile_distances":
-                annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                annotations.polylines = this._addPolylinesFromArray(data.coordinates);
+        try {
+            // FIXME: add id, color and other properties options to graphics
+            switch (data.mode) {
+                case "area":
+                    annotations.polygon = this._addPolygon(data.coordinates);
+                    annotations.markers = this._addPointMarkersFromArray(data.coordinates);
+                    annotations.labels = [
+                        this._addLabel(data.coordinates, data._records[0], "squareMeter"),
+                    ];
+                    break;
+                case "pointInfo":
+                    // -- Add points --
+                    const [cartographicDegrees] = data.coordinates;
+                    annotations.markers = this._addPointMarkersFromArray(data.coordinates);
+                    // -- Add labels --
+                    const formattedText =
+                        `lat: ${cartographicDegrees.latitude.toFixed(6)}\u00B0` +
+                        `\nlng: ${cartographicDegrees.longitude.toFixed(6)}\u00B0` +
+                        (cartographicDegrees.height ? `\nheight: ${cartographicDegrees.height.toFixed(2)} m` : "");
+                    annotations.labels = [
+                        this._addLabel(
+                            [data.coordinates[0], data.coordinates[0]],
+                            formattedText,
+                            null,
+                        ),
+                    ];
+                    break;
+                case "multi_distances":
+                case "multi_distances_clamped":
+                case "profile_distances":
+                    // FIXME: add id, color and other properties options
+                    // -- Add points and lines --
+                    annotations.markers = this._addPointMarkersFromArray(data.coordinates);
+                    annotations.polylines = this._addPolylinesFromArray(data.coordinates);
 
-                annotations.labels = this._addLabelsFromArray(
-                    data.coordinates,
-                    data._records[0]?.distances,
-                );
-                // add label for total distance
-                if (data.status === "completed") {
-                    const endCoords = data.coordinates[data.coordinates.length - 1];
-                    annotations.labels &&
-                        annotations.labels.push(
-                            this._addLabel(
-                                [endCoords, endCoords],
-                                data._records[0]?.totalDistance[0]
-                            )
+                    // -- Add labels -- 
+                    const { distances, totalDistance } = data._records[0] || {};
+                    annotations.labels = this._addLabelsFromArray(
+                        data.coordinates,
+                        distances,
+                        "meter",
+                    );
+                    // -- Add total label --
+                    if (data.status === "completed") {
+                        const endCoords = data.coordinates[data.coordinates.length - 1];
+
+                        const formattedText = `Total: ${formatMeasurementValue(totalDistance, "meter")}`;
+                        const totalLabel = this._addLabel(
+                            [endCoords, endCoords],
+                            formattedText,
+                            null
                         );
-                }
-                break;
-            default:
-                annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                annotations.polylines = this._addPolylinesFromArray(data.coordinates);
-                annotations.labels = this._addLabelsFromArray(data.coordinates, data._records, "meter");
-                break;
+
+                        if (!totalLabel || annotations.labels.length === 0) return;
+                        annotations.labels.push(totalLabel);
+                    }
+                    break;
+                default:
+                    annotations.markers = this._addPointMarkersFromArray(data.coordinates);
+                    annotations.polylines = this._addPolylinesFromArray(data.coordinates);
+                    annotations.labels = this._addLabelsFromArray(data.coordinates, data._records, "meter");
+                    break;
+            }
+        } catch (error) {
+            console.error(`${this.constructor.name}: Error drawing annotations for ${data.mode}:`, error);
+            // Clean up any partially created annotations
+            this._removeAnnotations(annotations);
+            return;
         }
 
         // Update data store
@@ -1048,7 +1070,7 @@ Lng:${data.coordinates[0].longitude.toFixed(6)}`,
             this.#data[existingIndex] = updatedData;
         } else {
             // Add new data
-            this.#data.push({ ...data, annotations });
+            this.#data.push(updatedData);
         }
     }
 

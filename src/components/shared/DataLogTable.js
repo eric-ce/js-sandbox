@@ -1,6 +1,6 @@
 import { sharedStyleSheet } from '../../styles/sharedStyle.js';
 import { dataLogBoxIcon } from '../../assets/icons.js';
-import { createCloseButton, createExpandCollapseButton, makeDraggable } from '../../lib/helper/helper.js';
+import { capitalizeString, createCloseButton, createExpandCollapseButton, makeDraggable } from '../../lib/helper/helper.js';
 import dataPool from '../../lib/data/DataPool.js';
 
 /**@typedef {import('../../lib/state/StateManager.js')} StateManager */
@@ -16,6 +16,17 @@ import dataPool from '../../lib/data/DataPool.js';
  * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
  * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
+ */
+
+/**
+ * @typedef LogRecord
+ * @property {string} id - Unique identifier for this log entry
+ * @property {'dataPool'|'action'} source - Source of the log entry
+ * @property {string} displayText - Text to display in the table
+ * @property {object} metadata - Additional data for future features
+ * @property {string} metadata.dataId - Original data ID if from dataPool
+ * @property {string} metadata.mode - Measurement mode
+ * @property {number} timestamp - When this entry was created
  */
 
 export class DataLogTable extends HTMLElement {
@@ -38,7 +49,7 @@ export class DataLogTable extends HTMLElement {
     _mapName = null;
 
     // Table related variables
-    /** @type {string[]} */
+    /** @type {LogRecord[]} */
     _logRecords = [];
     /** @type {DocumentFragment} */
     _fragment = null;
@@ -61,8 +72,6 @@ export class DataLogTable extends HTMLElement {
 
         // Initialize document fragment
         this._fragment = document.createDocumentFragment();
-
-
     }
 
 
@@ -78,18 +87,13 @@ export class DataLogTable extends HTMLElement {
         // Initial data load when emitter is set
         this._loadInitialData();
 
-        // listen for data:updated
-        this._emitter.on('data:updated', () => {
-            const data = dataPool.data;
-            if (data.length === 0) return; // No data to process
-            this._handleData(data);
+        // listen for data:updated - now logs actions instead of reloading all data
+        this._emitter.on('data:updated', (updatedItem) => {
+            this._handleDataAction(updatedItem);
         });
 
-        this._emitter.on('data:removed', () => {
-            const data = dataPool.data;
-            console.log("🚀 data:", data);
-
-            this._handleData(data);
+        this._emitter.on('data:removed', (removedItem) => {
+            this._handleDataRemoval(removedItem);
         });
 
 
@@ -119,7 +123,6 @@ export class DataLogTable extends HTMLElement {
     get mapName() {
         return this._mapName;
     }
-
     set mapName(mapName) {
         this._mapName = mapName;
     }
@@ -131,6 +134,8 @@ export class DataLogTable extends HTMLElement {
 
         // create data log table UI
         this._createUI();
+
+        this._loadInitialData();
     }
 
     disconnectedCallback() {
@@ -205,9 +210,14 @@ export class DataLogTable extends HTMLElement {
         this._dataLogBox.className = "info-box data-log-box visible";
         this._dataLogBox.style.position = "absolute";
 
+        // Prevent scroll events from bubbling to the map
+        this._dataLogBox.addEventListener('wheel', (e) => {
+            e.stopPropagation();
+        }, { passive: false });
+
         // -- Create title div --
         const titleDiv = document.createElement("div");
-        const formatTitleText = this.mapName ? `All Data Log - ${this.mapName.charAt(0).toUpperCase() + this.mapName.slice(1)}` : "Data Log";
+        const formatTitleText = this.mapName ? `All Data Log - ${capitalizeString(this.mapName)}` : "Data Log";
         titleDiv.textContent = formatTitleText;
         titleDiv.style.fontWeight = "bold";
         titleDiv.style.padding = "2px 0px 0px 2px";
@@ -219,6 +229,12 @@ export class DataLogTable extends HTMLElement {
         this._table.style.width = "100%";
         this._table.style.marginTop = "7px";
         this._table.style.borderCollapse = "collapse";
+
+        // Additional scroll event prevention for the table specifically
+        this._table.addEventListener('wheel', (e) => {
+            e.stopPropagation();
+        }, { passive: false });
+
         // Append table to dataLogBox
         this._dataLogBox.appendChild(this._table);
 
@@ -394,10 +410,7 @@ export class DataLogTable extends HTMLElement {
     _enableDragging() {
         if (!this._dataLogTableContainer || !this._container) return;
 
-        this._dragCleanup = makeDraggable(
-            this._dataLogTableContainer,
-            this._container
-        );
+        this._dragCleanup = makeDraggable(this._dataLogTableContainer, this._container);
     }
 
     /**
@@ -406,7 +419,12 @@ export class DataLogTable extends HTMLElement {
     _updatePositions() {
         const containerRect = this.container.getBoundingClientRect();
         const logTableContainer = this._dataLogTableContainer.getBoundingClientRect();
-        if (!containerRect || !this._dataLogTableContainer || containerRect.width === 0 || logTableContainer.width === 0) return;
+        if (
+            !containerRect ||
+            !this._dataLogTableContainer ||
+            containerRect.width === 0 ||
+            logTableContainer.width === 0
+        ) return;
 
         const x = containerRect.width - logTableContainer.width - 5;
         const y = 300;
@@ -518,37 +536,32 @@ export class DataLogTable extends HTMLElement {
     }
 
     /**
-     * Handles dataPool data and triggered by "data:updated" event from the emitter.
-     * @param {MeasurementGroup[]} data - The dataPool data to be processed. 
+     * Handles individual data updates as actions (triggered by "data:updated" event)
+     * @param {MeasurementGroup} updatedItem - The specific item that was updated
      * @returns {void} 
      */
-    _handleData(data) {
-        // Handle array of data from dataPool
-        if (!Array.isArray(data)) return;
+    _handleDataAction(updatedItem) {
+        if (!updatedItem ||
+            updatedItem.status !== "completed"
+            // updatedItem.mapName !== this._mapName  // Only log actions from this specific map
+        ) return;
 
-        if (data.length === 0) {
-            while (this._table && this._table.rows.length > 0) {
-                this._table.deleteRow(0);
-            }
-        }
-
-        // Process only completed data
-        const completedData = data.filter(item =>
-            item && item.status === "completed"
-        );
-
-        if (completedData.length === 0) return;
-
-        // Clear existing records to show current state
-        this._logRecords = [];
-
-        // Process each completed data item
-        completedData.forEach(item => {
-            const formattedLines = this._formatDataToStrings(item);
-            formattedLines.forEach(line => {
-                this._logRecords.push(line);
-            });
+        // Log this as an action rather than rebuilding all data
+        const formattedLines = this._formatDataToStrings(updatedItem);
+        formattedLines.forEach(line => {
+            this._logRecords.push(this._createLogRecord({
+                source: 'action',
+                displayText: line,
+                metadata: {
+                    dataId: updatedItem.id,
+                    mode: updatedItem.mode,
+                    actionType: 'measurement_completed'
+                }
+            }));
         });
+
+        // Sort by timestamp to maintain chronological order
+        this._logRecords.sort((a, b) => a.timestamp - b.timestamp);
 
         // Update the table UI
         this._updateTable();
@@ -639,17 +652,6 @@ export class DataLogTable extends HTMLElement {
         return lines;
     }
 
-    // _handleModeSelected(record) {
-    //     if (!Array.isArray(record)) return;
-
-    //     const modeObject = record[0];
-    //     Object.entries(modeObject).forEach(([key, value]) => {
-    //         this._records.push(`${key}: ${value}`);
-    //     });
-
-    //     this._updateTable();
-    // }
-
     /**
      * Updates the table UI based on the current data log records.
      * Assumes that this._records is an array of objects with "key" and "string" properties.
@@ -670,8 +672,17 @@ export class DataLogTable extends HTMLElement {
         // }
 
         // Iterate over each formatted record string.
-        this._logRecords.forEach(line => {
-            this._table.appendChild(this._createRow(line));
+        this._logRecords.forEach(record => {
+            // destructure the record to get displayText, source, and id
+            const { displayText, source, id } = record;
+
+            // create new row for each record
+            const row = this._createRow(displayText);
+
+            // Store the properties in the row for future reference
+            row.dataset.recordId = id; // Store the record ID 
+            row.dataset.source = source; // Store the record source
+            this._table.appendChild(row);
         });
 
         // Auto-scroll to the bottom for smooth UX.
@@ -679,15 +690,86 @@ export class DataLogTable extends HTMLElement {
     }
 
     /**
-     * Loads initial data from dataPool when component is first set up
+     * Loads initial data from dataPool when component is first set up (one-time only)
      * @private
      */
     _loadInitialData() {
         const data = dataPool.data;
-        if (data && data.length > 0) {
-            this._handleData(data);
-        }
+        if (!data || data.length === 0) return;
+
+        // Process only completed data for initial load
+        const completedData = data.filter(item => item && item.status === "completed");
+
+        // Load existing completed measurements as initial dataPool entries
+        completedData.forEach(item => {
+            const formattedLines = this._formatDataToStrings(item);
+            formattedLines.forEach(line => {
+                // Check if this dataPool item already exists in logRecords
+                const isDuplicate = this._logRecords.some(record =>
+                    record.source === 'dataPool' &&
+                    record.metadata.dataId === item.id &&
+                    record.displayText === line
+                );
+
+                // Only add if not duplicate
+                if (!isDuplicate) {
+                    const log = this._createLogRecord({
+                        source: 'dataPool',
+                        displayText: line,
+                        metadata: {
+                            dataId: item.id,
+                            mode: item.mode
+                        }
+                    });
+                    this._logRecords.push(log);
+                }
+            });
+        });
+
+        // Sort by timestamp
+        this._logRecords.sort((a, b) => a.timestamp - b.timestamp);
+
+        this._updateTable();
     }
+
+    /**
+     * Creates a structured log record
+     * @private
+     * @param {object} options - Record options
+     * @param {'dataPool'|'action'} options.source - Source of the log entry
+     * @param {string} options.displayText - Text to display
+     * @param {object} options.metadata - Additional metadata
+     * @returns {LogRecord} Structured log record
+     */
+    _createLogRecord({ source, displayText, metadata = {} }) {
+        return {
+            id: `${source}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            source,
+            displayText,
+            metadata,
+            timestamp: Date.now()
+        };
+    }
+
+    // /**
+    //  * Adds an action-based log entry
+    //  * @param {string} actionText - Text describing the action
+    //  * @param {object} metadata - Additional action metadata
+    //  */
+    // addActionLog(actionText, metadata = {}) {
+    //     const actionRecord = this._createLogRecord({
+    //         source: 'action',
+    //         displayText: actionText,
+    //         metadata
+    //     });
+
+    //     this._logRecords.push(actionRecord);
+
+    //     // Sort to maintain chronological order
+    //     this._logRecords.sort((a, b) => a.timestamp - b.timestamp);
+
+    //     this._updateTable();
+    // }
 
     /*********
      * RESET *

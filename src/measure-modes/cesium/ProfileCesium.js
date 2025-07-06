@@ -5,13 +5,13 @@ import {
 import {
     editableLabel,
     updatePointerOverlay,
-    formatDistance,
     areCoordinatesEqual,
     calculateMiddlePos,
     calculateClampedDistance,
     getRankedPickedObjectType,
     convertToCartesian3,
 } from "../../lib/helper/cesiumHelper.js";
+import { formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -497,7 +497,7 @@ class ProfileCesium extends MeasureModeCesium {
         } = options;
 
         const { distance, clampedPositions, clampedPositionsCartographic } = calculateClampedDistance(positions, this.map.scene, 4);
-        const formattedText = formatDistance(distance);
+        const formattedText = formatMeasurementValue(distance, "meter");
         const middlePos = calculateMiddlePos(positions);
 
         if (!middlePos) {
