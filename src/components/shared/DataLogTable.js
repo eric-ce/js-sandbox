@@ -210,6 +210,11 @@ export class DataLogTable extends HTMLElement {
         this._dataLogBox.className = "info-box data-log-box visible";
         this._dataLogBox.style.position = "absolute";
 
+        // Prevent scroll events from bubbling to the map
+        this._dataLogBox.addEventListener('wheel', (e) => {
+            e.stopPropagation();
+        }, { passive: false });
+
         // -- Create title div --
         const titleDiv = document.createElement("div");
         const formatTitleText = this.mapName ? `All Data Log - ${capitalizeString(this.mapName)}` : "Data Log";
@@ -224,6 +229,12 @@ export class DataLogTable extends HTMLElement {
         this._table.style.width = "100%";
         this._table.style.marginTop = "7px";
         this._table.style.borderCollapse = "collapse";
+
+        // Additional scroll event prevention for the table specifically
+        this._table.addEventListener('wheel', (e) => {
+            e.stopPropagation();
+        }, { passive: false });
+
         // Append table to dataLogBox
         this._dataLogBox.appendChild(this._table);
 
