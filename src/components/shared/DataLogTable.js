@@ -87,14 +87,14 @@ export class DataLogTable extends HTMLElement {
         // Initial data load when emitter is set
         this._loadInitialData();
 
-        // listen for data:updated - now logs actions instead of reloading all data
+        // listen for data:updated - logs data updates as actions
         this._emitter.on('data:updated', (updatedItem) => {
             this._handleDataAction(updatedItem);
         });
-
-        this._emitter.on('data:removed', (removedItem) => {
-            this._handleDataRemoval(removedItem);
-        });
+        // listen for data:removed - logs data removals as actions
+        // this._emitter.on('data:removed', (removedItem) => {
+        //     this._handleDataRemoval(removedItem);
+        // });
 
 
         // listen for mode:selected

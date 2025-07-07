@@ -212,7 +212,7 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
         const measureId = Number(linePrimitive.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
 
         // -- User confirmation --
-        const userConfirmation = window.confirm(`Do you want to add mode to add a new point to this segment? Measure id: ${measureId}`);
+        const userConfirmation = window.confirm(`Do you want to add a new point to this line segment? Measure id: ${measureId}`);
         if (!userConfirmation) return; // If the user does not confirm, exit
 
         // Set the measure data
