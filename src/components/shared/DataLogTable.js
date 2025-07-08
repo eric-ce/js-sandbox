@@ -35,6 +35,8 @@ export class DataLogTable extends HTMLElement {
     _dragCleanup = null;
     /** @type {function(): void} */
     _closeButtonCleanup;
+    /** @type {function(object): void} */
+    _boundDataActionHandler = null;
     /** @type {Set<{button: HTMLButtonElement, handler: function}>} */
     _copyButtonCleanupSet; // Renamed from _copyButtonHandlers
 
@@ -88,9 +90,8 @@ export class DataLogTable extends HTMLElement {
         this._loadInitialData();
 
         // listen for data:updated - logs data updates as actions
-        this._emitter.on('data:updated', (updatedItem) => {
-            this._handleDataAction(updatedItem);
-        });
+        this._boundDataActionHandler = (updatedItem) => this._handleDataAction(updatedItem);
+        this._emitter.on('data:updated', this._boundDataActionHandler);
         // listen for data:removed - logs data removals as actions
         // this._emitter.on('data:removed', (removedItem) => {
         //     this._handleDataRemoval(removedItem);
@@ -118,6 +119,7 @@ export class DataLogTable extends HTMLElement {
         }
 
         this._container = container;
+        console.log('container', container)
     }
 
     get mapName() {
@@ -215,52 +217,66 @@ export class DataLogTable extends HTMLElement {
             e.stopPropagation();
         }, { passive: false });
 
+        // -- Create title bar --
+        const titleBar = document.createElement("div");
+        titleBar.className = "data-log-titleBar";
+        Object.assign(titleBar.style, {
+            width: "100%",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+        });
+
         // -- Create title div --
         const titleDiv = document.createElement("div");
         const formatTitleText = this.mapName ? `All Data Log - ${capitalizeString(this.mapName)}` : "Data Log";
         titleDiv.textContent = formatTitleText;
-        titleDiv.style.fontWeight = "bold";
-        titleDiv.style.padding = "2px 0px 0px 2px";
-        this._dataLogBox.appendChild(titleDiv);
+        Object.assign(titleDiv.style, {
+            fontWeight: "bold",
+            padding: "2px 0px 0px 2px"
+        });
+        titleBar.appendChild(titleDiv);
 
-        // -- Create a table -- 
+        // -- Create title controls container --
+        const titleControls = document.createElement("div");
+        Object.assign(titleControls.style, {
+            display: "flex",
+            gap: "0.5rem"
+        });
+
+        // -- Create expand/collapse button --
+        const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
+            clickCallback: () => this._hideDataLogBox()
+        });
+        this._expandCollapseButtonCleanup = expandCollapseCleanup;
+
+        // -- Create close button --
+        const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
+            clickCallback: () => this._destroy()
+        });
+        this._closeButtonCleanup = closeButtonCleanup;
+
+        // Append controls in logical order
+        titleControls.appendChild(expandCollapseButton);
+        titleControls.appendChild(closeButton);
+        titleBar.appendChild(titleControls);
+        this._dataLogBox.appendChild(titleBar);
+
+        // -- Create table --
         this._table = document.createElement("table");
-        this._table.style.display = "table";
-        this._table.style.width = "100%";
-        this._table.style.marginTop = "7px";
-        this._table.style.borderCollapse = "collapse";
+        Object.assign(this._table.style, {
+            display: "table",
+            width: "100%",
+            marginTop: "7px",
+            borderCollapse: "collapse"
+        });
 
-        // Additional scroll event prevention for the table specifically
+        // Prevent scroll events from bubbling to the map
         this._table.addEventListener('wheel', (e) => {
             e.stopPropagation();
         }, { passive: false });
 
-        // Append table to dataLogBox
         this._dataLogBox.appendChild(this._table);
-
-
-        // -- Create close button --
-        const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
-            color: "#edffff",
-            clickCallback: () => this._destroy()
-        });
-        this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function
-        this._dataLogBox.appendChild(closeButton); // Add close button to data log box
-
-
-        // -- Create expand/collapse button for the data log box --
-        const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
-            color: "#edffff",
-            right: "1.5rem",
-            clickCallback: () => {
-                this._hideDataLogBox();
-                expandCollapseButton.style.transform = "scale(1.0)"; // Reset scale on collapse 
-            }
-        });
-        this._expandCollapseButtonCleanup = expandCollapseCleanup; // Store cleanup function
-        this._dataLogBox.appendChild(expandCollapseButton); // Add expand/collapse button to data log box
-
-        // Append to container initially
         this._dataLogTableContainer.appendChild(this._dataLogBox);
     }
 
@@ -785,14 +801,16 @@ export class DataLogTable extends HTMLElement {
         this._dataLogIconButton = null;
         this._dataLogBox = null;
         this._table = null;
-        this._container = null;  // Clear the container reference
         this._fragment = null;  // Reset the fragment
         this._stateManager = null;  // Clear the state manager reference
-        if (this._emitter) {
-            this._emitter.off('data:updated', this._handleData);
-            // this._emitter.off('selected:info', (info) => this._handleModeSelected(info));
+
+        // Remove event listeners
+        if (this._emitter && this._boundDataActionHandler) {
+            this._emitter.off('data:updated', this._boundDataActionHandler);
         }
+
         this._emitter = null;  // Clear the emitter reference
+        this._container = null;  // Clear the container reference
 
         // Clean up dragging
         if (this._dragCleanup) {

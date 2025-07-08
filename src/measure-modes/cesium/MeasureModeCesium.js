@@ -185,10 +185,11 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // -- Create and add the close button --
         const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
+            position: "absolute",
+            top: "5px",
+            right: "5px",
             image: closeIconBlack,
-            clickCallback: () => {
-                this._destroyChart()
-            },
+            clickCallback: () => this._destroyChart()
         });
         this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function    
         this.chartDiv.appendChild(closeButton); // Add close button to chart div
