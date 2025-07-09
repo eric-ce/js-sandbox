@@ -97,7 +97,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             throw new Error("ProfileDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
-        super("profile_distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("profile-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;

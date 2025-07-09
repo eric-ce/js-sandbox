@@ -156,7 +156,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("multi_distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter)
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;

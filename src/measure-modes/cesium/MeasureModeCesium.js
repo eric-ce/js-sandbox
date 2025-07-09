@@ -492,8 +492,11 @@ class MeasureModeCesium extends MeasureModeBase {
         const targetIdPrefix = `annotate_${this.mode}`;
 
         // Helper function to check if annotation should be removed
-        const shouldRemove = (annotation) =>
-            annotation && annotation?.id?.includes(targetIdPrefix) && annotation.status !== "completed";
+        const shouldRemove = (annotation) => {
+            const annotationStatus = annotation?.feature?.properties?.status || annotation.status;
+            return annotation && annotation?.id?.includes(targetIdPrefix) && annotationStatus !== "completed";
+
+        }
 
         // Define collections with their access methods and removal methods
         const collections = [

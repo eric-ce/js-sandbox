@@ -12,7 +12,7 @@ import {
     getRankedPickedObjectType,
     updatePointerOverlay,
 } from "../../lib/helper/cesiumHelper.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -176,7 +176,7 @@ class HeightCesium extends MeasureModeCesium {
 
         if (this.coordsCache.length === 2) {
             // Reset for a new measure using the default structure
-            this.measure = this._createDefaultMeasure();
+            // this.measure = this._createDefaultMeasure();
 
             // Establish data relation
             this.measure.coordinates = this.coordsCache; // when cache changed measure data changed, due to reference by address.
@@ -190,15 +190,16 @@ class HeightCesium extends MeasureModeCesium {
             // -- APPROACH 2: Update existing polyline and label --
             // -- Handle polyline
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
-                status: "completed",
-                color: this.stateManager.getColorState("line")
+                color: this.stateManager.getColorState("line"),
+                status: "completed"
             });
 
             // -- Handle label --
             const { height } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-                status: "completed",
-                showBackground: true
+                showBackground: true,
+                status: "completed"
             });
+
 
             // -- Handle Data --
             this.measure.coordinates = this.coordsCache;
@@ -217,6 +218,9 @@ class HeightCesium extends MeasureModeCesium {
             this.#interactiveAnnotations.points = []; // Clear the interactive points
             this.#interactiveAnnotations.polylines = []; // Clear the interactive polylines
             this.#interactiveAnnotations.labels = []; // Clear the interactive labels
+
+            // Reset the measure data to keep the moving id correct, this is specific to this mode
+            this.measure = this._createDefaultMeasure();
         }
     }
 
@@ -266,14 +270,12 @@ class HeightCesium extends MeasureModeCesium {
         this._createOrUpdateLine(this.coordsCache, this.interactiveAnnotations.polylines, {
             color: this.stateManager.getColorState("move"),
             status: "moving",
-            id: `annotate_${this.mode}_line_${this.measure.id}`,
         });
 
         // update the labels
         this._createOrUpdateLabel(this.coordsCache, this.interactiveAnnotations.labels, {
             status: "moving",
             showBackground: false,
-            id: `annotate_${this.mode}_label_${this.measure.id}`,
         });
     }
 
@@ -286,7 +288,6 @@ class HeightCesium extends MeasureModeCesium {
         const anchorPosition = measure.coordinates.find(cart => !areCoordinatesEqual(cart, this.dragHandler.draggedObjectInfo.beginPosition));
         if (!anchorPosition || !this.pointCollection) {
             console.warn("anchorPosition not found or pointCollection is not defined.");
-
             return null;
         }
 
@@ -319,20 +320,20 @@ class HeightCesium extends MeasureModeCesium {
 
         // -- Handle Point --
         this._createOrUpdatePoints(positions, this.dragHandler.draggedObjectInfo.points, {
-            status: "moving",
             color: this.stateManager.getColorState("move"),
+            status: "moving"
         });
 
         // -- Handle polyline --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            status: "moving"
         });
 
         // -- Handle label --
         this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "moving",
-            showBackground: false
+            showBackground: false,
+            status: "moving"
         });
     }
 
@@ -400,8 +401,13 @@ class HeightCesium extends MeasureModeCesium {
                     // Update point 
                     pointPrimitive.position = index === 0 ? topPosition : bottomPosition;
                     pointPrimitive.color = Color.fromCssColorString(color); // Update color
-                    pointPrimitive.status = status; // Set status on the new primitive
                     pointPrimitive.id = id; // Update ID to match the new measure
+
+                    Object.assign(pointPrimitive.feature.properties, {
+                        status: status,
+                        positions: index === 0 ? [Cartesian3.clone(topPosition)] : [Cartesian3.clone(bottomPosition)],
+                        ...deconstructIdForMetadata(id)
+                    });
                 }
             });
         }
@@ -413,9 +419,9 @@ class HeightCesium extends MeasureModeCesium {
                 const pointPrimitive = this.drawingHelper._addPointMarker(position, {
                     color,
                     id,
+                    status,
                 });
                 if (!pointPrimitive) return; // If point creation fails, exit
-                pointPrimitive.status = status; // Set status to pending for the point primitive
 
                 // Push the new primitive into the array passed by reference.
                 pointsArray.push(pointPrimitive);
@@ -434,7 +440,8 @@ class HeightCesium extends MeasureModeCesium {
         // default options
         const {
             status = null,
-            color = this.stateManager.getColorState("line")
+            color = this.stateManager.getColorState("line"),
+            id = `annotate_${this.mode}_line_${this.measure.id}`
         } = options
 
         // -- Check for and remove existing polyline --
@@ -443,14 +450,15 @@ class HeightCesium extends MeasureModeCesium {
             if (existingLinePrimitive) {
                 this.drawingHelper._removePolyline(existingLinePrimitive);
             }
-            // Clear the array passed by reference. This modifies the original array (e.g., this.#interactiveAnnotations.polylines)
+            // Clear the array
             polylinesArray.length = 0;
         }
 
         // -- Create new polyline --
         const newLinePrimitive = this.drawingHelper._addPolyline(positions, {
-            color,
-            id: `annotate_${this.mode}_line_${this.measure.id}` // Consider making ID more specific if needed (e.g., adding status)
+            color: color,
+            id: id,
+            status: status
         });
 
         // If creation failed, exit
@@ -458,9 +466,6 @@ class HeightCesium extends MeasureModeCesium {
             console.error("Failed to create new polyline primitive.");
             return; // Explicitly return
         }
-
-        // -- Handle Metadata Update --
-        newLinePrimitive.status = status; // Set status on the new primitive
 
         // -- Handle References Update --
         // Push the new primitive into the array passed by reference.
@@ -489,6 +494,7 @@ class HeightCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
+            id = `annotate_${this.mode}_label_${this.measure.id}`
         } = options;
 
         const cartographicDegreesPositions = positions.map(pos => convertToCartographicDegrees(pos));
@@ -515,14 +521,16 @@ class HeightCesium extends MeasureModeCesium {
                 labelPrimitive.position = middlePos;
                 labelPrimitive.text = formattedText;
                 labelPrimitive.showBackground = showBackground; // Set background visibility
+                labelPrimitive.id = id;
             }
         }
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
             labelPrimitive = this.drawingHelper._addLabel(positions, height, "meter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id: id,
                 showBackground: showBackground,
+                status: status,
             });
 
             if (!labelPrimitive) {
@@ -535,8 +543,11 @@ class HeightCesium extends MeasureModeCesium {
         }
 
         // -- Handle Label Metadata Update --
-        labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
-        labelPrimitive.status = status; // Set status
+        Object.assign(labelPrimitive.feature.properties, {
+            status: status,
+            positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
+            ...deconstructIdForMetadata(id) // deconstruct id for metadata
+        });
 
         return { height, labelPrimitive };
     }

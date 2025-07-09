@@ -11,7 +11,7 @@ import {
     calculateMiddlePos,
     getRankedPickedObjectType,
 } from "../../lib/helper/cesiumHelper.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -187,9 +187,9 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "pending"
         });
         if (!pointPrimitive) return; // If point creation fails, exit
-        pointPrimitive.status = "pending"; // Set status to pending for the point primitive
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -207,22 +207,22 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
             for (let i = 0; i < collectionLength; i++) {
                 const pointPrimitive = this.pointCollection.get(i);
                 // pointPrimitive is guaranteed to be a valid primitive object here
-                if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
-                    pointPrimitive.status = "completed";
+                if (pointPrimitive.id?.includes(`annotate_${this.mode}`) || pointPrimitive?.feature?.properties?.status) {
+                    pointPrimitive.feature.properties.status = "completed";
                 }
             }
 
 
             // -- Handle polyline
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
-                status: "completed",
-                color: this.stateManager.getColorState("line")
+                color: this.stateManager.getColorState("line"),
+                status: "completed"
             });
 
             // -- Handle label --
             const { distance, curvePositions } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-                status: "completed",
-                showBackground: true
+                showBackground: true,
+                status: "completed"
             });
 
             // -- Handle Data --
@@ -279,14 +279,14 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
 
                 // Moving line: remove if existed, create if not existed
                 this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                    status: "moving",
-                    color: this.stateManager.getColorState("move")
+                    color: this.stateManager.getColorState("move"),
+                    status: "moving"
                 });
 
                 // Moving label: update if existed, create if not existed
                 this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                    status: "moving",
-                    showBackground: false
+                    showBackground: false,
+                    status: "moving"
                 });
                 break;
             default:
@@ -316,14 +316,14 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
 
         // -- Handle polyline --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            status: "moving"
         });
 
         // -- Handle label --
         this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "moving",
-            showBackground: false
+            showBackground: false,
+            status: "moving"
         });
     }
 
@@ -344,14 +344,14 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
 
         // -- Finalize Line Graphics --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "completed",
-            color: this.stateManager.getColorState("line")
+            color: this.stateManager.getColorState("line"),
+            status: "completed"
         });
 
         // -- Finalize Label Graphics --
         const { distance, curvePositions } = this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // --- Update Measure Data ---
@@ -378,7 +378,8 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         // default options
         const {
             status = null,
-            color = this.stateManager.getColorState("line")
+            color = this.stateManager.getColorState("line"),
+            id = `annotate_${this.mode}_line_${this.measure.id}`
         } = options
 
         // -- Check for and remove existing polyline --
@@ -397,8 +398,9 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
 
         // Create the new polyline primitive
         const newLinePrimitive = this.drawingHelper._addPolyline(linePositions, {
-            color,
-            id: `annotate_${this.mode}_line_${this.measure.id}` // Consider making ID more specific if needed (e.g., adding status)
+            color: color,
+            id: id,
+            status: status
         });
 
         // If creation failed, exit
@@ -408,7 +410,9 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         }
 
         // -- Handle Metadata Update --
-        newLinePrimitive.status = status; // Set status on the new primitive
+        Object.assign(newLinePrimitive.feature.properties, {
+            positions: positions.map(pos => Cartesian3.clone(pos))
+        });
 
         // -- Handle References Update --
         // Push the new primitive into the array passed by reference.
@@ -424,7 +428,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
      * @param {Cartesian3[]} positions - the positions to create or update the label. 
      * @param {Label[]} labelsArray - the array to store the label primitive reference. Caution: it is not the label collection.
      * @param {object} options - options for label creation or update.
-     * @returns {void}
+     * @returns {{distance: number, labelPrimitive: Label, curvePositions: Cartesian3[]}} - Returns an object containing the distance, label primitive, and curve positions.
      */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
         // Validate input
@@ -437,6 +441,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
+            id = `annotate_${this.mode}_label_${this.measure.id}`
         } = options;
 
         // Compute the curve interpolation points
@@ -474,14 +479,16 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
                 labelPrimitive.position = middlePos;
                 labelPrimitive.text = formattedText;
                 labelPrimitive.showBackground = showBackground; // Set background visibility
+                labelPrimitive.id = id;
             }
         }
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
             labelPrimitive = this.drawingHelper._addLabel(curvePositions, distance, "meter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id: id,
                 showBackground: showBackground,
+                status: status,
             });
 
             if (!labelPrimitive) {
@@ -494,8 +501,11 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         }
 
         // -- Handle Label Metadata Update --
-        labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
-        labelPrimitive.status = status; // Set status
+        Object.assign(labelPrimitive.feature.properties, {
+            status: status,
+            positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
+            ...deconstructIdForMetadata(id) // deconstruct id for metadata
+        });
 
         return { distance, labelPrimitive, curvePositions };
     }

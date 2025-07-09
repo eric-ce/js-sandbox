@@ -42,7 +42,7 @@ import { convertToCartesian3, getPrimitiveByPointPosition } from "../helper/cesi
 class CesiumDragHandler {
     // -- Public fields: dependencies --
     /** @type {Viewer} */
-    viewer;
+    map;
     /** @type {CesiumInputHandler} */
     inputHandler;
     /** @type {EventEmitter} */
@@ -71,7 +71,7 @@ class CesiumDragHandler {
      * @param {function} callbacks 
      */
     constructor(map, inputHandler, emitter, callbacks = {}) {
-        this.viewer = map;
+        this.map = map;
         this.inputHandler = inputHandler;
         this.emitter = emitter; // Keep emitter if needed for other things
 
@@ -120,7 +120,7 @@ class CesiumDragHandler {
      */
     _handleDragStart = async (eventData) => {
         // initialize camera movement, default camera moving
-        this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+        this.map.scene.screenSpaceCameraController.enableInputs = true;
 
         // Validate active instance and check dragging state
         if (!this.activeModeInstance || this.isDragging) return;
@@ -131,23 +131,25 @@ class CesiumDragHandler {
         }
 
         // Get the picked point primitive and check if it belongs to the current mode
-        const isPoint = pickedObjects.find(po => {
-            const primitiveId = po.primitive.id;
+        const isPoint = pickedObjects.find(point => {
+            if (!point || !point.primitive || !point.primitive.id || !point.primitive.feature) return false; // Ensure point is valid
+            const primitiveId = point.primitive.id;
+            const { status: pointStatus } = point.primitive.feature.properties;
             return typeof primitiveId === 'string' &&
                 primitiveId.startsWith(`annotate_${this.activeModeInstance.mode}_point`) &&
-                po.primitive.status === "completed"  // Check if the point is completed
+                pointStatus === "completed";  // Check if the point is completed
         });
         if (!defined(isPoint)) return; // No point found, exit the function
 
         // Disable camera movement
-        this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+        this.map.scene.screenSpaceCameraController.enableInputs = false;
 
         // -- Store reference for the dragging process --
         // Store the dragged point primitive
-        this.draggedObjectInfo.beginPoint = isPoint;
+        this.draggedObjectInfo.beginPoint = isPoint.primitive;
         // Store the dragged point position and screen position
         this.draggedObjectInfo.beginPosition = isPoint.primitive.position.clone();
-        this.draggedObjectInfo.beginScreenPoint = this.viewer.scene.cartesianToCanvasCoordinates(this.draggedObjectInfo.beginPosition); // store the screen position
+        this.draggedObjectInfo.beginScreenPoint = this.map.scene.cartesianToCanvasCoordinates(this.draggedObjectInfo.beginPosition); // store the screen position
 
 
         // -- Handle Measure Data --
@@ -177,6 +179,8 @@ class CesiumDragHandler {
             this.polylineCollection,
             this.polygonCollection,
         )
+        console.log("🚀 labelPrimitives:", labelPrimitives);
+
         this.draggedObjectInfo.lines = linePrimitives; // Store the line primitives
         this.draggedObjectInfo.labels = labelPrimitives; // Store the label primitives
         this.draggedObjectInfo.polygons = polygonPrimitives; // Store the polygon primitives
@@ -185,7 +189,7 @@ class CesiumDragHandler {
         const LabelLen = this.labelCollection.length;
         for (let i = 0; i < LabelLen; ++i) {
             const label = this.labelCollection.get(i);
-            if (label.id === `annotate_${this.activeModeInstance.mode}_total_label_${this.measure.id}`) {
+            if (label.id === `annotate_${this.activeModeInstance.mode}_total-label_${this.measure.id}`) {
                 this.draggedObjectInfo.totalLabels = [label]; // Store the total label primitive
             }
         }
@@ -213,22 +217,21 @@ class CesiumDragHandler {
 
         const pickedObjects = eventData.pickedFeature;
         if (!Array.isArray(pickedObjects) && pickedObjects.length === 0) {
+
             return;
         }
         // Use moving point as coordinate
         this.#coordinate = eventData.mapPoint;
-        if (!defined(this.#coordinate)) {
-            return;
-        }
+        if (!defined(this.#coordinate)) return;
 
         // -- Handle dragging point --
         // Update dragging point style and visual position
-        this.draggedObjectInfo.beginPoint.primitive.outlineColor = Color.fromCssColorString('yellow');
-        this.draggedObjectInfo.beginPoint.primitive.outlineWidth = 2;
-        this.draggedObjectInfo.beginPoint.primitive.position = this.#coordinate;
+        this.draggedObjectInfo.beginPoint.outlineColor = Color.fromCssColorString('yellow');
+        this.draggedObjectInfo.beginPoint.outlineWidth = 2;
+        this.draggedObjectInfo.beginPoint.position = this.#coordinate;
         // update dragging point metadata
-        this.draggedObjectInfo.beginPoint.primitive.positions = [this.#coordinate]; // store custom position for reference
-        this.draggedObjectInfo.beginPoint.primitive.status = "moving";
+        this.draggedObjectInfo.beginPoint.feature.properties.positions = [this.#coordinate]; // store custom position for reference
+        this.draggedObjectInfo.beginPoint.feature.properties.status = "moving";
 
         // -- Handle graphics update --
         // let activeModeInstance to handle the graphics update, each mode has its own way to update the graphics
@@ -247,7 +250,7 @@ class CesiumDragHandler {
         this.inputHandler.off('mousemove', this._handleDrag);
 
         // Re-enable camera movement
-        this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+        this.map.scene.screenSpaceCameraController.enableInputs = true;
 
         if (!this.isDragging || !this.measure) {
             this._resetValue(); // Ensure reset even if something went wrong: consider it as exit dragging
@@ -256,13 +259,13 @@ class CesiumDragHandler {
 
         // -- Handle point --
         // reset dragging point style
-        this.draggedObjectInfo.beginPoint.primitive.outlineColor = Color.fromCssColorString('red');
-        this.draggedObjectInfo.beginPoint.primitive.outlineWidth = 0;
+        this.draggedObjectInfo.beginPoint.outlineColor = Color.fromCssColorString('red');
+        this.draggedObjectInfo.beginPoint.outlineWidth = 0;
 
         // Final update of the dragged point
-        this.draggedObjectInfo.beginPoint.primitive.position = this.#coordinate;
-        this.draggedObjectInfo.beginPoint.primitive.positions = [this.#coordinate]; // store custom position for reference
-        this.draggedObjectInfo.beginPoint.primitive.status = "completed";
+        this.draggedObjectInfo.beginPoint.position = this.#coordinate;
+        this.draggedObjectInfo.beginPoint.feature.properties.positions = [this.#coordinate]; // store custom position for reference
+        this.draggedObjectInfo.beginPoint.feature.properties.status = "completed";
 
         // -- Handle graphics update --
         // let activeModeInstance to handle the graphics update, each mode has its own way to update the graphics
@@ -278,10 +281,11 @@ class CesiumDragHandler {
         dataPool.updateOrAddMeasure({ ...this.measure });
         // -- End handle data --
 
-        this.emitter.emit("drag-end", {
-            measureData: { ...this.measure },
-            draggedObjectInfo: { ...this.draggedObjectInfo },
-        })
+        // Emit drag end event
+        // this.emitter.emit("drag-end", {
+        //     measureData: { ...this.measure },
+        //     draggedObjectInfo: { ...this.draggedObjectInfo },
+        // })
 
         // Reset values
         this.activeModeInstance?.resetValuesModeSpecific(); // Call mode specific reset values

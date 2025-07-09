@@ -1,13 +1,18 @@
 // This is the cesium measure web component that will be used in the MapCesium component.
 import {
     BlendOption,
-    SceneTransforms
+    SceneTransforms,
+    defined,
+    Entity,
+    Cesium3DTileFeature,
+    Cartesian3,
 } from "cesium";
 
 import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual, createPointerOverlay, convertToCartesian3 } from "../lib/helper/cesiumHelper.js";
 // import { LogTable } from './shared/LogTable.js';
 // import { HelpTable } from './shared/HelpTable.js';
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
+import { capitalizeString, deconstructIdForMetadata } from "../lib/helper/helper.js";
 
 
 /**@typedef {import('cesium').Cartesian3} Cartesian3 - the x,y,z coordinate that used in cesium map*/
@@ -35,6 +40,9 @@ export default class CesiumMeasure extends MeasureComponentBase {
     /** @type {Primitive[]} */
     #polygonCollection = [];
 
+    /** @type {Entity|null} */
+    #selectedEntity = null;
+
     constructor() {
         super();
     }
@@ -60,7 +68,14 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // setup moving dot with mouse
         // const pointer = createPointerOverlay(this.map.container);
         // this.stateManager.setOverlayState("pointer", pointer);
+
+        // TODO: pick object to display data in the info table
     }
+
+
+    /*********************
+     * GRAPHICS FEATURES *
+     *********************/
     /**
      * Initializes Cesium collections for point and label primitives for cesium specific.
      */
@@ -103,7 +118,8 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // Default options
         const {
-            status = null
+            status = null,
+            id = null,
         } = options;
 
         // -- Handle position --
@@ -121,8 +137,14 @@ export default class CesiumMeasure extends MeasureComponentBase {
         const pointPrimitive = this.#pointCollection.add(point);
 
         // -- Handle metadata --
-        pointPrimitive.status = status; // Store status
-        pointPrimitive.positions = [{ ...position }]; // Store cloned position
+        pointPrimitive.feature = {
+            properties: {
+                mapName: this.mapName,
+                status: status,
+                positions: [{ ...position }],
+                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+            }
+        };
 
         return pointPrimitive;
     };
@@ -171,6 +193,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Default options
         const {
             status = null,
+            id = null, // id is used to store metadata
         } = options;
 
         // -- Handle position --
@@ -190,8 +213,14 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this.#polylineCollection.push(polylinePrimitive);
 
         // -- Handle metadata --
-        polylinePrimitive.status = status; // Store status
-
+        polylinePrimitive.feature = {
+            properties: {
+                mapName: this.mapName,
+                status: status,
+                positions: linePositions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
+                ...deconstructIdForMetadata(id),
+            }
+        }
         return polylinePrimitive;
     };
 
@@ -238,6 +267,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Default options
         const {
             status = null,
+            id = null,
         } = options;
 
         // -- Handle visualization --
@@ -250,8 +280,15 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Add to private collection - will not affect visualization, store for reference only
         this.#polylineCollection.push(polylinePrimitive);
 
-        // -- Handle metadata --
-        polylinePrimitive.status = status; // Store status
+        // -- Handle metadata --  
+        polylinePrimitive.feature = {
+            properties: {
+                mapName: this.mapName,
+                status: status,
+                positions: positions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
+                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+            }
+        };
 
         return polylinePrimitive;
     };
@@ -274,6 +311,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Default options
         const {
             status = null,
+            id = null, // id is used to store metadata
         } = options
 
         // -- Handle position --
@@ -291,9 +329,14 @@ export default class CesiumMeasure extends MeasureComponentBase {
         const labelPrimitive = this.#labelCollection.add(label);
 
         // -- Handle metadata --
-        labelPrimitive.status = status; // Store status
-        labelPrimitive.positions = positions.map(pos => ({ ...pos })); // Store cloned position
-
+        labelPrimitive.feature = {
+            properties: {
+                mapName: this.mapName,
+                status: status,
+                positions: labelPositions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
+                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+            }
+        };
         return labelPrimitive;
     };
 
@@ -380,7 +423,14 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this.#polygonCollection.push(polygonPrimitive);
 
         // -- Handle metadata --
-        polygonPrimitive.status = status; // Add status property
+        polygonPrimitive.feature = {
+            properties: {
+                mapName: this.mapName,
+                status: status,
+                positions: polygonPositions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
+                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+            }
+        }
 
         return polygonPrimitive;
     };
@@ -434,10 +484,17 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this.#polygonCollection.push(polygonOutlinePrimitive);
 
         // -- Handle metadata --
-        polygonOutlinePrimitive.status = status; // Store status
-
+        polygonOutlinePrimitive.feature = {
+            properties: {
+                mapName: this.mapName,
+                status: status,
+                positions: polygonPositions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
+                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+            }
+        }
         return polygonOutlinePrimitive;
     };
+
 
 
     /**************************
@@ -477,9 +534,10 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Case1: the positions is one point, find the lines that has some position matched
         if (positions.length === 1) {
             const targetPosition = positions[0];
-            const matchingLines = this.#polylineCollection.filter(polyline =>
-                polyline.positions && polyline.positions.some(pos => areCoordinatesEqual(pos, targetPosition))
-            );
+            const matchingLines = this.#polylineCollection.filter(polyline => {
+                const { positions: polylinePositions } = polyline.feature.properties;
+                return polylinePositions && polylinePositions.some(pos => areCoordinatesEqual(pos, targetPosition))
+            });
             if (matchingLines.length > 0) {
                 foundLine.push(...matchingLines);
             }
@@ -490,11 +548,13 @@ export default class CesiumMeasure extends MeasureComponentBase {
             const pos2 = positions[1];
             // Find returns the first matching polyline or undefined
             const matchingLine = this.#polylineCollection.find(polyline => {
+                const { positions: polylinePositions } = polyline.feature.properties;
+
                 // Check if the polyline has exactly two positions
-                if (polyline.positions && polyline.positions.length === 2) {
+                if (polylinePositions && polylinePositions.length === 2) {
                     // Compare the positions of the polyline with the provided positions
-                    return areCoordinatesEqual(polyline.positions[0], pos1) &&
-                        areCoordinatesEqual(polyline.positions[1], pos2);
+                    return areCoordinatesEqual(polylinePositions[0], pos1) &&
+                        areCoordinatesEqual(polylinePositions[1], pos2);
                 }
                 return false; // Not a match
             });
@@ -528,13 +588,14 @@ export default class CesiumMeasure extends MeasureComponentBase {
             if (!label) continue; // Skip if label is somehow null
 
             if (isArrayPosition) {
+                const labelPositions = label?.feature?.properties?.positions;
                 // Ensure label.positions exists and is an array before trying to access it
-                if (!label.positions || !Array.isArray(label.positions)) continue;
+                if (!labelPositions || !Array.isArray(labelPositions) || labelPositions.length === 0) continue;
 
                 // Case 1: Input `positions` is an array of one point.
                 // Find labels where `label.positions` contains this point.
                 if (positions.length === 1) {
-                    if (label.positions.some(pos => areCoordinatesEqual(pos, positions[0]))) {
+                    if (labelPositions.some(pos => areCoordinatesEqual(pos, positions[0]))) {
                         foundLabels.push(label);
                     }
                 }
@@ -545,9 +606,9 @@ export default class CesiumMeasure extends MeasureComponentBase {
                     const pos2 = positions[1];
 
                     // Ensure label.positions has at least two points for comparison
-                    if (label.positions.length === 2 &&
-                        areCoordinatesEqual(label.positions[0], pos1) &&
-                        areCoordinatesEqual(label.positions[1], pos2)
+                    if (labelPositions.length === 2 &&
+                        areCoordinatesEqual(labelPositions[0], pos1) &&
+                        areCoordinatesEqual(labelPositions[1], pos2)
                     ) {
                         foundLabels.push(label);
                         break; // If you only want the first match, break here
@@ -680,6 +741,93 @@ export default class CesiumMeasure extends MeasureComponentBase {
     };
 
 
+    /****************************************
+     * DISPLAY INFO TABLE FOR PICKED OBJECT *
+     ****************************************/
+    _pickedObjectDisplayData(event) {
+        console.log("🚀 event:", event);
+
+        // -- Validate dependencies --
+        if (!event) return;
+
+        // -- Picked Object --
+        const pickedObjects = event.pickedFeature;
+        if (pickedObjects.length === 0) return;
+
+        const [pickedObject] = pickedObjects;
+        if (!defined(pickedObject) || pickedObject instanceof Cesium3DTileFeature) return;
+
+        const { primitive } = pickedObject;
+        if (!primitive) return;
+
+
+        // TODO: hover highlight feature
+
+        // -- Show the info table for the picked object --
+        this._showInfoTable(primitive);
+    }
+
+    _showInfoTable(primitive) {
+        // -- Create the description data --
+        const descriptionData = this._createDescriptionData(primitive); // handle the primitive data
+        if (!descriptionData) return;
+
+        // -- Set the selected entity and create description -- 
+        const { id } = primitive;
+        const title = descriptionData["Annotate Type"] ?
+            `${capitalizeString(descriptionData["Annotate Type"])} Details` : "Unknown Details";
+        const selectedEntity = new Entity({
+            id: id || null,
+            name: title,
+            description: this._createPickedObjectDescription(descriptionData)
+        });
+
+        // Store reference for cleanup
+        this.#selectedEntity = selectedEntity;
+
+        // This assigns the entity to Cesium's selection system
+        this.map.selectedEntity = selectedEntity;
+    }
+
+    _createDescriptionData(primitive) {
+        if (!primitive || !primitive.feature || !primitive.feature.properties) return null;
+
+        const { id } = primitive;
+        if (!id) return null; // Ensure id exists
+
+        const { positions, status } = primitive.feature.properties;
+
+        const [annotation, annotate_mode, annotate_type, measureId] = id.split("_");
+        const descriptionData = {
+            "ID": id,
+            "Annotate Mode": annotate_mode,
+            "Annotate Type": annotate_type || "N/A",
+            "Measure ID": measureId || "N/A",
+            "Status": status || "N/A"
+        };
+        // handle positions
+        if (positions.length > 0) {
+            const flatPositions = positions.flat();
+            flatPositions.forEach((pos, index) => {
+                const cartographicDegrees = convertToCartographicDegrees(pos);
+                Object.entries(cartographicDegrees).forEach(([key, value]) => {
+                    descriptionData[`Pos ${index + 1} ${key}`] = JSON.stringify(value);
+                });
+            });
+        }
+        return descriptionData;
+    }
+
+    _createPickedObjectDescription(descriptionData) {
+        let description = `${'<table class="cesium-infoBox-defaultTable"><tbody>'}`;
+        for (const [propertyId, propertyValue] of Object.entries(descriptionData)) {
+            description += `<tr><th>${propertyId}</th><td>${propertyValue}</td></tr>`;
+        }
+        description += `</tbody></table>`;
+        return description;
+    }
+
+
     /*****************
      * RESET FEATURE *
      *****************/
@@ -714,6 +862,23 @@ export default class CesiumMeasure extends MeasureComponentBase {
             }
             collection.length = 0;
         });
+
+        // Clear selected entity
+        this._clearSelectedEntity();
+    }
+
+    /**
+     * Clears the currently selected entity
+     * @private
+     */
+    _clearSelectedEntity() {
+        if (this.#selectedEntity) {
+            // Clear from Cesium's selection system
+            if (this.map.selectedEntity === this.#selectedEntity) {
+                this.map.selectedEntity = undefined;
+            }
+            this.#selectedEntity = null;
+        }
     }
 
 

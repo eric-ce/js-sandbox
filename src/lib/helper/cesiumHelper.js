@@ -490,7 +490,7 @@ export function createPolylinePrimitive(Primitive, coordinateArray, options = {}
     if (!linePrimitive) return null;
 
     // Add metadata to the line primitive
-    linePrimitive.positions = coordinateArray;
+    // linePrimitive.positions = coordinateArray;
     linePrimitive.id = id;
 
     return linePrimitive;
@@ -613,7 +613,7 @@ export function createGroundPolylinePrimitive(GroundPolylinePrimitive, coordinat
     if (!groundPolylinePrimitive) return null;
 
     // Add metadata to the polyline primitive
-    groundPolylinePrimitive.positions = cartesianArray;
+    // groundPolylinePrimitive.positions = cartesianArray;
     groundPolylinePrimitive.id = id;
     // groundPolylinePrimitive.isSubmitted = false; // for fireTrail mode
 
@@ -638,6 +638,7 @@ export function createLabelPrimitive(coordinates, value, unit = "meter", options
         fillColor = "rgba(255, 255, 255, 1)",
         showBackground = true,
         backgroundColor = "rgba(0, 0, 0, 0.5)",
+        id = "annotate_label",
         ...rest // other options
     } = options
 
@@ -693,6 +694,7 @@ export function createLabelPrimitive(coordinates, value, unit = "meter", options
         scaleByDistance: new Cesium.NearFarScalar(1000.0, 1.0, 20000.0, 0.5),
         style: Cesium.LabelStyle.FILL,
         disableDepthTestDistance: Number.POSITIVE_INFINITY, // Disable depth test to always show on top
+        id: id,
         ...rest // other options
     };
 }
@@ -765,7 +767,7 @@ export function createPolygonPrimitive(Primitive, coordinateArray, options = {})
     if (!polygonPrimitive) return null; // Final check for polygonPrimitive
 
     // Add metadata to the line primitive
-    polygonPrimitive.positions = cartesianArray;
+    // polygonPrimitive.positions = cartesianArray;
     polygonPrimitive.id = id;
 
     return polygonPrimitive;
@@ -842,7 +844,7 @@ export function createPolygonOutlinePrimitive(Primitive, coordinateArray, option
     if (!polygonOutlinePrimitive) return null;
 
     // Add metadata to the polygon outline primitive
-    polygonOutlinePrimitive.positions = cartesianArray;
+    // polygonOutlinePrimitive.positions = cartesianArray;
     polygonOutlinePrimitive.id = id;
 
     return polygonOutlinePrimitive;
@@ -893,7 +895,9 @@ function _getSinglePickedObjectType(pickedObject, modeString) {
     let determinedObjectType = null;
 
     // Ignore objects with 'moving' status
-    if (typeof pickedObject?.primitive.status === 'string' && pickedObject.primitive.status.includes('moving')) {
+    if (typeof pickedObject?.primitive?.feature?.properties?.status === 'string' &&
+        pickedObject.primitive?.feature?.properties?.status?.includes('moving')
+    ) {
         // 'moving' objects are valid but won't have a type for ranking
         return { objectType: null, pickedObject: pickedObject };
     }
@@ -907,12 +911,14 @@ function _getSinglePickedObjectType(pickedObject, modeString) {
         if (id.startsWith(`${searchString}_point`)) determinedObjectType = 'point';
         else if (id.startsWith(`${searchString}_line`)) determinedObjectType = 'line';
         else if (id.startsWith(`${searchString}_label`)) determinedObjectType = 'label';
+        else if (id.startsWith(`${searchString}_total-label`)) determinedObjectType = 'label';
         else if (id.startsWith(`${searchString}_polygon`)) determinedObjectType = 'polygon';
     } else {
         // General search (no modeString or empty modeString): id starts with "annotate_" and includes "_type"
         if (id.startsWith(searchString) && id.includes('_point_')) determinedObjectType = 'point';
         else if (id.startsWith(searchString) && id.includes('_line_')) determinedObjectType = 'line';
         else if (id.startsWith(searchString) && id.includes('_label_')) determinedObjectType = 'label';
+        else if (id.startsWith(searchString) && id.includes('_total-label_')) determinedObjectType = 'label';
         else if (id.startsWith(searchString) && id.includes('_polygon_')) determinedObjectType = 'polygon';
     }
 
@@ -1231,7 +1237,7 @@ export function getPrimitiveByPointPosition(
             const p = pointCollection.get(i);
             if (
                 typeof p.id === 'string' &&
-                p.id.startsWith("annotate") &&
+                p.id.startsWith("annotate_") &&
                 areCoordinatesEqual(p.position, position)
             ) {
                 foundPointPrimitive = p;
@@ -1243,12 +1249,13 @@ export function getPrimitiveByPointPosition(
     // --- Find the line primitives ---
     // Assuming lineCollection is a plain array of Cesium.Primitive objects
     if (Array.isArray(polylineCollection) && polylineCollection.length > 0) {
-        foundLinePrimitives = polylineCollection.filter(p =>
-            typeof p.id === 'string' &&
-            p.id.startsWith("annotate") &&
-            Array.isArray(p.positions) && // Ensure positions array exists
-            p.positions.some(cart => areCoordinatesEqual(cart, position))
-        );
+        foundLinePrimitives = polylineCollection.filter(p => {
+            const linePositions = p?.feature?.properties?.positions;
+            return typeof p.id === 'string' &&
+                p.id.startsWith("annotate_") &&
+                Array.isArray(linePositions) && // Ensure positions array exists
+                linePositions.some(cart => areCoordinatesEqual(cart, position))
+        });
     }
 
     // --- Find the label primitives (using public API) ---
@@ -1257,13 +1264,14 @@ export function getPrimitiveByPointPosition(
         const matchingLabels = [];
         for (let i = 0; i < labelCollection.length; i++) {
             const l = labelCollection.get(i);
-            // Ensure 'positions' property exists and is an array before using .some()
+
+            const labelPositions = l?.feature?.properties?.positions;
             if (
                 typeof l.id === 'string' &&
-                l.id.startsWith("annotate") &&
-                !l.id.includes("total_label") &&
-                Array.isArray(l.positions) &&
-                l.positions.some(cart => areCoordinatesEqual(cart, position))
+                l.id.startsWith("annotate_") &&
+                !l.id.includes("total-label") &&
+                Array.isArray(labelPositions) &&
+                labelPositions.some(cart => areCoordinatesEqual(cart, position))
             ) {
                 matchingLabels.push(l);
             }
@@ -1274,12 +1282,13 @@ export function getPrimitiveByPointPosition(
     // --- Find the polygon primitives ---
     // Assuming polygonCollection is a plain array of Cesium.Primitive objects
     if (Array.isArray(polygonCollection) && polygonCollection.length > 0) {
-        foundPolygonPrimitives = polygonCollection.filter(p =>
-            typeof p.id === 'string' &&
-            p.id.startsWith("annotate") &&
-            Array.isArray(p.positions) && // Ensure positions array exists
-            p.positions.some(cart => areCoordinatesEqual(cart, position))
-        );
+        foundPolygonPrimitives = polygonCollection.filter(p => {
+            const polygonPositions = p?.feature?.properties?.positions;
+            return typeof p.id === 'string' &&
+                p.id.startsWith("annotate") &&
+                Array.isArray(polygonPositions) && // Ensure positions array exists
+                polygonPositions.some(cart => areCoordinatesEqual(cart, position))
+        });
     }
 
     // Return found primitives (using more descriptive names internally)
@@ -1303,30 +1312,63 @@ export function getPrimitiveByPointPosition(
  * @returns {Promise<void>} - A promise that resolves when the label is updated.
  */
 export async function editableLabel(viewerContainer, label) {
+    // Input validation
+    if (!viewerContainer || !label || typeof label.text !== 'string') {
+        console.warn('editableLabel: Invalid parameters provided');
+        return null;
+    }
+
     try {
-        // open a modal for user to edit the label name
+        // Open modal for user to edit the label name
         const newLabelName = await setupEditableModal(viewerContainer);
 
-        const labelText = label.text
-        let value = null;
-        // check the label to see if it has ":"
-        if (labelText.includes(":")) {
-            // retrieve the distance value
-            const [labelName, distance] = label.text.split(":");
-            value = distance;
-        } else {
-            // if the label does not have ":", label value is the distance value
-            value = label.text;
+        // Handle user cancellation
+        if (!newLabelName || newLabelName.trim() === '') {
+            return null;
         }
 
-        // create the new label text
-        const newLabelText = `${newLabelName.trim()} : ${value.trim()}`;
-        // set the new label text
-        label.text = newLabelText;
+        const labelText = label.text;
+        let value = null;
+        let newLabelText = null;
 
+        // Improved label text parsing with better logic
+        if (labelText.includes("lat")) {
+            // Check if this is first edit (no text before "lat") or subsequent edit
+            const latIndex = labelText.indexOf("lat");
+
+            if (latIndex === 0) {
+                // First edit: "lat..." - add new text before lat
+                value = labelText; // Keep entire coordinate text
+                newLabelText = `${newLabelName.trim()}:\n${value.trim()}`;
+            } else {
+                // Subsequent edit: "SomeText:\nlat..." - replace text before lat
+                const coordinatesPart = labelText.substring(latIndex); // Extract from "lat" onwards
+                newLabelText = `${newLabelName.trim()}:\n${coordinatesPart.trim()}`;
+            }
+        } else if (labelText.includes(":")) {
+            // Labels with existing name:value format
+            const colonIndex = labelText.indexOf(":");
+            value = labelText.substring(colonIndex + 1);
+            newLabelText = `${newLabelName.trim()}:${value.trim()}`;
+        } else {
+            // Labels without ":" - treat entire text as value
+            value = labelText;
+            newLabelText = `${newLabelName.trim()}: ${value.trim()}`;
+        }
+
+        // Validate new label text before applying
+        if (!newLabelText || newLabelText.trim() === '') {
+            console.warn('editableLabel: Generated label text is empty');
+            return null;
+        }
+
+        // Update the label text
+        label.text = newLabelText;
         return label;
+
     } catch (error) {
-        return;
+        console.warn('editableLabel: Error updating label:', error);
+        return null;
     }
 }
 
@@ -1426,15 +1468,42 @@ function setupEditableModal(viewerContainer) {
 /**
  * Creates a pointer overlay element for the map container.
  * @param {HTMLElement} container - The map container element where the pointer overlay will be created.
- * @returns {HTMLElement} - The created pointer overlay element.
+ * @returns {HTMLElement|null} - The created pointer overlay element or null if container is invalid.
  */
 export function createPointerOverlay(container) {
+    // Input validation
+    if (!container || !(container instanceof HTMLElement)) {
+        console.warn('createPointerOverlay: Invalid container element provided');
+        return null;
+    }
+
     const pointer = document.createElement("div");
     pointer.className = "backdrop";
-    pointer.style.cssText =
-        "position: absolute; top: 0; left: 0; pointer-events: none; padding: 4px; display: none;";
-    container.appendChild(pointer);
-    return pointer;
+
+    // Improved styling with Object.assign for better readability
+    Object.assign(pointer.style, {
+        position: "absolute",
+        top: "0",
+        left: "0",
+        pointerEvents: "none",
+        padding: "4px",
+        display: "none",
+        zIndex: "1000", // Added z-index for proper layering
+        borderRadius: "50%", // Added border radius for circular pointer
+        width: "10px", // Added default size
+        height: "10px",
+        backgroundColor: "yellow", // Added default background color
+        transform: "translate(-50%, -50%)" // Center the pointer on coordinates
+    });
+
+    // Error handling for DOM manipulation
+    try {
+        container.appendChild(pointer);
+        return pointer;
+    } catch (error) {
+        console.warn('createPointerOverlay: Failed to append pointer to container:', error);
+        return null;
+    }
 }
 
 /**

@@ -41,7 +41,7 @@ export class StateManager {
                 add: "rgba(255, 255, 0, 1)",        // Cesium.Color.YELLOW
                 // default: "rgba(154, 205, 50, 1)",   // Cesium.Color.YELLOWGREEN
                 hover: "rgba(240, 230, 140, 1)",   // Cesium.Color.KHAKI
-                hoverChatPoint: "rgba(240, 248, 255, 1)", // Cesium.Color.ALICEBLUE
+                hoverChartPoint: "rgba(240, 248, 255, 1)", // Cesium.Color.ALICEBLUE
                 // layerColor: null,
                 line: "rgba(154, 205, 50, 1)",      // Cesium.Color.YELLOWGREEN
                 // lineCacheColor: null,

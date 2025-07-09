@@ -119,7 +119,6 @@ export class DataLogTable extends HTMLElement {
         }
 
         this._container = container;
-        console.log('container', container)
     }
 
     get mapName() {

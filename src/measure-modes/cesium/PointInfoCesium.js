@@ -6,6 +6,7 @@ import {
 import { areCoordinatesEqual, convertToCartographicDegrees, editableLabel, getRankedPickedObjectType, updatePointerOverlay } from "../../lib/helper/cesiumHelper";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium";
+import { deconstructIdForMetadata } from "../../lib/helper/helper.js";
 
 // -- Cesium types --
 /** @typedef {import('cesium').Label} Label*/
@@ -186,6 +187,7 @@ class PointInfoCesium extends MeasureModeCesium {
         const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "completed"
         });
         if (!pointPrimitive) return; // If point creation fails, exit
         pointPrimitive.status = "completed"; // Set status to pending for the point primitive
@@ -196,8 +198,8 @@ class PointInfoCesium extends MeasureModeCesium {
 
         // -- Handle Label -- 
         const { cartographicDegrees } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // -- Handle Data --
@@ -279,7 +281,7 @@ class PointInfoCesium extends MeasureModeCesium {
 
             // Get the measure id
             const idParts = pointToRemove.id.split("_");
-            const measureId = idParts.pop(); // Gets the last element and modifies idParts
+            const measureId = idParts.slice(-1)[0]; // Gets the last element and modifies idParts
 
             // -- Confirm deletion --
             // Use js confirm dialog to confirm deletion
@@ -380,6 +382,7 @@ class PointInfoCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
         } = options;
 
         const cartographicDegrees = convertToCartographicDegrees(positions[0]);
@@ -402,14 +405,16 @@ class PointInfoCesium extends MeasureModeCesium {
                 labelPrimitive.position = positions[0];
                 labelPrimitive.text = formattedText;
                 labelPrimitive.showBackground = showBackground; // Set background visibility
+                labelPrimitive.id = id;
             }
         }
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
             labelPrimitive = this.drawingHelper._addLabel(positions, formattedText, null, {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id: id,
                 showBackground: showBackground,
+                status: status,
             });
 
             if (!labelPrimitive) {
@@ -422,8 +427,11 @@ class PointInfoCesium extends MeasureModeCesium {
         }
 
         // -- Handle Label Metadata Update --
-        labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
-        labelPrimitive.status = status; // Set status
+        Object.assign(labelPrimitive.feature.properties, {
+            status: status,
+            positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
+            ...deconstructIdForMetadata(id) // deconstruct id for metadata
+        });
 
         return { cartographicDegrees, labelPrimitive };
     }
