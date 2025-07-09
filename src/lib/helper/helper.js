@@ -142,7 +142,7 @@ function _createBaseButton(options) {
             pointerEvents: "none" // ✅ Prevent image from interfering with button events
         });
         button.appendChild(imgElement);
-    } else if (textContent) { // ✅ Added safety check
+    } else if (textContent) {
         button.textContent = textContent;
     }
 
@@ -173,7 +173,7 @@ function _createBaseButton(options) {
     const clickHandler = (event) => {
         event.stopPropagation();
         event.preventDefault();
-        clickCallback?.(event); // ✅ Safe call with optional chaining
+        clickCallback?.(event);
 
         // Reset hover effects on click
         if (imgElement) {
@@ -621,5 +621,28 @@ export function areCoordinatesEqual(coordinate1, coordinate2, options = {}) {
     return latEqual && lonEqual && heightEqual;
 }
 
+/**
+ * Deconstructs an annotation formatted id to extract metadata.
+ * The id format is expected to be "annotate_{mode}_{type}_{measureId}"
+ * @param {string} id - The annotation formatted id for the graphics. (e.g. "annotate_height_label_12345")
+ * @returns {{id: string, mode: string|null, type: string|null, measureId: string|null} | null} An object containing the deconstructed metadata from the id, or null if invalid.
+ */
+export function deconstructIdForMetadata(id) {
+    if (typeof id !== "string") {
+        // convert id to string if it's not already
+        id = String(id);
+    }
 
+    // validate if it is annotation id
+    if (!id.startsWith("annotate_")) return null;
+
+    const [annotation, mode, type, measureId] = id.split("_");
+
+    return {
+        id,
+        mode: mode || null,
+        type: type || null,
+        measureId: measureId || null
+    };
+}
 
