@@ -116,7 +116,7 @@ export function getOverlayByPosition(
  * @param {google.maps.Map} map - The Google Map instance.
  * @param {{latitude: number, longitude: number}| {lat: number, lng: number}} position - The marker's position.
  * @param {Object} [options={}] - Additional options for marker styling.
- * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|undefined} The created marker.
+ * @returns {google.maps.Marker|undefined} The created marker.
  */
 export function createPointMarker(map, position, options = {}) {
     // -- Validate input params --
@@ -129,109 +129,130 @@ export function createPointMarker(map, position, options = {}) {
     const googlePos = convertToLatLng(position);
     if (!googlePos) {
         console.error("createPointMarker: Invalid position format.", position);
-        return;
+        return null; // Changed from return; to return null; for consistency
     }
 
     const {
-        advancedMarker = {},
-        advancedMarkerStyle = {},
-        marker = {},
-        markerStyle = {},
+        style = {},
         id = "annotate_point",
-        color = "rgba(255,0,0,1)", // Default color if not provided
-        outlineColor = "rgba(255,0,0,1)",
-        opacity = 1.0,
-        weight = 0, // No border by default
-        scale = 5,  // Default size of the circle
-        zIndex = 1, // Default zIndex
-        clickable = true, // Default clickable
+        clickable = true,
         title = "Point Marker",
         ...rest
     } = options;
 
+    const {
+        color = "rgba(255,0,0,1)",
+        outlineColor = "rgba(255,0,0,1)",
+        opacity = 1.0,
+        weight = 0,
+        scale = 5,
+        zIndex = 1,
+    } = style;
+
     // -- Create the point marker --
-    let pointInstance;
-    // Case 1: AdvancedMarkerElement (Vector Maps)
-    if (map.mapId) {
-        // --- Logic for AdvancedMarkerElement (Vector Maps) ---
-        const advancedMarkerStyleOptions = {
-            width: "10px",
-            height: "10px",
-            backgroundColor: color,
-            borderRadius: "50%",
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            ...advancedMarkerStyle,
-        }
+    const markerStyleOptions = {
+        fillColor: color,
+        fillOpacity: opacity,
+        strokeColor: outlineColor,
+        strokeWeight: weight,
+        scale,
+        zIndex
+    };
 
-        // Merge default options with user provided options
-        const markerOptions = { ...advancedMarkerStyleOptions, ...options };
-
-        // Create a dot element for advanced marker content.
-        const dotElement = document.createElement("div");
-
-        // Apply all styles from markerOptions to the dotElement
-        Object.keys(markerOptions).forEach(key => {
-            dotElement.style[key] = advancedMarkerStyleOptions[key];
-        });
-
-        // Create and return the Advanced Marker
-        try {
-            pointInstance = new google.maps.marker.AdvancedMarkerElement({
-                map,
-                position: googlePos,
-                content: dotElement,
-                title,
-                zIndex,
-                ...advancedMarker,
-                ...rest
-            });
-        } catch (e) {
-            console.error("Failed to create AdvancedMarkerElement. Ensure the Google Maps Marker library is loaded.", e);
-            return; // Prevent further errors
-        }
-    }
-    // Case 2: Traditional Marker (Raster Maps or no mapId)
-    else {
-        // --- Logic for traditional Marker (Raster Maps or no mapId) ---
-        const markerStyleOptions = {  // Default Icon options for the dot symbol
-            fillColor: color,
-            fillOpacity: opacity,
-            strokeColor: outlineColor,
-            strokeWeight: weight,
-            scale,
-            ...markerStyle
-        };
-
-        // Create and return the traditional Marker
-        pointInstance = new google.maps.Marker({
-            map,
-            position: googlePos,
-            title,
-            icon: {
-                path: google.maps.SymbolPath.CIRCLE, // Use the built-in circle symbol
-                ...markerStyleOptions,
-            },
-            clickable, // Default true, but can be overridden by options if needed
-            ...marker,
-            ...rest
-        });
-    }
+    // Create and return the traditional Marker
+    const pointInstance = new google.maps.Marker({
+        map,
+        position: googlePos,
+        title,
+        icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            ...markerStyleOptions,
+        },
+        clickable,
+        ...rest
+    });
 
     if (!pointInstance) {
         console.error("createPointMarker: Failed to create marker. Ensure the Google Maps API is loaded correctly.");
-        return;
+        return null; // Changed from return; to return null; for consistency
     }
 
     // -- Store custom meta data --
-    // Store original positions data on the marker.
-    pointInstance.positions = [{ ...position }];
-    // Store default id 
+    pointInstance.positions = [{ ...position }]; // Added positions metadata like other functions
     pointInstance.id = id;
 
     return pointInstance;
+}
+
+export function createAdvancedPointMarker(map, position, options = {}) {
+    // -- Validate input params --
+    if (!map || !position || !map.mapId) {
+        console.warn("createAdvancedPointMarker: Invalid map or position provided.");
+        return null;
+    }
+
+    const {
+        style = {},
+        title = "Advanced Point Marker",
+        zIndex = 1,
+        id = "annotate_advanced_point",
+        color = "rgba(255,0,0,1)",
+        clickable = true,
+        ...rest
+    } = options;
+
+    const {
+        width = "10px",
+        height = "10px",
+        backgroundColor = color,
+        borderRadius = "50%",
+        position: cssPosition = "absolute",
+        top = "50%",
+        left = "50%",
+        transform = "translate(-50%, -50%)",
+    } = style;
+
+    // -- Convert position to {lat, lng} format --
+    const googlePos = convertToLatLng(position);
+    if (!googlePos) {
+        console.warn("createAdvancedPointMarker: Invalid position format.", position);
+        return null;
+    }
+    // Create a dot element for advanced marker content.
+    const dotElement = document.createElement("div");
+
+    // Apply style to the dotElement
+    Object.assign(dotElement.style, {
+        width,
+        height,
+        backgroundColor,
+        borderRadius,
+        position: cssPosition,
+        top,
+        left,
+        transform,
+    });
+
+    // Create and return the Advanced Marker
+    try {
+        const pointInstance = new google.maps.marker.AdvancedMarkerElement({
+            map,
+            position: googlePos,
+            content: dotElement,
+            title,
+            zIndex,
+            clickable,
+            ...rest
+        });
+
+        // Add id to the pointInstance
+        pointInstance.id = id;
+
+        return pointInstance;
+    } catch (e) {
+        console.error("Failed to create AdvancedMarkerElement. Ensure the Google Maps Marker library is loaded.", e);
+        return null;
+    }
 }
 
 /**

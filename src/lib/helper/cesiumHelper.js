@@ -489,8 +489,7 @@ export function createPolylinePrimitive(Primitive, coordinateArray, options = {}
     // Final check for linePrimitive
     if (!linePrimitive) return null;
 
-    // Add metadata to the line primitive
-    // linePrimitive.positions = coordinateArray;
+    // Add id to the primitive
     linePrimitive.id = id;
 
     return linePrimitive;

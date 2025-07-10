@@ -135,8 +135,10 @@ class MeasureModeGoogle extends MeasureModeBase {
         const targetIdPrefix = `annotate_${this.mode}`;
 
         // Helper function to check if annotation should be removed
-        const shouldRemove = (annotation) =>
-            annotation.id.includes(targetIdPrefix) && annotation.status !== "completed";
+        const shouldRemove = (annotation) => {
+            const annotationStatus = annotation?.feature?.properties?.status || annotation.status;
+            return annotation.id.includes(targetIdPrefix) && annotationStatus !== "completed";
+        }
 
         // Define collections with their removal methods
         const collections = [

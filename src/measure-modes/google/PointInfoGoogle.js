@@ -1,5 +1,5 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { showCustomNotification } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /**
@@ -149,11 +149,11 @@ class PointInfoGoogle extends MeasureModeGoogle {
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "completed", // Set status to pending
             clickable: true, // Make the point marker clickable
             listeners: this.#markerListeners
         });
         if (!point) return;
-        point.status = "completed"; // Set status to pending
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -216,7 +216,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
     _removePointInfo(marker) {
         // Get the measure id
         const idParts = marker.id.split("_");
-        const measureId = idParts[idParts.length - 1]; // Extract the measure ID from the marker ID
+        const measureId = idParts.slice(-1)[0]; // Extract the measure ID from the marker ID
 
         // -- Confirm deletion --
         // Use js confirm dialog to confirm deletion
@@ -315,7 +315,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
         const {
             clickable = false,
             status = null,
-            // add more options here if needed
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -342,6 +342,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
                     // Fallback if getLabel() is not as expected
                     labelInstance.setLabel({ text: formattedText, clickable });
                 }
+                labelInstance.id = id; // update id
             }
         }
 
@@ -349,7 +350,8 @@ class PointInfoGoogle extends MeasureModeGoogle {
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, formattedText, null, {
                 clickable,
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id,
+                status,
                 ...rest
             });
 
@@ -368,8 +370,11 @@ class PointInfoGoogle extends MeasureModeGoogle {
         }
 
         // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = positions.map(pos => ({ ...pos })); // Store positions copy
+        Object.assign(labelInstance.feature.properties, {
+            status,
+            positions: positions.map(pos => ({ ...pos })), // Store positions copy
+            ...deconstructIdForMetadata(id) // deconstruct id for metadata
+        })
 
         return { labelInstance };
     }
