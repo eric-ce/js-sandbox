@@ -865,7 +865,7 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
 
     /**
      * Removes the remaining point and labels when only one point is left in the measure.
-     * @param {Cartesian3} positions - The positions to be removed
+     * @param {Cartesian3[]} positions - The positions to be removed
      * @returns {void}
      */
     _removeRemaining(positions) {
@@ -1314,9 +1314,9 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
             if (!segmentDistance) console.warn("Failed to calculate segment distance.");
 
             const labelPrimitive = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
-                id: id,
-                showBackground: showBackground,
-                status: status,
+                id,
+                showBackground,
+                status,
                 ...rest
             });
 
@@ -1363,7 +1363,7 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
-            id = `annotate_${this.mode}_total-label_${this.measure.id}`, // Default ID for the total label
+            id = `annotate_${this.mode}_total-label_${this.measure.id}`,
             ...rest
         } = options;
 

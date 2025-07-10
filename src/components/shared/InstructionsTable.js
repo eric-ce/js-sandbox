@@ -46,36 +46,37 @@ export class InstructionsTable extends HTMLElement {
         const multiDistancesInstructions = [
             "Left Click to start measure",
             "Left Click on label to edit",
-            "Left Click on first or last point to continue measure",
+            "Left Click on first or last point to resume measure",
             "Hold Left Click to drag point",
             "Right Click to finish measure",
             "Double Left Click on line to add line",
             "Middle Click on point to remove line segment",
             "Middle Click on line to remove line set",
         ];
+        const defaultInstructions = [
+            "Left Click to start measure",
+            "Hold Left Click to drag point",
+            "Left Click on label to edit",
+        ];
 
         this._modeMessages = {
-            "default": [
-                "Left Click to start measure",
-                "Hold Left Click to drag point",
-                "Left Click on label to edit"
+            "default": [...defaultInstructions],
+            "pointInfo": [
+                ...defaultInstructions,
+                "Middle Click on point to remove point",
             ],
             "fireTrail": [...multiDistancesInstructions],
-            "multi_distances": [...multiDistancesInstructions],
-            "multi_distances_clamped": [...multiDistancesInstructions],
+            "multi-distances": [...multiDistancesInstructions],
+            "multi-distances-clamped": [...multiDistancesInstructions],
             "picker": [
                 "Left Click to pick annotation to switch modes"
             ],
             "polygon": [
-                "Left Click to start measure",
+                ...defaultInstructions,
                 "Right Click to finish measure",
-                "Hold Left Click to drag point",
-                "Left Click on label to edit"
             ],
             "profile": [
-                "Left Click to start measure",
-                "Hold Left Click to drag point",
-                "Left Click on label to edit",
+                ...defaultInstructions,
                 "Hover on chart to show point on the map",
                 "Hover on point to show on chart"
             ],
