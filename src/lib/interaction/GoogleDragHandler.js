@@ -133,7 +133,7 @@ class GoogleDragHandler {
 
         // -- Store total label primitive reference --
         // Assume total label should have only one per measure
-        const totalLabel = this.labelCollection.find(label => label.id === `annotate_${this.activeModeInstance.mode}_total_label_${this.measure.id}`)
+        const totalLabel = this.labelCollection.find(label => label.id === `annotate_${this.activeModeInstance.mode}_total-label_${this.measure.id}`)
         if (totalLabel) this.draggedObjectInfo.totalLabels = [totalLabel] // Store total label if exists
 
         // Update data pool
@@ -174,7 +174,7 @@ class GoogleDragHandler {
 
         this.draggedObjectInfo.beginPoint.setPosition(this.#coordinate); // Update the marker visual position on the map
         this.draggedObjectInfo.beginPoint.positions = [{ ...this.#coordinate }]; // Update the position data in the marker object
-        this.draggedObjectInfo.beginPoint.status = "moving";
+        this.draggedObjectInfo.beginPoint.feature.properties.status = "moving";
 
         // --- Update Associated Geometry (Approach 2: Reuse/Update) ---
         this.activeModeInstance?.updateGraphicsOnDrag(this.measure); // Update graphics on drag (optional)
@@ -201,10 +201,15 @@ class GoogleDragHandler {
             strokeColor: "rgba(255,0,0,1)" // FIXME: replace the color using stateManager to make consistent color
         });
         this.draggedObjectInfo.beginPoint.setPosition(this.#coordinate); // Update the marker position on the map
+
         // Update metadata in the marker object
-        this.draggedObjectInfo.beginPoint.positions = [{ ...this.#coordinate }]; // Update the position data in the marker object
-        this.draggedObjectInfo.beginPoint.status = "completed"; // Update status to completed
-        this.draggedObjectInfo.beginPoint.clickable = true; // Make the marker clickable again
+        Object.assign(this.draggedObjectInfo.beginPoint.feature.properties, {
+            positions: [{ ...this.#coordinate }], // Update positions
+            status: "completed", // Update status to completed
+        })
+
+        // Make the marker clickable again
+        this.draggedObjectInfo.beginPoint.clickable = true;
 
         // -- Finalize Associated Geometry --
         this.activeModeInstance?.finalizeDrag(this.measure);
@@ -216,10 +221,10 @@ class GoogleDragHandler {
         dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Emit consistent event (optional)
-        this.emitter.emit("drag-end", {
-            measureData: { ...this.measure },
-            draggedObjectInfo: { ...this.draggedObjectInfo }, // Send snapshot before reset
-        });
+        // this.emitter.emit("drag-end", {
+        //     measureData: { ...this.measure },
+        //     draggedObjectInfo: { ...this.draggedObjectInfo }, // Send snapshot before reset
+        // });
 
         // Log the time of the last drag end event to solve left click trigger too fast issue
         this.lastDragEndTs = Date.now();

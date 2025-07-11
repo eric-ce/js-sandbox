@@ -373,7 +373,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
         Object.assign(labelInstance.feature.properties, {
             status,
             positions: positions.map(pos => ({ ...pos })), // Store positions copy
-            ...deconstructIdForMetadata(id) // deconstruct id for metadata
+            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
         })
 
         return { labelInstance };

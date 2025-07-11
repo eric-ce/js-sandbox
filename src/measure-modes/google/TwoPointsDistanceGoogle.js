@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { convertToLatLng, calculateMiddlePos, calculateDistance, areCoordinatesEqual, checkOverlayType, } from "../../lib/helper/googleHelper.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /** @typedef {{lat: number, lng: number}} LatLng */
@@ -147,10 +147,10 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
+            status: "pending",
             listeners: this.#markerListeners, // Add listeners for the point marker
         });
         if (!point) return;
-        point.status = "pending"; // Set status to pending
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -161,8 +161,8 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         if (this.coordsCache.length === 2) {
             // update status pending annotations
             this.pointCollection.forEach(point => {
-                if (point.id.includes(this.mode)) {
-                    point.status = "completed"
+                if (point.id?.includes(`annotate_${this.mode}`) || point?.feature?.properties?.status) {
+                    point.feature.properties.status = "completed";
                 }
             });
 
@@ -193,7 +193,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             this.coordsCache = [];
             this.#interactiveAnnotations.polylines = []; // Clear moving polylines
             this.#interactiveAnnotations.labels = [];  // Clear moving labels
-
         }
     };
 
@@ -335,6 +334,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             status = "pending",
             color = this.stateManager.getColorState("move"), // Default color if not provided
             clickable = false,
+            id = `annotate_${this.mode}_line_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -355,15 +355,16 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                 lineInstance.setPath(positions); // Update path of the line
                 lineInstance.setOptions({ strokeColor: color, clickable }); // Update color
             }
+            lineInstance.id = id; // Update id
         }
         // --- Creation Block (if needed) ---
         // This block runs if polylinesArray was empty OR if the existing entry was invalid (!lineInstance was true above)
         if (!lineInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             lineInstance = this.drawingHelper._addPolyline(positions, {
                 color,
-                // Assumes this.measure.id is always available when creating
-                id: `annotate_${this.mode}_line_${this.measure.id}`,
+                id,
                 clickable,
+                status,
                 ...rest
             });
 
@@ -378,8 +379,12 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         // --- Common Updates (for both existing and newly created) ---
         // -- Handle Metadata Update --
-        lineInstance.status = status; // Set status
-        lineInstance.positions = positions.map(p => ({ ...p })); // Store a copy of positions
+        Object.assign(lineInstance.feature.properties, {
+            status,
+            positions: positions.map(p => ({ ...p })), // Store a copy of positions
+            ...(id && deconstructIdForMetadata(id)) // Deconstruct id for metadata
+        });
+
         return lineInstance; // Return the instance
     }
 
@@ -390,7 +395,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
      * @param {{lat:number,lng:number}[]} positions - Array of positions (expects 2) to calculate distance and middle point.
      * @param {google.maps.Marker[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified.
      * @param {Object} [options={}] - Options for the label.
-     * @param {string|null} [options.status=null] - Status to set on the label instance.
      * @return {{ distance: number, labelInstance: google.maps.Marker | null }} - The calculated distance and the created/updated label instance, or null if failed.
      */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
@@ -404,7 +408,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         const {
             status = "pending",
             clickable = false,
-            // add more options here if needed
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -438,6 +442,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                     // Fallback if getLabel() is not as expected
                     labelInstance.setLabel({ text: formattedText, clickable });
                 }
+                labelInstance.id = id // update id
             }
         }
 
@@ -445,7 +450,8 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
                 clickable,
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id,
+                status,
                 ...rest
             });
 
@@ -464,8 +470,11 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         }
 
         // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = positions.map(pos => ({ ...pos })); // Store positions copy
+        Object.assign(labelInstance.feature.properties, {
+            status,
+            positions: positions.map(pos => ({ ...pos })), // Store positions copy
+            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+        })
 
         return { distance, labelInstance }; // Return the newly created instance
     }

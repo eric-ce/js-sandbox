@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { calculateMiddlePos, calculateDistance, areCoordinatesEqual, checkOverlayType, getOverlayByPosition, convertToLatLng, } from "../../lib/helper/googleHelper.js";
-import { getNeighboringValues, showCustomNotification, formatMeasurementValue } from "../../lib/helper/helper.js";
+import { getNeighboringValues, showCustomNotification, formatMeasurementValue, deconstructIdForMetadata } from "../../lib/helper/helper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /** @typedef {{lat: number, lng: number}} LatLng */
@@ -92,7 +92,8 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             event.domEvent?.preventDefault();
             // Case: it is during measure
             if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) {
-                const pointIndex = this.coordsCache.findIndex(coordinate => areCoordinatesEqual(coordinate, marker.positions[0]));
+                const pointPositions = marker?.feature?.properties?.positions || [];
+                const pointIndex = this.coordsCache.findIndex(coordinate => areCoordinatesEqual(coordinate, pointPositions[0]));
                 if (pointIndex === -1) return false;
                 const isFirstPoint = pointIndex === 0;
 
@@ -222,10 +223,10 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
+            status: "pending",
             listeners: this.#pointMarkerListeners
         });
         if (!point) return;
-        point.status = "pending"; // Set status to pending
 
         // Update the coordsCache based on the measurement direction
         if (this.flags.isReverse) {
@@ -256,8 +257,8 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
             // Create the label
             const { distances } = this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                status: "pending",
-                clickable: false
+                clickable: false,
+                status: "pending"
             });
 
             // -- Handle Distances record --
@@ -269,8 +270,8 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
             // Create the total label
             const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
-                status: "pending",
-                clickable: false
+                clickable: false,
+                status: "pending"
             });
 
             // -- Update current measure data --
@@ -296,7 +297,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         if (!userConfirmation) return; // If the user does not confirm, exit
 
         // -- Update coordsCache --
-        const pointPosition = point.positions[0];
+        const pointPosition = point.feature.properties?.positions[0];
         this.coordsCache.push(pointPosition); // Add the point to the cache
 
         // -- Complete the measure --
@@ -325,7 +326,8 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         this.#distances = [...this.measure._records[0].distances]; // Get the distances from the measure data
 
         // Find the index of the point in the measure coordinates
-        const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, point.positions[0]));
+        const pointPositions = point.feature?.properties?.positions || [point.position];
+        const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, pointPositions[0]));
 
         // -- Resume Measure --
         // Resume measure only when the point is the first or last point
@@ -411,10 +413,10 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                 color: this.stateManager.getColorState("pointColor"),
                 id: `annotate_${this.mode}_point_${this.measure.id}`,
                 clickable: true,
+                status: "pending",
                 listeners: this.#pointMarkerListeners
             });
             if (!lastPoint) return; // If point creation fails, exit
-            lastPoint.status = "completed";
 
             this._finalizeMeasure();
         }
@@ -456,20 +458,22 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         // -- Update annotations status --
         // update points status
         this.pointCollection.forEach(point => {
-            if (point.id.includes(this.mode) && point.status === "pending") {
-                point.status = "completed"
+            if (point.id?.includes(`annotate_${this.mode}`) || point?.feature?.properties?.status) {
+                point.feature.properties.status = "completed";
                 point.clickable = true;
             }
         });
         // update pending status line to completed
-        const pendingPolylines = this.#interactiveAnnotations.polylines.filter(line => line.status === "pending");
+        const pendingPolylines = this.#interactiveAnnotations.polylines.filter(line => line?.feature?.properties?.status === "pending");
         pendingPolylines.forEach(polyline => {
-            polyline.setOptions({ status: "completed", clickable: true });
+            if (polyline?.feature?.properties?.status) polyline.feature.properties.status = "completed";
+            polyline.setOptions({ clickable: true });
         });
         // update pending status labels to completed
-        const pendingLabels = this.#interactiveAnnotations.labels.filter(label => label.status === "pending");
+        const pendingLabels = this.#interactiveAnnotations.labels.filter(label => label?.feature?.properties?.status === "pending");
         pendingLabels.forEach(label => {
-            label.setOptions({ status: "completed", clickable: true });
+            if (label?.feature?.properties?.status) label.feature.properties.status = "completed";
+            label.setOptions({ clickable: true });
         });
 
 
@@ -502,7 +506,9 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
      */
     _removePointFromMeasure(point) {
         // Validate input parameters
-        if (!point || !Array.isArray(point.positions) || point.positions.length === 0) return;
+        if (!point || !point?.feature?.properties) return;
+        const pointPositions = point?.feature?.properties?.positions;
+        if (!Array.isArray(pointPositions) || pointPositions.length === 0) return;
 
         // confirmation 
         const userConfirmation = window.confirm(`Do you want to remove this point?`) // Confirm the removal action
@@ -523,7 +529,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         // Find the point index in the measure coordinates
         const pointPositionIndices = this.measure.coordinates
-            .map((coordinate, index) => areCoordinatesEqual(coordinate, point.positions[0]) ? index : -1)
+            .map((coordinate, index) => areCoordinatesEqual(coordinate, pointPositions[0]) ? index : -1)
             .filter(index => index !== -1);
         if (pointPositionIndices.length === 0) return; // If the point is not found, exit
 
@@ -531,29 +537,35 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         // Set positions to filter out pointPositionIndices
         positions = positions.filter((_, index) => !pointPositionIndices.includes(index));
 
+        // -- Find and Remove related annotations --
         // remove related lines
-        const polylines = this.drawingHelper._getLineByPositions([point.positions[0]]);
+        const polylines = this.drawingHelper._getLineByPositions([pointPositions[0]]);
         if (!Array.isArray(polylines) || polylines.length === 0) return; // If no lines are found, exit
         polylines.forEach(line => {
             this.drawingHelper._removePolyline(line); // Remove the line
 
+            const linePositions = line?.feature?.properties?.positions;
+            if (!Array.isArray(linePositions) || linePositions.length === 0) return; // If no line positions are found, exit
+
             // Case: during measuring, remove the line from this.#interactiveAnnotations
             if (this.#interactiveAnnotations.polylines.length === 0) return; // If there are no polylines, exit
-            const lineToRemoveIndex = this.#interactiveAnnotations.polylines.findIndex(l =>
-                areCoordinatesEqual(l.positions[0], line.positions[0]) &&
-                areCoordinatesEqual(l.positions[1], line.positions[1])
-            );
+            const lineToRemoveIndex = this.#interactiveAnnotations.polylines.findIndex(l => {
+                const lineToRemovePositions = l.feature?.properties?.positions;
+                return areCoordinatesEqual(lineToRemovePositions[0], linePositions[0]) &&
+                    areCoordinatesEqual(lineToRemovePositions[1], linePositions[1]);
+            });
             if (lineToRemoveIndex === -1) return; // If the line is not found, exit
-            this.#interactiveAnnotations.polylines.splice(lineToRemoveIndex, 1); // Remove the line from this interactive annotations        });
+            this.#interactiveAnnotations.polylines.splice(lineToRemoveIndex, 1); // Remove the line from this interactive annotations
         });
 
         // remove related labels
-        const labelMarkers = this.drawingHelper._getLabelByPosition([point.positions[0]]);
+        const labelMarkers = this.drawingHelper._getLabelByPosition([pointPositions[0]]);
         if (!Array.isArray(labelMarkers) || labelMarkers.length === 0) return; // If no labels are found, exit
         labelMarkers.forEach(label => {
             // Safety check: assume moving or total labels should not be removed here
-            const isMovingLabel = label.status === "moving";
-            const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total_label`);
+            const isMovingLabel = label?.feature?.properties?.status === "moving";
+            const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total-label`);
+            this.#interactiveAnnotations.totalLabels = isTotalLabel ? [label] : [];
             if (isMovingLabel || isTotalLabel) return;
 
             this.drawingHelper._removeLabel(label); // Remove the label            
@@ -564,9 +576,6 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             if (labelToRemoveIndex === -1) return; // If the label is not found, exit
             this.#interactiveAnnotations.labels.splice(labelToRemoveIndex, 1);
         });
-
-        // Set the existed total label
-        this.#interactiveAnnotations.totalLabels = this.labelCollection.filter(label => label.id.startsWith(`annotate_${this.mode}_total_label_${this.measure.id}`));
 
         // Find neighboring coordinate
         const { previous, current, next } = getNeighboringValues(this.measure.coordinates, pointPositionIndices[0]); // find the point position neighboring positions.
@@ -608,7 +617,9 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                     // -- Create polyline --
                     this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
                         status: graphicsStatus,
-                        color: this.stateManager.getColorState("line")
+                        color: this.stateManager.getColorState("line"),
+                        clickable: true,
+                        listeners: this.#polylineListeners
                     });
                     // -- Create label --
                     const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
@@ -639,6 +650,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         if (!isPerimeter) {
             if (previous && next) {  // Case: the removing point is in the middle of the positions
                 const reconnectedPositions = [previous, next];
+
                 // -- Create polyline --
                 this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
                     status: graphicsStatus,
@@ -973,6 +985,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             status = "pending",
             color = this.stateManager.getColorState("move"),
             clickable = false,
+            id = `annotate_${this.mode}_line_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -996,7 +1009,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                 for (let i = polylinesArray.length - 1; i >= 0; i--) {
                     const line = polylinesArray[i];
                     // Ensure line exists and has a status property before checking
-                    if (line && line.status === "moving") {
+                    if (line && line?.feature?.properties?.status === "moving") {
                         this.drawingHelper._removePolyline(line);
                         polylinesArray.splice(i, 1);
                     }
@@ -1009,14 +1022,13 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             positions.forEach(posSet => {
                 const newLineInstance = this.drawingHelper._addPolyline(posSet, {
                     color,
-                    id: `annotate_${this.mode}_line_${this.measure.id}`, // Consider making ID more specific if needed (e.g., adding status)
+                    id,
+                    status,
                     clickable,
                     ...rest
                 });
                 if (!newLineInstance) return;
 
-                // -- Handle Metadata Update --
-                newLineInstance.status = status; // Set status on the new instance
                 // -- Handle References Update --
                 polylinesArray.push(newLineInstance);
             })
@@ -1024,14 +1036,13 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             // -- Create a new single polyline --
             const newLineInstance = this.drawingHelper._addPolyline(positions, {
                 color,
-                id: `annotate_${this.mode}_line_${this.measure.id}`, // Consider making ID more specific if needed (e.g., adding status)
+                id,
+                status,
                 clickable,
                 ...rest
             });
             if (!newLineInstance) return;
 
-            // -- Handle Metadata Update --
-            newLineInstance.status = status; // Set status on the new instance
             // -- Handle References Update --
             polylinesArray.push(newLineInstance);
         }
@@ -1048,6 +1059,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         const {
             status = "pending", // Default pending status
             clickable = false,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -1070,7 +1082,6 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                     if (!segmentDistance || !segmentMiddlePos) return;
 
                     const labelToUpdate = labelInstances[index];
-
                     // -- Handle Label Visual Update --
                     labelToUpdate.setPosition(segmentMiddlePos); // update position
                     // Ensure getLabel() exists and returns an object before spreading
@@ -1083,11 +1094,17 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                     }
 
                     // -- Handle Label Metadata Update --
-                    labelToUpdate.status = status;
-                    labelToUpdate.positions = posSet.map(pos => ({ ...pos })); // store positions
+                    if (!labelToUpdate?.feature?.properties) {
+                        labelToUpdate.feature = { properties: {} }; // Ensure feature properties exist
+                    }
+                    Object.assign(labelToUpdate.feature.properties, {
+                        status: status,
+                        positions: posSet.map(pos => ({ ...pos })), // Store the original positions
+                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+                    });
 
                     // -- Handle records Update --
-                    distances.push(segmentDistance); // Collect distances for each segment
+                    segmentDistance && distances.push(segmentDistance); // Collect distances for each segment
                 });
             }
             // Case: update SINGLE LABEL, typically for moving operation 
@@ -1096,7 +1113,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                 const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
                 const segmentMiddlePos = calculateMiddlePos(positions);
 
-                const labelInstance = labelsArray.find(label => label.status === "moving");
+                const labelInstance = labelsArray.find(label => label?.feature?.properties?.status === "moving");
                 if (labelInstance) {
                     // -- Handle Label Visual Update --
                     labelInstance.setPosition(segmentMiddlePos); // update position
@@ -1107,10 +1124,14 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                         // Fallback if getLabel() is not as expected
                         labelInstance.setLabel({ text: segmentFormattedText, clickable });
                     }
+                    labelInstance.id = id;
 
                     // -- Handle Label Metadata Update --
-                    labelInstance.status = status;
-                    labelInstance.positions = positions.map(pos => ({ ...pos })); // store positions
+                    Object.assign(labelInstance.feature.properties, {
+                        status: status,
+                        positions: positions.map(pos => ({ ...pos })), // store positions
+                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+                    });
 
                     // -- Handle references Update --
                     labelInstances = [labelInstance]; // Get the label that is currently being moved
@@ -1126,6 +1147,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             const labelInstance = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
                 id: `annotate_${this.mode}_label_${this.measure.id}`,
                 clickable,
+                status,
                 ...rest
             });
 
@@ -1139,8 +1161,11 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             }
 
             // -- Handle Label Metadata Update --
-            labelInstance.positions = positions.map(pos => ({ ...pos })); // store positions
-            labelInstance.status = status; // Set status
+            Object.assign(labelInstance.feature.properties, {
+                status,
+                positions: positions.map(pos => ({ ...pos })), // Store the original positions
+                ...(id && deconstructIdForMetadata(id))
+            });
 
             // -- Handle References Update --
             labelInstances.push(labelInstance); // Store the new label instance in the array
@@ -1161,6 +1186,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         const {
             status = null,
             clickable = false,
+            id = `annotate_${this.mode}_total-label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -1174,7 +1200,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         if (labelsArray.length > 0) {
             labelInstance = labelsArray[0]; // Get the reference from the array
         } else {
-            const existedTotalLabel = this.labelCollection.find(label => label.id === `annotate_${this.mode}_total_label_${this.measure.id}`); // Find the label by ID      
+            const existedTotalLabel = this.labelCollection.find(label => label.id === `annotate_${this.mode}_total-label_${this.measure.id}`); // Find the label by ID      
             if (existedTotalLabel) {
                 labelInstance = existedTotalLabel; // If it exists, use it
             }
@@ -1192,13 +1218,15 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                 // Fallback if getLabel() is not as expected
                 labelInstance.setLabel({ text: formattedText, clickable });
             }
+            labelInstance.id = id // Update id
         }
 
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
                 clickable,
-                id: `annotate_${this.mode}_total_label_${this.measure.id}`,
+                id,
+                status,
                 ...rest
             });
             // update references
@@ -1211,8 +1239,11 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         }
 
         // -- Handle Label Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = [{ ...labelPosition }] // Store positions copy
+        Object.assign(labelInstance.feature.properties, {
+            status,
+            positions: positions.map(pos => ({ ...pos })),
+            ...(id && deconstructIdForMetadata(id))
+        });
 
         return { totalDistance, labelInstance }; // Return the newly created instance
     }
