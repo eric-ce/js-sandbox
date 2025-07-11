@@ -543,7 +543,7 @@ class ProfileCesium extends MeasureModeCesium {
         Object.assign(labelPrimitive.feature.properties, {
             status: status,
             positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-            ...deconstructIdForMetadata(id) // deconstruct id for metadata
+            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
         });
 
         return { distance, clampedPositions, clampedPositionsCartographic, labelPrimitive };

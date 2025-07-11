@@ -406,7 +406,7 @@ class HeightCesium extends MeasureModeCesium {
                     Object.assign(pointPrimitive.feature.properties, {
                         status: status,
                         positions: index === 0 ? [Cartesian3.clone(topPosition)] : [Cartesian3.clone(bottomPosition)],
-                        ...deconstructIdForMetadata(id)
+                        ...(id && deconstructIdForMetadata(id))
                     });
                 }
             });
@@ -546,7 +546,7 @@ class HeightCesium extends MeasureModeCesium {
         Object.assign(labelPrimitive.feature.properties, {
             status: status,
             positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-            ...deconstructIdForMetadata(id) // deconstruct id for metadata
+            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
         });
 
         return { height, labelPrimitive };

@@ -785,6 +785,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
             } else if (previous) {  // Case: The removing point is the last point
                 this.#distances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
             }
+
+            showCustomNotification(`removed point, id ${measureId}`, this._container);
         }
 
         // Case: Normal measure, it could be during measuring or measure completed or measure not yet started
@@ -899,6 +901,9 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // remove the measure data from dataPool
         dataPool.removeMeasureById(measureId);
+
+        // show notification
+        showCustomNotification(`removed line set, id: ${measureId}`, this._container)
     }
 
 
@@ -1234,7 +1239,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
                     Object.assign(labelToUpdate.feature.properties, {
                         status: status,
                         positions: posSet.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                        ...deconstructIdForMetadata(id) // deconstruct id for metadata
+                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
                     });
 
                     // -- Handle records Update --
@@ -1259,7 +1264,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
                     Object.assign(labelPrimitive.feature.properties, {
                         status: status,
                         positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                        ...deconstructIdForMetadata(id) // deconstruct id for metadata
+                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
                     });
 
                     // -- Handle references Update --
@@ -1275,9 +1280,9 @@ class MultiDistancesCesium extends MeasureModeCesium {
             if (!segmentDistance) console.warn("Failed to calculate segment distance.");
 
             const labelPrimitive = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
-                id: id,
-                showBackground: showBackground,
-                status: status,
+                id,
+                showBackground,
+                status,
                 ...rest
             });
 
@@ -1294,7 +1299,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             Object.assign(labelPrimitive.feature.properties, {
                 status: status,
                 positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                ...deconstructIdForMetadata(id) // deconstruct id for metadata
+                ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
             });
 
             // -- Handle References Update --
@@ -1374,7 +1379,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         Object.assign(totalLabel.feature.properties, {
             status: status,
             positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-            ...deconstructIdForMetadata(id) // deconstruct id for metadata
+            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
         });
 
         return { totalLabel, totalDistance };

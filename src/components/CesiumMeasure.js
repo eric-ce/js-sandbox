@@ -138,11 +138,13 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // -- Handle metadata --
         pointPrimitive.feature = {
+            id,
+            type: "annotation",
             properties: {
                 mapName: this.mapName,
                 status: status,
                 positions: [{ ...position }],
-                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
             }
         };
 
@@ -214,11 +216,13 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // -- Handle metadata --
         polylinePrimitive.feature = {
+            id,
+            type: "annotation",
             properties: {
                 mapName: this.mapName,
                 status: status,
                 positions: linePositions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
-                ...deconstructIdForMetadata(id),
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
             }
         }
         return polylinePrimitive;
@@ -282,11 +286,13 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // -- Handle metadata --  
         polylinePrimitive.feature = {
+            id,
+            type: "annotation",
             properties: {
                 mapName: this.mapName,
                 status: status,
                 positions: positions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
-                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
             }
         };
 
@@ -330,11 +336,13 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // -- Handle metadata --
         labelPrimitive.feature = {
+            id,
+            type: "annotation",
             properties: {
                 mapName: this.mapName,
                 status: status,
                 positions: labelPositions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
-                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
             }
         };
         return labelPrimitive;
@@ -424,11 +432,13 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // -- Handle metadata --
         polygonPrimitive.feature = {
+            id,
+            type: "annotation",
             properties: {
                 mapName: this.mapName,
                 status: status,
                 positions: polygonPositions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
-                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
             }
         }
 
@@ -485,11 +495,13 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // -- Handle metadata --
         polygonOutlinePrimitive.feature = {
+            id,
+            type: "annotation",
             properties: {
                 mapName: this.mapName,
                 status: status,
                 positions: polygonPositions.map(pos => Cartesian3.clone(convertToCartesian3(pos))),
-                ...deconstructIdForMetadata(id), // deconstruct id for metadata
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
             }
         }
         return polygonOutlinePrimitive;
