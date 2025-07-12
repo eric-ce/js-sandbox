@@ -165,16 +165,19 @@ class GoogleDragHandler {
         this.#coordinate = eventData.mapPoint; // Store current coordinate {lat, lng}
 
         // --- Update Dragging Point ---
-        // Update dragging point style
+        // Visual update the drag point marker
         this.draggedObjectInfo.beginPoint.setIcon({
             ...this.draggedObjectInfo.beginPoint.getIcon(),
             strokeWeight: 2,
             strokeColor: "rgb(255,255,0,1)"
         });
-
         this.draggedObjectInfo.beginPoint.setPosition(this.#coordinate); // Update the marker visual position on the map
-        this.draggedObjectInfo.beginPoint.positions = [{ ...this.#coordinate }]; // Update the position data in the marker object
-        this.draggedObjectInfo.beginPoint.feature.properties.status = "moving";
+
+        // Update metadata for the drag point marker
+        Object.assign(this.draggedObjectInfo.beginPoint.feature.properties, {
+            positions: [{ ...this.#coordinate }], // Update positions
+            status: "moving", // Update status to moving
+        });
 
         // --- Update Associated Geometry (Approach 2: Reuse/Update) ---
         this.activeModeInstance?.updateGraphicsOnDrag(this.measure); // Update graphics on drag (optional)

@@ -8,12 +8,11 @@ import {
     areCoordinatesEqual,
     calculateMiddlePos,
     convertToCartesian3,
-    showCustomNotification,
     getRankedPickedObjectType,
     calculateClampedDistance,
     convertToCartographicDegrees
 } from "../../lib/helper/cesiumHelper.js";
-import { getNeighboringValues, formatMeasurementValue, deconstructIdForMetadata } from "../../lib/helper/helper.js";
+import { getNeighboringValues, formatMeasurementValue, deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -988,6 +987,9 @@ class ProfileDistancesCesium extends MeasureModeCesium {
 
         // Destroy the chart if it exists
         this.chartDiv && this._destroyChart();
+
+        // Show notification
+        showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
 
     /**

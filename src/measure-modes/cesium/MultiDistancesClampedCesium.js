@@ -8,11 +8,10 @@ import {
     areCoordinatesEqual,
     calculateMiddlePos,
     convertToCartesian3,
-    showCustomNotification,
     getRankedPickedObjectType,
     calculateClampedDistance
 } from "../../lib/helper/cesiumHelper.js";
-import { getNeighboringValues, formatMeasurementValue, deconstructIdForMetadata } from "../../lib/helper/helper.js";
+import { getNeighboringValues, formatMeasurementValue, deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -889,6 +888,9 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
         this.coordsCache = []; // Clear the coordsCache
         this.#distances = []; // Clear the distances cache
         dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+
+        // Show notification
+        showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
 
     /**

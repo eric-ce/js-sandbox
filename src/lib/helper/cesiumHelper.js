@@ -1560,58 +1560,7 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 }
 
 
-/**
- * Shows a custom notification message
- * @param {string} message - The message to display in the notification
- * @param {HTMLElement} viewerContainer - the cesium viewer container to append the notification
- * @returns {HTMLElement} - The notification element
- */
-export function showCustomNotification(message, viewerContainer) {
-    // Create notification container
-    const notification = document.createElement('div');
-    notification.classList.add('custom-notification');
-    notification.textContent = message;
 
-    // Style the notification
-    Object.assign(notification.style, {
-        position: 'absolute',
-        top: '0px', // Position at the bottom
-        left: '50%',
-        padding: '14px 24px',
-        backgroundColor: '#323232', // Material Design dark background
-        color: '#FFFFFF', // White text color
-        borderRadius: '4px', // Slightly rounded corners
-        boxShadow: '0px 3px 5px rgba(0, 0, 0, 0.2)', // Soft shadow for elevation
-        zIndex: '1000',
-        opacity: '0',
-        transition: 'opacity 0.3s, transform 0.3s',
-        width: 'fit-content',
-        transform: 'translateX(-50%)', // Start slightly below
-        fontFamily: 'Roboto, Arial, sans-serif',
-        fontSize: '14px',
-        lineHeight: '20px',
-    });
-
-    // Add to the document
-    viewerContainer.appendChild(notification);
-
-    // Fade in
-    setTimeout(() => {
-        notification.style.opacity = '1';
-    }, 100);
-
-    // Fade out and remove after 5 seconds
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-            if (notification.parentElement) {
-                notification.parentElement.removeChild(notification);
-            }
-        }, 500);
-    }, 3000);
-
-    return notification;
-}
 
 
 
@@ -2095,52 +2044,52 @@ export function showCustomNotification(message, viewerContainer) {
 //     };
 // }
 
-/**
- * Get the type of the Cesium picked object.
- * @param {object[]} pickedObjects - The array of picked objects from viewer.scene.pick
- * @param {string} modeString - The mode string to filter the picked object, e.g., "multi_distance"
- * @returns {string|null} - The type of the picked object ("point", "line", "label", "other") or null if it doesn't match
- */
-export function getPickedObjectType(pickedObjects, modeString) {
-    // Validate input parameters
-    if (!Array.isArray(pickedObjects) || pickedObjects.length === 0 || typeof modeString !== 'string') {
-        return null;
-    }
+// /**
+//  * Get the type of the Cesium picked object.
+//  * @param {object[]} pickedObjects - The array of picked objects from viewer.scene.pick
+//  * @param {string} modeString - The mode string to filter the picked object, e.g., "multi_distance"
+//  * @returns {string|null} - The type of the picked object ("point", "line", "label", "other") or null if it doesn't match
+//  */
+// export function getPickedObjectType(pickedObjects, modeString) {
+//     // Validate input parameters
+//     if (!Array.isArray(pickedObjects) || pickedObjects.length === 0 || typeof modeString !== 'string') {
+//         return null;
+//     }
 
-    const { id, primitive, status } = pickedObjects[0];
+//     const { id, primitive, status } = pickedObjects[0];
 
-    let type = null;
+//     let type = null;
 
-    const searchString = modeString ? `annotate_${modeString}` : `annotate_`;
+//     const searchString = modeString ? `annotate_${modeString}` : `annotate_`;
 
-    // Return null if status is a string and contains 'moving' 
-    if (typeof status === 'string' && status.includes('moving')) {
-        return null;
-    }
+//     // Return null if status is a string and contains 'moving'
+//     if (typeof status === 'string' && status.includes('moving')) {
+//         return null;
+//     }
 
-    // Determine the type based on the suffix of the 'id'
-    const isPoint = modeString ? id.startsWith(`${searchString}_point`) : (id.startsWith(`${searchString}`) && id.includes('_point'));
-    const isLine = modeString ? id.startsWith(`${searchString}_line`) : (id.startsWith(`${searchString}`) && id.includes('_line'));
-    const isLabel = modeString ? id.startsWith(`${searchString}_label`) : (id.startsWith(`${searchString}`) && id.includes('_label'));
-    const isPolygon = modeString ? id.startsWith(`${searchString}_polygon`) : (id.startsWith(`${searchString}`) && id.includes('_polygon'));
+//     // Determine the type based on the suffix of the 'id'
+//     const isPoint = modeString ? id.startsWith(`${searchString}_point`) : (id.startsWith(`${searchString}`) && id.includes('_point'));
+//     const isLine = modeString ? id.startsWith(`${searchString}_line`) : (id.startsWith(`${searchString}`) && id.includes('_line'));
+//     const isLabel = modeString ? id.startsWith(`${searchString}_label`) : (id.startsWith(`${searchString}`) && id.includes('_label'));
+//     const isPolygon = modeString ? id.startsWith(`${searchString}_polygon`) : (id.startsWith(`${searchString}`) && id.includes('_polygon'));
 
-    // return the type based on the conditions
-    if (isPoint) {
-        type = 'point';
-    } else if (isLine) {
-        type = 'line';
-    } else if (id.includes("tileId") && primitive?.feature?.type === "fireTrail") {
-        type = 'line';
-    } else if (isLabel) {
-        type = 'label';
-    } else if (isPolygon) {
-        type = 'polygon';
-    } else {
-        type = null; // Return null if none of the conditions match
-    }
+//     // return the type based on the conditions
+//     if (isPoint) {
+//         type = 'point';
+//     } else if (isLine) {
+//         type = 'line';
+//     } else if (id.includes("tileId") && primitive?.feature?.type === "fireTrail") {
+//         type = 'line';
+//     } else if (isLabel) {
+//         type = 'label';
+//     } else if (isPolygon) {
+//         type = 'polygon';
+//     } else {
+//         type = null; // Return null if none of the conditions match
+//     }
 
-    return { type, object: pickedObjects[0] }; // Return the type and the object
-}
+//     return { type, object: pickedObjects[0] }; // Return the type and the object
+// }
 
 // /**
 //  * Format the distance.
@@ -2176,4 +2125,57 @@ export function getPickedObjectType(pickedObjects, modeString) {
 //         // Convert to square centimeters
 //         return (area * 10_000).toFixed(2) + " cm²";
 //     }
+// }
+
+// /**
+//  * Shows a custom notification message
+//  * @param {string} message - The message to display in the notification
+//  * @param {HTMLElement} viewerContainer - the cesium viewer container to append the notification
+//  * @returns {HTMLElement} - The notification element
+//  */
+// export function showCustomNotification(message, viewerContainer) {
+//     // Create notification container
+//     const notification = document.createElement('div');
+//     notification.classList.add('custom-notification');
+//     notification.textContent = message;
+
+//     // Style the notification
+//     Object.assign(notification.style, {
+//         position: 'absolute',
+//         top: '0px', // Position at the bottom
+//         left: '50%',
+//         padding: '14px 24px',
+//         backgroundColor: '#323232', // Material Design dark background
+//         color: '#FFFFFF', // White text color
+//         borderRadius: '4px', // Slightly rounded corners
+//         boxShadow: '0px 3px 5px rgba(0, 0, 0, 0.2)', // Soft shadow for elevation
+//         zIndex: '1000',
+//         opacity: '0',
+//         transition: 'opacity 0.3s, transform 0.3s',
+//         width: 'fit-content',
+//         transform: 'translateX(-50%)', // Start slightly below
+//         fontFamily: 'Roboto, Arial, sans-serif',
+//         fontSize: '14px',
+//         lineHeight: '20px',
+//     });
+
+//     // Add to the document
+//     viewerContainer.appendChild(notification);
+
+//     // Fade in
+//     setTimeout(() => {
+//         notification.style.opacity = '1';
+//     }, 100);
+
+//     // Fade out and remove after 5 seconds
+//     setTimeout(() => {
+//         notification.style.opacity = '0';
+//         setTimeout(() => {
+//             if (notification.parentElement) {
+//                 notification.parentElement.removeChild(notification);
+//             }
+//         }, 500);
+//     }, 3000);
+
+//     return notification;
 // }

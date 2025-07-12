@@ -728,6 +728,9 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         this.coordsCache = []; // Clear the coordsCache
         this.#distances = []; // Clear the distances cache
         dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+
+        // Show notification
+        showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
 
     /**

@@ -369,7 +369,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
             return null; // Early exit if labelInstance is not valid
         }
 
-        // -- Handle Metadata Update --
+        // -- Handle Metadata Update for new and existed label --
         Object.assign(labelInstance.feature.properties, {
             status,
             positions: positions.map(pos => ({ ...pos })), // Store positions copy

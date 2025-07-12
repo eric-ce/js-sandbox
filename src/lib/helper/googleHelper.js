@@ -59,7 +59,6 @@ export function getOverlayByPosition(
         for (const point of pointCollection) {
             const pointPosition = point?.feature?.properties?.positions;
             if (
-                pointPosition &&
                 Array.isArray(pointPosition) &&
                 pointPosition.some(p => areCoordinatesEqual(p, position))
             ) {

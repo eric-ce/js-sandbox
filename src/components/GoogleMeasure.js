@@ -388,6 +388,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
      */
     _addPolyline(positions, options = {}) {
         if (!this.map || !Array.isArray(positions) || positions.length < 2) return null;
+
         const {
             listeners,
             status = null,
@@ -421,7 +422,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             this._addCustomEventListeners(polyline, listeners);
 
             // Store the polyline in the collection
-            polyline && this.#polylineCollection.push(polyline);
+            this.#polylineCollection.push(polyline);
 
             return polyline;
         } catch (error) {
@@ -577,7 +578,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             this._addCustomEventListeners(polygon, listeners);
 
             // Store the polygon in the collection
-            polygon && this.#polygonCollection.push(polygon);
+            this.#polygonCollection.push(polygon);
 
             return polygon;
         } catch (error) {
