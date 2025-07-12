@@ -108,7 +108,8 @@ class MeasureModeLeaflet extends MeasureModeBase {
 
             // Iterate through layers to find pending annotations for this mode
             collection.eachLayer(layer => {
-                if (layer.id.includes(targetId) && layer.status !== 'completed') {
+                const layerStatus = layer?.feature?.properties?.status
+                if (layer.id.includes(targetId) && layerStatus !== 'completed') {
                     layersToRemove.push(layer);
                 }
             });

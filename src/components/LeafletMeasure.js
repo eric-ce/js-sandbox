@@ -1,3 +1,4 @@
+import { deconstructIdForMetadata } from "../lib/helper/helper.js";
 import {
     createCircleMarker,
     createPolygon,
@@ -74,11 +75,27 @@ export default class LeafletMeasure extends MeasureComponentBase {
         }
 
         // Separate listeners from other options
-        const { listeners, ...rest } = options;
+        const {
+            listeners,
+            status = null,
+            id = null,
+        } = options;
 
         // Create the point marker (assuming helper doesn't add to map)
-        const pointMarker = createCircleMarker(position, { ...rest });
+        const pointMarker = createCircleMarker(position, options);
         if (!pointMarker) return null;
+
+        // -- Handle metadata --
+        pointMarker.feature = {
+            id,
+            type: "annotation",
+            properties: {
+                mapName: this.mapName,
+                status,
+                positions: [{ ...position }],
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
+            }
+        };
 
         // Add highlight event listeners
         this._addHighlightEventListeners(pointMarker);
@@ -87,7 +104,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this._addPickerEventListeners(pointMarker);
 
         // Add custom event listeners
-        listeners && this._addCustomEventListeners(pointMarker, listeners);
+        this._addCustomEventListeners(pointMarker, listeners);
 
         // -- Add to the collection --
         this.#pointCollection.addLayer(pointMarker);
@@ -135,12 +152,27 @@ export default class LeafletMeasure extends MeasureComponentBase {
             this._initializeMapSpecifics();
         }
 
-        // Separate listeners from other options
-        const { listeners, ...rest } = options;
+        const {
+            listeners,
+            status = null,
+            id = null,
+        } = options;
 
         // -- Create Polyline --
-        const polyline = createPolyline(positions, { ...rest });
+        const polyline = createPolyline(positions, options);
         if (!polyline) return null;
+
+        // -- Handle metadata --
+        polyline.feature = {
+            id,
+            type: "annotation",
+            properties: {
+                mapName: this.mapName,
+                status,
+                positions: positions.map(pos => ({ ...pos })), // Store original positions
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
+            }
+        };
 
         // Add highlight event listeners
         this._addHighlightEventListeners(polyline);
@@ -149,7 +181,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this._addPickerEventListeners(polyline);
 
         // Add custom event listeners
-        listeners && this._addCustomEventListeners(polyline, listeners);
+        this._addCustomEventListeners(polyline, listeners);
 
         // -- Add to the collection --
         this.#polylineCollection.addLayer(polyline);
@@ -187,12 +219,27 @@ export default class LeafletMeasure extends MeasureComponentBase {
             this._initializeMapSpecifics();
         }
 
-        // Separate listeners from other options
-        const { listeners, ...rest } = options;
+        const {
+            listeners,
+            status = null,
+            id = null,
+        } = options;
 
         // -- Create Polygon --
-        const polygon = createPolygon(positions, { ...rest });
+        const polygon = createPolygon(positions, options);
         if (!polygon) return null;
+
+        // -- Handle metadata --
+        polygon.feature = {
+            id,
+            type: "annotation",
+            properties: {
+                mapName: this.mapName,
+                status,
+                positions: positions.map(pos => ({ ...pos })), // Store original positions
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
+            }
+        };
 
         // Add highlight event listeners
         this._addHighlightEventListeners(polygon);
@@ -201,7 +248,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this._addPickerEventListeners(polygon);
 
         // Add custom event listeners
-        listeners && this._addCustomEventListeners(polygon, listeners);
+        this._addCustomEventListeners(polygon, listeners);
 
         // -- Add to the collection --
         this.#polygonCollection.addLayer(polygon);
@@ -221,12 +268,30 @@ export default class LeafletMeasure extends MeasureComponentBase {
             this._initializeMapSpecifics();
         }
 
-        // Separate listeners from other options
-        const { listeners, ...rest } = options;
+        const {
+            listeners,
+            status = null,
+            id = null,
+        } = options;
 
         // -- Create Label --
-        const label = createLabelTooltip(positions, value, unit, { ...rest });
-        if (!label) return null;
+        const label = createLabelTooltip(positions, value, unit, options);
+        if (!label) {
+            console.error("_addLabel: Failed to create label instance."); // ✅ Add this line
+            return null;
+        }
+
+        // -- Handle metadata --
+        label.feature = {
+            id,
+            type: "annotation",
+            properties: {
+                mapName: this.mapName,
+                status,
+                positions: positions.map(pos => ({ ...pos })), // Store original positions
+                ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
+            }
+        };
 
         // Add highlight event listeners
         this._addHighlightEventListeners(label);
@@ -235,7 +300,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this._addPickerEventListeners(label);
 
         // Add custom event listeners
-        listeners && this._addCustomEventListeners(label, listeners);
+        this._addCustomEventListeners(label, listeners);
 
         // -- Add to the collection --
         this.#labelCollection.addLayer(label);
@@ -290,15 +355,15 @@ export default class LeafletMeasure extends MeasureComponentBase {
     }
 
     _addCustomEventListeners(layer, listeners) {
-        if (listeners && typeof listeners === 'object') {
-            for (const eventName in listeners) {
-                if (typeof listeners[eventName] === 'function') {
-                    // Use marker.on() for Leaflet
-                    layer.on(eventName, (event) => {
-                        const eventData = this._createEventData(event, layer);
-                        listeners[eventName](layer, eventData);
-                    });
-                }
+        if (!layer || !listeners || typeof listeners !== 'object') return;
+
+        for (const eventName in listeners) {
+            if (typeof listeners[eventName] === 'function') {
+                // Use marker.on() for Leaflet
+                layer.on(eventName, (event) => {
+                    const eventData = this._createEventData(event, layer);
+                    listeners[eventName](layer, eventData);
+                });
             }
         }
     }
@@ -387,9 +452,10 @@ export default class LeafletMeasure extends MeasureComponentBase {
         let foundPointMarker = null;
 
         for (const point of points) {
+            const pointPositions = point.feature?.properties?.positions || [];
             if (point &&
-                Array.isArray(point.positions) &&
-                point.positions.some(p => areCoordinatesEqual(p, position))
+                Array.isArray(pointPositions) &&
+                pointPositions.some(p => areCoordinatesEqual(p, position))
             ) {
                 foundPointMarker = point;
                 break; // Exit loop once found
@@ -416,9 +482,10 @@ export default class LeafletMeasure extends MeasureComponentBase {
         // Case1: the positions is one point, find the lines that has some position matched
         if (positions.length === 1) {
             const targetPosition = positions[0];
-            const matchingLines = polylines.filter(polyline =>
-                polyline.positions && polyline.positions.some(pos => areCoordinatesEqual(pos, targetPosition))
-            );
+            const matchingLines = polylines.filter(polyline => {
+                const polylinePositions = polyline?.feature?.properties?.positions;
+                return polylinePositions && polylinePositions.some(pos => areCoordinatesEqual(pos, targetPosition));
+            });
             if (matchingLines.length > 0) {
                 foundPolylines.push(...matchingLines);
             }
@@ -430,10 +497,11 @@ export default class LeafletMeasure extends MeasureComponentBase {
             // Find returns the first matching polyline or undefined
             const matchingLine = polylines.find(polyline => {
                 // Check if the polyline has exactly two positions
-                if (polyline.positions && polyline.positions.length === 2) {
+                const polylinePositions = polyline?.feature?.properties?.positions;
+                if (polylinePositions && polylinePositions.length === 2) {
                     // Compare the positions of the polyline with the provided positions
-                    return areCoordinatesEqual(polyline.positions[0], pos1) &&
-                        areCoordinatesEqual(polyline.positions[1], pos2);
+                    return areCoordinatesEqual(polylinePositions[0], pos1) &&
+                        areCoordinatesEqual(polylinePositions[1], pos2);
                 }
                 return false; // Not a match
             });
@@ -465,25 +533,26 @@ export default class LeafletMeasure extends MeasureComponentBase {
         const foundLabels = [];
         for (const label of labels) {
             // Check if label has positions property
-            if (label && Array.isArray(label.positions)) {
-                // If positions is a single position, check if it matches any position in label.positions
-                if (Array.isArray(positions) && positions.length === 1) {
-                    if (label.positions.some(p => areCoordinatesEqual(p, positions[0]))) {
-                        foundLabels.push(label);
-                    }
+            const labelPositions = label?.feature?.properties?.positions;
+            if (!labelPositions || !Array.isArray(labelPositions)) continue; // Skip if no positions
+
+            // If positions is a single position, check if it matches any position in label.positions
+            if (Array.isArray(positions) && positions.length === 1) {
+                if (labelPositions.some(p => areCoordinatesEqual(p, positions[0]))) {
+                    foundLabels.push(label);
                 }
-                // If positions is an array of two positions, check for exact match
-                else if (Array.isArray(positions) && positions.length === 2) {
-                    if (areCoordinatesEqual(label.positions[0], positions[0]) &&
-                        areCoordinatesEqual(label.positions[1], positions[1])) {
-                        foundLabels.push(label);
-                    }
+            }
+            // If positions is an array of two positions, check for exact match
+            else if (Array.isArray(positions) && positions.length === 2) {
+                if (areCoordinatesEqual(labelPositions[0], positions[0]) &&
+                    areCoordinatesEqual(labelPositions[1], positions[1])) {
+                    foundLabels.push(label);
                 }
-                // If positions is a single position object, check for exact match
-                else if (typeof positions === 'object' && 'lat' in positions && 'lng' in positions) {
-                    if (label.positions.some(p => areCoordinatesEqual(p, positions))) {
-                        foundLabels.push(label);
-                    }
+            }
+            // If positions is a single position object, check for exact match
+            else if (typeof positions === 'object' && 'lat' in positions && 'lng' in positions) {
+                if (labelPositions.some(p => areCoordinatesEqual(p, positions))) {
+                    foundLabels.push(label);
                 }
             }
         }

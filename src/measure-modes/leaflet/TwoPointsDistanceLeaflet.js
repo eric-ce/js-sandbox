@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { calculateDistance, calculateMiddlePos, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 
 /**
@@ -138,10 +138,10 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             interactive: true, // Make the point interactive
+            status: "pending",
             listeners: this.#markerListeners,
         });
         if (!point) return;
-        point.status = "pending"; // Set status to pending
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -153,8 +153,8 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             // update status pending annotations
             const pointsArray = this.pointCollection.getLayers();
             pointsArray.forEach(point => {
-                if (point && point.id.includes(this.mode)) {
-                    point.status = "completed"
+                if (point.id?.includes(`annotate_${this.mode}`) || point?.feature?.properties?.status) {
+                    point.feature.properties.status = "completed";
                 }
             });
 
@@ -354,7 +354,8 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         // Default options
         const {
             status = "pending", // Default pending status
-            color = this.stateManager.getColorState("move"), // Default color 
+            color = this.stateManager.getColorState("move"),
+            id = `annotate_${this.mode}_line_${this.measure.id}`,
             interactive = false,
             ...rest
         } = options;
@@ -387,6 +388,15 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
                         this.drawingHelper._refreshLayerInteractivity(lineInstance);
                     }
                 }
+
+                // -- Handle Metadata Update for new and existed line --
+                Object.assign(lineInstance.feature.properties, {
+                    status,
+                    positions: positions.map(pos => ({ ...pos })), // Store positions copy
+                    ...(id && deconstructIdForMetadata(id)), // Deconstruct id for metadata
+                })
+                lineInstance.feature.id = id; // Update the id on the feature
+                lineInstance.id = id; // Update the id on the line instance
             }
         }
 
@@ -395,7 +405,8 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         if (!lineInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             lineInstance = this.drawingHelper._addPolyline(positions, {
                 color,
-                id: `annotate_${this.mode}_line_${this.measure.id}`,
+                id,
+                status,
                 interactive,
                 ...rest
             });
@@ -408,11 +419,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             // -- Handle References Update --
             polylinesArray.push(lineInstance); // Push the new instance into the referenced array
         }
-
-        // --- Common Updates (for both existing and newly created) ---
-        // -- Handle Metadata Update --
-        lineInstance.status = status; // Set status
-        lineInstance.positions = positions.map(pos => ({ ...pos })); // Store a copy of positions
 
         return lineInstance; // Return the instance
     }
@@ -439,6 +445,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             status = null,
             color = "rgba(0,0,0,1)",
             interactive = false,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -485,13 +492,23 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
                         this.drawingHelper._refreshLayerInteractivity(labelInstance);
                     }
                 }
+
+                // -- Handle Metadata Update for new and existed label --
+                Object.assign(labelInstance.feature.properties, {
+                    status,
+                    positions: positions.map(pos => ({ ...pos })), // Store positions copy
+                    ...(id && deconstructIdForMetadata(id)), // Deconstruct id for metadata
+                });
+                labelInstance.feature.id = id; // Update the id on the feature
+                labelInstance.id = id; // Update the id on the label instance
             }
         }
 
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id,
+                status,
                 interactive,
                 ...rest
             });
@@ -509,10 +526,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return { distance, labelInstance: null }; // Return distance but null instance
         }
-
-        // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = positions.map(pos => ({ ...pos })); // Store positions copy
 
         return { distance, labelInstance }; // Return the newly created instance
     }
