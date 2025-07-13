@@ -224,12 +224,8 @@ class PolygonGoogle extends MeasureModeGoogle {
         this.coordsCache.push(this.#coordinate); // Update the coordinate cache
 
         // -- Update annotations status --
-        // update status pending annotations
-        this.pointCollection.forEach(point => {
-            if (point.id?.includes(`annotate_${this.mode}`) || point?.feature?.properties?.status) {
-                point.feature.properties.status = "completed";
-            }
-        });
+        // update points status
+        this._updatePendingItemsToCompleted(this.pointCollection, `annotate_${this.mode}`);
 
 
         // -- Create final point --
@@ -443,12 +439,12 @@ class PolygonGoogle extends MeasureModeGoogle {
 
         const area = calculateArea(positions);
         const formattedText = formatMeasurementValue(area, "squareMeter");
-        const middlePos = calculateMiddlePos(positions); // Calculate the middle position for the label
+        // const middlePos = calculateMiddlePos(positions); // Calculate the middle position for the label
 
-        if (!middlePos) {
-            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { area: null, labelInstance: null }; // Return early if middle position is invalid
-        }
+        // if (!middlePos) {
+        //     console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
+        //     return { area: null, labelInstance: null }; // Return early if middle position is invalid
+        // }
 
         let labelInstance = null;
 
@@ -461,18 +457,14 @@ class PolygonGoogle extends MeasureModeGoogle {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setPosition(middlePos); // update position
-                // Ensure getLabel() exists and returns an object before spreading
-                const currentLabelOptions = labelInstance.getLabel();
-                if (currentLabelOptions) {
-                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText, clickable }); // update text
-                } else {
-                    // Fallback if getLabel() is not as expected
-                    labelInstance.setLabel({ text: formattedText, clickable });
-                }
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
+                    id,
+                    status,
+                    clickable,
+                    ...rest
+                });
             }
-            labelInstance.id = id; // Update id
         }
 
         // -- Create new label --
@@ -497,13 +489,6 @@ class PolygonGoogle extends MeasureModeGoogle {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return { area, labelInstance: null }; // Early exit if labelInstance is not valid
         }
-
-        // -- Handle Metadata Update --
-        Object.assign(labelInstance.feature.properties, {
-            status,
-            positions: positions.map(p => ({ ...p })),
-            ...(id && deconstructIdForMetadata(id))
-        });
 
         return { area, labelInstance };
     }

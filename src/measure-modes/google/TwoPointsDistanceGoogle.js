@@ -159,22 +159,18 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length === 2) {
-            // update status pending annotations
-            this.pointCollection.forEach(point => {
-                if (point.id?.includes(`annotate_${this.mode}`) || point?.feature?.properties?.status) {
-                    point.feature.properties.status = "completed";
-                }
-            });
+            // -- Update annotations status --
+            // update points status
+            this._updatePendingItemsToCompleted(this.pointCollection, `annotate_${this.mode}`);
 
-            // -- APPROACH 2: Update/ Reuse existing polyline and label --
-            // -- Handle polyline --
+            // -- APPROACH 1: Remove and recreate polyline --
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
                 status: "completed",
                 color: this.stateManager.getColorState("line"),
                 clickable: true
             });
 
-            // -- Handle label --
+            // -- APPROACH 2: Update/ Reuse existing label --
             const { distance } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "completed",
                 clickable: true
@@ -414,12 +410,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         const distance = calculateDistance(positions[0], positions[1]); // calculate distance
         const formattedText = formatMeasurementValue(distance, "meter"); // Format the distance value
-        const middlePos = calculateMiddlePos(positions); // calculate label position
-
-        if (!middlePos) {
-            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { distance, labelInstance: null }; // Return early if middle position is invalid
-        }
 
         let labelInstance = null;
 
@@ -432,17 +422,13 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setPosition(middlePos); // update position
-                // Ensure getLabel() exists and returns an object before spreading
-                const currentLabelOptions = labelInstance.getLabel();
-                if (currentLabelOptions) {
-                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText, clickable }); // update text
-                } else {
-                    // Fallback if getLabel() is not as expected
-                    labelInstance.setLabel({ text: formattedText, clickable });
-                }
-                labelInstance.id = id // update id
+                // Update label visuals and metadata
+                this._updateLabel(labelInstance, positions, formattedText, {
+                    status,
+                    clickable,
+                    id,
+                    ...rest
+                });
             }
         }
 
@@ -468,13 +454,6 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return { distance, labelInstance: null }; // Early exit if labelInstance is not valid
         }
-
-        // -- Handle Metadata Update --
-        Object.assign(labelInstance.feature.properties, {
-            status,
-            positions: positions.map(pos => ({ ...pos })), // Store positions copy
-            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
-        })
 
         return { distance, labelInstance }; // Return the newly created instance
     }

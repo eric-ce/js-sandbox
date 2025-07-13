@@ -213,13 +213,13 @@ class MeasureModeLeaflet extends MeasureModeBase {
      * @param {{lat:number,lng:number}[]} positions - Array of positions for this label
      * @param {string} labelText - The text to display in the label
      * @param {Object} [options={}] - Update options
-     * @returns {{distance: number, label: L.tooltip}} The calculated distance and updated label
+     * @returns {L.tooltip | null} The updated label
      * @private
      */
-    _updateLabel(label, positions, labelText, options) {
+    _updateLabel(label, positions, labelText, options = {}) {
         if (!label || typeof labelText !== "string") {
             console.warn("Invalid label or labelText provided for update.");
-            return { label: null };
+            return null;
         }
 
         const { status, color, interactive, id } = options;
@@ -260,7 +260,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         label.feature.id = id;
         label.id = id;
 
-        return label
+        return label;
     }
 
     /**

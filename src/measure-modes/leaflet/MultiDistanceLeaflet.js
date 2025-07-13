@@ -1007,7 +1007,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                     });
 
                     // -- Handle records Update --
-                    distances.push(segmentDistance); // Collect distances for each segment
+                    segmentDistance && distances.push(segmentDistance); // Collect distances for each segment
                 });
             }
             // Case: update SINGLE LABEL, typically for moving operation 
@@ -1026,7 +1026,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                         interactive,
                         ...rest
                     });
-                    // Store reference 
+
+                    // -- Handle References Update --
                     labelInstances = [labelInstance];
                     distances = [segmentDistance];
                 }

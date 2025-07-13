@@ -1,6 +1,7 @@
 import { MeasureModeBase } from "../MeasureModeBase.js";
-import { areCoordinatesEqual, convertToLatLng } from "../../lib/helper/googleHelper.js";
+import { areCoordinatesEqual, calculateMiddlePos, convertToLatLng } from "../../lib/helper/googleHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
+import { deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.js";
 
 
 /** @typedef {import('../../lib/input/GoogleMapsInputHandler.js').GoogleMapsInputHandler} GoogleMapsInputHandler */
@@ -157,6 +158,123 @@ class MeasureModeGoogle extends MeasureModeBase {
             }
         });
     }
+
+    /*******************************
+     * COMMON METHOD USED IN MODES *
+     *******************************/
+    /**
+     * Updates a single label's visual appearance and metadata.
+     * Reused in different modes to ensure consistent label updates.
+     * @param {google.maps.Marker} label - The label to update.
+     * @param {{lat:number,lng:number}[]} positions - Array of positions for this label.
+     * @param {string} labelText - The plain formatted text string to display on the label.
+     * @param {Object} [options={}] - Additional options for label update.
+     */
+    _updateLabel(label, positions, labelText, options = {}) {
+        if (!label || typeof labelText !== "string") {
+            console.warn("Invalid label or labelText provided for update.");
+            return null;
+        }
+
+        const { status, clickable, id } = options;
+
+        // Label position
+        const numPos = positions.length;
+        const labelPosition = numPos === 1 ? positions[0] : calculateMiddlePos(positions);
+
+        // -- Handle Label Visual Update --
+        label.setPosition(labelPosition); // update position
+        // Ensure getLabel() exists and returns an object before spreading
+        const currentLabelOptions = label.getLabel();
+        if (currentLabelOptions) {
+            label.setLabel({ ...currentLabelOptions, text: labelText, clickable }); // update text
+        } else {
+            // Fallback if getLabel() is not as expected
+            label.setLabel({ text: labelText, clickable });
+        }
+
+        // -- Handle Label Metadata Update --
+        if (!label?.feature?.properties) {
+            label.feature = { properties: {} }; // Ensure feature properties exist
+        }
+        Object.assign(label.feature.properties, {
+            status,
+            positions: positions.map(pos => ({ ...pos })),
+            ...(id && deconstructIdForMetadata(id))
+        });
+        label.feature.id = id;
+        label.id = id;
+
+        return label;
+    }
+
+    /**
+     * Updates all pending items in a collection to completed status and makes them interactive.
+     * @param {Array} collection - The collection of items to update (points, polylines, or labels)
+     * @param {string} filterPrefix - The ID prefix to filter items by (e.g., `annotate_${this.mode}`)
+     * @returns {void}
+     */
+    _updatePendingItemsToCompleted(collection, filterPrefix) {
+        if (!Array.isArray(collection)) return;
+
+        const pendingItems = collection.filter(item =>
+            item.id?.includes(filterPrefix) && item?.feature?.properties?.status === "pending"
+        );
+
+        pendingItems.forEach(item => {
+            // Set status to completed
+            if (item?.feature?.properties?.status) {
+                item.feature.properties.status = "completed";
+            }
+
+            // Make the item interactive (Google Maps uses different methods)
+            if (item.setOptions) {
+                item.setOptions({ clickable: true });
+            } else if (item.clickable !== undefined) {
+                item.clickable = true;
+            }
+        });
+    }
+
+
+    /******************
+     * COMMON FEATURE *
+     ******************/
+    /**
+     * Removes an entire line set, including related points, labels, and polygons.
+     * @param {google.maps.Polyline} polyline - The polyline to remove.
+     * @returns {void}
+     */
+    _removeLineSet(polyline) {
+        if (!polyline) return;
+
+        // confirmation 
+        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
+        if (!userConfirmation) return;
+
+        const measureId = Number(polyline.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
+
+        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
+        points.forEach(point => {
+            this.drawingHelper._removePointMarker(point); // Remove the point marker
+        });
+        labels.forEach(label => {
+            this.drawingHelper._removeLabel(label); // Remove the label
+        });
+        polylines.forEach(polyline => {
+            this.drawingHelper._removePolyline(polyline); // Remove the polyline
+        });
+        polygons.forEach(polygon => {
+            this.drawingHelper._removePolygon(polygon); // Remove the polygon
+        });
+
+        // remove the measure data from dataPool
+        dataPool.removeMeasureById(measureId);
+
+        // show notification
+        showCustomNotification(`removed line set, id: ${measureId}`, this._container)
+    }
+
 }
 
 export { MeasureModeGoogle };

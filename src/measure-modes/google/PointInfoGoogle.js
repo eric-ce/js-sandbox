@@ -320,7 +320,6 @@ class PointInfoGoogle extends MeasureModeGoogle {
         } = options;
 
         const formattedText = `lat: ${positions[0].lat.toFixed(6)}, lng: ${positions[0].lng.toFixed(6)}`;
-        const labelPos = positions[0]; // Use the first position for the label
 
         let labelInstance = null;
         // -- Update existing label --
@@ -332,17 +331,13 @@ class PointInfoGoogle extends MeasureModeGoogle {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setPosition(labelPos); // update position
-                // Ensure getLabel() exists and returns an object before spreading
-                const currentLabelOptions = labelInstance.getLabel();
-                if (currentLabelOptions) {
-                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText, clickable }); // update text
-                } else {
-                    // Fallback if getLabel() is not as expected
-                    labelInstance.setLabel({ text: formattedText, clickable });
-                }
-                labelInstance.id = id; // update id
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
+                    id,
+                    status,
+                    clickable,
+                    ...rest
+                });
             }
         }
 
@@ -368,13 +363,6 @@ class PointInfoGoogle extends MeasureModeGoogle {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return null; // Early exit if labelInstance is not valid
         }
-
-        // -- Handle Metadata Update for new and existed label --
-        Object.assign(labelInstance.feature.properties, {
-            status,
-            positions: positions.map(pos => ({ ...pos })), // Store positions copy
-            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
-        })
 
         return { labelInstance };
     }

@@ -90,6 +90,13 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             // Prevent map drag, default behavior
             event.domEvent?.stopPropagation();
             event.domEvent?.preventDefault();
+
+            // Prevent click event from firing immediately after a drag operation.
+            // A drag is determined if the isDragging flag is true or if a drag ended recently.
+            if (this.dragHandler?.isDragging || (this.dragHandler?.lastDragEndTs && (Date.now() - this.dragHandler.lastDragEndTs) < 200)) {
+                return;
+            }
+
             // Case: it is during measure
             if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) {
                 const pointPositions = marker?.feature?.properties?.positions || [];
@@ -457,24 +464,11 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         // -- Update annotations status --
         // update points status
-        this.pointCollection.forEach(point => {
-            if (point.id?.includes(`annotate_${this.mode}`) || point?.feature?.properties?.status) {
-                point.feature.properties.status = "completed";
-                point.clickable = true;
-            }
-        });
-        // update pending status line to completed
-        const pendingPolylines = this.#interactiveAnnotations.polylines.filter(line => line?.feature?.properties?.status === "pending");
-        pendingPolylines.forEach(polyline => {
-            if (polyline?.feature?.properties?.status) polyline.feature.properties.status = "completed";
-            polyline.setOptions({ clickable: true });
-        });
+        this._updatePendingItemsToCompleted(this.pointCollection, `annotate_${this.mode}`);
+        // update pending status line to completed   
+        this._updatePendingItemsToCompleted(this.#interactiveAnnotations.polylines, `annotate_${this.mode}`);
         // update pending status labels to completed
-        const pendingLabels = this.#interactiveAnnotations.labels.filter(label => label?.feature?.properties?.status === "pending");
-        pendingLabels.forEach(label => {
-            if (label?.feature?.properties?.status) label.feature.properties.status = "completed";
-            label.setOptions({ clickable: true });
-        });
+        this._updatePendingItemsToCompleted(this.#interactiveAnnotations.labels, `annotate_${this.mode}`);
 
 
         // -- Handle Measure Data --
@@ -733,40 +727,6 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
 
-    /**
-     * Removes an entire line set, including related points, labels, and polygons.
-     * @param {google.maps.Polyline} polyline - The polyline to remove.
-     * @returns {void}
-     */
-    _removeLineSet(polyline) {
-        if (!polyline) return;
-
-        // confirmation 
-        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
-        if (!userConfirmation) return;
-
-        const measureId = Number(polyline.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
-
-        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
-        points.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point marker
-        });
-        labels.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label
-        });
-        polylines.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline
-        });
-        polygons.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon
-        });
-
-        // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
-
-        // show notification
-        showCustomNotification(`removed line set, id: ${measureId}`, this._container)
-    }
 
     /******************
      * EVENT HANDLING *
@@ -1079,31 +1039,16 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                 // Assume: nested positions length should be same as labelsArray length
                 positions.forEach((posSet, index) => {
                     labelInstances = labelsArray;
-                    const segmentDistance = calculateDistance(posSet[0], posSet[1]);
-                    const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                    const segmentMiddlePos = calculateMiddlePos(posSet);
-                    if (!segmentDistance || !segmentMiddlePos) return;
-
                     const labelToUpdate = labelInstances[index];
-                    // -- Handle Label Visual Update --
-                    labelToUpdate.setPosition(segmentMiddlePos); // update position
-                    // Ensure getLabel() exists and returns an object before spreading
-                    const currentLabelOptions = labelToUpdate.getLabel();
-                    if (currentLabelOptions) {
-                        labelToUpdate.setLabel({ ...currentLabelOptions, text: segmentFormattedText, clickable }); // update text
-                    } else {
-                        // Fallback if getLabel() is not as expected
-                        labelToUpdate.setLabel({ text: segmentFormattedText, clickable });
-                    }
+                    const segmentDistance = calculateDistance(posSet[0], posSet[1]);
+                    const formattedText = formatMeasurementValue(segmentDistance, "meter");
 
-                    // -- Handle Label Metadata Update --
-                    if (!labelToUpdate?.feature?.properties) {
-                        labelToUpdate.feature = { properties: {} }; // Ensure feature properties exist
-                    }
-                    Object.assign(labelToUpdate.feature.properties, {
-                        status: status,
-                        positions: posSet.map(pos => ({ ...pos })), // Store the original positions
-                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+                    // Update label visuals and metadata
+                    this._updateLabel(labelToUpdate, posSet, formattedText, {
+                        id,
+                        status,
+                        clickable,
+                        ...rest
                     });
 
                     // -- Handle records Update --
@@ -1112,31 +1057,21 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             }
             // Case: update SINGLE LABEL, typically for moving operation 
             else {
-                const segmentDistance = calculateDistance(positions[0], positions[1]);
-                const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                const segmentMiddlePos = calculateMiddlePos(positions);
-
+                // Find the moving label instance
                 const labelInstance = labelsArray.find(label => label?.feature?.properties?.status === "moving");
                 if (labelInstance) {
-                    // -- Handle Label Visual Update --
-                    labelInstance.setPosition(segmentMiddlePos); // update position
-                    const currentLabelOptions = labelInstance.getLabel();
-                    if (currentLabelOptions) {
-                        labelInstance.setLabel({ ...currentLabelOptions, text: segmentFormattedText, clickable }); // update text
-                    } else {
-                        // Fallback if getLabel() is not as expected
-                        labelInstance.setLabel({ text: segmentFormattedText, clickable });
-                    }
-                    labelInstance.id = id;
+                    const segmentDistance = calculateDistance(positions[0], positions[1]);
+                    const formattedText = formatMeasurementValue(segmentDistance, "meter");
 
-                    // -- Handle Label Metadata Update --
-                    Object.assign(labelInstance.feature.properties, {
-                        status: status,
-                        positions: positions.map(pos => ({ ...pos })), // store positions
-                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+                    // Update label visuals and metadata
+                    this._updateLabel(labelInstance, positions, formattedText, {
+                        id,
+                        status,
+                        clickable,
+                        ...rest
                     });
 
-                    // -- Handle references Update --
+                    // -- Handle References Update --
                     labelInstances = [labelInstance]; // Get the label that is currently being moved
                     distances = [segmentDistance]; // Store the distance for the single segment
                 }
@@ -1162,13 +1097,6 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                 console.warn("_createOrUpdateLabel: Failed to create new label instance.");
                 return { distances, labelInstances: null }; // Return distance but null instance
             }
-
-            // -- Handle Label Metadata Update --
-            Object.assign(labelInstance.feature.properties, {
-                status,
-                positions: positions.map(pos => ({ ...pos })), // Store the original positions
-                ...(id && deconstructIdForMetadata(id))
-            });
 
             // -- Handle References Update --
             labelInstances.push(labelInstance); // Store the new label instance in the array
@@ -1197,34 +1125,33 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         const formattedText = `Total: ${formatMeasurementValue(totalDistance, "meter")}`;
         const labelPosition = positions[positions.length - 1]; // Use the last position for the total label
 
+        if (!labelPosition) {
+            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
+            return { totalDistance, labelInstance: null }; // Return early if middle position is invalid
+        }
+
         let labelInstance = null;
 
-        // -- Update existing label --
+        // -- Update label if exists --
         if (labelsArray.length > 0) {
             labelInstance = labelsArray[0]; // Get the reference from the array
-        } else {
-            const existedTotalLabel = this.labelCollection.find(label => label.id === `annotate_${this.mode}_total-label_${this.measure.id}`); // Find the label by ID      
-            if (existedTotalLabel) {
-                labelInstance = existedTotalLabel; // If it exists, use it
-            }
-        }
 
-        // Update labelInstance if it exists
-        if (labelInstance) {
-            // -- Handle Label Visual Update --
-            labelInstance.setPosition(labelPosition); // update position
-            // Ensure getLabel() exists and returns an object before spreading
-            const currentLabelOptions = labelInstance.getLabel();
-            if (currentLabelOptions) {
-                labelInstance.setLabel({ ...currentLabelOptions, text: formattedText, clickable }); // update text
+            // Check if the reference is a valid label instance
+            if (!labelInstance) {
+                console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
+                labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // Fallback if getLabel() is not as expected
-                labelInstance.setLabel({ text: formattedText, clickable });
+                // Update label visuals and metadata
+                this._updateLabel(labelInstance, [labelPosition], formattedText, {
+                    clickable,
+                    id,
+                    status,
+                    ...rest
+                });
             }
-            labelInstance.id = id // Update id
         }
 
-        // -- Create new label --
+        // -- Create new label if not exists --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
                 clickable,
@@ -1240,13 +1167,6 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return { totalDistance, labelInstance: null }; // Early exit if labelInstance is not valid
         }
-
-        // -- Handle Label Metadata Update --
-        Object.assign(labelInstance.feature.properties, {
-            status,
-            positions: positions.map(pos => ({ ...pos })),
-            ...(id && deconstructIdForMetadata(id))
-        });
 
         return { totalDistance, labelInstance }; // Return the newly created instance
     }
@@ -1274,3 +1194,43 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 }
 
 export { MultiDistanceGoogle };
+
+
+
+/**************
+ * DEPRECATED *
+ **************/
+// /**
+//  * Removes an entire line set, including related points, labels, and polygons.
+//  * @param {google.maps.Polyline} polyline - The polyline to remove.
+//  * @returns {void}
+//  */
+// _removeLineSet(polyline) {
+//     if (!polyline) return;
+
+//     // confirmation
+//     const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
+//     if (!userConfirmation) return;
+
+//     const measureId = Number(polyline.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
+
+//     const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
+//     points.forEach(point => {
+//         this.drawingHelper._removePointMarker(point); // Remove the point marker
+//     });
+//     labels.forEach(label => {
+//         this.drawingHelper._removeLabel(label); // Remove the label
+//     });
+//     polylines.forEach(polyline => {
+//         this.drawingHelper._removePolyline(polyline); // Remove the polyline
+//     });
+//     polygons.forEach(polygon => {
+//         this.drawingHelper._removePolygon(polygon); // Remove the polygon
+//     });
+
+//     // remove the measure data from dataPool
+//     dataPool.removeMeasureById(measureId);
+
+//     // show notification
+//     showCustomNotification(`removed line set, id: ${measureId}`, this._container)
+// }
