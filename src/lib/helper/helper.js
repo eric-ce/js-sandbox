@@ -639,7 +639,6 @@ export function deconstructIdForMetadata(id) {
     const [annotation, mode, type, measureId] = id.split("_");
 
     return {
-        id,
         mode: mode || null,
         type: type || null,
         measureId: measureId || null

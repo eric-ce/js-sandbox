@@ -216,17 +216,10 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         // update coordinate data cache
         this.coordsCache.push(this.#coordinate); // Update the coordinate cache
 
-        // update status pending annotations
-        const pendingPoints = this.pointCollection.getLayers().filter(point => point.id?.includes(`annotate_${this.mode}`) || point?.feature?.properties?.status === "pending");
-        pendingPoints.forEach(point => {
-            // Set status to completed
-            if (point?.feature?.properties?.status) point.feature.properties.status = "completed";
-            // Make the polyline interactive
-            if (point.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                point.options.interactive = true; // Make the point interactive
-                this.drawingHelper._refreshLayerInteractivity(point);
-            }
-        });
+        // -- Update annotations status --
+        // Update points status and interactive
+        this._updatePendingItemsToCompleted(this.pointCollection.getLayers(), `annotate_${this.mode}`); // Update points status and interactive
+
 
         // -- Create final point --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
@@ -477,37 +470,14 @@ class PolygonLeaflet extends MeasureModeLeaflet {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setLatLng(middlePos); // update position
-
-                // Create HTML element for label content
-                const contentElement = document.createElement('span');
-                contentElement.style.color = color;
-                contentElement.textContent = formattedText;
-
-                // Set the content of the label
-                labelInstance.setContent(contentElement); // update content
-
-                // Update interactive state
-                const oldInteractiveState = labelInstance.options.interactive;
-                // Compare the old with current interactive state, only update interactive if different
-                if (oldInteractiveState !== interactive) {
-                    // Update the interactive
-                    labelInstance.options.interactive = interactive;
-                    // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(labelInstance);
-                    }
-                }
-
-                // -- Handle Metadata to update label --
-                Object.assign(labelInstance.feature.properties, {
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
                     status,
-                    positions: positions.map(pos => ({ ...pos })),
-                    ...(id && deconstructIdForMetadata(id))
+                    color,
+                    interactive,
+                    id,
+                    ...rest
                 })
-                labelInstance.feature.id = id; // Update the id on the label instance feature
-                labelInstance.id = id; // Update the id on the label instance
             }
         }
 
@@ -517,6 +487,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
                 id,
                 interactive,
                 status,
+                color,
                 ...rest
             });
             if (!labelInstance) {

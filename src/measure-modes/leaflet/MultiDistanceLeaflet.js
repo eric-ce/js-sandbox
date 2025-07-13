@@ -87,6 +87,13 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             // Prevent map drag, default behavior
             event.domEvent?.stopPropagation();
             event.domEvent?.preventDefault();
+
+            // Prevent click event from firing immediately after a drag operation.
+            // A drag is determined if the isDragging flag is true or if a drag ended recently.
+            if (this.dragHandler?.isDragging || (this.dragHandler?.lastDragEndTs && (Date.now() - this.dragHandler.lastDragEndTs) < 200)) {
+                return;
+            }
+
             // Case: it is during measure
             if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) {
                 const pointPositions = marker?.feature?.properties?.positions || [];
@@ -99,7 +106,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                     this._formsPerimeter(marker);
                 }
             } else {
-                // this._resumeMeasure(marker); // Resume measure by the clicked point
+                this._resumeMeasure(marker); // Resume measure by the clicked point
             }
         }
     };
@@ -451,40 +458,11 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // -- Update annotations status --
         // Update points status and interactive
-        const pendingPoints = this.pointCollection.getLayers().filter(point => point.id?.includes(`annotate_${this.mode}`) || point?.feature?.properties?.status === "pending");
-        pendingPoints.forEach(point => {
-            // Set status to completed
-            if (point?.feature?.properties?.status) point.feature.properties.status = "completed";
-            // Make the polyline interactive
-            if (point.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                point.options.interactive = true; // Make the point interactive
-                this.drawingHelper._refreshLayerInteractivity(point);
-            }
-        });
+        this._updatePendingItemsToCompleted(this.pointCollection.getLayers(), `annotate_${this.mode}`);
         // Update polylines status and interactive
-        const pendingPolylines = this.#interactiveAnnotations.polylines.filter(polyline => polyline.id?.includes(`annotate_${this.mode}`) && polyline?.feature?.properties?.status === "pending");
-        pendingPolylines.forEach(polyline => {
-            // Set status to completed
-            if (polyline?.feature?.properties?.status) polyline.feature.properties.status = "completed";
-            // Make the polyline interactive
-            if (polyline.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                polyline.options.interactive = true; // Make the polyline interactive
-                this.drawingHelper._refreshLayerInteractivity(polyline);
-            }
-        })
-
+        this._updatePendingItemsToCompleted(this.#interactiveAnnotations.polylines, `annotate_${this.mode}`);
         // Update labels status and interactive
-        const pendingLabels = this.#interactiveAnnotations.labels.filter(label => label.id?.includes(`annotate_${this.mode}`) && label?.feature?.properties?.status === "pending");
-        pendingLabels.forEach(label => {
-            // Set status to completed
-            if (label?.feature?.properties?.status) label.feature.properties.status = "completed";
-            // Make the label interactive
-            if (label.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                label.options.interactive = true; // Make the label interactive
-                this.drawingHelper._refreshLayerInteractivity(label);
-            }
-        });
-
+        this._updatePendingItemsToCompleted(this.#interactiveAnnotations.labels, `annotate_${this.mode}`);
 
         // -- Handle Measure Data --
         if (this.#distances.length > 0 && typeof totalDistance === "number") {
@@ -766,45 +744,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
 
-    /**
-     * Removes an entire line set, including related points, labels, and polygons.
-     * @param {L.Polyline} polyline - The polyline to remove.
-     * @returns {void}
-     */
-    _removeLineSet(polyline) {
-        if (!polyline) return;
 
-        // confirmation 
-        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
-        if (!userConfirmation) {
-            this._refreshMapDrag();
-            return; // If the user does not confirm, exit
-        }
-
-        const measureId = Number(polyline.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
-        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
-        points.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point marker
-        });
-        labels.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label
-        });
-        polylines.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline
-        });
-        polygons.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon
-        });
-
-        // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
-
-        // Refresh the map dragging, to solve issue the middle click keep dragging
-        this._refreshMapDrag();
-
-        // Show notification
-        showCustomNotification(`Line set removed from measure ${measureId}`, this._container);
-    }
 
 
     /******************
@@ -952,7 +892,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         this._createOrUpdateLine(draggedPositions, this.dragHandler.draggedObjectInfo.lines, {
             status: "completed",
             color: this.stateManager.getColorState("line"),
-            interactive: true
+            interactive: true,
+            listeners: this.#polylineListeners
         });
 
         // -- Finalize Label Graphics --
@@ -1015,89 +956,6 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
      * HELPER *
      **********/
     /**
-     * Creates a new polyline or updates an existing one based on positions.
-     * Manages the reference within the provided polylinesArray.
-     * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
-     * @param {L.polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified. Caution: this is not the polylineCollection.
-     * @param {Object} [options={}] - Options for the line.
-     * @returns {L.polyline | null} The created or updated polyline instance, or null if failed.
-     */
-    _createOrUpdateLine(positions, polylinesArray, options = {}) {
-        // 1. DEFAULTS & INPUT VALIDATION
-        if (!Array.isArray(polylinesArray) || !Array.isArray(positions) || positions.length === 0) {
-            console.warn("_createOrUpdateLine: input parameters are invalid.");
-            return;
-        }
-
-        // default options
-        const {
-            status = "pending", // Default pending status
-            color = this.stateManager.getColorState("move"),
-            interactive = false,
-            id = `annotate_${this.mode}_line_${this.measure.id}`,
-            ...rest
-        } = options;
-
-
-        // Determine if `positions` represents multiple line segments (typically for drag)
-        const isNested = positions.length > 0 && Array.isArray(positions[0]);
-
-        // 2. REMOVAL PHASE
-        // -- Check for and remove existing polyline --
-        if (polylinesArray.length > 0) {
-            // Case: remove all lines if positions is nested. Nested positions means it is from dragging operation
-            if (isNested) {
-                // remove all lines in the lines array
-                polylinesArray.forEach(lineToRemove => {
-                    this.drawingHelper._removePolyline(lineToRemove);
-                });
-                polylinesArray.length = 0; // Clear the array
-            }
-            // Case: remove lines that has status "moving"
-            else {
-                for (let i = polylinesArray.length - 1; i >= 0; i--) {
-                    const line = polylinesArray[i];
-                    // Ensure line exists and has a status property before checking
-                    if (line && line?.feature?.properties?.status === "moving") {
-                        this.drawingHelper._removePolyline(line);
-                        polylinesArray.splice(i, 1);
-                    }
-                }
-            }
-        }
-        // 3. CREATION PHASE
-        if (isNested) {
-            // -- Create multiple polylines for nested positions --
-            positions.forEach(posSet => {
-                const newLineInstance = this.drawingHelper._addPolyline(posSet, {
-                    color,
-                    id, // Consider making ID more specific if needed (e.g., adding status)
-                    interactive,
-                    status,
-                    ...rest
-                });
-                if (!newLineInstance) return;
-
-                // -- Handle References Update --
-                polylinesArray.push(newLineInstance);
-            })
-        } else {
-            // -- Create a new single polyline --
-            const newLineInstance = this.drawingHelper._addPolyline(positions, {
-                color,
-                id, // Consider making ID more specific if needed (e.g., adding status)
-                interactive,
-                status,
-                ...rest
-            });
-            if (!newLineInstance) return;
-
-            // -- Handle References Update --
-            polylinesArray.push(newLineInstance);
-        }
-    }
-
-    /**
       * Create or update the label.
       * If the label exists in labelsArray, update its position and text, else create a new one.
       * Manages the reference within the provided labelsArray.
@@ -1136,12 +994,16 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 positions.forEach((posSet, index) => {
                     labelInstances = labelsArray;
                     const labelToUpdate = labelInstances[index];
-                    const { distance: segmentDistance } = this._updateLabel(labelToUpdate, posSet, {
+                    const segmentDistance = calculateDistance(posSet[0], posSet[1]); // Calculate distance for the segment
+                    const formattedText = formatMeasurementValue(segmentDistance, "meter"); // Format the distance text
+
+                    // Update label visuals and metadata
+                    this._updateLabel(labelToUpdate, posSet, formattedText, {
                         id,
                         status,
                         color,
                         interactive,
-                        ...options
+                        ...rest
                     });
 
                     // -- Handle records Update --
@@ -1153,13 +1015,16 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 // Find the moving label instance
                 const labelInstance = labelsArray.find(label => label?.feature?.properties?.status === "moving");
                 if (labelInstance) {
-                    // Update the label instance
-                    const { distance: segmentDistance } = this._updateLabel(labelInstance, positions, {
+                    const segmentDistance = calculateDistance(positions[0], positions[1]); // Calculate distance for the segment
+                    const formattedText = formatMeasurementValue(segmentDistance, "meter"); // Format the distance text
+
+                    // Update label visuals and metadata
+                    this._updateLabel(labelInstance, positions, formattedText, {
                         id,
                         status,
                         color,
                         interactive,
-                        ...options
+                        ...rest
                     });
                     // Store reference 
                     labelInstances = [labelInstance];
@@ -1209,6 +1074,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             color = "rgba(0, 0, 0, 1)",
             interactive = false,
             id = `annotate_${this.mode}_total-label_${this.measure.id}`,
+            ...rest
         } = options;
 
         const totalDistance = this.#distances.reduce((acc, val) => acc + val, 0);
@@ -1231,14 +1097,13 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Update the existing label instance --
-                this._updateLabel(labelInstance, [labelPosition], {
-                    textContent: formattedText,
+                // Update label visuals and metadata
+                this._updateLabel(labelInstance, [labelPosition], formattedText, {
                     id,
                     status,
                     color,
                     interactive,
-                    ...options
+                    ...rest
                 });
             }
         }
@@ -1268,72 +1133,6 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         }
 
         return { totalDistance, labelInstance }; // Return the newly created instance
-    }
-
-    /**
-     * Updates a single label's visual appearance and metadata.
-     * @param {L.tooltip} label - The label instance to update
-     * @param {{lat:number,lng:number}[]} positions - Array of positions for this label
-     * @param {Object} [options={}] - Update options
-     * @returns {{distance: number, label: L.tooltip}} The calculated distance and updated label
-     * @private
-     */
-    _updateLabel(label, positions, options) {
-        const { status, color, interactive, id, textContent } = options;
-
-        // Label position
-        const numPos = positions.length;
-        const labelPosition = numPos === 1 ? positions[0] : calculateMiddlePos(positions);
-
-        // Label text
-        let formattedText = "";
-        let distance = 0;
-        if (typeof textContent === "string") {
-            formattedText = textContent; // Use provided text content directly
-        } else {
-            distance = calculateDistance(positions[0], positions[1]);
-            formattedText = formatMeasurementValue(distance, "meter");
-        }
-
-        if (!formattedText || !labelPosition) return { distance: 0, label };
-
-        // -- Handle Label Visual Update --
-        label.setLatLng(labelPosition);
-
-        // Create HTML element for label content
-        const contentElement = document.createElement('span');
-        contentElement.style.color = color;
-        contentElement.textContent = formattedText;
-
-        label.setContent(contentElement);
-
-        // Update interactive state
-        const oldInteractiveState = label.options.interactive;
-        if (oldInteractiveState !== interactive) {
-            label.options.interactive = interactive;
-            if (typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                this.drawingHelper._refreshLayerInteractivity(label);
-            }
-        }
-
-        // -- Handle Metadata Update --
-        Object.assign(label.feature.properties, {
-            status,
-            positions: positions.map(pos => ({ ...pos })),
-            ...(id && deconstructIdForMetadata(id))
-        });
-        label.feature.id = id;
-        label.id = id;
-
-        return { distance, label };
-    }
-
-    /**
-     * Refreshes the map dragging to ensure it is responsive after changes.
-     */
-    _refreshMapDrag() {
-        this.map?.dragging.disable();
-        this.map?.dragging.enable();
     }
 
     /**

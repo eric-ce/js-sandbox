@@ -322,7 +322,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
             ...rest
         } = options;
 
-        const labelPos = positions[0]; // Use the first position for the label
+        // const labelPos = positions[0]; // Use the first position for the label
         const formattedText =
             `lat: ${positions[0].lat.toFixed(6)}\u00B0` +
             `\nlng: ${positions[0].lng.toFixed(6)}\u00B0`;
@@ -338,38 +338,14 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setLatLng(labelPos); // update position
-
-                // Create HTML element for label content
-                const contentElement = document.createElement('span');
-                contentElement.style.color = color;
-                contentElement.textContent = formattedText;
-                contentElement.style.whiteSpace = 'pre';
-
-                // Set the content of the label
-                labelInstance.setContent(contentElement); // update content
-
-                // Update interactive state
-                const oldInteractiveState = labelInstance.options.interactive;
-                // Compare the old with current interactive state, only update interactive if different
-                if (oldInteractiveState !== interactive) {
-                    // Update the interactive
-                    labelInstance.options.interactive = interactive;
-                    // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(labelInstance);
-                    }
-                }
-
-                // -- Handle Metadata Update --
-                Object.assign(labelInstance.feature.properties, {
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
                     status,
-                    positions: positions.map(pos => ({ ...pos })),
-                    ...(id && deconstructIdForMetadata(id))
+                    color,
+                    interactive,
+                    id,
+                    ...rest
                 });
-                labelInstance.feature.id = id;
-                labelInstance.id = id; // Update the id
             }
         }
 
@@ -377,6 +353,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, formattedText, null, {
                 id,
+                color,
                 status,
                 interactive,
                 ...rest
