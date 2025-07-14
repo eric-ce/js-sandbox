@@ -260,18 +260,17 @@ export class MeasureComponentBase extends HTMLElement {
                 case "cesium":
                     this.inputHandler = new CesiumInputHandler(this.map);
                     this.dragHandler = new CesiumDragHandler(this.map, this.inputHandler, this.emitter);
-                    this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter);
-
+                    this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 case "google":
                     this.inputHandler = new GoogleMapsInputHandler(this.map);
                     this.dragHandler = new GoogleDragHandler(this.map, this.inputHandler, this.emitter);
-                    this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 case "leaflet":
                     this.inputHandler = new LeafletInputHandler(this.map);
                     this.dragHandler = new LeafletDragHandler(this.map, this.inputHandler, this.emitter);
-                    this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 default:
                     throw new Error(`Unsupported map type for Input Handler: ${this.mapName}`);
@@ -741,6 +740,7 @@ export class MeasureComponentBase extends HTMLElement {
                     this._pickedObjectDisplayDataHandler = (event) => this._pickedObjectDisplayData(event);
                 }
                 this.inputHandler.on('leftclick', this._pickedObjectDisplayDataHandler);
+                this.highlightHandler.activate();
             }
 
             return;
@@ -751,6 +751,7 @@ export class MeasureComponentBase extends HTMLElement {
             // turn off picked object feature when activating a mode
             if (typeof this._pickedObjectDisplayData === 'function') {
                 this.inputHandler.off('leftclick', this._pickedObjectDisplayDataHandler);
+                this.highlightHandler.deactivate();
             }
 
             const instance = this._getOrCreateModeInstance(modeId);

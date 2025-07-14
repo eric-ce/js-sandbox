@@ -15,15 +15,16 @@ import { Color } from "cesium";
 
 
 class CesiumHighlightHandler {
-    viewer;
+    map;
     inputHandler;
     emitter;
+    stateManager;
 
     activeModeInstance = null;
     isSelected = false;
     highlightedObjectInfo = null;
 
-    measure = null;
+    // measure = null;
 
     // --- State for Hover and Select ---
     originalStylesMap = new Map(); // Stores original styles { primitive: styleObject }
@@ -38,10 +39,11 @@ class CesiumHighlightHandler {
     // [] 1. left click to select primitive, and set relevant data;
     // [x] 2. mouse move over to highlight primitive, mouse out to unhighlight primitive
 
-    constructor(map, inputHandler, emitter, callbacks = {}) {
-        this.viewer = map;
+    constructor(map, inputHandler, emitter, stateManager) {
+        this.map = map;
         this.inputHandler = inputHandler;
         this.emitter = emitter; // Keep emitter if needed for other things
+        this.stateManager = stateManager;
     }
 
     // get coordinate() {
@@ -49,28 +51,24 @@ class CesiumHighlightHandler {
     // }
 
     activate(modeInstance) {
-        // Validate the variables from modeInstance
-        if (!modeInstance || typeof modeInstance.mode !== 'string' || typeof modeInstance.flags !== 'object') {
-            console.error("CesiumDragHandler activate requires a valid modeInstance with 'mode' and 'flags'.");
-            return;
+        if (modeInstance && typeof modeInstance.mode === 'string') {
+            this.activeModeInstance = modeInstance;
         }
-
-        this.activeModeInstance = modeInstance; // Store the mode instance
 
         // this.pointCollection = this.activeModeInstance.pointCollection; // Store the point collection
         // this.labelCollection = this.activeModeInstance.labelCollection; // Store the label collection
         // this.polylineCollection = this.activeModeInstance.polylineCollection; // Store the polyline collection
         // this.polygonCollection = this.activeModeInstance.polygonCollection; // Store the polygon collection
 
-        this.inputHandler.on('leftclick', this.handleClickToSelect); // Register the click event
+        // this.inputHandler.on('leftclick', this.handleClickToSelect); // Register the click event
         this.inputHandler.on('mousemove', this.handleMoveOverHightlight); // Register the mouse move event
     }
 
     deactivate() {
-        this.inputHandler.off('leftclick', this.handleClickToSelect); // Register the click event
+        // this.inputHandler.off('leftclick', this.handleClickToSelect); // Register the click event
         this.inputHandler.off('mousemove', this.handleMoveOverHightlight); // Register the mouse move event
 
-        this.activeModeInstance = null;
+        if (this.activeModeInstance) this.activeModeInstance = null;
 
         this._resetAllHighlights(); // Reset the dragged object info and flags
 
@@ -92,15 +90,16 @@ class CesiumHighlightHandler {
         }
 
         // -- Conditions to PREVENT highlight --
-        if (this.activeModeInstance.flags?.isDragMode ||
-            this.activeModeInstance.flags?.isAddMode ||
-            (!this.activeModeInstance.flags?.isMeasurementComplete && this.activeModeInstance?.coordsCache?.length > 0)
+        if (this.activeModeInstance?.flags?.isDragMode ||
+            this.activeModeInstance?.flags?.isAddMode ||
+            (!this.activeModeInstance?.flags?.isMeasurementComplete && this.activeModeInstance?.coordsCache?.length > 0)
         ) return;
 
         // -- Picked object with picker mode support --
-        // For picker mode, allow highlighting any annotation; for other modes, filter by mode
-        const modeFilter = this.activeModeInstance.mode === 'picker' ? null : this.activeModeInstance.mode;
+        // For picker mode, or no active mode set, allow highlighting any annotation; when mode set, filter by mode
+        const modeFilter = (!this.activeModeInstance || this.activeModeInstance.mode === 'picker') ? null : this.activeModeInstance.mode;
         const { type: newHoveredObjectType, object } = getRankedPickedObjectType(eventData.pickedFeature, modeFilter);
+
         const newHoveredPrimitive = object?.primitive;
 
         const oldHoveredPrimitive = this.currentlyHoveredPrimitive;
@@ -206,7 +205,7 @@ class CesiumHighlightHandler {
      * @returns {void}
      */
     _updatePrimitiveAppearance(primitive, primitiveType) {
-        if (!primitive || !this.activeModeInstance) return;
+        if (!primitive) return;
 
         const originalStyle = this.originalStylesMap.get(primitive);
         // It's possible originalStyle is not yet stored if _ensureOriginalStyleStored hasn't run for it,
@@ -216,9 +215,9 @@ class CesiumHighlightHandler {
         const isSelected = primitive === this.currentlySelectedPrimitive;
         const isHovered = primitive === this.currentlyHoveredPrimitive;
 
-        const selectColorStr = this.activeModeInstance.stateManager.getColorState("select") || "cyan";
+        const selectColorStr = this.stateManager.getColorState("select") || "cyan";
         const selectColor = Color.fromCssColorString(selectColorStr);
-        const hoverColorStr = this.activeModeInstance.stateManager.getColorState("hover") || "yellow";
+        const hoverColorStr = this.stateManager.getColorState("hover") || "yellow";
         const hoverColor = Color.fromCssColorString(hoverColorStr);
 
         switch (primitiveType) {

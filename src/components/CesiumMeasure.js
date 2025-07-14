@@ -774,9 +774,6 @@ export default class CesiumMeasure extends MeasureComponentBase {
         const { primitive } = pickedObject;
         if (!primitive) return;
 
-
-        // TODO: hover highlight feature
-
         // -- Show the info table for the picked object --
         this._showInfoTable(primitive);
     }
