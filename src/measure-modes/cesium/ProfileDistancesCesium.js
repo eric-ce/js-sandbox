@@ -25,7 +25,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 /** @typedef {import('cesium').PointPrimitive} PointPrimitive */
 
 // -- Data types -- 
-/** @typedef {{polylines: Primitive[], labels: Label[]}} InteractiveAnnotationsState */
+/** @typedef {{polylines: Primitive[], labels: Label[], chartHoveredPoints: PointPrimitive[], addModeLines: PointPrimitive[], totalLabels: Label[]}} InteractiveAnnotationsState */
 /**
  * @typedef MeasurementGroup
  * @property {string} id - Unique identifier for the measurement
@@ -556,6 +556,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
 
         this._createOrUpdateHoveredPoint(closestPosition, {
             id: `annotate_${this.mode}_hovered-point_${measureId}`,
+            color: this.stateManager.getColorState("hoverChartPoint"),
             status: "completed"
         });
 
@@ -992,46 +993,6 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
 
-    /**
-     * Removes an entire line measurement set and its associated primitives from the map.
-     * @param {Primitive} line - The line primitive to remove. This is the visual representation of a measurement line.
-     * @returns {void}
-     */
-    _removeLineSet(line) {
-        if (!line) return;
-
-        // confirmation 
-        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
-        if (!userConfirmation) return;
-
-        const measureId = Number(line.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID    
-
-        const {
-            pointPrimitives,
-            labelPrimitives,
-            polylinePrimitives,
-            polygonPrimitives
-        } = this.drawingHelper._getRelatedPrimitivesByMeasureId(measureId);
-        pointPrimitives.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point primitive
-        });
-        labelPrimitives.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label primitive
-        });
-        polylinePrimitives.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline primitive
-        });
-        polygonPrimitives.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon primitive
-        });
-
-        // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
-
-        // Destroy the chart if it exists
-        this.chartDiv && this._destroyChart();
-    }
-
 
     /******************
      * EVENT HANDLING *
@@ -1363,25 +1324,16 @@ class ProfileDistancesCesium extends MeasureModeCesium {
                 positions.forEach((posSet, index) => {
                     labelPrimitives = labelsArray;
                     const { distance: segmentDistance, clampedPositions } = calculateClampedDistance([posSet[0], posSet[1]], this.map.scene);
+                    if (!segmentDistance) return { distances: [], labelPrimitives: null };
                     const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                    const segmentMiddlePos = calculateMiddlePos(posSet);
-                    if (!segmentDistance || !segmentMiddlePos) return;
 
                     const labelToUpdate = labelPrimitives[index];
-                    // -- Handle Label Visual Update --
-                    labelToUpdate.position = segmentMiddlePos;
-                    labelToUpdate.text = segmentFormattedText;
-                    labelToUpdate.showBackground = showBackground;
-                    labelToUpdate.id = id;
-
-                    // -- Handle Label Metadata Update --
-                    if (!labelToUpdate?.feature?.properties) {
-                        labelToUpdate.feature = { properties: {} }; // Ensure feature properties exist
-                    }
-                    Object.assign(labelToUpdate.feature.properties, {
-                        status: status,
-                        positions: posSet.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+                    // Update label visuals and metadata
+                    this._updateLabel(labelToUpdate, posSet, segmentFormattedText, {
+                        status,
+                        showBackground,
+                        id,
+                        ...rest
                     });
 
                     // -- Handle records Update --
@@ -1393,21 +1345,15 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             else {
                 const { distance: segmentDistance, clampedPositions } = calculateClampedDistance([positions[0], positions[1]], this.map.scene);
                 const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                const segmentMiddlePos = calculateMiddlePos(positions);
 
                 const labelPrimitive = labelsArray.find(label => label?.feature?.properties?.status === "moving");
                 if (labelPrimitive) {
-                    // -- Handle Label Visual Update --
-                    labelPrimitive.position = segmentMiddlePos;
-                    labelPrimitive.text = segmentFormattedText;
-                    labelPrimitive.showBackground = showBackground; // Set background visibility
-                    labelPrimitive.id = id;
-
-                    // -- Handle Label Metadata Update --
-                    Object.assign(labelPrimitive.feature.properties, {
-                        status: status,
-                        positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+                    // Update label visuals and metadata
+                    this._updateLabel(labelPrimitive, positions, segmentFormattedText, {
+                        status,
+                        showBackground,
+                        id,
+                        ...rest
                     });
 
                     // -- Handle references Update --
@@ -1440,13 +1386,6 @@ class ProfileDistancesCesium extends MeasureModeCesium {
                 return { distances, labelPrimitives: null }; // Return distance but null primitive
             }
 
-            // -- Handle Label Metadata Update --
-            Object.assign(labelPrimitive.feature.properties, {
-                status: status,
-                positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
-            });
-
             // -- Handle References Update --
             labelPrimitives.push(labelPrimitive); // Store the new label primitive in the array
             labelsArray.push(labelPrimitive);
@@ -1460,10 +1399,10 @@ class ProfileDistancesCesium extends MeasureModeCesium {
      * @param {Cartesian3[]} positions - The positions of the measure.
      * @param {Label[]} labelsArray - The array of labels to update or create.
      * @param {object} [options={}] - Options for creating or updating the label.
-     * @returns {{ totalLabel: Label, totalDistance: number }} - The created or updated total label and the total distance.
+     * @returns {{ labelPrimitive: Label, totalDistance: number }} - The created or updated total label and the total distance.
      */
     _createOrUpdateTotalLabel(positions, labelsArray, options = {}) {
-        // 1. DEFAULTS & INPUT VALIDATION
+        // Input validation
         if (!Array.isArray(positions) || !Array.isArray(labelsArray) || positions.length === 0) {
             console.warn("Invalid input: positions and labelsArray should be arrays.");
             return { totalLabel: null, totalDistance: 0 }; // Validate input positions
@@ -1496,36 +1435,31 @@ class ProfileDistancesCesium extends MeasureModeCesium {
 
         // Update total label if it exists
         if (totalLabel) {
-            // -- Handle Label Visual Update --
-            totalLabel.position = labelPosition;
-            totalLabel.text = formattedText;
-            totalLabel.showBackground = showBackground; // Set background visibility
-            totalLabel.id = id;
+            totalLabel = this._updateLabel(totalLabel, [labelPosition], formattedText, {
+                status,
+                showBackground,
+                id,
+                ...rest
+            });
         }
 
         // Create a new total label if it does not exist
         if (!totalLabel) {
             totalLabel = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
-                id,
-                showBackground,
-                status,
+                id: id,
+                showBackground: showBackground,
+                status: status,
                 ...rest
             });
-            if (!totalLabel) {
-                console.error("_createOrUpdateTotalLabel: Failed to create new total label primitive.");
-                return { totalLabel: null, totalDistance: 0 }; // Return null label and
-            }
 
             // update references
-            labelsArray.push(totalLabel);
+            totalLabel && labelsArray.push(totalLabel);
         }
 
-        // -- Handle Label Metadata Update --
-        Object.assign(totalLabel.feature.properties, {
-            status: status,
-            positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
-        });
+        if (!totalLabel) {
+            console.error("_createOrUpdateTotalLabel: Failed to create new total label primitive.");
+            return { totalLabel: null, totalDistance: 0 }; // Return null label and
+        }
 
         return { totalLabel, totalDistance };
     }
@@ -1648,28 +1582,38 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         const pointCartographic = dataPoint.position[0];
         const pointCartesian = convertToCartesian3(pointCartographic); // convert to Cartesian3
         if (!pointCartesian) return null;
+
         // Access the metadata stored in the 'measureId' property
         const dataMeasureId = dataPoint.measureId;
         this._createOrUpdateHoveredPoint(pointCartesian, {
             id: `annotate_${this.mode}_hovered-point_${dataMeasureId}`,
+            color: this.stateManager.getColorState("hoverChartPoint"),
             status: "completed"
         });
     }
 
+    /**
+     * Activates the tooltip at the specified point index.
+     * @param {number} index - The index of the point to activate the tooltip for.
+     * @returns {void}
+     */
     _activateTooltipAtPointIndex(index) {
         if (!this.chartInstance) return;
         this.chartInstance.tooltip.setActiveElements([{ datasetIndex: 0, index: index }], this.chartInstance.getDatasetMeta(0).data[1].element);
         this.chartInstance.update();
     }
 
+    /**
+     * Removes the hovered point marker from the chart.
+     */
     removeChartHoveredPoint() {
         const hoveredPoints = this.#interactiveAnnotations.chartHoveredPoints;
-        if (hoveredPoints.length > 0) {
-            hoveredPoints.forEach(point => {
-                this.drawingHelper._removePointMarker(point); // Remove the point primitive
-            });
-            this.#interactiveAnnotations.chartHoveredPoints = []; // Clear the reference
-        }
+        if (!hoveredPoints || hoveredPoints.length === 0) return; // If no hovered points, exit
+
+        hoveredPoints.forEach(point => {
+            this.drawingHelper._removePointMarker(point); // Remove the point primitive
+        });
+        this.#interactiveAnnotations.chartHoveredPoints = []; // Clear the reference
     }
 
     /**

@@ -401,11 +401,12 @@ class PointInfoCesium extends MeasureModeCesium {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelPrimitive.position = positions[0];
-                labelPrimitive.text = formattedText;
-                labelPrimitive.showBackground = showBackground; // Set background visibility
-                labelPrimitive.id = id;
+                // Update label visuals and metadata
+                labelPrimitive = this._updateLabel(labelPrimitive, positions, formattedText, {
+                    showBackground,
+                    status,
+                    id,
+                });
             }
         }
 
@@ -417,21 +418,14 @@ class PointInfoCesium extends MeasureModeCesium {
                 status: status,
             });
 
-            if (!labelPrimitive) {
-                console.error("_createOrUpdateLabel: Failed to create new label primitive.");
-                return { cartographicDegrees, labelPrimitive: null }; // Return cartographicDegrees but null primitive
-            }
-
             // -- Handle References Update --
-            labelsArray.push(labelPrimitive);
+            labelPrimitive && labelsArray.push(labelPrimitive);
         }
 
-        // -- Handle Label Metadata Update --
-        Object.assign(labelPrimitive.feature.properties, {
-            status: status,
-            positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
-        });
+        if (!labelPrimitive) {
+            console.error("_createOrUpdateLabel: Failed to create new label primitive.");
+            return { cartographicDegrees, labelPrimitive: null }; // Return cartographicDegrees but null primitive
+        }
 
         return { cartographicDegrees, labelPrimitive };
     }

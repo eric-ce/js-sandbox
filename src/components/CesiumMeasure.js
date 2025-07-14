@@ -397,6 +397,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Default options
         const {
             status = null,
+            id = null,
         } = options;
 
         // -- Handle position --
@@ -461,6 +462,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Default options
         const {
             status = null,
+            id = null,
         } = options;
 
         // -- Handle position --

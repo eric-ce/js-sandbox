@@ -873,41 +873,6 @@ class MultiDistancesCesium extends MeasureModeCesium {
         showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
 
-    _removeLineSet(line) {
-        if (!line) return;
-
-        // confirmation 
-        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
-        if (!userConfirmation) return;
-
-        const measureId = Number(line.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID    
-
-        const {
-            pointPrimitives,
-            labelPrimitives,
-            polylinePrimitives,
-            polygonPrimitives
-        } = this.drawingHelper._getRelatedPrimitivesByMeasureId(measureId);
-        pointPrimitives.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point primitive
-        });
-        labelPrimitives.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label primitive
-        });
-        polylinePrimitives.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline primitive
-        });
-        polygonPrimitives.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon primitive
-        });
-
-        // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
-
-        // show notification
-        showCustomNotification(`removed line set, id: ${measureId}`, this._container)
-    }
-
 
     /******************
      * EVENT HANDLING *
@@ -1223,25 +1188,17 @@ class MultiDistancesCesium extends MeasureModeCesium {
                 positions.forEach((posSet, index) => {
                     labelPrimitives = labelsArray;
                     const segmentDistance = calculateDistance(posSet[0], posSet[1]);
+                    if (!segmentDistance) return { distances: [], labelPrimitives: null };
                     const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                    const segmentMiddlePos = calculateMiddlePos(posSet);
-                    if (!segmentDistance || !segmentMiddlePos) return;
 
                     const labelToUpdate = labelPrimitives[index];
-                    // -- Handle Label Visual Update --
-                    labelToUpdate.position = segmentMiddlePos;
-                    labelToUpdate.text = segmentFormattedText;
-                    labelToUpdate.showBackground = showBackground;
-                    labelToUpdate.id = id;
 
-                    // -- Handle Label Metadata Update --
-                    if (!labelToUpdate?.feature?.properties) {
-                        labelToUpdate.feature = { properties: {} }; // Ensure feature properties exist
-                    }
-                    Object.assign(labelToUpdate.feature.properties, {
-                        status: status,
-                        positions: posSet.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+                    // Update label visuals and metadata
+                    this._updateLabel(labelToUpdate, posSet, segmentFormattedText, {
+                        status,
+                        showBackground,
+                        id,
+                        ...rest
                     });
 
                     // -- Handle records Update --
@@ -1252,21 +1209,15 @@ class MultiDistancesCesium extends MeasureModeCesium {
             else {
                 const segmentDistance = calculateDistance(positions[0], positions[1]);
                 const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                const segmentMiddlePos = calculateMiddlePos(positions);
 
                 const labelPrimitive = labelsArray.find(label => label?.feature?.properties?.status === "moving");
                 if (labelPrimitive) {
-                    // -- Handle Label Visual Update --
-                    labelPrimitive.position = segmentMiddlePos;
-                    labelPrimitive.text = segmentFormattedText;
-                    labelPrimitive.showBackground = showBackground; // Set background visibility
-                    labelPrimitive.id = id;
-
-                    // -- Handle Label Metadata Update --
-                    Object.assign(labelPrimitive.feature.properties, {
-                        status: status,
-                        positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                        ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+                    // Update label visuals and metadata
+                    this._updateLabel(labelPrimitive, positions, segmentFormattedText, {
+                        status,
+                        showBackground,
+                        id,
+                        ...rest
                     });
 
                     // -- Handle references Update --
@@ -1296,13 +1247,6 @@ class MultiDistancesCesium extends MeasureModeCesium {
                 console.warn("_createOrUpdateLabel: Failed to create new label primitive.");
                 return { distances, labelPrimitives: null }; // Return distance but null primitive
             }
-
-            // -- Handle Label Metadata Update --
-            Object.assign(labelPrimitive.feature.properties, {
-                status: status,
-                positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-                ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
-            });
 
             // -- Handle References Update --
             labelPrimitives.push(labelPrimitive); // Store the new label primitive in the array
@@ -1353,36 +1297,31 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // Update total label if it exists
         if (totalLabel) {
-            // -- Handle Label Visual Update --
-            totalLabel.position = labelPosition;
-            totalLabel.text = formattedText;
-            totalLabel.showBackground = showBackground; // Set background visibility
-            totalLabel.id = id;
+            totalLabel = this._updateLabel(totalLabel, [labelPosition], formattedText, {
+                status,
+                showBackground,
+                id,
+                ...rest
+            });
         }
 
         // Create a new total label if it does not exist
         if (!totalLabel) {
             totalLabel = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
-                id: id,
-                showBackground: showBackground,
-                status: status,
+                id,
+                showBackground,
+                status,
                 ...rest
             });
-            if (!totalLabel) {
-                console.error("_createOrUpdateTotalLabel: Failed to create new total label primitive.");
-                return { totalLabel: null, totalDistance: 0 }; // Return null label and
-            }
 
             // update references
-            labelsArray.push(totalLabel);
+            totalLabel && labelsArray.push(totalLabel);
         }
 
-        // -- Handle Label Metadata Update --
-        Object.assign(totalLabel.feature.properties, {
-            status: status,
-            positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
-        });
+        if (!totalLabel) {
+            console.error("_createOrUpdateTotalLabel: Failed to create new total label primitive.");
+            return { totalLabel: null, totalDistance: 0 }; // Return null label and
+        }
 
         return { totalLabel, totalDistance };
     }

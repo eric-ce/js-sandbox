@@ -475,10 +475,6 @@ class PolygonCesium extends MeasureModeCesium {
             return null;
         }
 
-        // -- Handle Polygon Metadata Update --
-        // polygonPrimitive.status = status; // Set status for polygon primitive
-        // polygonOutlinePrimitive.status = status; // Set status for polygon outline primitive
-
         // -- Handle References Update --
         // Push the new primitive into the array passed by reference.
         if (Array.isArray(polygonsArray)) {
@@ -507,16 +503,12 @@ class PolygonCesium extends MeasureModeCesium {
             status = null,
             showBackground = true,
             id = `annotate_${this.mode}_label_${this.measure.id}`,
+            ...rest
         } = options;
 
         const area = computePolygonArea(positions);
+        if (!area) return { area: null, labelPrimitive: null };  // Validate area calculation
         const formattedText = formatMeasurementValue(area, "squareMeter");
-        const middlePos = calculateMiddlePos(positions); // Calculate the middle position of the polygon
-
-        if (!middlePos) {
-            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { area, labelPrimitive: null }; // Return distance but null primitive
-        }
 
         let labelPrimitive = null;
 
@@ -528,37 +520,33 @@ class PolygonCesium extends MeasureModeCesium {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelPrimitive.position = middlePos;
-                labelPrimitive.text = formattedText;
-                labelPrimitive.showBackground = showBackground; // Set background visibility
-                labelPrimitive.id = id;
+                // Update label visuals and metadata
+                labelPrimitive = this._updateLabel(labelPrimitive, positions, formattedText, {
+                    status,
+                    showBackground,
+                    id,
+                    ...rest
+                });
             }
         }
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
             labelPrimitive = this.drawingHelper._addLabel(positions, area, "squareMeter", {
-                id: id,
-                showBackground: showBackground,
-                status: status,
+                id,
+                showBackground,
+                status,
+                ...rest
             });
 
-            if (!labelPrimitive) {
-                console.error("_createOrUpdateLabel: Failed to create new label primitive.");
-                return { area, labelPrimitive: null }; // Return area but null primitive
-            }
-
             // -- Handle References Update --
-            labelsArray.push(labelPrimitive);
+            labelPrimitive && labelsArray.push(labelPrimitive);
         }
 
-        // -- Handle Label Metadata Update --
-        Object.assign(labelPrimitive.feature.properties, {
-            status: status,
-            positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
-            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
-        });
+        if (!labelPrimitive) {
+            console.error("_createOrUpdateLabel: Failed to create new label primitive.");
+            return { area, labelPrimitive: null }; // Return area but null primitive
+        }
 
         return { area, labelPrimitive };
     }
