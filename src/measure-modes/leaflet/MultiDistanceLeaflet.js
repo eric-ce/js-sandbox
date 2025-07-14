@@ -1089,24 +1089,25 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         let labelInstance = null;
 
-        // -- Update label if exists --
+        // -- Update existing label --
         if (labelsArray.length > 0) {
             labelInstance = labelsArray[0]; // Get the reference from the array
-
-            // Check if the reference is a valid label instance
-            if (!labelInstance) {
-                console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
-                labelsArray.length = 0; // Clear the array to trigger creation below
-            } else {
-                // Update label visuals and metadata
-                this._updateLabel(labelInstance, [labelPosition], formattedText, {
-                    id,
-                    status,
-                    color,
-                    interactive,
-                    ...rest
-                });
+        } else {
+            const existedTotalLabel = this.labelCollection.getLayers().find(label => label.id === `annotate_${this.mode}_total-label_${this.measure.id}`); // Find the label by ID      
+            if (existedTotalLabel) {
+                labelInstance = existedTotalLabel; // If it exists, use it
             }
+        }
+
+        // -- Update label if exists --
+        if (labelInstance) {
+            // Update label visuals and metadata
+            this._updateLabel(labelInstance, [labelPosition], formattedText, {
+                interactive,
+                id,
+                status,
+                ...rest
+            });
         }
 
         // -- Create new label if not exists --
@@ -1119,13 +1120,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 ...options
             });
 
-            if (!labelInstance) {
-                console.error("_createOrUpdateLabel: Failed to create new label instance.");
-                return { totalDistance, labelInstance: null }; // Return totalDistance but null instance
-            }
-
             // -- Handle References Update --
-            labelsArray.push(labelInstance); // Push the new instance into the referenced array
+            labelInstance && labelsArray.push(labelInstance); // Push the new instance into the referenced array
         }
 
         if (!labelInstance) {

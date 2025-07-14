@@ -1132,23 +1132,25 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         let labelInstance = null;
 
-        // -- Update label if exists --
+        // -- Update existing label --
         if (labelsArray.length > 0) {
             labelInstance = labelsArray[0]; // Get the reference from the array
-
-            // Check if the reference is a valid label instance
-            if (!labelInstance) {
-                console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
-                labelsArray.length = 0; // Clear the array to trigger creation below
-            } else {
-                // Update label visuals and metadata
-                this._updateLabel(labelInstance, [labelPosition], formattedText, {
-                    clickable,
-                    id,
-                    status,
-                    ...rest
-                });
+        } else {
+            const existedTotalLabel = this.labelCollection.find(label => label.id === `annotate_${this.mode}_total-label_${this.measure.id}`); // Find the label by ID      
+            if (existedTotalLabel) {
+                labelInstance = existedTotalLabel; // If it exists, use it
             }
+        }
+
+        // -- Update label if exists --
+        if (labelInstance) {
+            // Update label visuals and metadata
+            this._updateLabel(labelInstance, [labelPosition], formattedText, {
+                clickable,
+                id,
+                status,
+                ...rest
+            });
         }
 
         // -- Create new label if not exists --
@@ -1160,7 +1162,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                 ...rest
             });
             // update references
-            labelsArray.push(labelInstance);
+            labelInstance && labelsArray.push(labelInstance);
         }
 
         if (!labelInstance) {
