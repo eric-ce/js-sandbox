@@ -109,6 +109,10 @@ export class MeasureComponentBase extends HTMLElement {
     /** @type {{ [modeId: string]: object }} */
     #modeInstances = {}; // Pool to store instantiated modes
 
+    // -- Event Handler References for Cleanup --
+    /** @type {function(Event): void | null} */
+    _pickedObjectDisplayDataHandler = null;
+
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
@@ -256,18 +260,17 @@ export class MeasureComponentBase extends HTMLElement {
                 case "cesium":
                     this.inputHandler = new CesiumInputHandler(this.map);
                     this.dragHandler = new CesiumDragHandler(this.map, this.inputHandler, this.emitter);
-                    this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter);
-
+                    this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 case "google":
                     this.inputHandler = new GoogleMapsInputHandler(this.map);
                     this.dragHandler = new GoogleDragHandler(this.map, this.inputHandler, this.emitter);
-                    this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 case "leaflet":
                     this.inputHandler = new LeafletInputHandler(this.map);
                     this.dragHandler = new LeafletDragHandler(this.map, this.inputHandler, this.emitter);
-                    this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter);
+                    this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 default:
                     throw new Error(`Unsupported map type for Input Handler: ${this.mapName}`);
@@ -398,7 +401,7 @@ export class MeasureComponentBase extends HTMLElement {
                 getClass: (type) => (type === 'cesium' ? ThreePointsCurveCesium : null)
             },
             {
-                id: 'multi_distances',
+                id: 'multi-distances',
                 name: 'Multi Distances',
                 icon: multiDImage,
                 mapAvailability: ['cesium', 'google', 'leaflet'],
@@ -410,7 +413,7 @@ export class MeasureComponentBase extends HTMLElement {
                 },
             },
             {
-                id: "multi_distances_clamped",
+                id: "multi-distances-clamped",
                 name: "Multi Distances Clamped",
                 icon: multiDClampedIcon,
                 mapAvailability: ["cesium"],
@@ -443,7 +446,7 @@ export class MeasureComponentBase extends HTMLElement {
                 getClass: (type) => (type === 'cesium' ? ProfileCesium : null)
             },
             {
-                id: 'profile_distances',
+                id: 'profile-distances',
                 name: 'Profile Distances',
                 icon: profileDistancesIcon,
                 mapAvailability: ['cesium'],
@@ -729,11 +732,28 @@ export class MeasureComponentBase extends HTMLElement {
         // --- Handle Deactivation Request ---
         if (!modeId || modeId === "inactive") {
             this._updateButtonStates(null);
+
+            // Turn on picked object feature when deactivating a mode
+            if (typeof this._pickedObjectDisplayData === 'function') {
+                // Only create if it doesn't exist to avoid multiple bindings
+                if (!this._pickedObjectDisplayDataHandler) {
+                    this._pickedObjectDisplayDataHandler = (event) => this._pickedObjectDisplayData(event);
+                }
+                this.inputHandler.on('leftclick', this._pickedObjectDisplayDataHandler);
+                this.highlightHandler.activate();
+            }
+
             return;
         }
 
         // --- Activate New Mode ---
         try {
+            // turn off picked object feature when activating a mode
+            if (typeof this._pickedObjectDisplayData === 'function') {
+                this.inputHandler.off('leftclick', this._pickedObjectDisplayDataHandler);
+                this.highlightHandler.deactivate();
+            }
+
             const instance = this._getOrCreateModeInstance(modeId);
             if (!instance) return;
 
@@ -742,14 +762,12 @@ export class MeasureComponentBase extends HTMLElement {
             this.activeModeId = modeId;
             this._updateButtonStates(modeId);
 
-            // show help table 
-
+            // Show instructions table and data log table
             this._showInstructionsTable();
             this._showDataLogTable();
-            requestAnimationFrame(() => {
-                // this.instructionsTable._updatePositions(); // One-time initial positioning after render
+            // Enable dragging for the tables
+            requestAnimationFrame(() => {  // ensure DOM is ready
                 this.instructionsTable._enableDragging();   // Enable dragging with built-in resize handling
-                // this.dataLogTable._updatePositions(); // One-time initial positioning after render
                 this.dataLogTable._enableDragging();   // Enable dragging with built-in resize handling
             });
         } catch (error) {
@@ -1019,9 +1037,9 @@ export class MeasureComponentBase extends HTMLElement {
                         ),
                     ];
                     break;
-                case "multi_distances":
-                case "multi_distances_clamped":
-                case "profile_distances":
+                case "multi-distances":
+                case "multi-distances-clamped":
+                case "profile-distances":
                     // FIXME: add id, color and other properties options
                     // -- Add points and lines --
                     annotations.markers = this._addPointMarkersFromArray(data.coordinates);

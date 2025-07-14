@@ -10,10 +10,9 @@ import {
     calculateMiddlePos,
     getPrimitiveByPointPosition,
     convertToCartesian3,
-    showCustomNotification,
     getRankedPickedObjectType
 } from "../../lib/helper/cesiumHelper.js";
-import { getNeighboringValues, formatMeasurementValue } from "../../lib/helper/helper.js";
+import { getNeighboringValues, formatMeasurementValue, deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -99,7 +98,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             throw new Error("MultiDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
-        super("multi_distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -191,8 +190,9 @@ class MultiDistancesCesium extends MeasureModeCesium {
                 }
                 return true;   // False mean do not handle point click 
             case "line":
+                const line = pickedObject.primitive;
                 if (this.flags.isMeasurementComplete && this.coordsCache.length === 0) {
-                    this._setAddModeByLine(pickedObject.primitive); // Set the add mode by line primitive
+                    this._setAddModeByLine(line); // Set the add mode by line primitive
                     return true;
                 }
                 // this._selectAction(pickedObject.primitive);
@@ -204,14 +204,13 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
     _setAddModeByLine(linePrimitive) {
         // Validate input parameters
-        if (!linePrimitive) return;
-        if (linePrimitive.status === "moving") return;
+        if (!linePrimitive || linePrimitive.feature?.properties?.status === "moving") return;
 
         // -- Set measure id --
         const measureId = Number(linePrimitive.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
 
         // -- User confirmation --
-        const userConfirmation = window.confirm(`Do you want to add mode to add a new point to this segment? Measure id: ${measureId}`);
+        const userConfirmation = window.confirm(`Do you want to add a new point to this line segment? Measure id: ${measureId}`);
         if (!userConfirmation) return; // If the user does not confirm, exit
 
         // Set the measure data
@@ -231,7 +230,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
         this.#interactiveAnnotations.polylines = [linePrimitive];  // Store the line primitive in the interactive annotations
 
         // Due to update method logic only update on existing label, so it need to clone it again to update two labels 
-        const existingLabel = this.drawingHelper._getLabelByPosition(linePrimitive.positions)[0];
+        const linePrimitivePositions = linePrimitive.feature?.properties?.positions;
+        const existingLabel = this.drawingHelper._getLabelByPosition(linePrimitivePositions)[0];
         if (!existingLabel) return; // If no label is found, exit
         const clonedLabel = this.labelCollection.add(existingLabel);
         this.#interactiveAnnotations.labels = [existingLabel, clonedLabel];
@@ -272,7 +272,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
         this.#distances = [...this.measure._records[0].distances]; // Get the distances from the measure data
 
         // Find the index of the point in the measure coordinates
-        const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, point.positions[0]));
+        const pointPositions = point.feature?.properties?.positions || [point.position];
+        const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, pointPositions[0]));
 
         // -- Resume Measure --
         // Resume measure only when the point is the first or last point
@@ -321,9 +322,9 @@ class MultiDistancesCesium extends MeasureModeCesium {
         const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "pending"
         });
         if (!pointPrimitive) return; // If point creation fails, exit
-        pointPrimitive.status = "pending"; // Set status to pending for the point primitive
 
         // Update the coordsCache based on the measurement direction
         if (this.flags.isReverse) {
@@ -346,14 +347,14 @@ class MultiDistancesCesium extends MeasureModeCesium {
             // -- Create Annotations --
             // Create the line
             this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                status: "pending",
-                color: this.stateManager.getColorState("line")
+                color: this.stateManager.getColorState("line"),
+                status: "pending"
             });
 
             // Create the label
             const { distances } = this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                status: "pending",
-                showBackground: true
+                showBackground: true,
+                status: "pending"
             });
 
             // -- Handle Distances record --
@@ -365,8 +366,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
             // Create the total label
             const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
-                status: "pending",
-                showBackground: false
+                showBackground: false,
+                status: "pending"
             });
 
             // -- Update current measure data --
@@ -383,13 +384,13 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
     _addAction() {
         const line = this.#interactiveAnnotations.polylines[0];
-        if (!line || line.status === "moving") {
+        if (!line || line?.feature?.properties?.status === "moving") {
             console.warn("No valid line to add a point to.");
             return;
         }
 
         // -- Update this.coordsCache --
-        const linePositions = line.positions;
+        const linePositions = line?.feature?.properties?.positions;
         const linePos1Index = this.coordsCache.findIndex(pos => areCoordinatesEqual(pos, linePositions[0]));
         const linePos2Index = this.coordsCache.findIndex(pos => areCoordinatesEqual(pos, linePositions[1]));
         if (linePos1Index === -1 || linePos2Index === -1) return; // If positions are not found, exit
@@ -407,14 +408,14 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Create or update the line --
         this._createOrUpdateLine(newPositions, this.#interactiveAnnotations.polylines, {
-            status: "completed",
-            color: this.stateManager.getColorState("line")
+            color: this.stateManager.getColorState("line"),
+            status: "completed"
         });
 
         // -- Create or update the label --
         const { distances } = this._createOrUpdateLabel(newPositions, this.#interactiveAnnotations.labels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
         if (distances.length === 0) return;
 
@@ -423,8 +424,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Update total distance label --
         const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // -- Update measure data --
@@ -485,14 +486,14 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
                 // Moving line: remove if existed, create if not existed
                 this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                    status: "moving",
-                    color: this.stateManager.getColorState("move")
+                    color: this.stateManager.getColorState("move"),
+                    status: "moving"
                 });
 
                 // Moving label: update if existed, create if not existed
                 this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                    status: "moving",
-                    showBackground: false
+                    showBackground: false,
+                    status: "moving"
                 });
 
                 break;
@@ -544,13 +545,13 @@ class MultiDistancesCesium extends MeasureModeCesium {
         // -- Create last annotations --
         // Create last line
         this._createOrUpdateLine(lastPositions, this.#interactiveAnnotations.polylines, {
-            status: "completed",
-            color: this.stateManager.getColorState("line")
+            color: this.stateManager.getColorState("line"),
+            status: "completed"
         });
         // Create last label
         const { distances } = this._createOrUpdateLabel(lastPositions, this.#interactiveAnnotations.labels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // -- Handle Distances record --
@@ -562,8 +563,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Update the last total label --
         const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.#interactiveAnnotations.totalLabels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
 
@@ -574,19 +575,19 @@ class MultiDistancesCesium extends MeasureModeCesium {
         for (let i = 0; i < pointCollectionLength; i++) {
             const pointPrimitive = this.pointCollection.get(i);
             // pointPrimitive is guaranteed to be a valid primitive object here
-            if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
-                pointPrimitive.status = "completed";
+            if (pointPrimitive.id?.includes(`annotate_${this.mode}`) || pointPrimitive?.feature?.properties?.status) {
+                pointPrimitive.feature.properties.status = "completed";
             }
         }
         // update pending status line to completed
-        const pendingLines = this.#interactiveAnnotations.polylines.filter(line => line.status === "pending");
+        const pendingLines = this.#interactiveAnnotations.polylines.filter(line => line?.feature?.properties?.status === "pending");
         pendingLines.forEach(line => {
-            line.status = "completed";
+            if (line?.feature?.properties?.status) line.feature.properties.status = "completed";
         });
         // update pending status labels to completed
-        const pendingLabels = this.#interactiveAnnotations.labels.filter(label => label.status === "pending");
+        const pendingLabels = this.#interactiveAnnotations.labels.filter(label => label?.feature?.properties?.status === "pending");
         pendingLabels.forEach(label => {
-            label.status = "completed";
+            if (label?.feature?.properties?.status) label.feature.properties.status = "completed";
         });
 
 
@@ -650,7 +651,9 @@ class MultiDistancesCesium extends MeasureModeCesium {
      */
     _removePointFromMeasure(point) {
         // Validate input parameters
-        if (!point || !Array.isArray(point.positions)) return;
+        if (!point || !point?.feature?.properties) return;
+        const pointPositions = point?.feature?.properties?.positions;
+        if (!Array.isArray(pointPositions) || pointPositions.length === 0) return;
 
         // confirmation 
         const userConfirmation = window.confirm(`Do you want to remove this point?`) // Confirm the removal action
@@ -671,7 +674,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // Find the point index in the measure coordinates
         const pointPositionIndices = this.measure.coordinates
-            .map((coordinate, index) => areCoordinatesEqual(coordinate, point.positions[0]) ? index : -1)
+            .map((coordinate, index) => areCoordinatesEqual(coordinate, pointPositions[0]) ? index : -1)
             .filter(index => index !== -1);
         if (pointPositionIndices.length === 0) return; // If the point is not found, exit
 
@@ -681,28 +684,32 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Find and Remove related annotations --
         // remove related lines
-        const linePrimitives = this.drawingHelper._getLineByPositions([point.positions[0]]);
+        const linePrimitives = this.drawingHelper._getLineByPositions([pointPositions[0]]);
         if (!Array.isArray(linePrimitives) || linePrimitives.length === 0) return; // If no lines are found, exit
         linePrimitives.forEach(line => {
             this.drawingHelper._removePolyline(line); // Remove the line primitive
 
+            const linePositions = line?.feature?.properties?.positions;
+            if (!Array.isArray(linePositions) || linePositions.length === 0) return; // If no line positions are found, exit
+
             // Case: during measuring, remove the line from this.#interactiveAnnotations
             if (this.#interactiveAnnotations.polylines.length === 0) return; // If there are no polylines, exit
-            const lineToRemoveIndex = this.#interactiveAnnotations.polylines.findIndex(l =>
-                areCoordinatesEqual(l.positions[0], line.positions[0]) &&
-                areCoordinatesEqual(l.positions[1], line.positions[1])
-            );
+            const lineToRemoveIndex = this.#interactiveAnnotations.polylines.findIndex(l => {
+                const lineToRemovePositions = l.feature?.properties?.positions;
+                return areCoordinatesEqual(lineToRemovePositions[0], linePositions[0]) &&
+                    areCoordinatesEqual(lineToRemovePositions[1], linePositions[1]);
+            });
             if (lineToRemoveIndex === -1) return; // If the line is not found, exit
             this.#interactiveAnnotations.polylines.splice(lineToRemoveIndex, 1); // Remove the line from this interactive annotations
         });
 
         // remove related labels
-        const labelPrimitives = this.drawingHelper._getLabelByPosition([point.positions[0]]);
+        const labelPrimitives = this.drawingHelper._getLabelByPosition([pointPositions[0]]);
         if (!Array.isArray(labelPrimitives) || labelPrimitives.length === 0) return; // If no labels are found, exit
         labelPrimitives.forEach(label => {
             // Safety check: assume moving or total labels should not be removed here
-            const isMovingLabel = label.status === "moving";
-            const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total_label`);
+            const isMovingLabel = label?.feature?.properties?.status === "moving";
+            const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total-label`);
             this.#interactiveAnnotations.totalLabels = isTotalLabel ? [label] : [];
             if (isMovingLabel || isTotalLabel) return;
 
@@ -734,13 +741,13 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
                     // -- Create polyline --
                     this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
-                        status: graphicsStatus,
-                        color: this.stateManager.getColorState("line")
+                        color: this.stateManager.getColorState("line"),
+                        status: graphicsStatus
                     });
                     // -- Create label --
                     const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
-                        status: graphicsStatus,
-                        showBackground: true
+                        showBackground: true,
+                        status: graphicsStatus
                     });
 
                     // -- Handle Distances record --
@@ -753,13 +760,13 @@ class MultiDistancesCesium extends MeasureModeCesium {
                     const reconnectedPositions = [positions[0], positions[positions.length - 2]];  // the last point primitive is the length-2 because first point equals to last point in perimeter.
                     // -- Create polyline --
                     this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
-                        status: graphicsStatus,
-                        color: this.stateManager.getColorState("line")
+                        color: this.stateManager.getColorState("line"),
+                        status: graphicsStatus
                     });
                     // -- Create label --
                     const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
-                        status: graphicsStatus,
-                        showBackground: true
+                        showBackground: true,
+                        status: graphicsStatus
                     });
 
                     // -- Handle Distances record --
@@ -777,6 +784,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
             } else if (previous) {  // Case: The removing point is the last point
                 this.#distances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
             }
+
+            showCustomNotification(`removed point, id ${measureId}`, this._container);
         }
 
         // Case: Normal measure, it could be during measuring or measure completed or measure not yet started
@@ -785,13 +794,13 @@ class MultiDistancesCesium extends MeasureModeCesium {
                 const reconnectedPositions = [previous, next];
                 // -- Create polyline --
                 this._createOrUpdateLine(reconnectedPositions, this.#interactiveAnnotations.polylines, {
-                    status: graphicsStatus,
-                    color: this.stateManager.getColorState("line")
+                    color: this.stateManager.getColorState("line"),
+                    status: graphicsStatus
                 });
                 // -- Create label --
                 const { distances } = this._createOrUpdateLabel(reconnectedPositions, this.#interactiveAnnotations.labels, {
-                    status: graphicsStatus,
-                    showBackground: true
+                    showBackground: true,
+                    status: graphicsStatus
                 });
                 // -- Handle Distances record --
                 // Don't calculate all distances from coordsCache due to performance and consistency
@@ -807,8 +816,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
         // -- Reposition the total label --
         // If the total label exists, update it; Fallback to create new one, If total label does not exist
         const { totalDistance } = this._createOrUpdateTotalLabel(positions, this.#interactiveAnnotations.totalLabels, {
-            status: graphicsStatus,
-            showBackground: isMeasuring ? false : true
+            showBackground: isMeasuring ? false : true,
+            status: graphicsStatus
         });
 
         // Case: if only one point left, remove the remaining point and labels
@@ -859,38 +868,9 @@ class MultiDistancesCesium extends MeasureModeCesium {
         this.coordsCache = []; // Clear the coordsCache
         this.#distances = []; // Clear the distances cache
         dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
-    }
 
-    _removeLineSet(line) {
-        if (!line) return;
-
-        // confirmation 
-        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
-        if (!userConfirmation) return;
-
-        const measureId = Number(line.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID    
-
-        const {
-            pointPrimitives,
-            labelPrimitives,
-            polylinePrimitives,
-            polygonPrimitives
-        } = this.drawingHelper._getRelatedPrimitivesByMeasureId(measureId);
-        pointPrimitives.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point primitive
-        });
-        labelPrimitives.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label primitive
-        });
-        polylinePrimitives.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline primitive
-        });
-        polygonPrimitives.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon primitive
-        });
-
-        // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
+        // Show notification
+        showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
 
 
@@ -942,14 +922,14 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Update polyline --
         this._createOrUpdateLine(draggedPositions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            status: "moving"
         });
 
         // -- Update label --
         const { distances } = this._createOrUpdateLabel(draggedPositions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "moving",
-            showBackground: false
+            showBackground: false,
+            status: "moving"
         });
 
         // -- Handle Distances record --
@@ -983,8 +963,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Handle total label --
         this._createOrUpdateTotalLabel(positions, this.dragHandler.draggedObjectInfo.totalLabels, {
-            status: "moving",
-            showBackground: false
+            showBackground: false,
+            status: "moving"
         });
     }
 
@@ -1033,14 +1013,14 @@ class MultiDistancesCesium extends MeasureModeCesium {
         // -- Finalize Line Graphics --
         // -- Handle polyline --
         this._createOrUpdateLine(draggedPositions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "completed",
-            color: this.stateManager.getColorState("line")
+            color: this.stateManager.getColorState("line"),
+            status: "completed"
         });
 
         // -- Finalize Label Graphics --
         const { distances } = this._createOrUpdateLabel(draggedPositions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // -- Handle Distances record --
@@ -1074,8 +1054,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Finalize Total Label Graphics --
         const { totalDistance } = this._createOrUpdateTotalLabel(positions, this.dragHandler.draggedObjectInfo.totalLabels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // --- Update Measure Data ---
@@ -1111,6 +1091,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         const {
             status = "pending",
             color = this.stateManager.getColorState("line"),
+            id = `annotate_${this.mode}_line_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -1133,7 +1114,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
                 for (let i = polylinesArray.length - 1; i >= 0; i--) {
                     const line = polylinesArray[i];
                     // Ensure line exists and has a status property before checking
-                    if (line && line.status === "moving") {
+                    if (line && line?.feature?.properties?.status === "moving") {
                         this.drawingHelper._removePolyline(line);
                         polylinesArray.splice(i, 1);
                     }
@@ -1146,13 +1127,12 @@ class MultiDistancesCesium extends MeasureModeCesium {
             positions.forEach(posSet => {
                 const newLinePrimitive = this.drawingHelper._addPolyline(posSet, {
                     color,
-                    id: `annotate_${this.mode}_line_${this.measure.id}`, // Consider making ID more specific if needed (e.g., adding status)
+                    id,
+                    status,
                     ...rest
                 });
                 if (!newLinePrimitive) return;
 
-                // -- Handle Metadata Update --
-                newLinePrimitive.status = status; // Set status on the new primitive
                 // -- Handle References Update --
                 polylinesArray.push(newLinePrimitive);
             })
@@ -1160,13 +1140,12 @@ class MultiDistancesCesium extends MeasureModeCesium {
             // -- Create a new single polyline --
             const newLinePrimitive = this.drawingHelper._addPolyline(positions, {
                 color,
-                id: `annotate_${this.mode}_line_${this.measure.id}`, // Consider making ID more specific if needed (e.g., adding status)
+                id,
+                status,
                 ...rest
             });
             if (!newLinePrimitive) return;
 
-            // -- Handle Metadata Update --
-            newLinePrimitive.status = status; // Set status on the new primitive
             // -- Handle References Update --
             polylinesArray.push(newLinePrimitive);
         }
@@ -1191,6 +1170,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -1208,19 +1188,18 @@ class MultiDistancesCesium extends MeasureModeCesium {
                 positions.forEach((posSet, index) => {
                     labelPrimitives = labelsArray;
                     const segmentDistance = calculateDistance(posSet[0], posSet[1]);
+                    if (!segmentDistance) return { distances: [], labelPrimitives: null };
                     const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                    const segmentMiddlePos = calculateMiddlePos(posSet);
-                    if (!segmentDistance || !segmentMiddlePos) return;
 
                     const labelToUpdate = labelPrimitives[index];
-                    // -- Handle Label Visual Update --
-                    labelToUpdate.position = segmentMiddlePos;
-                    labelToUpdate.text = segmentFormattedText;
-                    labelToUpdate.showBackground = showBackground;
 
-                    // -- Handle Label Metadata Update --
-                    labelToUpdate.status = status;
-                    labelToUpdate.positions = posSet.map(pos => ({ ...pos })); // store positions
+                    // Update label visuals and metadata
+                    this._updateLabel(labelToUpdate, posSet, segmentFormattedText, {
+                        status,
+                        showBackground,
+                        id,
+                        ...rest
+                    });
 
                     // -- Handle records Update --
                     segmentDistance && distances.push(segmentDistance); // Collect distances for each segment
@@ -1230,18 +1209,16 @@ class MultiDistancesCesium extends MeasureModeCesium {
             else {
                 const segmentDistance = calculateDistance(positions[0], positions[1]);
                 const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                const segmentMiddlePos = calculateMiddlePos(positions);
 
-                const labelPrimitive = labelsArray.find(label => label.status === "moving");
+                const labelPrimitive = labelsArray.find(label => label?.feature?.properties?.status === "moving");
                 if (labelPrimitive) {
-                    // -- Handle Label Visual Update --
-                    labelPrimitive.position = segmentMiddlePos;
-                    labelPrimitive.text = segmentFormattedText;
-                    labelPrimitive.showBackground = showBackground; // Set background visibility
-
-                    // -- Handle Label Metadata Update --
-                    labelPrimitive.status = status;
-                    labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
+                    // Update label visuals and metadata
+                    this._updateLabel(labelPrimitive, positions, segmentFormattedText, {
+                        status,
+                        showBackground,
+                        id,
+                        ...rest
+                    });
 
                     // -- Handle references Update --
                     labelPrimitives = [labelPrimitive]; // Get the label that is currently being moved
@@ -1256,8 +1233,9 @@ class MultiDistancesCesium extends MeasureModeCesium {
             if (!segmentDistance) console.warn("Failed to calculate segment distance.");
 
             const labelPrimitive = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
-                showBackground: showBackground,
+                id,
+                showBackground,
+                status,
                 ...rest
             });
 
@@ -1269,10 +1247,6 @@ class MultiDistancesCesium extends MeasureModeCesium {
                 console.warn("_createOrUpdateLabel: Failed to create new label primitive.");
                 return { distances, labelPrimitives: null }; // Return distance but null primitive
             }
-
-            // -- Handle Label Metadata Update --
-            labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
-            labelPrimitive.status = status; // Set status
 
             // -- Handle References Update --
             labelPrimitives.push(labelPrimitive); // Store the new label primitive in the array
@@ -1300,6 +1274,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
+            id = `annotate_${this.mode}_total-label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -1307,8 +1282,8 @@ class MultiDistancesCesium extends MeasureModeCesium {
         const formattedText = `Total: ${formatMeasurementValue(totalDistance, "meter")}`; // Format the total distance text
         const labelPosition = positions[positions.length - 1];
 
-
         let totalLabel;
+
         // -- Check for existing total label --
         if (labelsArray.length > 0) {
             totalLabel = labelsArray[0]; // Assume the labelsArray contains only one total label for this measure
@@ -1316,32 +1291,37 @@ class MultiDistancesCesium extends MeasureModeCesium {
             const LabelLen = this.labelCollection.length;
             for (let i = 0; i < LabelLen; ++i) {
                 const label = this.labelCollection.get(i);
-                if (label.id === `annotate_${this.mode}_total_label_${this.measure.id}`) totalLabel = label;
+                if (label.id === `annotate_${this.mode}_total-label_${this.measure.id}`) totalLabel = label;
             }
         }
 
         // Update total label if it exists
         if (totalLabel) {
-            // -- Handle Label Visual Update --
-            totalLabel.position = labelPosition;
-            totalLabel.text = formattedText;
-            totalLabel.showBackground = showBackground; // Set background visibility
+            totalLabel = this._updateLabel(totalLabel, [labelPosition], formattedText, {
+                status,
+                showBackground,
+                id,
+                ...rest
+            });
         }
 
         // Create a new total label if it does not exist
         if (!totalLabel) {
             totalLabel = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
-                id: `annotate_${this.mode}_total_label_${this.measure.id}`,
-                showBackground: showBackground,
+                id,
+                showBackground,
+                status,
                 ...rest
             });
+
             // update references
-            labelsArray.push(totalLabel);
+            totalLabel && labelsArray.push(totalLabel);
         }
 
-        // -- Handle Label Metadata Update --
-        totalLabel.positions = [{ ...labelPosition }] // store positions
-        totalLabel.status = status; // Set status
+        if (!totalLabel) {
+            console.error("_createOrUpdateTotalLabel: Failed to create new total label primitive.");
+            return { totalLabel: null, totalDistance: 0 }; // Return null label and
+        }
 
         return { totalLabel, totalDistance };
     }

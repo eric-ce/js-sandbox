@@ -10,7 +10,7 @@ import {
     calculateMiddlePos,
     getRankedPickedObjectType,
 } from "../../lib/helper/cesiumHelper.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -191,9 +191,9 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "pending"
         });
         if (!pointPrimitive) return; // If point creation fails, exit
-        pointPrimitive.status = "pending"; // Set status to pending for the point primitive
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -211,22 +211,22 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
             for (let i = 0; i < collectionLength; i++) {
                 const pointPrimitive = this.pointCollection.get(i);
                 // pointPrimitive is guaranteed to be a valid primitive object here
-                if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
-                    pointPrimitive.status = "completed";
+                if (pointPrimitive.id?.includes(`annotate_${this.mode}`) || pointPrimitive?.feature?.properties?.status) {
+                    pointPrimitive.feature.properties.status = "completed";
                 }
             }
 
             // -- APPROACH 2: Update existing polyline and label --
             // -- Handle polyline
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
-                status: "completed",
-                color: this.stateManager.getColorState("line")
+                color: this.stateManager.getColorState("line"),
+                status: "completed"
             });
 
             // -- Handle label --
             const { distance } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-                status: "completed",
-                showBackground: true
+                showBackground: true,
+                status: "completed"
             });
 
             // -- Handle Data --
@@ -282,14 +282,14 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
 
                 // Moving line: remove if existed, create if not existed
                 this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                    status: "moving",
-                    color: this.stateManager.getColorState("move")
+                    color: this.stateManager.getColorState("move"),
+                    status: "moving"
                 });
 
                 // Moving label: update if existed, create if not existed
                 this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                    status: "moving",
-                    showBackground: false
+                    showBackground: false,
+                    status: "moving"
                 });
                 break;
             default:
@@ -319,14 +319,14 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
 
         // -- Handle polyline --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            status: "moving"
         });
 
         // -- Handle label --
         this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "moving",
-            showBackground: false
+            showBackground: false,
+            status: "moving"
         });
     }
 
@@ -346,14 +346,14 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
 
         // -- Finalize Line Graphics --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "completed",
-            color: this.stateManager.getColorState("line")
+            color: this.stateManager.getColorState("line"),
+            status: "completed"
         });
 
         // -- Finalize Label Graphics --
         const { distance } = this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // --- Update Measure Data ---
@@ -378,7 +378,8 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         // default options
         const {
             status = null,
-            color = this.stateManager.getColorState("line")
+            color = this.stateManager.getColorState("line"),
+            id = `annotate_${this.mode}_line_${this.measure.id}`,
         } = options
 
         // -- Check for and remove existing polyline --
@@ -393,8 +394,9 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
 
         // -- Create new polyline --
         const newLinePrimitive = this.drawingHelper._addPolyline(positions, {
-            color,
-            id: `annotate_${this.mode}_line_${this.measure.id}` // Consider making ID more specific if needed (e.g., adding status)
+            color: color,
+            id: id,
+            status: status
         });
 
         // If creation failed, exit
@@ -402,9 +404,6 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
             console.error("Failed to create new polyline primitive.");
             return; // Explicitly return
         }
-
-        // -- Handle Metadata Update --
-        newLinePrimitive.status = status; // Set status on the new primitive
 
         // -- Handle References Update --
         // Push the new primitive into the array passed by reference.
@@ -433,16 +432,12 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
+            ...rest
         } = options;
 
         const distance = calculateDistance(positions[0], positions[1]);
         const formattedText = formatMeasurementValue(distance, "meter");
-        const middlePos = calculateMiddlePos(positions);
-
-        if (!middlePos) {
-            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { distance, labelPrimitive: null }; // Return distance but null primitive
-        }
 
         let labelPrimitive = null;
 
@@ -454,32 +449,33 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelPrimitive.position = middlePos;
-                labelPrimitive.text = formattedText;
-                labelPrimitive.showBackground = showBackground; // Set background visibility
+                // Update label visuals and metadata
+                labelPrimitive = this._updateLabel(labelPrimitive, positions, formattedText, {
+                    status,
+                    showBackground,
+                    id,
+                    ...rest
+                });
             }
         }
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
             labelPrimitive = this.drawingHelper._addLabel(positions, distance, "meter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
-                showBackground: showBackground,
+                id,
+                showBackground,
+                status,
+                ...rest
             });
 
-            if (!labelPrimitive) {
-                console.error("_createOrUpdateLabel: Failed to create new label primitive.");
-                return { distance, labelPrimitive: null }; // Return distance but null primitive
-            }
-
             // -- Handle References Update --
-            labelsArray.push(labelPrimitive);
+            labelPrimitive && labelsArray.push(labelPrimitive);
         }
 
-        // -- Handle Label Metadata Update --
-        labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
-        labelPrimitive.status = status; // Set status
+        if (!labelPrimitive) {
+            console.error("_createOrUpdateLabel: Failed to create new label primitive.");
+            return { distance, labelPrimitive: null }; // Return distance but null primitive
+        }
 
         return { distance, labelPrimitive };
     }

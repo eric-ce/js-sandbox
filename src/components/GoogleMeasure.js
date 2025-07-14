@@ -7,6 +7,7 @@ import {
     removeOverlay,
     areCoordinatesEqual
 } from "../lib/helper/googleHelper.js";
+import { deconstructIdForMetadata } from "../lib/helper/helper.js";
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
 
 
@@ -161,14 +162,15 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
         let foundPointMarker = null;
         // Iterate through the point collection to find the marker with the matching position
-        for (const marker of this.#pointCollection) {
+        for (const point of this.#pointCollection) {
+            const pointPosition = point?.feature?.properties?.positions;
             // Check the custom 'positions' property
             if (
-                marker &&
-                Array.isArray(marker.positions) &&
-                marker.positions.some(p => areCoordinatesEqual(p, position))
+                pointPosition &&
+                Array.isArray(pointPosition) &&
+                pointPosition.some(p => areCoordinatesEqual(p, position))
             ) {
-                foundPointMarker = marker;
+                foundPointMarker = point;
                 break; // Found the point marker associated with this position
             }
         }
@@ -189,9 +191,11 @@ export default class GoogleMeasure extends MeasureComponentBase {
         // Case1: the positions is one point, find the lines that has some position matched
         if (positions.length === 1) {
             const targetPosition = positions[0];
-            const matchingLines = this.#polylineCollection.filter(polyline =>
-                polyline.positions && polyline.positions.some(pos => areCoordinatesEqual(pos, targetPosition))
-            );
+            const matchingLines = this.#polylineCollection.filter(polyline => {
+                const polylinePositions = polyline?.feature?.properties?.positions || [];
+                return Array.isArray(polylinePositions) &&
+                    polylinePositions.some(pos => areCoordinatesEqual(pos, targetPosition))
+            });
             if (matchingLines.length > 0) {
                 foundPolylines.push(...matchingLines);
             }
@@ -202,11 +206,12 @@ export default class GoogleMeasure extends MeasureComponentBase {
             const pos2 = positions[1];
             // Find returns the first matching polyline or undefined
             const matchingLine = this.#polylineCollection.find(polyline => {
+                const polylinePositions = polyline?.feature?.properties?.positions || [];
                 // Check if the polyline has exactly two positions
-                if (polyline.positions && polyline.positions.length === 2) {
+                if (Array.isArray(polylinePositions) && polylinePositions.length === 2) {
                     // Compare the positions of the polyline with the provided positions
-                    return areCoordinatesEqual(polyline.positions[0], pos1) &&
-                        areCoordinatesEqual(polyline.positions[1], pos2);
+                    return areCoordinatesEqual(polylinePositions[0], pos1) &&
+                        areCoordinatesEqual(polylinePositions[1], pos2);
                 }
                 return false; // Not a match
             });
@@ -232,24 +237,25 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
         const foundLabels = [];
         for (const label of this.#labelCollection) {
+            const labelPositions = label?.feature?.properties?.positions || [];
             // Check if label has positions property
-            if (label && Array.isArray(label.positions)) {
+            if (label && Array.isArray(labelPositions)) {
                 // If positions is a single position, check if it matches any position in label.positions
                 if (Array.isArray(positions) && positions.length === 1) {
-                    if (label.positions.some(p => areCoordinatesEqual(p, positions[0]))) {
+                    if (labelPositions.some(p => areCoordinatesEqual(p, positions[0]))) {
                         foundLabels.push(label);
                     }
                 }
                 // If positions is an array of two positions, check for exact match
                 else if (Array.isArray(positions) && positions.length === 2) {
-                    if (areCoordinatesEqual(label.positions[0], positions[0]) &&
-                        areCoordinatesEqual(label.positions[1], positions[1])) {
+                    if (areCoordinatesEqual(labelPositions[0], positions[0]) &&
+                        areCoordinatesEqual(labelPositions[1], positions[1])) {
                         foundLabels.push(label);
                     }
                 }
                 // If positions is a single position object, check for exact match
                 else if (typeof positions === 'object' && 'lat' in positions && 'lng' in positions) {
-                    if (label.positions.some(p => areCoordinatesEqual(p, positions))) {
+                    if (labelPositions.some(p => areCoordinatesEqual(p, positions))) {
                         foundLabels.push(label);
                     }
                 }
@@ -279,23 +285,23 @@ export default class GoogleMeasure extends MeasureComponentBase {
         // Find related points
         relatedOverlays.points = this.#pointCollection.filter(marker => {
             // Check if the marker has a 'measureId' property and matches the provided measureId
-            return marker && marker.id && marker.id.includes(measureId);
+            return typeof marker.id === "string" && marker.id.includes(measureId);
         });
         // Find related polygons
         relatedOverlays.polygons = this.#polygonCollection.filter(polygon => {
             // Check if the polygon has a 'measureId' property and matches the provided measureId
-            return polygon && polygon.id && polygon.id.includes(measureId);
+            return typeof polygon.id === "string" && polygon.id.includes(measureId);
         });
         // Find related polylines
         relatedOverlays.polylines = this.#polylineCollection.filter(polyline => {
             // Check if the polyline has a 'measureId' property and matches the provided measureId
-            return polyline && polyline.id && polyline.id.includes(measureId);
+            return typeof polyline.id === "string" && polyline.id.includes(measureId);
         });
 
         // Find related labels
         relatedOverlays.labels = this.#labelCollection.filter(label => {
             // Check if the label has a 'measureId' property and matches the provided measureId
-            return label && label.id && label.id.includes(measureId);
+            return typeof label.id === "string" && label.id.includes(measureId);
         });
 
         return relatedOverlays;
@@ -309,15 +315,34 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * Adds a point marker to the map at the specified position.
      * @param {{lat:number,lng:number}} position - The position where the marker will be added
      * @param {object} [options={}] - Optional configuration for the marker
-     * @returns {google.maps.marker.AdvancedMarkerElement|google.maps.Marker|null} The created marker or null if an error occurs.
+     * @returns {google.maps.Marker|null} The created marker or null if an error occurs.
      */
     _addPointMarker(position, options = {}) {
+        // Validate map and position
         if (!this.map || !position) return null;
-        try {
-            const { listeners, ...markerOptions } = options;
 
-            const point = createPointMarker(this.map, position, markerOptions);
+        // Deconstruct options to set default values 
+        const {
+            listeners,
+            status = null,
+            id = null,
+        } = options;
+
+        try {
+            const point = createPointMarker(this.map, position, options);
             if (!point) return null;
+
+            // -- Handle metadata --
+            point.feature = {
+                id,
+                type: "annotation",
+                properties: {
+                    mapName: this.mapName,
+                    status,
+                    positions: [{ ...position }],
+                    ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
+                }
+            };
 
             // Add highlight event listeners
             this._addHighlightEventListeners(point);
@@ -328,7 +353,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
             // Add custom event listeners
             this._addCustomEventListeners(point, listeners);
 
+            // Store the point in the collection
             this.#pointCollection.push(point);
+
             return point;
         } catch (error) {
             console.error("GoogleMeasure: Error in _addPointMarker:", error);
@@ -361,13 +388,29 @@ export default class GoogleMeasure extends MeasureComponentBase {
      */
     _addPolyline(positions, options = {}) {
         if (!this.map || !Array.isArray(positions) || positions.length < 2) return null;
-        try {
-            // Separate listeners from other polyline options        
-            const { listeners, ...rest } = options;
 
+        const {
+            listeners,
+            status = null,
+            id = null,
+        } = options;
+
+        try {
             // Create the polyline
-            const polyline = createPolyline(this.map, positions, { ...rest });
+            const polyline = createPolyline(this.map, positions, options);
             if (!polyline) return null;
+
+            // -- Handle metadata --
+            polyline.feature = {
+                id,
+                type: "annotation",
+                properties: {
+                    mapName: this.mapName,
+                    status,
+                    positions: positions.map(pos => ({ ...pos })), // Store original positions
+                    ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
+                }
+            };
 
             // Add highlight event listeners
             this._addHighlightEventListeners(polyline);
@@ -379,7 +422,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             this._addCustomEventListeners(polyline, listeners);
 
             // Store the polyline in the collection
-            polyline && this.#polylineCollection.push(polyline);
+            this.#polylineCollection.push(polyline);
 
             return polyline;
         } catch (error) {
@@ -422,27 +465,46 @@ export default class GoogleMeasure extends MeasureComponentBase {
     _addLabel(positions, value, unit, options = {}) {
         if (!this.map || !Array.isArray(positions)) return null;
 
-        const { status = null, ...rest } = options;
+        const {
+            listeners,
+            status = null,
+            id = null,
+        } = options;
 
-        // Create the label
-        const label = createLabelMarker(this.map, positions, value, unit, { ...rest });
-        if (!label) return null;
+        try {
+            // Create the label
+            const label = createLabelMarker(this.map, positions, value, unit, options);
+            if (!label) return null;
 
-        // Add highlight event listeners
-        this._addHighlightEventListeners(label);
+            // -- Handle metadata --
+            label.feature = {
+                id,
+                type: "annotation",
+                properties: {
+                    mapName: this.mapName,
+                    status,
+                    positions: positions.map(pos => ({ ...pos })), // Store original positions
+                    ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
+                }
+            };
 
-        // Add Picker event listeners
-        this._addPickerEventListeners(label);
+            // Add highlight event listeners
+            this._addHighlightEventListeners(label);
 
-        // Add custom event listeners
-        this._addCustomEventListeners(label, options.listeners);
+            // Add Picker event listeners
+            this._addPickerEventListeners(label);
 
-        // -- Handle metadata --
-        label.status = status;
+            // Add custom event listeners
+            this._addCustomEventListeners(label, listeners);
 
-        // Store the label in the collection
-        this.#labelCollection.push(label);
-        return label;
+            // Store the label in the collection
+            this.#labelCollection.push(label);
+
+            return label;
+        } catch (error) {
+            console.error("GoogleMeasure: Error in _addLabel:", error);
+            return null;
+        }
     }
 
     /**
@@ -483,23 +545,46 @@ export default class GoogleMeasure extends MeasureComponentBase {
     _addPolygon(positions, options = {}) {
         if (!this.map || !Array.isArray(positions) || positions.length < 3) return null;
 
-        // Create the polygon
-        const polygon = createPolygon(this.map, positions, options);
-        if (!polygon) return null;
+        const {
+            listeners,
+            status = null,
+            id = null,
+        } = options;
 
-        // Add highlight event listeners
-        this._addHighlightEventListeners(polygon);
+        try {
+            // Create the polygon
+            const polygon = createPolygon(this.map, positions, options);
+            if (!polygon) return null;
 
-        // Add Picker event listeners
-        this._addPickerEventListeners(polygon);
+            // -- Handle metadata --
+            polygon.feature = {
+                id,
+                type: "annotation",
+                properties: {
+                    mapName: this.mapName,
+                    status,
+                    positions: positions.map(pos => ({ ...pos })), // Store original positions
+                    ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
+                }
+            };
 
-        // Add custom event listeners
-        this._addCustomEventListeners(polygon, options.listeners);
+            // Add highlight event listeners
+            this._addHighlightEventListeners(polygon);
 
-        // Store the polygon in the collection
-        polygon && this.#polygonCollection.push(polygon);
+            // Add Picker event listeners
+            this._addPickerEventListeners(polygon);
 
-        return polygon;
+            // Add custom event listeners
+            this._addCustomEventListeners(polygon, listeners);
+
+            // Store the polygon in the collection
+            this.#polygonCollection.push(polygon);
+
+            return polygon;
+        } catch (error) {
+            console.error("GoogleMeasure: Error in _addPolygon:", error);
+            return null;
+        }
     }
 
 
@@ -592,12 +677,6 @@ export default class GoogleMeasure extends MeasureComponentBase {
     _removePointMarker(marker) {
         // remove the overlay from the map
         removeOverlay(marker);
-
-        if (marker && marker.listeners) {
-            for (const eventName in marker.listeners) {
-                marker.removeListener(eventName, marker.listeners[eventName]);
-            }
-        }
 
         // remove the marker from the collection
         const index = this.#pointCollection.indexOf(marker);

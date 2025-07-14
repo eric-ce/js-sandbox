@@ -1,8 +1,7 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { calculateDistance, calculateMiddlePos, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
-import { getNeighboringValues, formatMeasurementValue } from "../../lib/helper/helper.js";
+import { getNeighboringValues, formatMeasurementValue, showCustomNotification, deconstructIdForMetadata } from "../../lib/helper/helper.js";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
-import { showCustomNotification } from "../../lib/helper/cesiumHelper.js";
 
 /**
  * @typedef MeasurementGroup
@@ -88,9 +87,17 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             // Prevent map drag, default behavior
             event.domEvent?.stopPropagation();
             event.domEvent?.preventDefault();
+
+            // Prevent click event from firing immediately after a drag operation.
+            // A drag is determined if the isDragging flag is true or if a drag ended recently.
+            if (this.dragHandler?.isDragging || (this.dragHandler?.lastDragEndTs && (Date.now() - this.dragHandler.lastDragEndTs) < 200)) {
+                return;
+            }
+
             // Case: it is during measure
             if (!this.flags.isMeasurementComplete && this.coordsCache.length > 0) {
-                const pointIndex = this.coordsCache.findIndex(coordinate => areCoordinatesEqual(coordinate, marker.positions[0]));
+                const pointPositions = marker?.feature?.properties?.positions || [];
+                const pointIndex = this.coordsCache.findIndex(coordinate => areCoordinatesEqual(coordinate, pointPositions[0]));
                 if (pointIndex === -1) return;
                 const isFirstPoint = pointIndex === 0;
                 // if it click on the first point then forms perimeter
@@ -99,7 +106,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                     this._formsPerimeter(marker);
                 }
             } else {
-                this._resumeMeasure(marker);
+                this._resumeMeasure(marker); // Resume measure by the clicked point
             }
         }
     };
@@ -150,7 +157,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             throw new Error("MultiDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
         }
 
-        super("multi_distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -213,11 +220,10 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             interactive: true, // Make the point interactive
+            status: "pending", // Set status to pending
             listeners: this.#pointMarkerListeners,
         });
-
         if (!point) return;
-        point.status = "pending"; // Set status to pending
 
         // Update the coordsCache based on the measurement direction
         if (this.flags.isReverse) {
@@ -288,7 +294,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         if (!userConfirmation) return; // If the user does not confirm, exit
 
         // -- Update coordsCache --
-        const pointPosition = point.positions[0];
+        const pointPosition = point.feature.properties?.positions[0];
         this.coordsCache.push(pointPosition); // Add the point to the cache
 
         // -- Complete the measure --
@@ -320,7 +326,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         if (isPerimeter) return;
 
         // Find the index of the point in the measure coordinates
-        const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, point.positions[0]));
+        const pointPositions = point.feature?.properties?.positions || [];
+        const pointIndex = this.measure.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, pointPositions[0]));
         if (pointIndex === -1) return; // If the point is not found, exit
 
         // -- Resume Measure --
@@ -407,10 +414,10 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 color: this.stateManager.getColorState("pointColor"),
                 id: `annotate_${this.mode}_point_${this.measure.id}`,
                 interactive: true,
+                status: "completed", // Set status to completed 
                 listeners: this.#pointMarkerListeners,
             });
             if (!lastPoint) return; // If point creation fails, exit
-            lastPoint.status = "completed";
 
             this._finalizeMeasure();
         }
@@ -450,37 +457,12 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         });
 
         // -- Update annotations status --
-        // update points status
-        this.pointCollection.getLayers().forEach(point => {
-            if (point.id.includes(this.mode)) {
-                if (point.status === "pending") point.status = "completed" // Set the status to completed
-                if (point.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                    point.options.interactive = true; // Make the point interactive
-                    this.drawingHelper._refreshLayerInteractivity(point);
-                }
-            }
-        });
-        // update polylines status
-        this.#interactiveAnnotations.polylines.forEach(polyline => {
-            if (polyline.id.includes(this.mode)) {
-                if (polyline.status === "pending") polyline.status = "completed"; // Set the status to completed
-                if (polyline.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                    polyline.options.interactive = true; // Make the polyline interactive
-                    this.drawingHelper._refreshLayerInteractivity(polyline);
-                }
-            }
-        });
-        // update labels status
-        this.#interactiveAnnotations.labels.forEach(label => {
-            if (label.id.includes(this.mode)) {
-                if (label.status === "pending") label.status = "completed"; // Set the status to completed
-                if (label.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                    label.options.interactive = true; // Make the label interactive
-                    this.drawingHelper._refreshLayerInteractivity(label);
-                }
-            }
-        });
-
+        // Update points status and interactive
+        this._updatePendingItemsToCompleted(this.pointCollection.getLayers(), `annotate_${this.mode}`);
+        // Update polylines status and interactive
+        this._updatePendingItemsToCompleted(this.#interactiveAnnotations.polylines, `annotate_${this.mode}`);
+        // Update labels status and interactive
+        this._updatePendingItemsToCompleted(this.#interactiveAnnotations.labels, `annotate_${this.mode}`);
 
         // -- Handle Measure Data --
         if (this.#distances.length > 0 && typeof totalDistance === "number") {
@@ -501,9 +483,9 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
     }
 
 
-    /************************
-     * Middle CLICK FEATURES *
-     ************************/
+    /*************************
+     * MIDDLE CLICK FEATURES *
+     *************************/
     /**
      * Removes a point marker during measurement.
      * @param {L.CircleMarker} point - The point marker to remove.
@@ -511,7 +493,9 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
      */
     _removePointFromMeasure(point) {
         // Validate input parameters
-        if (!point || !Array.isArray(point.positions) || point.positions.length === 0) return;
+        if (!point || !point?.feature?.properties) return;
+        const pointPositions = point?.feature?.properties?.positions;
+        if (!Array.isArray(pointPositions) || pointPositions.length === 0) return;
 
         // confirmation 
         const userConfirmation = window.confirm(`Do you want to remove this point?`) // Confirm the removal action
@@ -527,7 +511,10 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         // Find the measure data by ID
         const measureId = Number(point.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID 
         this.measure = this._findMeasureById(measureId);    // Set the measure
-        if (!this.measure) return;  // If the measure is not found, exit
+        if (!this.measure) {
+            this._refreshMapDrag();
+            return; // If the measure is not found, exit
+        }
         this.#distances = [...this.measure._records[0].distances]; // Get the distances from the measure data
         // clone the coordinates from the measure data
         // this.measure.coordinates is the `original coordinates`, this.coordsCache is the `updated coordinates`
@@ -535,7 +522,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // Find the point index in the measure coordinates
         const pointPositionIndices = this.measure.coordinates
-            .map((coordinate, index) => areCoordinatesEqual(coordinate, point.positions[0]) ? index : -1)
+            .map((coordinate, index) => areCoordinatesEqual(coordinate, pointPositions[0]) ? index : -1)
             .filter(index => index !== -1);
         if (pointPositionIndices.length === 0) {
             this._refreshMapDrag();
@@ -547,28 +534,36 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         positions = positions.filter((_, index) => !pointPositionIndices.includes(index));
 
         // remove related lines
-        const polylines = this.drawingHelper._getLineByPositions([point.positions[0]]);
-        if (!Array.isArray(polylines) || polylines.length === 0) return; // If no lines are found, exit
+        const polylines = this.drawingHelper._getLineByPositions([pointPositions[0]]);
+        if (!Array.isArray(polylines) || polylines.length === 0) {
+            this._refreshMapDrag();
+            return; // If no lines are found, exit
+        }
+
         polylines.forEach(line => {
             this.drawingHelper._removePolyline(line); // Remove the line
 
+            const linePositions = line?.feature?.properties?.positions;
+            if (!Array.isArray(linePositions) || linePositions.length === 0) return; // If no line positions are found, exit
+
             // Case: during measuring, remove the line from this.#interactiveAnnotations
             if (this.#interactiveAnnotations.polylines.length === 0) return; // If there are no polylines, exit
-            const lineToRemoveIndex = this.#interactiveAnnotations.polylines.findIndex(l =>
-                areCoordinatesEqual(l.positions[0], line.positions[0]) &&
-                areCoordinatesEqual(l.positions[1], line.positions[1])
-            );
+            const lineToRemoveIndex = this.#interactiveAnnotations.polylines.findIndex(l => {
+                const lineToRemovePositions = l?.feature?.properties?.positions;
+                return areCoordinatesEqual(lineToRemovePositions[0], linePositions[0]) &&
+                    areCoordinatesEqual(lineToRemovePositions[1], linePositions[1]);
+            });
             if (lineToRemoveIndex === -1) return; // If the line is not found, exit
             this.#interactiveAnnotations.polylines.splice(lineToRemoveIndex, 1); // Remove the line from this interactive annotations        });
         });
 
         // remove related labels
-        const labelMarkers = this.drawingHelper._getLabelByPosition([point.positions[0]]);
+        const labelMarkers = this.drawingHelper._getLabelByPosition([pointPositions[0]]);
         if (!Array.isArray(labelMarkers) || labelMarkers.length === 0) return; // If no labels are found, exit
         labelMarkers.forEach(label => {
             // Safety check: assume moving or total labels should not be removed here
-            const isMovingLabel = label.status === "moving";
-            const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total_label`);
+            const isMovingLabel = label?.feature?.properties?.status === "moving";
+            const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total-label`);
             if (isMovingLabel || isTotalLabel) return;
 
             this.drawingHelper._removeLabel(label); // Remove the label            
@@ -583,7 +578,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         // set existed total label 
         const labels = this.labelCollection.getLayers();
         if (Array.isArray(labels) && labels.length > 0) {
-            this.#interactiveAnnotations.totalLabels = labels.filter(label => label.id.startsWith(`annotate_${this.mode}_total_label_${this.measure.id}`));
+            this.#interactiveAnnotations.totalLabels = labels.filter(label => label.id.startsWith(`annotate_${this.mode}_total-label_${this.measure.id}`));
         }
 
         // Find neighboring coordinate
@@ -744,44 +739,13 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         this.coordsCache = []; // Clear the coordsCache
         this.#distances = []; // Clear the distances cache
         dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
-    }
-
-    /**
-     * Removes an entire line set, including related points, labels, and polygons.
-     * @param {L.Polyline} polyline - The polyline to remove.
-     * @returns {void}
-     */
-    _removeLineSet(polyline) {
-        if (!polyline) return;
-
-        // confirmation 
-        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
-        if (!userConfirmation) return;
-
-        const measureId = Number(polyline.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
-        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
-        points.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point marker
-        });
-        labels.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label
-        });
-        polylines.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline
-        });
-        polygons.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon
-        });
-
-        // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
-
-        // Refresh the map dragging, to solve issue the middle click keep dragging
-        this._refreshMapDrag();
 
         // Show notification
-        showCustomNotification(`Line set removed from measure ${measureId}`, this._container);
+        showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
     }
+
+
+
 
     /******************
      * EVENT HANDLING *
@@ -928,7 +892,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         this._createOrUpdateLine(draggedPositions, this.dragHandler.draggedObjectInfo.lines, {
             status: "completed",
             color: this.stateManager.getColorState("line"),
-            interactive: true
+            interactive: true,
+            listeners: this.#polylineListeners
         });
 
         // -- Finalize Label Graphics --
@@ -991,97 +956,12 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
      * HELPER *
      **********/
     /**
-     * Creates a new polyline or updates an existing one based on positions.
-     * Manages the reference within the provided polylinesArray.
-     * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
-     * @param {L.polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified. Caution: this is not the polylineCollection.
-     * @param {Object} [options={}] - Options for the line.
-     * @returns {L.polyline | null} The created or updated polyline instance, or null if failed.
-     */
-    _createOrUpdateLine(positions, polylinesArray, options = {}) {
-        // 1. DEFAULTS & INPUT VALIDATION
-        if (!Array.isArray(polylinesArray) || !Array.isArray(positions) || positions.length === 0) {
-            console.warn("_createOrUpdateLine: input parameters are invalid.");
-            return;
-        }
-
-        // default options
-        const {
-            status = "pending", // Default pending status
-            color = this.stateManager.getColorState("move"),
-            interactive = false,
-            ...rest
-        } = options;
-
-
-        // Determine if `positions` represents multiple line segments (typically for drag)
-        const isNested = positions.length > 0 && Array.isArray(positions[0]);
-
-        // 2. REMOVAL PHASE
-        // -- Check for and remove existing polyline --
-        if (polylinesArray.length > 0) {
-            // Case: remove all lines if positions is nested. Nested positions means it is from dragging operation
-            if (isNested) {
-                // remove all lines in the lines array
-                polylinesArray.forEach(lineToRemove => {
-                    this.drawingHelper._removePolyline(lineToRemove);
-                });
-                polylinesArray.length = 0; // Clear the array
-            }
-            // Case: remove lines that has status "moving"
-            else {
-                for (let i = polylinesArray.length - 1; i >= 0; i--) {
-                    const line = polylinesArray[i];
-                    // Ensure line exists and has a status property before checking
-                    if (line && line.status === "moving") {
-                        this.drawingHelper._removePolyline(line);
-                        polylinesArray.splice(i, 1);
-                    }
-                }
-            }
-        }
-        // 3. CREATION PHASE
-        if (isNested) {
-            // -- Create multiple polylines for nested positions --
-            positions.forEach(posSet => {
-                const newLineInstance = this.drawingHelper._addPolyline(posSet, {
-                    color,
-                    id: `annotate_${this.mode}_line_${this.measure.id}`, // Consider making ID more specific if needed (e.g., adding status)
-                    interactive,
-                    ...rest
-                });
-                if (!newLineInstance) return;
-
-                // -- Handle Metadata Update --
-                newLineInstance.status = status; // Set status on the new instance
-                // -- Handle References Update --
-                polylinesArray.push(newLineInstance);
-            })
-        } else {
-            // -- Create a new single polyline --
-            const newLineInstance = this.drawingHelper._addPolyline(positions, {
-                color,
-                id: `annotate_${this.mode}_line_${this.measure.id}`, // Consider making ID more specific if needed (e.g., adding status)
-                interactive,
-                ...rest
-            });
-            if (!newLineInstance) return;
-
-            // -- Handle Metadata Update --
-            newLineInstance.status = status; // Set status on the new instance
-            // -- Handle References Update --
-            polylinesArray.push(newLineInstance);
-        }
-    }
-
-    /**
       * Create or update the label.
       * If the label exists in labelsArray, update its position and text, else create a new one.
       * Manages the reference within the provided labelsArray.
       * @param {{lat:number,lng:number}[]} positions - Array of positions (expects 2) to calculate distance and middle point.
       * @param {L.tooltip[]} labelsArray - The array (passed by reference) that holds the label instance. This array will be modified. Caution: this is not the labelCollection.
       * @param {Object} [options={}] - Options for the label.
-      * @param {string|null} [options.status=null] - Status to set on the label instance.
       * @return {{ distance:number, labelInstance:L.tooltip|null }} - The calculated distance and the created/updated label instance, or null if failed.
       */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
@@ -1096,6 +976,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             status = "pending", // Default pending status
             color = "rgba(0, 0, 0, 1)",
             interactive = false,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -1112,81 +993,43 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 // Assume: nested positions length should be same as labelsArray length
                 positions.forEach((posSet, index) => {
                     labelInstances = labelsArray;
-                    const segmentDistance = calculateDistance(posSet[0], posSet[1]);
-                    const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                    const segmentMiddlePos = calculateMiddlePos(posSet);
-                    if (!segmentDistance || !segmentMiddlePos) return;
-
                     const labelToUpdate = labelInstances[index];
+                    const segmentDistance = calculateDistance(posSet[0], posSet[1]); // Calculate distance for the segment
+                    const formattedText = formatMeasurementValue(segmentDistance, "meter"); // Format the distance text
 
-                    // -- Handle Label Visual Update --
-                    labelToUpdate.setLatLng(segmentMiddlePos); // update position
-
-                    // Create HTML element for label content
-                    const contentElement = document.createElement('span');
-                    contentElement.style.color = color;
-                    contentElement.textContent = segmentFormattedText;
-
-                    // Set the content of the label
-                    labelToUpdate.setContent(contentElement); // update content
-                    // Update interactive state
-                    const oldInteractiveState = labelToUpdate.options.interactive;
-                    // Compare the old with current interactive state, only update interactive if different
-                    if (oldInteractiveState !== interactive) {
-                        // Update the interactive
-                        labelToUpdate.options.interactive = interactive;
-                        // Refresh the layer to apply the new interactive state. 
-                        if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                            this.drawingHelper._refreshLayerInteractivity(labelToUpdate);
-                        }
-                    }
-
-                    // -- Handle Label Metadata Update --
-                    labelToUpdate.status = status;
-                    labelToUpdate.positions = posSet.map(pos => ({ ...pos })); // store positions
+                    // Update label visuals and metadata
+                    this._updateLabel(labelToUpdate, posSet, formattedText, {
+                        id,
+                        status,
+                        color,
+                        interactive,
+                        ...rest
+                    });
 
                     // -- Handle records Update --
-                    distances.push(segmentDistance); // Collect distances for each segment
+                    segmentDistance && distances.push(segmentDistance); // Collect distances for each segment
                 });
             }
             // Case: update SINGLE LABEL, typically for moving operation 
             else {
-                const segmentDistance = calculateDistance(positions[0], positions[1]);
-                const segmentFormattedText = formatMeasurementValue(segmentDistance, "meter");
-                const segmentMiddlePos = calculateMiddlePos(positions);
-
-                const labelInstance = labelsArray.find(label => label.status === "moving");
-
+                // Find the moving label instance
+                const labelInstance = labelsArray.find(label => label?.feature?.properties?.status === "moving");
                 if (labelInstance) {
-                    // -- Handle Label Visual Update --
-                    labelInstance.setLatLng(segmentMiddlePos); // update position
+                    const segmentDistance = calculateDistance(positions[0], positions[1]); // Calculate distance for the segment
+                    const formattedText = formatMeasurementValue(segmentDistance, "meter"); // Format the distance text
 
-                    // Create HTML element for label content
-                    const contentElement = document.createElement('span');
-                    contentElement.style.color = color;
-                    contentElement.textContent = segmentFormattedText;
+                    // Update label visuals and metadata
+                    this._updateLabel(labelInstance, positions, formattedText, {
+                        id,
+                        status,
+                        color,
+                        interactive,
+                        ...rest
+                    });
 
-                    // Set the content of the label
-                    labelInstance.setContent(contentElement); // update content
-                    // Update interactive state
-                    const oldInteractiveState = labelInstance.options.interactive;
-                    // Compare the old with current interactive state, only update interactive if different
-                    if (oldInteractiveState !== interactive) {
-                        // Update the interactive
-                        labelInstance.options.interactive = interactive;
-                        // Refresh the layer to apply the new interactive state. 
-                        if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                            this.drawingHelper._refreshLayerInteractivity(labelInstance);
-                        }
-                    }
-
-                    // -- Handle Label Metadata Update --
-                    labelInstance.status = status;
-                    labelInstance.positions = positions.map(pos => ({ ...pos })); // store positions
-
-                    // -- Handle references Update --
-                    labelInstances = [labelInstance]; // Get the label that is currently being moved
-                    distances = [segmentDistance]; // Store the distance for the single segment
+                    // -- Handle References Update --
+                    labelInstances = [labelInstance];
+                    distances = [segmentDistance];
                 }
             }
         }
@@ -1196,7 +1039,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             const segmentDistance = calculateDistance(positions[0], positions[1]);
 
             const labelInstance = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id,
+                status,
                 interactive,
                 ...rest
             });
@@ -1210,10 +1054,6 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 return { distances, labelInstances: null }; // Return distance but null instance
             }
 
-            // -- Handle Label Metadata Update --
-            labelInstance.positions = positions.map(pos => ({ ...pos })); // store positions
-            labelInstance.status = status; // Set status
-
             // -- Handle References Update --
             labelInstances.push(labelInstance); // Store the new label instance in the array
             labelsArray.push(labelInstance);
@@ -1222,9 +1062,8 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         return { distances, labelInstances };
     }
 
-
     _createOrUpdateTotalLabel(positions, labelsArray, options = {}) {
-        // 1. DEFAULTS & INPUT VALIDATION
+        // Input validation
         if (!Array.isArray(positions) || !Array.isArray(labelsArray) || positions.length === 0) {
             console.warn("Invalid input: positions and labelsArray should be arrays.");
             return { distances: [], labelInstance: null }; // Validate input positions
@@ -1235,6 +1074,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             status = null,
             color = "rgba(0, 0, 0, 1)",
             interactive = false,
+            id = `annotate_${this.mode}_total-label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -1252,52 +1092,36 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         // -- Update existing label --
         if (labelsArray.length > 0) {
             labelInstance = labelsArray[0]; // Get the reference from the array
-
-            // Check if the reference is a valid label instance
-            if (!labelInstance) {
-                console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
-                labelsArray.length = 0; // Clear the array to trigger creation below
-            } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setLatLng(labelPosition); // update position
-
-                // Create HTML element for label content
-                const contentElement = document.createElement('span');
-                contentElement.style.color = color;
-                contentElement.textContent = formattedText;
-
-                // Set the content of the label
-                labelInstance.setContent(contentElement); // update content
-
-                // Update interactive state
-                const oldInteractiveState = labelInstance.options.interactive;
-                // Compare the old with current interactive state, only update interactive if different
-                if (oldInteractiveState !== interactive) {
-                    // Update the interactive
-                    labelInstance.options.interactive = interactive;
-                    // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(labelInstance);
-                    }
-                }
+        } else {
+            const existedTotalLabel = this.labelCollection.getLayers().find(label => label.id === `annotate_${this.mode}_total-label_${this.measure.id}`); // Find the label by ID      
+            if (existedTotalLabel) {
+                labelInstance = existedTotalLabel; // If it exists, use it
             }
         }
 
-        // -- Create new label --
-        if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
-                id: `annotate_${this.mode}_total_label_${this.measure.id}`,
+        // -- Update label if exists --
+        if (labelInstance) {
+            // Update label visuals and metadata
+            this._updateLabel(labelInstance, [labelPosition], formattedText, {
                 interactive,
+                id,
+                status,
                 ...rest
             });
+        }
 
-            if (!labelInstance) {
-                console.error("_createOrUpdateLabel: Failed to create new label instance.");
-                return { totalDistance, labelInstance: null }; // Return totalDistance but null instance
-            }
+        // -- Create new label if not exists --
+        if (!labelInstance) {
+            labelInstance = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
+                id,
+                interactive,
+                status,
+                color,
+                ...options
+            });
 
             // -- Handle References Update --
-            labelsArray.push(labelInstance); // Push the new instance into the referenced array
+            labelInstance && labelsArray.push(labelInstance); // Push the new instance into the referenced array
         }
 
         if (!labelInstance) {
@@ -1305,19 +1129,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             return { totalDistance, labelInstance: null }; // Early exit if labelInstance is not valid
         }
 
-        // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = [{ ...labelPosition }] // Store positions copy
-
         return { totalDistance, labelInstance }; // Return the newly created instance
-    }
-
-    /**
-     * Refreshes the map dragging to ensure it is responsive after changes.
-     */
-    _refreshMapDrag() {
-        this.map?.dragging.disable();
-        this.map?.dragging.enable();
     }
 
     /**

@@ -11,13 +11,13 @@ import { formatMeasurementValue } from './helper.js';
  * @returns {"polyline"|"polygon"|"label"|"point"|null} - The type of the layer or null if not recognized.
  */
 export function checkLayerType(layer) {
-    if (layer instanceof L.Polyline && layer?.id.includes('line')) {
+    if (layer instanceof L.Polyline && layer?.id?.includes('line')) {
         return "polyline";
-    } else if (layer instanceof L.Polygon && layer?.id.includes('polygon')) {
+    } else if (layer instanceof L.Polygon && layer?.id?.includes('polygon')) {
         return "polygon";
-    } else if (layer instanceof L.Tooltip && layer?.id.includes('label')) {
+    } else if (layer instanceof L.Tooltip && layer?.id?.includes('label')) {
         return "label";
-    } else if (layer instanceof L.CircleMarker && layer?.id.includes('point')) {
+    } else if (layer instanceof L.CircleMarker && layer?.id?.includes('point')) {
         return "point";
     } else {
         return null;
@@ -71,9 +71,8 @@ export function createCircleMarker(position, options = {}) {
         return null;
     }
 
-    // -- Handle Metadata --
-    marker.positions = [{ ...position }]; // Store original positions
-    marker.id = id; // Store the ID
+    // Store the ID
+    marker.id = id;
 
     return marker;
 }
@@ -91,15 +90,18 @@ export function getVectorByPosition(
     let foundPolygons = [];
 
     if (!position) {
-        console.warn("getOverlayByPosition: Invalid input position provided.");
+        console.warn("getVectorByPosition: Invalid input position provided.");
         return { pointMarker: undefined, labelMarker: [], polylines: [], polygons: [] };
     }
 
     // --- Find Point Marker ---
     if (Array.isArray(pointCollection.getLayers())) {
         for (const marker of pointCollection.getLayers()) {
-            if (marker && Array.isArray(marker.positions) &&
-                marker.positions.some(pos => areCoordinatesEqual(pos, position))) {
+            const pointPosition = marker?.feature?.properties?.positions;
+            if (
+                Array.isArray(pointPosition) &&
+                pointPosition.some(pos => areCoordinatesEqual(pos, position))
+            ) {
                 foundPointMarker = marker;
                 break; // Stop searching after finding the first match
             }
@@ -109,28 +111,38 @@ export function getVectorByPosition(
     // --- Find Label Marker ---
     // Checks if the search position matches any coordinate in the label's 'positions' property.
     if (Array.isArray(labelCollection.getLayers())) {
-        foundLabelMarkers = labelCollection.getLayers().filter(label =>
-            label && Array.isArray(label.positions) &&
-            label.positions.some(p => areCoordinatesEqual(p, position))
-        );
+        foundLabelMarkers = labelCollection.getLayers().filter(label => {
+            const labelPositions = label?.feature?.properties?.positions;
+            return typeof label.id === 'string' &&
+                label.id.startsWith('annotate_') &&
+                !label.id.includes("total-label") &&
+                Array.isArray(labelPositions) &&
+                labelPositions.some(p => areCoordinatesEqual(p, position));
+        });
     }
 
     // --- Find Polylines ---
     // Checks if the search position matches any coordinate in the polyline's 'positions' property.
     if (Array.isArray(polylineCollection.getLayers())) {
-        foundPolylines = polylineCollection.getLayers().filter(polyline =>
-            polyline && Array.isArray(polyline.positions) &&
-            polyline.positions.some(p => areCoordinatesEqual(p, position))
-        );
+        foundPolylines = polylineCollection.getLayers().filter(polyline => {
+            const polylinePositions = polyline?.feature?.properties?.positions;
+            return typeof polyline.id === 'string' &&
+                polyline.id.startsWith("annotate_") &&
+                Array.isArray(polylinePositions) &&
+                polylinePositions.some(p => areCoordinatesEqual(p, position));
+        });
     }
 
     // --- Find Polygons ---
     // Checks if the search position matches any coordinate in the polygon's 'positions' property.
     if (Array.isArray(polygonCollection.getLayers())) {
-        foundPolygons = polygonCollection.getLayers().filter(polygon =>
-            polygon && Array.isArray(polygon.positions) &&
-            polygon.positions.some(p => areCoordinatesEqual(p, position))
-        );
+        foundPolygons = polygonCollection.getLayers().filter(polygon => {
+            const polygonPositions = polygon?.feature?.properties?.positions;
+            return typeof polygon.id === 'string' &&
+                polygon.id.startsWith("annotate_") &&
+                Array.isArray(polygonPositions) &&
+                polygonPositions.some(p => areCoordinatesEqual(p, position));
+        });
     }
 
     return {
@@ -184,8 +196,9 @@ export function createPolyline(positions, options = {}) {
         return null;
     }
     // -- Handle Metadata --
-    polyline.positions = positions.map(pos => ({ ...pos })) // Store cloned original positions
-    polyline.id = id; // Store the ID
+    // polyline.positions = positions.map(pos => ({ ...pos })) // Store cloned original positions
+    // Store the ID
+    polyline.id = id;
 
     return polyline;
 }
@@ -229,8 +242,9 @@ export function createPolygon(positions, options = {}) {
     }
 
     // -- Handle Metadata --
-    polygon.positions = positions.map(pos => ({ ...pos })); // Store cloned original positions
-    polygon.id = id; // Store the ID
+    // polygon.positions = positions.map(pos => ({ ...pos })); // Store cloned original positions
+    // Store the ID
+    polygon.id = id;
 
     return polygon;
 }
@@ -279,6 +293,7 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
     const contentElement = document.createElement('span');
     contentElement.style.color = color;
     contentElement.textContent = textContent;
+    contentElement.style.whiteSpace = "pre";
 
     // Create Label tooltip
     // !important: L.tooltip requires L.latLng for position but using setLagLng() can accept lat lng object
@@ -299,9 +314,8 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
         return null;
     }
 
-    // -- Handle Metadata --
-    tooltip.positions = positions.map(pos => ({ ...pos })); // Store cloned original positions
-    tooltip.id = id; // Store the ID
+    // Store the ID
+    tooltip.id = id;
 
     return tooltip;
 }
@@ -415,6 +429,7 @@ export function calculateMiddlePos(positions) {
     return bounds.getCenter();
 }
 
+
 /***********
  * MEASURE *
  ***********/
@@ -438,32 +453,6 @@ export function calculateDistance(coord1, coord2) {
     const distance = latLng1.distanceTo(latLng2); // in meters
     return distance ?? null;
 }
-
-// /**
-//  * Formats a measurement value based on the provided unit.
-//  * @param {number|string} value - The measurement value.
-//  * @param {string} unit - The unit type ("meter" or "squareMeter").
-//  * @returns {string} The formatted measurement string.
-//  */
-// export function formatMeasurementValue(value, unit) {
-//     if (typeof value === "string" && unit === "meter") {
-//         return value;
-//     }
-//     if (typeof value === "number") {
-//         const numValue = Number(value);
-//         if (unit === "meter") {
-//             return numValue >= 1000
-//                 ? (numValue / 1000).toFixed(2) + "km"
-//                 : numValue.toFixed(2) + "m";
-//         }
-//         if (unit === "squareMeter") {
-//             return numValue >= 1000000
-//                 ? (numValue / 1000000).toFixed(2) + "km²"
-//                 : numValue.toFixed(2) + "m²";
-//         }
-//     }
-//     return value.toString();
-// }
 
 export function findMeasureByCoordinate(coordinate, measureDataArray, mapName) {
     if (!coordinate) return null;
@@ -540,151 +529,151 @@ export function calculateArea(positions) {
  * DEPRECATED HELPERS *
  *   TO BE REMOVED    *
  **********************/
-/**
- * Creates a custom icon for markers
- * 
- * @param {Object} options - Icon options
- * @param {string} options.iconUrl - URL to the icon image
- * @param {Array} [options.iconSize=[25, 41]] - Size [width, height] in pixels
- * @param {Array} [options.iconAnchor=[12, 41]] - Anchor point [x, y] in pixels
- * @returns {L.Icon} Custom icon instance
- */
-export function createIcon({ iconUrl, iconSize = [25, 41], iconAnchor = [12, 41] }) {
-    return L.icon({
-        iconUrl,
-        iconSize,
-        iconAnchor,
-        popupAnchor: [1, -34],
-        shadowUrl: '/leaflet/images/marker-shadow.png',
-        shadowSize: [41, 41],
-        shadowAnchor: [12, 41]
-    });
-}
+// /**
+//  * Creates a custom icon for markers
+//  *
+//  * @param {Object} options - Icon options
+//  * @param {string} options.iconUrl - URL to the icon image
+//  * @param {Array} [options.iconSize=[25, 41]] - Size [width, height] in pixels
+//  * @param {Array} [options.iconAnchor=[12, 41]] - Anchor point [x, y] in pixels
+//  * @returns {L.Icon} Custom icon instance
+//  */
+// export function createIcon({ iconUrl, iconSize = [25, 41], iconAnchor = [12, 41] }) {
+//     return L.icon({
+//         iconUrl,
+//         iconSize,
+//         iconAnchor,
+//         popupAnchor: [1, -34],
+//         shadowUrl: '/leaflet/images/marker-shadow.png',
+//         shadowSize: [41, 41],
+//         shadowAnchor: [12, 41]
+//     });
+// }
 
-/**
- * Clears all custom elements from the map
- * 
- * @param {L.Map} map - The Leaflet map instance
- * @param {boolean} [preserveBaseLayers=true] - Whether to preserve base tile layers
- */
-export function clearMapElements(map, preserveBaseLayers = true) {
-    if (!map) return;
+// /**
+//  * Clears all custom elements from the map
+//  *
+//  * @param {L.Map} map - The Leaflet map instance
+//  * @param {boolean} [preserveBaseLayers=true] - Whether to preserve base tile layers
+//  */
+// export function clearMapElements(map, preserveBaseLayers = true) {
+//     if (!map) return;
 
-    map.eachLayer(layer => {
-        // Skip base tile layers if preserveBaseLayers is true
-        if (preserveBaseLayers && layer instanceof L.TileLayer) return;
+//     map.eachLayer(layer => {
+//         // Skip base tile layers if preserveBaseLayers is true
+//         if (preserveBaseLayers && layer instanceof L.TileLayer) return;
 
-        // Remove all other layers (markers, polylines, etc.)
-        if (layer instanceof L.Marker ||
-            layer instanceof L.CircleMarker ||
-            layer instanceof L.Polyline) {
-            map.removeLayer(layer);
-        }
-    });
-}
+//         // Remove all other layers (markers, polylines, etc.)
+//         if (layer instanceof L.Marker ||
+//             layer instanceof L.CircleMarker ||
+//             layer instanceof L.Polyline) {
+//             map.removeLayer(layer);
+//         }
+//     });
+// }
 
-/**
- * Creates a standardized popup with content on a marker
- * 
- * @param {L.Marker|L.CircleMarker} marker - The marker to add the popup to
- * @param {string} content - HTML content for the popup
- * @returns {L.Marker|L.CircleMarker} The marker with popup attached
- */
-export function addPopupToMarker(marker, content) {
-    if (!marker) return;
+// /**
+//  * Creates a standardized popup with content on a marker
+//  *
+//  * @param {L.Marker|L.CircleMarker} marker - The marker to add the popup to
+//  * @param {string} content - HTML content for the popup
+//  * @returns {L.Marker|L.CircleMarker} The marker with popup attached
+//  */
+// export function addPopupToMarker(marker, content) {
+//     if (!marker) return;
 
-    marker.bindPopup(content);
-    return marker;
-}
+//     marker.bindPopup(content);
+//     return marker;
+// }
 
-/**
- * Creates multiple circle markers on the provided map from an array of positions.
- *
- * @param {L.Map} map - The Leaflet Map instance.
- * @param {{lat:number,lng:number}[]} positions - Array of position objects.
- * @param {string} [color="#FF0000"] - The color for the markers.
- * @param {Object} [options={}] - Additional options for the circle markers.
- * @returns {L.CircleMarker[]|undefined} An array of circle marker elements.
- */
-export function createCircleMarkers(positions, options = {}) {
-    // Removed map parameter and check
-    if (!Array.isArray(positions) || positions.length === 0) {
-        console.warn("createCircleMarkers: Invalid positions provided.",);
-        return [];
-    }
+// /**
+//  * Creates multiple circle markers on the provided map from an array of positions.
+//  *
+//  * @param {L.Map} map - The Leaflet Map instance.
+//  * @param {{lat:number,lng:number}[]} positions - Array of position objects.
+//  * @param {string} [color="#FF0000"] - The color for the markers.
+//  * @param {Object} [options={}] - Additional options for the circle markers.
+//  * @returns {L.CircleMarker[]|undefined} An array of circle marker elements.
+//  */
+// export function createCircleMarkers(positions, options = {}) {
+//     // Removed map parameter and check
+//     if (!Array.isArray(positions) || positions.length === 0) {
+//         console.warn("createCircleMarkers: Invalid positions provided.",);
+//         return [];
+//     }
 
-    return positions.map((pos) => createCircleMarker(pos, options));
-}
-/**
- * Creates multiple polylines on the provided map by connecting consecutive position pairs.
- *
- * @param {L.Map} map - The Leaflet Map instance.
- * @param {{lat:number,lng:number}[]} positions - Array of position objects.
- * @param {string} [color="#A52A2A"] - Stroke color for the polylines.
- * @param {Object} [options={}] - Additional options for the polylines
- * @returns {L.Polyline[]|undefined} An array of created polylines if valid; otherwise, undefined.
- */
-export function createPolylines(positions, options = {}) {
-    if (!positions || positions.length < 2) return;
+//     return positions.map((pos) => createCircleMarker(pos, options));
+// }
+// /**
+//  * Creates multiple polylines on the provided map by connecting consecutive position pairs.
+//  *
+//  * @param {L.Map} map - The Leaflet Map instance.
+//  * @param {{lat:number,lng:number}[]} positions - Array of position objects.
+//  * @param {string} [color="#A52A2A"] - Stroke color for the polylines.
+//  * @param {Object} [options={}] - Additional options for the polylines
+//  * @returns {L.Polyline[]|undefined} An array of created polylines if valid; otherwise, undefined.
+//  */
+// export function createPolylines(positions, options = {}) {
+//     if (!positions || positions.length < 2) return;
 
-    const polylines = [];
-    // for every two consecutive positions, create a polyline
-    for (let i = 0; i < positions.length - 1; i += 2) {
-        const polyline = createPolyline([positions[i], positions[i + 1]], options);
-        if (polyline) {
-            polylines.push(polyline);
-        } else {
-            console.warn("Failed to create polyline for positions:", [positions[i], positions[i + 1]]);
-        }
-    }
-    return polylines;
-}
-/**
- * Creates multiple tooltip labels on the map for each consecutive pair of positions using corresponding values.
- * @param {L.Map} map - The Leaflet map instance.
- * @param {Array} positions - An array of position objects with { latitude, longitude }.
- * @param {nubmer[]} valueArray - An array of values to display for each tooltip label.
- * @param {Object} [options={}] - Optional tooltip options.
- * @returns {L.Tooltip[]} An array of created tooltip labels.
- */
-export function createLabelTooltips(map, positions, valueArray, unit = "meter", options = {}) {
-    // Validate input parameters
-    if (!map || !positions || positions.length < 2 || !valueArray || valueArray.length < 1) return;
-    const tooltips = [];
+//     const polylines = [];
+//     // for every two consecutive positions, create a polyline
+//     for (let i = 0; i < positions.length - 1; i += 2) {
+//         const polyline = createPolyline([positions[i], positions[i + 1]], options);
+//         if (polyline) {
+//             polylines.push(polyline);
+//         } else {
+//             console.warn("Failed to create polyline for positions:", [positions[i], positions[i + 1]]);
+//         }
+//     }
+//     return polylines;
+// }
+// /**
+//  * Creates multiple tooltip labels on the map for each consecutive pair of positions using corresponding values.
+//  * @param {L.Map} map - The Leaflet map instance.
+//  * @param {Array} positions - An array of position objects with { latitude, longitude }.
+//  * @param {nubmer[]} valueArray - An array of values to display for each tooltip label.
+//  * @param {Object} [options={}] - Optional tooltip options.
+//  * @returns {L.Tooltip[]} An array of created tooltip labels.
+//  */
+// export function createLabelTooltips(map, positions, valueArray, unit = "meter", options = {}) {
+//     // Validate input parameters
+//     if (!map || !positions || positions.length < 2 || !valueArray || valueArray.length < 1) return;
+//     const tooltips = [];
 
-    // Loop until the second to last position to prevent an undefined reference.
-    for (let i = 0; i < valueArray.length; i++) {
-        const tooltip = createLabelTooltip(map, [positions[i], positions[i + 1]], valueArray[i], unit, options);
-        tooltip && tooltips.push(tooltip);
-    }
+//     // Loop until the second to last position to prevent an undefined reference.
+//     for (let i = 0; i < valueArray.length; i++) {
+//         const tooltip = createLabelTooltip(map, [positions[i], positions[i + 1]], valueArray[i], unit, options);
+//         tooltip && tooltips.push(tooltip);
+//     }
 
-    return tooltips;
-}
+//     return tooltips;
+// }
 
-/**
- * Fit map bounds to show all provided elements
- * 
- * @param {L.Map} map - The Leaflet map instance
- * @param {Array<L.Marker|L.CircleMarker|L.Polyline>} elements - Array of map elements
- * @param {Object} [options] - Options for the fit bounds operation
- * @param {number} [options.padding=50] - Padding in pixels
- */
-export function fitBoundsToElements(map, elements, options = { padding: 50 }) {
-    if (!map || !elements || elements.length === 0) return;
+// /**
+//  * Fit map bounds to show all provided elements
+//  *
+//  * @param {L.Map} map - The Leaflet map instance
+//  * @param {Array<L.Marker|L.CircleMarker|L.Polyline>} elements - Array of map elements
+//  * @param {Object} [options] - Options for the fit bounds operation
+//  * @param {number} [options.padding=50] - Padding in pixels
+//  */
+// export function fitBoundsToElements(map, elements, options = { padding: 50 }) {
+//     if (!map || !elements || elements.length === 0) return;
 
-    const bounds = L.latLngBounds();
+//     const bounds = L.latLngBounds();
 
-    elements.forEach(element => {
-        if (element instanceof L.Marker || element instanceof L.CircleMarker) {
-            bounds.extend(element.getLatLng());
-        } else if (element instanceof L.Polyline) {
-            element.getLatLngs().forEach(latLng => {
-                bounds.extend(latLng);
-            });
-        }
-    });
+//     elements.forEach(element => {
+//         if (element instanceof L.Marker || element instanceof L.CircleMarker) {
+//             bounds.extend(element.getLatLng());
+//         } else if (element instanceof L.Polyline) {
+//             element.getLatLngs().forEach(latLng => {
+//                 bounds.extend(latLng);
+//             });
+//         }
+//     });
 
-    if (!bounds.isValid()) return;
+//     if (!bounds.isValid()) return;
 
-    map.fitBounds(bounds, options);
-}
+//     map.fitBounds(bounds, options);
+// }

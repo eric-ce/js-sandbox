@@ -10,7 +10,7 @@ import {
  */
 export class CesiumInputHandler {
     /** @type {import('cesium').Viewer} */
-    viewer; // Reference to the Cesium viewer instance
+    map; // Reference to the Cesium viewer instance
     /** @type {import('cesium').Scene} */
     scene; // Reference to the Cesium scene
     /** @type {import('cesium').ScreenSpaceEventHandler} */
@@ -26,7 +26,7 @@ export class CesiumInputHandler {
         if (!viewer || !viewer.scene || !viewer.scene.canvas) {
             throw new Error("Cesium Viewer with scene and canvas is required for CesiumInputHandler.");
         }
-        this.viewer = viewer;
+        this.map = viewer;
         this.scene = viewer.scene;
         // Create a dedicated handler instance to avoid conflicts and ensure proper cleanup.
         this.handler = new ScreenSpaceEventHandler(this.scene.canvas);
@@ -86,7 +86,7 @@ export class CesiumInputHandler {
 
                 if (!screenPos) return;
 
-                const mapPoint = this.viewer.scene.pickPosition(screenPos) || null;
+                const mapPoint = this.map.scene.pickPosition(screenPos) || null;
                 if (!defined(mapPoint)) return;
 
                 // Prepare normalized event data
@@ -96,7 +96,7 @@ export class CesiumInputHandler {
                     // Cesium movement object doesn't directly expose the DOM event
                     domEvent: undefined,
                     // Result from scene.pick()
-                    pickedFeature: this.viewer.scene.drillPick(screenPos, 4, 1, 1) || null
+                    pickedFeature: this.map.scene.drillPick(screenPos, 4, 1, 1) || null
                 };
 
                 // Call all registered callbacks for this event type
@@ -169,7 +169,7 @@ export class CesiumInputHandler {
             this.setCursor('default');
         } catch (e) { }
 
-        this.viewer = null; // Release reference
+        this.map = null; // Release reference
         this.scene = null;
         console.log("CesiumInputHandler instance destroyed.");
     }

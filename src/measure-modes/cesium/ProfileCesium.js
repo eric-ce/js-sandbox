@@ -11,7 +11,7 @@ import {
     getRankedPickedObjectType,
     convertToCartesian3,
 } from "../../lib/helper/cesiumHelper.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
@@ -188,9 +188,9 @@ class ProfileCesium extends MeasureModeCesium {
         const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "pending"
         });
         if (!pointPrimitive) return; // If point creation fails, exit
-        pointPrimitive.status = "pending"; // Set status to pending for the point primitive
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -208,22 +208,22 @@ class ProfileCesium extends MeasureModeCesium {
             for (let i = 0; i < collectionLength; i++) {
                 const pointPrimitive = this.pointCollection.get(i);
                 // pointPrimitive is guaranteed to be a valid primitive object here
-                if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
-                    pointPrimitive.status = "completed";
+                if (pointPrimitive.id?.includes(`annotate_${this.mode}`) || pointPrimitive?.feature?.properties?.status) {
+                    pointPrimitive.feature.properties.status = "completed";
                 }
             }
 
             // -- APPROACH 2: Update existing polyline and label --
             // -- Handle polyline
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
-                status: "completed",
-                color: this.stateManager.getColorState("line")
+                color: this.stateManager.getColorState("line"),
+                status: "completed"
             });
 
             // -- Handle label --
             const { distance, clampedPositions, clampedPositionsCartographic } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-                status: "completed",
-                showBackground: true
+                showBackground: true,
+                status: "completed"
             });
 
             // -- Handle Chart --
@@ -286,8 +286,8 @@ class ProfileCesium extends MeasureModeCesium {
                 break; // Do nothing, point is handled by the event handler
             case "line":
                 const linePrimitive = pickedObject.primitive;
-                if (linePrimitive.status === "moving") return;
-                // hide the pointer overlay 
+                if (linePrimitive?.feature?.properties?.status === "moving") return;
+                // hide the pointer overlay
                 const pointerElement = this.stateManager.getOverlayState("pointer");
                 pointerElement && (pointerElement.style.display = "none");
 
@@ -300,14 +300,14 @@ class ProfileCesium extends MeasureModeCesium {
 
                     // Moving line: remove if existed, create if not existed
                     this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
-                        status: "moving",
-                        color: this.stateManager.getColorState("move")
+                        color: this.stateManager.getColorState("move"),
+                        status: "moving"
                     });
 
                     // Moving label: update if existed, create if not existed
                     this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                        status: "moving",
-                        showBackground: false
+                        showBackground: false,
+                        status: "moving"
                     });
                 }
         }
@@ -344,7 +344,8 @@ class ProfileCesium extends MeasureModeCesium {
         }, interpolatedPoints[0]);
 
         this._createOrUpdateHoveredPoint(closestPosition, {
-            id: `annotate_${this.mode}_hovered_point_${measure.id}`,
+            id: `annotate_${this.mode}_hovered-point_${measureId}`,
+            color: this.stateManager.getColorState("hoverChartPoint"),
             status: "completed"
         });
 
@@ -374,14 +375,14 @@ class ProfileCesium extends MeasureModeCesium {
 
         // -- Handle polyline --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "moving",
-            color: this.stateManager.getColorState("move")
+            color: this.stateManager.getColorState("move"),
+            status: "moving"
         });
 
         // -- Handle label --
         this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "moving",
-            showBackground: false
+            showBackground: false,
+            status: "moving"
         });
     }
 
@@ -401,14 +402,14 @@ class ProfileCesium extends MeasureModeCesium {
 
         // -- Finalize Line Graphics --
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
-            status: "completed",
-            color: this.stateManager.getColorState("line")
+            color: this.stateManager.getColorState("line"),
+            status: "completed"
         });
 
         // -- Finalize Label Graphics --
         const { distance, clampedPositions, clampedPositionsCartographic } = this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // -- Handle Chart --
@@ -439,9 +440,9 @@ class ProfileCesium extends MeasureModeCesium {
         const {
             status = null,
             color = this.stateManager.getColorState("line"),
+            id = `annotate_${this.mode}_line_${this.measure.id}`,
         } = options;
 
-        // -- Check for and remove existing polyline --
         // -- Check for and remove existing polyline --
         if (Array.isArray(polylinesArray) && polylinesArray.length > 0) {
             const existingLinePrimitive = polylinesArray[0]; // Get reference to the existing primitive
@@ -454,8 +455,9 @@ class ProfileCesium extends MeasureModeCesium {
 
         // -- Create new polyline --
         const newLinePrimitive = this.drawingHelper._addGroundPolyline(positions, {
-            color,
-            id: `annotate_${this.mode}_line_${this.measure.id}` // Consider making ID more specific if needed (e.g., adding status)
+            color: color,
+            id: id,
+            status: status
         });
 
         // If creation failed, exit
@@ -463,9 +465,6 @@ class ProfileCesium extends MeasureModeCesium {
             console.error("Failed to create new polyline primitive.");
             return; // Explicitly return
         }
-
-        // -- Handle Metadata Update --
-        newLinePrimitive.status = status; // Set status on the new primitive
 
         // -- Handle References Update --
         // Push the new primitive into the array passed by reference.
@@ -481,7 +480,7 @@ class ProfileCesium extends MeasureModeCesium {
      * @param {Cartesian3[]} positions - the positions to create or update the label. 
      * @param {Label[]} labelsArray - the array to store the label primitive reference of the operation not the label collection.
      * @param {object} options - options for label creation or update.
-     * @returns 
+     * @returns {{distance: number, labelPrimitive: Label, clampedPositions: Cartesian3[], clampedPositionsCartographic: Cartographic[]}} - Returns an object containing the distance, label primitive, clamped positions, and clamped positions in cartographic coordinates.
      */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
         // Validate input
@@ -494,16 +493,13 @@ class ProfileCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
+            ...rest
         } = options;
 
         const { distance, clampedPositions, clampedPositionsCartographic } = calculateClampedDistance(positions, this.map.scene, 4);
+        if (!distance) return { distance: null, labelPrimitive: null };
         const formattedText = formatMeasurementValue(distance, "meter");
-        const middlePos = calculateMiddlePos(positions);
-
-        if (!middlePos) {
-            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { distance, labelPrimitive: null }; // Return distance but null primitive
-        }
 
         let labelPrimitive = null;
 
@@ -515,40 +511,48 @@ class ProfileCesium extends MeasureModeCesium {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelPrimitive.position = middlePos;
-                labelPrimitive.text = formattedText;
-                labelPrimitive.showBackground = showBackground; // Set background visibility
+                // Update label visuals and metadata
+                labelPrimitive = this._updateLabel(labelPrimitive, positions, formattedText, {
+                    status,
+                    showBackground,
+                    id,
+                    ...rest
+                });
             }
         }
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
-            labelPrimitive = this.drawingHelper._addLabel(positions, distance ?? 0, "meter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+            labelPrimitive = this.drawingHelper._addLabel(positions, distance, "meter", {
+                id: id,
                 showBackground: showBackground,
+                status: status,
+                ...rest
             });
 
-            if (!labelPrimitive) {
-                console.error("_createOrUpdateLabel: Failed to create new label primitive.");
-                return { distance, labelPrimitive: null }; // Return distance but null primitive
-            }
-
             // -- Handle References Update --
-            labelsArray.push(labelPrimitive);
+            labelPrimitive && labelsArray.push(labelPrimitive);
         }
 
-        // -- Handle Label Metadata Update --
-        labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
-        labelPrimitive.status = status; // Set status
+        if (!labelPrimitive) {
+            console.error("_createOrUpdateLabel: Failed to create new label primitive.");
+            return { distance, labelPrimitive: null }; // Return distance but null primitive
+        }
 
         return { distance, clampedPositions, clampedPositionsCartographic, labelPrimitive };
     }
 
+    /**
+     * Creates or updates a hovered point marker.
+     * @param {Cartesian3} position - The position of the hovered point.
+     * @param {object} options - Options for the hovered point.
+     * @returns {PointPrimitive} - The created or updated hovered point marker.
+     */
     _createOrUpdateHoveredPoint(position, options = {}) {
         const {
-            color = this.stateManager.getColorState("pointColor"),
+            color = this.stateManager.getColorState("hoverChartPoint"),
             status = "pending",
+            id = `annotate_${this.mode}_hovered-point`
         } = options;
 
         if (this.#interactiveAnnotations.chartHoveredPoints.length > 0) {
@@ -563,14 +567,16 @@ class ProfileCesium extends MeasureModeCesium {
         // Create a new point marker at the closest position
         const hoveredPoint = this.drawingHelper._addPointMarker(position, {
             color,
-            id: `annotate_${this.mode}_hovered_point_${this.measure.id}`,
-            status
+            id,
+            status,
         });
         if (!hoveredPoint) {
             console.warn("_createOrUpdateHoveredPoint: Failed to create hovered point primitive.");
             return null;
         }
-        this.#interactiveAnnotations.chartHoveredPoints = [hoveredPoint]
+
+        this.#interactiveAnnotations.chartHoveredPoints = [hoveredPoint]; // Store the reference to the hovered point
+
         return hoveredPoint;
     }
 
@@ -624,7 +630,7 @@ class ProfileCesium extends MeasureModeCesium {
      * @param {object} event - The event object from the chart.js interaction.
      * @param {object[]} chartElements - The chart elements that were interacted with on chart.js.
      * @param {import("chart.js").Chart} chartInstance - The chart.js Chart instance.
-     * @returns {PointPrimitive}
+     * @returns {void}
      */
     _addPointAtChartHoveredPoint(event, chartElements, chartInstance) {
         // Validate input parameters
@@ -651,26 +657,37 @@ class ProfileCesium extends MeasureModeCesium {
         const pointCartesian = convertToCartesian3(pointCartographic); // convert to Cartesian3
         if (!pointCartesian) return null;
 
+        // Access the metadata stored in the 'measureId' property
+        const dataMeasureId = dataPoint.measureId;
         this._createOrUpdateHoveredPoint(pointCartesian, {
-            id: `annotate_${this.mode}_chart_hovered_point`,
+            id: `annotate_${this.mode}_hovered-point_${dataMeasureId}`,
+            color: this.stateManager.getColorState("hoverChartPoint"),
             status: "completed"
         });
     }
 
+    /**
+     * Activates the tooltip at the specified point index.
+     * @param {number} index - The index of the point to activate the tooltip for.
+     * @returns {void}
+     */
     _activateTooltipAtPointIndex(index) {
         if (!this.chartInstance) return;
         this.chartInstance.tooltip.setActiveElements([{ datasetIndex: 0, index: index }], this.chartInstance.getDatasetMeta(0).data[1].element);
         this.chartInstance.update();
     }
 
+    /**
+     * Removes the hovered point marker from the chart.
+     */
     removeChartHoveredPoint() {
         const hoveredPoints = this.#interactiveAnnotations.chartHoveredPoints;
-        if (hoveredPoints.length > 0) {
-            hoveredPoints.forEach(point => {
-                this.drawingHelper._removePointMarker(point); // Remove the point primitive
-            });
-            this.#interactiveAnnotations.chartHoveredPoints = []; // Clear the reference
-        }
+        if (!hoveredPoints || hoveredPoints.length === 0) return; // If no hovered points, exit
+
+        hoveredPoints.forEach(point => {
+            this.drawingHelper._removePointMarker(point); // Remove the point primitive
+        });
+        this.#interactiveAnnotations.chartHoveredPoints = []; // Clear the reference
     }
 
     /**

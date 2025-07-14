@@ -99,7 +99,6 @@ class LeafletDragHandler {
         // Find the associated measurement data (Requires _findMeasureByCoordinate in the mode)
         // this.measure = findMeasureByCoordinate(dragBeginPosition, dataPool.getAllMeasures("cartographicDegrees"), "leaflet");
         this.measure = this.activeModeInstance._findMeasureByCoordinate(dragBeginPosition);
-
         if (!this.measure) {
             console.warn("LeafletDragHandler: Could not find measure data for dragged marker at", dragBeginPosition);
             return;
@@ -130,7 +129,7 @@ class LeafletDragHandler {
 
         // -- Store total label primitive reference --
         // Assume total label should have only one per measure
-        const totalLabel = this.labelCollection.getLayers().find(label => label.id === `annotate_${this.activeModeInstance.mode}_total_label_${this.measure.id}`)
+        const totalLabel = this.labelCollection.getLayers().find(label => label.id === `annotate_${this.activeModeInstance.mode}_total-label_${this.measure.id}`)
         if (totalLabel) this.draggedObjectInfo.totalLabels = [totalLabel] // Store total label if exists
 
         // Update data pool
@@ -157,6 +156,7 @@ class LeafletDragHandler {
         this.#coordinate = eventData.mapPoint; // Store current coordinate {lat, lng}
 
         // --- Update Dragging Point ---
+        // Visual update the drag point marker
         this.draggedObjectInfo.beginPoint.setStyle({
             weight: 2,
             color: "#FFFF00",
@@ -164,9 +164,11 @@ class LeafletDragHandler {
         }); // Update the marker style
         this.draggedObjectInfo.beginPoint.setLatLng(this.#coordinate); // Update the marker position
 
-        // Update custom properties on the marker object itself
-        this.draggedObjectInfo.beginPoint.positions = [{ ...this.#coordinate }]; // Assuming you store position this way
-        this.draggedObjectInfo.beginPoint.status = "moving";
+        // Update metadata for the drag point marker
+        Object.assign(this.draggedObjectInfo.beginPoint.feature.properties, {
+            positions: [{ ...this.#coordinate }], // Update positions
+            status: "moving", // Update status to moving
+        });
 
         // --- Update Associated Geometry (Approach 2: Reuse/Update) ---
         this.activeModeInstance?.updateGraphicsOnDrag(this.measure); // Update graphics on drag (optional)
@@ -181,27 +183,34 @@ class LeafletDragHandler {
             return;
         }
 
-        // -- Handle point --
-        // Update the dragged point visual style and position
+        // --- Update Dragging Point ---
+        // Visual update the drag point marker
         this.draggedObjectInfo.beginPoint.setStyle({
             color: "#FF0000",
             fillColor: "#FF0000"
         });
         this.draggedObjectInfo.beginPoint.setLatLng(this.#coordinate); // Update the marker position
-        // Update metadata in the marker object
-        this.draggedObjectInfo.beginPoint.positions = [{ ...this.#coordinate }]; // Update the position data in the marker object
-        this.draggedObjectInfo.beginPoint.status = "completed"; // Update status to completed
+
+        // Update metadata for the drag point marker
+        Object.assign(this.draggedObjectInfo.beginPoint.feature.properties, {
+            positions: [{ ...this.#coordinate }], // Update positions
+            status: "completed", // Update status to completed
+        })
+
         // -- Finalize Associated Geometry --
         this.activeModeInstance?.finalizeDrag(this.measure);
+
+        // -- Update end position --
+        this.draggedObjectInfo.endPosition = this.#coordinate; // Update the end position
 
         // Update data pool
         dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Emit consistent event (optional)
-        this.emitter.emit("drag-end", {
-            measureData: { ...this.measure },
-            draggedObjectInfo: { ...this.draggedObjectInfo }, // Send snapshot before reset
-        });
+        // this.emitter.emit("drag-end", {
+        //     measureData: { ...this.measure },
+        //     draggedObjectInfo: { ...this.draggedObjectInfo }, // Send snapshot before reset
+        // });
 
         // Log the time of the last drag end event to solve left click trigger too fast issue
         this.lastDragEndTs = Date.now();

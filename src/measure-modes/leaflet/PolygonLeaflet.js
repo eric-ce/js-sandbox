@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng } from "../../lib/helper/leafletHelper.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 /**
  * @typedef MeasurementGroup
@@ -138,10 +138,10 @@ class PolygonLeaflet extends MeasureModeLeaflet {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_area_point_${this.measure.id}`,
             interactive: true,
+            status: "pending", // Set status to pending
             listeners: this.#markerListeners
         });
         if (!point) return;
-        point.status = "pending"; // Set status to pending
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -216,23 +216,20 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         // update coordinate data cache
         this.coordsCache.push(this.#coordinate); // Update the coordinate cache
 
-        // update status pending annotations
-        const pointsArray = this.pointCollection.getLayers();
-        pointsArray.forEach(point => {
-            if (point && point.id.includes(this.mode)) {
-                point.status = "completed"
-            }
-        });
+        // -- Update annotations status --
+        // Update points status and interactive
+        this._updatePendingItemsToCompleted(this.pointCollection.getLayers(), `annotate_${this.mode}`); // Update points status and interactive
+
 
         // -- Create final point --
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: "#FF0000",
             id: `annotate_area_point_${this.measure.id}`,
             interactive: true, // Make the point interactive
+            status: "completed", // Set status to completed
             listeners: this.#markerListeners
         });
         if (!point) return;
-        point.status = "completed"; // Set status to completed
 
         // -- Handle Polygon --
         this._createOrUpdatePolygon(this.coordsCache, this.#interactiveAnnotations.polygons, {
@@ -360,6 +357,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
             status = null,
             color = this.stateManager.getColorState("polygon"),
             interactive = false,
+            id = `annotate_${this.mode}_polygon_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -387,6 +385,15 @@ class PolygonLeaflet extends MeasureModeLeaflet {
                         this.drawingHelper._refreshLayerInteractivity(polygonInstance);
                     }
                 }
+
+                // -- Handle Metadata to update polygon --
+                Object.assign(polygonInstance.feature.properties, {
+                    status,
+                    positions: positions.map(pos => ({ ...pos })),
+                    ...(id && deconstructIdForMetadata(id)) // Deconstruct id for metadata
+                });
+                polygonInstance.feature.id = id; // Update the id on the polygon instance feature
+                polygonInstance.id = id; // Update the id on the polygon instance
             }
         }
 
@@ -395,7 +402,8 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         if (!polygonInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             polygonInstance = this.drawingHelper._addPolygon(positions, {
                 color,
-                id: `annotate_area_polygon_${this.measure.id}`,
+                id,
+                status,
                 interactive,
                 ...rest
             });
@@ -409,24 +417,24 @@ class PolygonLeaflet extends MeasureModeLeaflet {
             polygonsArray.push(polygonInstance); // Store polygon reference for interaction use
         }
 
-        // --- Common Updates (for both existing and newly created) ---
-        // -- Handle Polygon Metadata Update --
-        polygonInstance.status = status; // Set status
-        polygonInstance.positions = positions.map(pos => ({ ...pos })); // Store a copy of positions
+        if (!polygonInstance) {
+            console.warn("_createOrUpdatePolygon: No valid polygon instance found after creation.");
+            return null; // Return null if no valid polygon instance is found
+        }
 
         return polygonInstance; // Return the polygon instance
     }
 
     /**
-      * Create or update the label.
-      * If the label exists in labelsArray, update its position and text, else create a new one.
-      * Manages the reference within the provided labelsArray.
-      * @param {{lat:number,lng:number}[]} positions - Array of positions (expects 2) to calculate distance and middle point.
-      * @param {L.tooltip[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified.
-      * @param {Object} [options={}] - Options for the label.
-      * @param {string|null} [options.status=null] - Status to set on the label instance.
-      * @return {{ distance: number, labelInstance: L.tooltip | null }} - The calculated distance and the created/updated label instance, or null if failed.
-      */
+     * Create or update the label.
+     * If the label exists in labelsArray, update its position and text, else create a new one.
+     * Manages the reference within the provided labelsArray.
+     * @param {{lat:number,lng:number}[]} positions - Array of positions to calculate area and middle point.
+     * @param {L.tooltip[]} labelsArray - The array (passed by reference) that holds the label instance (Marker). This array will be modified.
+     * @param {Object} [options={}] - Options for the label.
+     * @param {string|null} [options.status=null] - Status to set on the label instance.
+     * @return {{ area: number, labelInstance: L.tooltip | null }} - The calculated area and the created/updated label instance, or null if failed.
+     */
     _createOrUpdateLabel(positions, labelsArray, options = {}) {
         // Validate input
         if (!Array.isArray(positions) || !Array.isArray(labelsArray)) {
@@ -439,6 +447,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
             status = null,
             color = 'rgba(0,0,0,1)',
             interactive = false,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -461,39 +470,26 @@ class PolygonLeaflet extends MeasureModeLeaflet {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setLatLng(middlePos); // update position
-
-                // Create HTML element for label content
-                const contentElement = document.createElement('span');
-                contentElement.style.color = color;
-                contentElement.textContent = formattedText;
-
-                // Set the content of the label
-                labelInstance.setContent(contentElement); // update content
-
-                // Update interactive state
-                const oldInteractiveState = labelInstance.options.interactive;
-                // Compare the old with current interactive state, only update interactive if different
-                if (oldInteractiveState !== interactive) {
-                    // Update the interactive
-                    labelInstance.options.interactive = interactive;
-                    // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(labelInstance);
-                    }
-                }
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
+                    status,
+                    color,
+                    interactive,
+                    id,
+                    ...rest
+                })
             }
         }
 
         // -- Create Label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, area, "squareMeter", {
-                id: `annotate_area_label_${this.measure.id}`,
+                id,
                 interactive,
+                status,
+                color,
                 ...rest
             });
-
             if (!labelInstance) {
                 console.error("_createOrUpdateLabel: Failed to create new label instance.");
                 return { area, labelInstance: null }; // Return area but null instance
@@ -505,12 +501,8 @@ class PolygonLeaflet extends MeasureModeLeaflet {
 
         if (!labelInstance) {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
-            return { distance, labelInstance: null }; // Return distance but null instance
+            return { area, labelInstance: null }; // Return area but null instance
         }
-
-        // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = positions.map(pos => ({ ...pos })); // Store a copy of positions
 
         return { area, labelInstance };
     }

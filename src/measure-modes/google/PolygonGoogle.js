@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng } from "../../lib/helper/googleHelper.js";
 
 
@@ -149,10 +149,10 @@ class PolygonGoogle extends MeasureModeGoogle {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_area_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
+            status: "pending",
             listeners: this.#markerListeners
         });
         if (!point) return;
-        point.status = "pending"; // Set status to pending
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -224,12 +224,8 @@ class PolygonGoogle extends MeasureModeGoogle {
         this.coordsCache.push(this.#coordinate); // Update the coordinate cache
 
         // -- Update annotations status --
-        // update status pending annotations
-        this.pointCollection.forEach(point => {
-            if (point.id.includes(this.mode)) {
-                point.status = "completed"
-            }
-        });
+        // update points status
+        this._updatePendingItemsToCompleted(this.pointCollection, `annotate_${this.mode}`);
 
 
         // -- Create final point --
@@ -237,10 +233,11 @@ class PolygonGoogle extends MeasureModeGoogle {
             color: "#FF0000",
             id: `annotate_area_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
+            status: "completed",
             listeners: this.#markerListeners
         });
         if (!point) return;
-        point.status = "completed"; // Set status to completed
+
 
         // -- Handle Polygon --
         this._createOrUpdatePolygon(this.coordsCache, this.#interactiveAnnotations.polygons, {
@@ -366,6 +363,7 @@ class PolygonGoogle extends MeasureModeGoogle {
             status = null,
             color = this.stateManager.getColorState("polygon"),
             clickable = false,
+            id = `annotate_area_polygon_${this.measure.id}`,
             ...rest
         } = options;
 
@@ -382,6 +380,7 @@ class PolygonGoogle extends MeasureModeGoogle {
                 polygonInstance.setPaths(positions); // update position
                 polygonInstance.setOptions({ strokeColor: color, clickable }); // Change color to indicate moving state
             }
+            polygonInstance.id = id; // Update id
         }
 
         // --- Create Polygon ---
@@ -389,8 +388,9 @@ class PolygonGoogle extends MeasureModeGoogle {
         if (!polygonInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
             polygonInstance = this.drawingHelper._addPolygon(positions, {
                 color,
-                id: `annotate_area_polygon_${this.measure.id}`,
+                id,
                 clickable,
+                status,
                 ...rest
             });
 
@@ -405,8 +405,11 @@ class PolygonGoogle extends MeasureModeGoogle {
 
         // --- Common Updates (for both existing and newly created) ---
         // -- Handle Polygon Metadata Update --
-        polygonInstance.status = status; // Set status
-        polygonInstance.positions = positions.map(pos => ({ ...pos })); // Store a copy of positions
+        Object.assign(polygonInstance.feature.properties, {
+            status,
+            positions: positions.map(p => ({ ...p })),
+            ...(id && deconstructIdForMetadata(id))
+        });
 
         return polygonInstance; // Return the polygon instance
     }
@@ -430,18 +433,18 @@ class PolygonGoogle extends MeasureModeGoogle {
         const {
             status = null,
             clickable = false,
-            // add more options here if needed
+            id = `annotate_area_label_${this.measure.id}`,
             ...rest
         } = options;
 
         const area = calculateArea(positions);
         const formattedText = formatMeasurementValue(area, "squareMeter");
-        const middlePos = calculateMiddlePos(positions); // Calculate the middle position for the label
+        // const middlePos = calculateMiddlePos(positions); // Calculate the middle position for the label
 
-        if (!middlePos) {
-            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { area: null, labelInstance: null }; // Return early if middle position is invalid
-        }
+        // if (!middlePos) {
+        //     console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
+        //     return { area: null, labelInstance: null }; // Return early if middle position is invalid
+        // }
 
         let labelInstance = null;
 
@@ -454,16 +457,13 @@ class PolygonGoogle extends MeasureModeGoogle {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setPosition(middlePos); // update position
-                // Ensure getLabel() exists and returns an object before spreading
-                const currentLabelOptions = labelInstance.getLabel();
-                if (currentLabelOptions) {
-                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText, clickable }); // update text
-                } else {
-                    // Fallback if getLabel() is not as expected
-                    labelInstance.setLabel({ text: formattedText, clickable });
-                }
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
+                    id,
+                    status,
+                    clickable,
+                    ...rest
+                });
             }
         }
 
@@ -489,10 +489,6 @@ class PolygonGoogle extends MeasureModeGoogle {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return { area, labelInstance: null }; // Early exit if labelInstance is not valid
         }
-
-        // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = positions.map(pos => ({ ...pos })); // Store a copy of positions
 
         return { area, labelInstance };
     }

@@ -1,14 +1,15 @@
 import { Cartesian3 } from "cesium";
 import { MeasureModeBase } from "../MeasureModeBase.js";
-import { areCoordinatesEqual, convertToCartesian3, createPointerOverlay } from "../../lib/helper/cesiumHelper.js";
+import { areCoordinatesEqual, calculateMiddlePos, convertToCartesian3, createPointerOverlay } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { Chart } from "chart.js/auto";
-import { createCloseButton, makeDraggable } from "../../lib/helper/helper.js";
+import { createCloseButton, deconstructIdForMetadata, makeDraggable, showCustomNotification } from "../../lib/helper/helper.js";
 import { closeIconBlack } from "../../assets/icons.js";
 
 // Cesium types
 /** @typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection */
 /** @typedef {import('cesium').LabelCollection} LabelCollection */
+/** @typedef {import('cesium').Cartesian3} Cartesian3 */
 
 // Dependencies types
 /** @typedef {import('../../lib/input/CesiumInputHandler.js').CesiumInputHandler} CesiumInputHandler */
@@ -65,6 +66,10 @@ class MeasureModeCesium extends MeasureModeBase {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
     }
 
+
+    /*******************
+     * UTILITY FEATURE *
+     *******************/
     /**
      * Finds a measure by its ID.
      * @param {number} measureId - The ID of the measure to find.
@@ -118,6 +123,73 @@ class MeasureModeCesium extends MeasureModeBase {
     }
 
     /**
+    * Resets all the collections, listeners, and internal state of cesium measure.
+    * This method is called when the tool is disconnected.
+    * @override
+    * @returns {void}
+    */
+    removeAnnotationsAndListeners() {
+        this.drawingHelper.clearCollections();
+    }
+
+    /**
+     * Removes all pending annotations in the current mode.
+     * This includes points, labels, polylines, and polygons that are not completed.
+     * It does not remove completed annotations.
+     * @override
+     * @returns {void}
+     */
+    removePendingAnnotations() {
+        const targetIdPrefix = `annotate_${this.mode}`;
+
+        // Helper function to check if annotation should be removed
+        const shouldRemove = (annotation) => {
+            const annotationStatus = annotation?.feature?.properties?.status;
+            return annotation && annotation?.id?.includes(targetIdPrefix) && annotationStatus !== "completed";
+        }
+
+        // Define collections with their access methods and removal methods
+        const collections = [
+            {
+                collection: this.pointCollection,
+                accessMethod: 'get',
+                removeMethod: '_removePointMarker'
+            },
+            {
+                collection: this.labelCollection,
+                accessMethod: 'get',
+                removeMethod: '_removeLabel'
+            },
+            {
+                collection: this.polylineCollection,
+                accessMethod: 'index',
+                removeMethod: '_removePolyline'
+            },
+            {
+                collection: this.polygonCollection,
+                accessMethod: 'index',
+                removeMethod: '_removePolygon'
+            }
+        ];
+
+        collections.forEach(({ collection, accessMethod, removeMethod }) => {
+            const length = collection.length;
+            if (length === 0) return; // Skip if collection is empty
+            for (let i = length - 1; i >= 0; i--) {
+                const item = accessMethod === 'get' ? collection.get(i) : collection[i];
+                if (shouldRemove(item)) {
+                    this.drawingHelper[removeMethod](item);
+                }
+            }
+        });
+    }
+
+
+    /*******************************
+     * COMMON METHOD USED IN MODES *
+     *  USED AS REUSABLE METHODS   *
+     *******************************/
+    /**
      * Checks if the given coordinate is near any existing point in the mode.
      * @param {Cartesian3} coordinate - The coordinate to check.
      * @return {boolean} - Returns true if the coordinate is near an existing point, false otherwise.
@@ -143,6 +215,45 @@ class MeasureModeCesium extends MeasureModeBase {
         });
     }
 
+    _updateLabel(label, positions, labelText, options = {}) {
+        if (!label || typeof labelText !== 'string') {
+            console.warn("Invalid label or labelText provided.");
+            return null;
+        }
+
+        const { status, showBackground, id } = options;
+
+        // Label position
+        const numPos = positions.length;
+        const labelPosition = numPos === 1 ? positions[0] : calculateMiddlePos(positions);
+        if (!labelPosition) return null;
+
+        // -- Handle Label Visual Update --
+        label.position = labelPosition; // Update the position of the label 
+        label.text = labelText; // Update the text of the label 
+        label.showBackground = showBackground; // Update the background visibility of the label
+
+        // -- Handle Label Metadata Update --
+        if (!label?.feature?.properties) {
+            label.feature = { properties: {} }; // Ensure feature properties exist
+        }
+        Object.assign(label.feature.properties, {
+            status,
+            positions: positions.map(pos => Cartesian3.clone(pos)), // Store the original positions
+            ...(id && deconstructIdForMetadata(id)) // deconstruct id for metadata
+        });
+        label.feature.id = id; // Set the feature ID
+        label.id = id;
+        console.log('label.feature.properties.status', label.feature.properties.status)
+        return label; // Return the updated label
+    }
+
+
+
+    /***********************************************************
+     *                     COMMON FEATURE                      *
+     * THE STANDALONE FEATURE OR SERIES METHOD FORMS A FEATURE *
+     ***********************************************************/
     _setupPointerOverlay() {
         // update pointerOverlay: the moving dot with mouse
         let pointerElement = this.stateManager.getOverlayState("pointer");
@@ -153,11 +264,55 @@ class MeasureModeCesium extends MeasureModeBase {
         return pointerElement;
     }
 
+    /**
+     * Removes the entire line set associated with the given polyline primitive.
+     * @param {Primitive} line - The polyline primitive to look up for its id and remove the entire line set.
+     * @returns {void} 
+     */
+    _removeLineSet(line) {
+        if (!line) return;
 
-    /*****************************************
-     *        CHART FEATURE SPECIFIC         *
-     * FOR PROFILE AND PROFILEDISTANCES MODE *
-     *****************************************/
+        // confirmation 
+        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
+        if (!userConfirmation) return;
+
+        const measureId = Number(line.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID    
+
+        const {
+            pointPrimitives,
+            labelPrimitives,
+            polylinePrimitives,
+            polygonPrimitives
+        } = this.drawingHelper._getRelatedPrimitivesByMeasureId(measureId);
+        pointPrimitives.forEach(point => {
+            this.drawingHelper._removePointMarker(point); // Remove the point primitive
+        });
+        labelPrimitives.forEach(label => {
+            this.drawingHelper._removeLabel(label); // Remove the label primitive
+        });
+        polylinePrimitives.forEach(polyline => {
+            this.drawingHelper._removePolyline(polyline); // Remove the polyline primitive
+        });
+        polygonPrimitives.forEach(polygon => {
+            this.drawingHelper._removePolygon(polygon); // Remove the polygon primitive
+        });
+
+        // remove the measure data from dataPool
+        dataPool.removeMeasureById(measureId);
+
+        // Remove the chart if it exists for profile and profile distance modes
+        if (this.chartDiv && typeof this._destroyChart === 'function') {
+            this._destroyChart(); // Destroy the chart if it exists
+        };
+
+        // show notification
+        showCustomNotification(`removed line set, id: ${measureId}`, this._container);
+    }
+
+
+    /**************************
+     * CHART FEATURE SPECIFIC *
+     **************************/
     /**
      * Creates and initializes the chart.
      * @param {object} specificChartConfig - Mode-specific chart configuration to merge with defaults.
@@ -185,10 +340,11 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // -- Create and add the close button --
         const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
+            position: "absolute",
+            top: "5px",
+            right: "5px",
             image: closeIconBlack,
-            clickCallback: () => {
-                this._destroyChart()
-            },
+            clickCallback: () => this._destroyChart()
         });
         this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function    
         this.chartDiv.appendChild(closeButton); // Add close button to chart div
@@ -345,6 +501,10 @@ class MeasureModeCesium extends MeasureModeBase {
         }
     }
 
+
+    /*************************
+     * CONTEXT MENU SPECIFIC *
+     *************************/
     // TODO: new feature: context menu to replace complicated left or middle click events
     _setupContextMenu(container, itemOptions = [], options = {}) {
         const {
@@ -468,67 +628,10 @@ class MeasureModeCesium extends MeasureModeBase {
         }
     }
 
-
-    /****************
-     * RESET METHOD *
-     ****************/
-    /**
-     * Resets all the collections, listeners, and internal state of cesium measure.
-     * This method is called when the tool is disconnected.
-     * @returns {void}
-     */
-    removeAnnotationsAndListeners() {
-        this.drawingHelper.clearCollections();
-    }
-
-    /**
-     * Removes all pending annotations in the current mode.
-     * This includes points, labels, polylines, and polygons that are not completed.
-     * It does not remove completed annotations.
-     * @returns {void}
-     */
-    removePendingAnnotations() {
-        const targetIdPrefix = `annotate_${this.mode}`;
-
-        // Helper function to check if annotation should be removed
-        const shouldRemove = (annotation) =>
-            annotation && annotation?.id?.includes(targetIdPrefix) && annotation.status !== "completed";
-
-        // Define collections with their access methods and removal methods
-        const collections = [
-            {
-                collection: this.pointCollection,
-                accessMethod: 'get',
-                removeMethod: '_removePointMarker'
-            },
-            {
-                collection: this.labelCollection,
-                accessMethod: 'get',
-                removeMethod: '_removeLabel'
-            },
-            {
-                collection: this.polylineCollection,
-                accessMethod: 'index',
-                removeMethod: '_removePolyline'
-            },
-            {
-                collection: this.polygonCollection,
-                accessMethod: 'index',
-                removeMethod: '_removePolygon'
-            }
-        ];
-
-        collections.forEach(({ collection, accessMethod, removeMethod }) => {
-            const length = collection.length;
-            if (length === 0) return; // Skip if collection is empty
-            for (let i = length - 1; i >= 0; i--) {
-                const item = accessMethod === 'get' ? collection.get(i) : collection[i];
-                if (shouldRemove(item)) {
-                    this.drawingHelper[removeMethod](item);
-                }
-            }
-        });
-    }
+    /*******************
+     *     HELPER      *
+     * GENERAL METHODS *
+     *******************/
 }
 
 export { MeasureModeCesium };

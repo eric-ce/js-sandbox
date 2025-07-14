@@ -1,6 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
 import { calculateDistance, calculateMiddlePos, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
-import { formatMeasurementValue } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 
 /**
@@ -68,6 +68,21 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         },
     };
 
+    #polylineListeners = {
+        mousedown: (polyline, event) => {
+            if (event.domEvent.button === 1) {
+                // Prevent map drag, default behavior
+                event.domEvent?.stopPropagation();
+                event.domEvent?.preventDefault();
+                // When the measure is completed or not started yet, make it interactive
+                // Switch mode case: isMeasurementComplete flags is not used (false) when at the beginning before the measure starts
+                if (this.coordsCache.length === 0) {
+                    // Handle polyline click logic here, if needed
+                    this._removeLineSet(polyline);
+                }
+            }
+        }
+    }
 
     /**
      * 
@@ -138,10 +153,10 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             interactive: true, // Make the point interactive
+            status: "pending",
             listeners: this.#markerListeners,
         });
         if (!point) return;
-        point.status = "pending"; // Set status to pending
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -150,23 +165,19 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length === 2) {
-            // update status pending annotations
-            const pointsArray = this.pointCollection.getLayers();
-            pointsArray.forEach(point => {
-                if (point && point.id.includes(this.mode)) {
-                    point.status = "completed"
-                }
-            });
+            // -- Update annotations status --
+            // Update points status and interactive
+            this._updatePendingItemsToCompleted(this.pointCollection.getLayers(), `annotate_${this.mode}`);
 
-            // -- APPROACH 2: Update/ Reuse existing polyline and label --
-            // -- Handle polyline --
+            // -- APPROACH 1: Remove and recreate polyline --
             this._createOrUpdateLine(this.coordsCache, this.#interactiveAnnotations.polylines, {
                 status: "completed",
                 color: this.stateManager.getColorState("line"),
-                interactive: true
+                interactive: true,
+                listeners: this.#polylineListeners
             });
 
-            // -- Handle label --
+            // -- APPROACH 2: Update/ Reuse existing label --
             const { distance } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
                 status: "completed",
                 interactive: true,
@@ -215,7 +226,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
                 this._createOrUpdateLine(positions, this.#interactiveAnnotations.polylines, {
                     status: "moving",
                     color: this.stateManager.getColorState("move"),
-                    interactive: false
+                    interactive: false,
                 });
 
                 // Moving label: update if existed, create if not existed
@@ -306,7 +317,8 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         this._createOrUpdateLine(positions, this.dragHandler.draggedObjectInfo.lines, {
             status: "completed",
             color: this.stateManager.getColorState("line"),
-            interactive: true
+            interactive: true,
+            listeners: this.#polylineListeners
         });
 
         // -- Finalize Label Graphics --
@@ -331,91 +343,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
     /**********
      * HELPER *
      **********/
-    /**
-     * Creates a new polyline or updates an existing one based on positions.
-     * Manages the reference within the provided polylinesArray.
-     * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
-     * @param {L.polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified. Caution: this is not the polylineCollection.
-     * @param {Object} [options={}] - Options for the line.
-     * @returns {L.polyline | null} The created or updated polyline instance, or null if failed.
-     */
-    _createOrUpdateLine(positions, polylinesArray, options = {}) {
-        // Validate positions input
-        if (!Array.isArray(positions) || positions.length < 2 || !positions[0] || !positions[1]) {
-            console.warn("_createOrUpdateLine: Requires an array with at least two valid positions.");
-            return null;
-        }
-        // Validate polylinesArray input
-        if (!Array.isArray(polylinesArray)) {
-            console.warn("_createOrUpdateLine: polylinesArray argument must be an array.");
-            return null;
-        }
 
-        // Default options
-        const {
-            status = "pending", // Default pending status
-            color = this.stateManager.getColorState("move"), // Default color 
-            interactive = false,
-            ...rest
-        } = options;
-
-        let lineInstance = null;
-
-        // -- Update existing polyline --
-        if (polylinesArray.length > 0) {
-            lineInstance = polylinesArray[0]; // Get the reference from the array
-
-            // Simplified Check: Assumes if exists, it's valid.
-            if (!lineInstance) { // Check if the retrieved reference is truthy
-                console.warn("_createOrUpdateLine: Invalid (null/undefined) object found in polylinesArray. Attempting to remove and recreate.");
-                polylinesArray.length = 0; // Clear the array to trigger creation below
-                // Fall through to the creation block (lineInstance is null)
-            } else {
-                // -- Handle Polyline Visual Update --
-                // Assumes lineInstance is a valid Polyline if it exists
-                lineInstance.setLatLngs(positions); // Update path of the line, requires L.latLng[]
-                lineInstance.setStyle({ color: color }); // Update color
-
-                // Update lineInstance interactive attribute
-                const oldInteractiveState = lineInstance.options.interactive;
-                // Compare the old with current interactive state, only update interactive if different
-                if (oldInteractiveState !== interactive) {
-                    // Update the interactive
-                    lineInstance.options.interactive = interactive;
-                    // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(lineInstance);
-                    }
-                }
-            }
-        }
-
-        // --- Creation new polyline ---
-        // This block runs if polylinesArray was empty OR if the existing entry was invalid (!lineInstance was true above)
-        if (!lineInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
-            lineInstance = this.drawingHelper._addPolyline(positions, {
-                color,
-                id: `annotate_${this.mode}_line_${this.measure.id}`,
-                interactive,
-                ...rest
-            });
-
-            if (!lineInstance) {
-                console.error("_createOrUpdateLine: Failed to create new polyline instance.");
-                return null; // Return null if creation failed
-            }
-
-            // -- Handle References Update --
-            polylinesArray.push(lineInstance); // Push the new instance into the referenced array
-        }
-
-        // --- Common Updates (for both existing and newly created) ---
-        // -- Handle Metadata Update --
-        lineInstance.status = status; // Set status
-        lineInstance.positions = positions.map(pos => ({ ...pos })); // Store a copy of positions
-
-        return lineInstance; // Return the instance
-    }
 
     /**
       * Create or update the label.
@@ -439,18 +367,12 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             status = null,
             color = "rgba(0,0,0,1)",
             interactive = false,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
         const distance = calculateDistance(positions[0], positions[1]); // calculate distance
         const formattedText = formatMeasurementValue(distance, "meter"); // Format the distance value
-        const middlePos = calculateMiddlePos(positions); // calculate label position
-
-        if (!middlePos) {
-            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            // Return distance but null instance if middle position calculation fails
-            return { distance, labelInstance: null };
-        }
 
         let labelInstance = null;
 
@@ -463,35 +385,23 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setLatLng(middlePos); // update position
-
-                // Create HTML element for label content
-                const contentElement = document.createElement('span');
-                contentElement.style.color = color;
-                contentElement.textContent = formattedText;
-
-                // Set the content of the label
-                labelInstance.setContent(contentElement); // update content
-
-                // Update interactive state
-                const oldInteractiveState = labelInstance.options.interactive;
-                // Compare the old with current interactive state, only update interactive if different
-                if (oldInteractiveState !== interactive) {
-                    // Update the interactive
-                    labelInstance.options.interactive = interactive;
-                    // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(labelInstance);
-                    }
-                }
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
+                    id,
+                    status,
+                    color,
+                    interactive,
+                    ...rest
+                })
             }
         }
 
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id,
+                color,
+                status,
                 interactive,
                 ...rest
             });
@@ -509,10 +419,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return { distance, labelInstance: null }; // Return distance but null instance
         }
-
-        // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = positions.map(pos => ({ ...pos })); // Store positions copy
 
         return { distance, labelInstance }; // Return the newly created instance
     }

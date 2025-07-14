@@ -1,5 +1,5 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { showCustomNotification } from "../../lib/helper/helper.js";
+import { deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.js";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 /**
@@ -149,11 +149,11 @@ class PointInfoGoogle extends MeasureModeGoogle {
         const point = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "completed", // Set status to pending
             clickable: true, // Make the point marker clickable
             listeners: this.#markerListeners
         });
         if (!point) return;
-        point.status = "completed"; // Set status to pending
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -216,7 +216,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
     _removePointInfo(marker) {
         // Get the measure id
         const idParts = marker.id.split("_");
-        const measureId = idParts[idParts.length - 1]; // Extract the measure ID from the marker ID
+        const measureId = idParts.slice(-1)[0]; // Extract the measure ID from the marker ID
 
         // -- Confirm deletion --
         // Use js confirm dialog to confirm deletion
@@ -315,12 +315,11 @@ class PointInfoGoogle extends MeasureModeGoogle {
         const {
             clickable = false,
             status = null,
-            // add more options here if needed
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
         const formattedText = `lat: ${positions[0].lat.toFixed(6)}, lng: ${positions[0].lng.toFixed(6)}`;
-        const labelPos = positions[0]; // Use the first position for the label
 
         let labelInstance = null;
         // -- Update existing label --
@@ -332,16 +331,13 @@ class PointInfoGoogle extends MeasureModeGoogle {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setPosition(labelPos); // update position
-                // Ensure getLabel() exists and returns an object before spreading
-                const currentLabelOptions = labelInstance.getLabel();
-                if (currentLabelOptions) {
-                    labelInstance.setLabel({ ...currentLabelOptions, text: formattedText, clickable }); // update text
-                } else {
-                    // Fallback if getLabel() is not as expected
-                    labelInstance.setLabel({ text: formattedText, clickable });
-                }
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
+                    id,
+                    status,
+                    clickable,
+                    ...rest
+                });
             }
         }
 
@@ -349,7 +345,8 @@ class PointInfoGoogle extends MeasureModeGoogle {
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, formattedText, null, {
                 clickable,
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id,
+                status,
                 ...rest
             });
 
@@ -366,10 +363,6 @@ class PointInfoGoogle extends MeasureModeGoogle {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return null; // Early exit if labelInstance is not valid
         }
-
-        // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = positions.map(pos => ({ ...pos })); // Store positions copy
 
         return { labelInstance };
     }

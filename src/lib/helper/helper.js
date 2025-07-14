@@ -113,69 +113,86 @@ function _createBaseButton(options) {
         title,
         color = "#333333",
         clickCallback,
-        top = "0.5rem",
-        right = "0.3rem",
+        top,
+        right,
+        position,
         textContent,
         image,
         hoverColor = "rgba(170, 221, 255, 0.8)",
     } = options;
 
+    // Create button element
     const button = document.createElement("button");
     button.title = title;
     button.className = className;
 
+    // Set button content
     if (image) {
         const imgElement = document.createElement("img");
-        imgElement.src = image;
-        imgElement.alt = title;
-        imgElement.style.width = "auto";
-        imgElement.style.height = "100%";
-        imgElement.style.display = "block";
-        imgElement.style.objectFit = "contain"; // Ensure the image fits well
+        Object.assign(imgElement, {
+            src: image,
+            alt: title,
+            draggable: false
+        });
+        Object.assign(imgElement.style, {
+            width: "auto",
+            height: "100%",
+            display: "block",
+            objectFit: "contain",
+            pointerEvents: "none" // ✅ Prevent image from interfering with button events
+        });
         button.appendChild(imgElement);
-    } else {
+    } else if (textContent) {
         button.textContent = textContent;
     }
 
-    const hoverButtonColor = hoverColor;
-
+    // Set button styles
     Object.assign(button.style, {
-        position: "absolute",
+        position: position,
         top: top,
         right: right,
-        width: "0.9rem",
-        height: "0.9rem",
+        width: "14px",
+        height: "14px",
         padding: "2px",
         border: "none",
         background: "transparent",
-        color,
-        fontSize: "16px",
-        fontWeight: "bold",
-        lineHeight: "20px",
-        textAlign: "center",
+        color: color,
         cursor: "pointer",
         zIndex: "1001",
         transition: "all 0.1s ease-in-out 0.05s",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        userSelect: "none", // ✅ Prevent text selection
+        outline: "none" // ✅ Remove focus outline for cleaner look
     });
 
-    // Event handlers
+    // Handler events
+    const imgElement = button.querySelector("img");
+
     const clickHandler = (event) => {
         event.stopPropagation();
         event.preventDefault();
-        clickCallback(event);
+        clickCallback?.(event);
+
+        // Reset hover effects on click
+        if (imgElement) {
+            Object.assign(imgElement.style, {
+                filter: "brightness(1)",
+                transform: "scale(1) rotate(0deg)"
+            });
+        } else {
+            button.style.transform = "scale(1)";
+        }
     };
 
     const mouseEnterHandler = () => {
-        const imgElement = button.querySelector("img");
         if (imgElement) {
             Object.assign(imgElement.style, {
                 transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
                 filter: "brightness(1.5)",
                 transform: "scale(1.3) rotate(90deg)",
-                transformOrigin: "center",
+                transformOrigin: "center"
             });
         } else {
             button.style.transform = "scale(1.2)";
@@ -183,20 +200,19 @@ function _createBaseButton(options) {
     };
 
     const mouseLeaveHandler = () => {
-        const imgElement = button.querySelector("img");
         if (imgElement) {
             Object.assign(imgElement.style, {
                 transition: "transform 0.2s ease-in-out, filter 0.2s ease-in-out",
                 filter: "brightness(1)",
                 transform: "scale(1) rotate(0deg)",
-                transformOrigin: "center",
+                transformOrigin: "center"
             });
         } else {
             button.style.transform = "scale(1)";
         }
     };
 
-    // Attach listeners
+    // Attach listeners 
     button.addEventListener("click", clickHandler);
     button.addEventListener("mouseenter", mouseEnterHandler);
     button.addEventListener("mouseleave", mouseLeaveHandler);
@@ -605,5 +621,27 @@ export function areCoordinatesEqual(coordinate1, coordinate2, options = {}) {
     return latEqual && lonEqual && heightEqual;
 }
 
+/**
+ * Deconstructs an annotation formatted id to extract metadata.
+ * The id format is expected to be "annotate_{mode}_{type}_{measureId}"
+ * @param {string} id - The annotation formatted id for the graphics. (e.g. "annotate_height_label_12345")
+ * @returns {{id: string, mode: string|null, type: string|null, measureId: string|null} | null} An object containing the deconstructed metadata from the id, or null if invalid.
+ */
+export function deconstructIdForMetadata(id) {
+    if (typeof id !== "string") {
+        // convert id to string if it's not already
+        id = String(id);
+    }
 
+    // validate if it is annotation id
+    if (!id.startsWith("annotate_")) return null;
+
+    const [annotation, mode, type, measureId] = id.split("_");
+
+    return {
+        mode: mode || null,
+        type: type || null,
+        measureId: measureId || null
+    };
+}
 

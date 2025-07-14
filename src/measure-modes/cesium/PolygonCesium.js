@@ -181,30 +181,31 @@ class PolygonCesium extends MeasureModeCesium {
         const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "pending",
         });
         if (!pointPrimitive) return; // If point creation fails, exit
-        pointPrimitive.status = "pending"; // Set status to pending for the point primitive
 
         // Update the coordinates cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
+
 
         // -- Handle Polygon --
         // If three points create the polygon primitive
         if (this.coordsCache.length > 2) {
             // -- Handle Polygon Graphics --
             this._createOrUpdatePolygonGraphics(this.coordsCache, this.#interactiveAnnotations.polygons, {
-                status: "pending",
                 polygonOptions: {
                     color: this.stateManager.getColorState("polygon"),
                 },
                 polygonOutlineOptions: {
                     color: this.stateManager.getColorState("line"),
-                }
+                },
+                status: "pending"
             });
             // -- Handle Label Graphics --
             const { area } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-                status: "pending",
                 showBackground: false,
+                status: "pending"
             });
 
             this.measure._records = [area]; // Store records with the area of the polygon
@@ -248,19 +249,19 @@ class PolygonCesium extends MeasureModeCesium {
 
                 // Moving polygon: remove if existed, create if not existed
                 this._createOrUpdatePolygonGraphics(positions, this.#interactiveAnnotations.polygons, {
-                    status: "moving",
                     polygonOptions: {
                         color: this.stateManager.getColorState("polygon"),
                     },
                     polygonOutlineOptions: {
                         color: this.stateManager.getColorState("polygonOutline"),
-                    }
+                    },
+                    status: "moving"
                 });
 
                 // Moving label: update if existed, create if not existed
                 this._createOrUpdateLabel(positions, this.#interactiveAnnotations.labels, {
-                    status: "moving",
                     showBackground: false,
+                    status: "moving"
                 });
 
                 break;
@@ -294,8 +295,8 @@ class PolygonCesium extends MeasureModeCesium {
             for (let i = 0; i < collectionLength; i++) {
                 const pointPrimitive = this.pointCollection.get(i);
                 // pointPrimitive is guaranteed to be a valid primitive object here
-                if (pointPrimitive.id?.includes(`annotate_${this.mode}`)) { // The check for pointPrimitive itself is less critical here
-                    pointPrimitive.status = "completed";
+                if (pointPrimitive.id?.includes(`annotate_${this.mode}`) || pointPrimitive?.feature?.properties?.status) {
+                    pointPrimitive.feature.properties.status = "completed";
                 }
             }
 
@@ -308,27 +309,25 @@ class PolygonCesium extends MeasureModeCesium {
             const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
                 color: this.stateManager.getColorState("pointColor"),
                 id: `annotate_${this.mode}_point_${this.measure.id}`,
+                status: "completed",
             });
             if (!pointPrimitive) return; // If point creation fails, exit
-            pointPrimitive.status = "completed"; // Set status to completed for the point primitive
-
 
             // -- Handle polygon graphics --
             this._createOrUpdatePolygonGraphics(this.coordsCache, this.#interactiveAnnotations.polygons, {
-                status: "completed",
                 polygonOptions: {
                     color: this.stateManager.getColorState("polygon"),
                 },
                 polygonOutlineOptions: {
                     color: this.stateManager.getColorState("line"),
-                }
+                },
+                status: "completed"
             });
-
 
             // -- Handle label --
             const { area } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
-                status: "completed",
                 showBackground: true,
+                status: "completed"
             });
 
             // -- Update data --
@@ -347,6 +346,7 @@ class PolygonCesium extends MeasureModeCesium {
             this.#interactiveAnnotations.labels = []; // Clear the reference to the polygon primitive
         }
     }
+
 
     /******************
      * EVENT HANDLING *
@@ -369,19 +369,19 @@ class PolygonCesium extends MeasureModeCesium {
 
         // -- Handle polygon --
         this._createOrUpdatePolygonGraphics(positions, this.dragHandler.draggedObjectInfo.polygons, {
-            status: "moving",
             polygonOptions: {
                 color: this.stateManager.getColorState("polygon"),
             },
             polygonOutlineOptions: {
                 color: this.stateManager.getColorState("polygonOutline"),
-            }
+            },
+            status: "moving"
         });
 
         // -- Handle label --
         this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "moving",
-            showBackground: false
+            showBackground: false,
+            status: "moving"
         });
     }
 
@@ -402,19 +402,19 @@ class PolygonCesium extends MeasureModeCesium {
 
         // -- Finalize Line Graphics --
         this._createOrUpdatePolygonGraphics(positions, this.dragHandler.draggedObjectInfo.polygons, {
-            status: "completed",
             polygonOptions: {
                 color: this.stateManager.getColorState("polygon"),
             },
             polygonOutlineOptions: {
                 color: this.stateManager.getColorState("line"),
-            }
+            },
+            status: "completed"
         });
 
         // -- Finalize Label Graphics --
         const { area } = this._createOrUpdateLabel(positions, this.dragHandler.draggedObjectInfo.labels, {
-            status: "completed",
-            showBackground: true
+            showBackground: true,
+            status: "completed"
         });
 
         // --- Update Measure Data ---
@@ -433,7 +433,7 @@ class PolygonCesium extends MeasureModeCesium {
      * @param {Cartesian3[]} positions - The positions to create or update the polygon graphics.
      * @param {Primitive[]} polygonsArray - The polygons array to update - Not the polygonCollection.
      * @param {object} options - Options for the polygon primitive.
-     * @returns 
+     * @returns {void}
      */
     _createOrUpdatePolygonGraphics(positions, polygonsArray, options = {}) {
         if (positions.length < 3) return; // Ensure there are enough points to create a polygon
@@ -442,6 +442,8 @@ class PolygonCesium extends MeasureModeCesium {
         const {
             status = null,
             polygonOptions = {},
+            polygonId = `annotate_${this.mode}_polygon_${this.measure.id}`,
+            polygonOutlineId = `annotate_${this.mode}_polygonOutline_${this.measure.id}`,
             polygonOutlineOptions = {},
         } = options;
 
@@ -456,12 +458,14 @@ class PolygonCesium extends MeasureModeCesium {
 
         // -- Create new polygon --
         const polygonPrimitive = this.drawingHelper._addPolygon(positions, {
-            id: `annotate_${this.mode}_polygon_${this.measure.id}`,
+            id: polygonId,
+            status: status, // Set status for polygon primitive
             ...polygonOptions
         });
         // Create polygon outline primitive
         const polygonOutlinePrimitive = this.drawingHelper._addPolygonOutline(positions, {
-            id: `annotate_${this.mode}_polygonOutline_${this.measure.id}`,
+            id: polygonOutlineId,
+            status: status, // Set status for polygon outline primitive
             ...polygonOutlineOptions
         });
 
@@ -470,10 +474,6 @@ class PolygonCesium extends MeasureModeCesium {
             console.warn("Failed to create polygon graphics.");
             return null;
         }
-
-        // -- Handle Polygon Metadata Update --
-        polygonPrimitive.status = status; // Set status for polygon primitive
-        polygonOutlinePrimitive.status = status; // Set status for polygon outline primitive
 
         // -- Handle References Update --
         // Push the new primitive into the array passed by reference.
@@ -502,16 +502,13 @@ class PolygonCesium extends MeasureModeCesium {
         const {
             status = null,
             showBackground = true,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
+            ...rest
         } = options;
 
         const area = computePolygonArea(positions);
+        if (!area) return { area: null, labelPrimitive: null };  // Validate area calculation
         const formattedText = formatMeasurementValue(area, "squareMeter");
-        const middlePos = calculateMiddlePos(positions); // Calculate the middle position of the polygon
-
-        if (!middlePos) {
-            console.warn("_createOrUpdateLabel: Failed to calculate middle position.");
-            return { area, labelPrimitive: null }; // Return distance but null primitive
-        }
 
         let labelPrimitive = null;
 
@@ -523,32 +520,33 @@ class PolygonCesium extends MeasureModeCesium {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelPrimitive.position = middlePos;
-                labelPrimitive.text = formattedText;
-                labelPrimitive.showBackground = showBackground; // Set background visibility
+                // Update label visuals and metadata
+                labelPrimitive = this._updateLabel(labelPrimitive, positions, formattedText, {
+                    status,
+                    showBackground,
+                    id,
+                    ...rest
+                });
             }
         }
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
             labelPrimitive = this.drawingHelper._addLabel(positions, area, "squareMeter", {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
-                showBackground: showBackground,
+                id,
+                showBackground,
+                status,
+                ...rest
             });
 
-            if (!labelPrimitive) {
-                console.error("_createOrUpdateLabel: Failed to create new label primitive.");
-                return { area, labelPrimitive: null }; // Return area but null primitive
-            }
-
             // -- Handle References Update --
-            labelsArray.push(labelPrimitive);
+            labelPrimitive && labelsArray.push(labelPrimitive);
         }
 
-        // -- Handle Label Metadata Update --
-        labelPrimitive.positions = positions.map(pos => ({ ...pos })); // store positions
-        labelPrimitive.status = status; // Set status
+        if (!labelPrimitive) {
+            console.error("_createOrUpdateLabel: Failed to create new label primitive.");
+            return { area, labelPrimitive: null }; // Return area but null primitive
+        }
 
         return { area, labelPrimitive };
     }

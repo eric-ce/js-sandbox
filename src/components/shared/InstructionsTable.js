@@ -46,40 +46,41 @@ export class InstructionsTable extends HTMLElement {
         const multiDistancesInstructions = [
             "Left Click to start measure",
             "Left Click on label to edit",
-            "Left Click on first or last point to continue measure",
+            "Left Click on first or last point to resume measure",
             "Hold Left Click to drag point",
             "Right Click to finish measure",
             "Double Left Click on line to add line",
             "Middle Click on point to remove line segment",
             "Middle Click on line to remove line set",
         ];
+        const defaultInstructions = [
+            "Left Click to start measure",
+            "Hold Left Click to drag point",
+            "Left Click on label to edit",
+        ];
 
         this._modeMessages = {
-            "default": [
-                "Left Click to start measure",
-                "Hold Left Click to drag point",
-                "Left Click on label to edit"
+            "default": [...defaultInstructions],
+            "pointInfo": [
+                ...defaultInstructions,
+                "Middle Click on point to remove point",
             ],
             "fireTrail": [...multiDistancesInstructions],
-            "multi_distances": [...multiDistancesInstructions],
-            "multi_distances_clamped": [...multiDistancesInstructions],
+            "multi-distances": [...multiDistancesInstructions],
+            "multi-distances-clamped": [...multiDistancesInstructions],
             "picker": [
                 "Left Click to pick annotation to switch modes"
             ],
             "polygon": [
-                "Left Click to start measure",
+                ...defaultInstructions,
                 "Right Click to finish measure",
-                "Hold Left Click to drag point",
-                "Left Click on label to edit"
             ],
             "profile": [
-                "Left Click to start measure",
-                "Hold Left Click to drag point",
-                "Left Click on label to edit",
+                ...defaultInstructions,
                 "Hover on chart to show point on the map",
                 "Hover on point to show on chart"
             ],
-            "profile-Distances": [
+            "profile_distances": [
                 ...multiDistancesInstructions,
                 "Hover on chart to show point on the map",
                 "Hover on point to show on chart"
@@ -202,45 +203,76 @@ export class InstructionsTable extends HTMLElement {
         this._instructionsBox.className = "info-box instructions-box hidden";
         this._instructionsBox.style.position = "absolute";
 
+        // Prevent scroll events from bubbling to the map
+        this._instructionsBox.addEventListener('wheel', (e) => {
+            e.stopPropagation();
+        }, { passive: false });
+
+        // -- Create title bar --
+        const titleBar = document.createElement("div");
+        titleBar.className = "instruction-titleBar";
+        Object.assign(titleBar.style, {
+            width: "100%",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+        });
+
         // -- Create title div --
         const titleDiv = document.createElement("div");
         const formatTitleText = this.mapName ? `${this.mapName.charAt(0).toUpperCase() + this.mapName.slice(1)} Instructions` : "Instructions";
         titleDiv.textContent = formatTitleText;
-        titleDiv.style.fontWeight = "bold";
-        titleDiv.style.padding = "2px 0px 0px 2px";
-        this._instructionsBox.appendChild(titleDiv);
+        Object.assign(titleDiv.style, {
+            fontWeight: "bold",
+            padding: "2px 0px 0px 2px"
+        });
+        titleBar.appendChild(titleDiv);
 
-        // -- Create a table -- 
-        this._table = document.createElement("table");
-        this._table.style.display = "table";
-        this._table.style.width = "100%";
-        this._table.style.marginTop = "7px";
-        this._table.style.borderCollapse = "collapse";
-        // Append table to instructions box
-        this._instructionsBox.appendChild(this._table);
+        // -- Create title controls container --
+        const titleControls = document.createElement("div");
+        Object.assign(titleControls.style, {
+            display: "flex",
+            gap: "0.5rem"
+        });
 
         // -- Create close button for the instructions box --
         const { button: closeButton, cleanup: closeButtonCleanup } = createCloseButton({
-            color: "#edffff",
             clickCallback: () => {
                 this._destroyInstructionsTable();
             }
         });
         this._closeButtonCleanup = closeButtonCleanup; // Store cleanup function
-        this._instructionsBox.appendChild(closeButton); // Add close button to instructions box
 
         // -- Create expand/collapse button for the instructions box --
         const { button: expandCollapseButton, cleanup: expandCollapseCleanup } = createExpandCollapseButton({
-            color: "#edffff",
-            right: "1.5rem",
             clickCallback: () => {
                 this._hideInstructionsBox();
                 expandCollapseButton.style.transform = "scale(1.0)"; // Reset scale on collapse 
             }
         });
         this._expandCollapseButtonCleanup = expandCollapseCleanup; // Store cleanup function
-        this._instructionsBox.appendChild(expandCollapseButton); // Add expand/collapse button to instructions box
 
+        titleControls.appendChild(expandCollapseButton); // Add expand/collapse button to title controls
+        titleControls.appendChild(closeButton); // Add close button to title controls
+        titleBar.appendChild(titleControls);
+        this._instructionsBox.appendChild(titleBar); // Append title bar to instructions box
+
+        // -- Create a table -- 
+        this._table = document.createElement("table");
+        Object.assign(this._table.style, {
+            display: "table",
+            width: "100%",
+            marginTop: "7px",
+            borderCollapse: "collapse"
+        });
+
+        // Prevent scroll events from bubbling to the map
+        this._table.addEventListener('wheel', (e) => {
+            e.stopPropagation();
+        }, { passive: false });
+
+        // Append table to instructions box
+        this._instructionsBox.appendChild(this._table);
         // Store in fragment initially
         this._fragment.appendChild(this._instructionsBox);
     }
@@ -416,6 +448,11 @@ export class InstructionsTable extends HTMLElement {
     updateContent(modeKey) {
         const messages = this._modeMessages[modeKey] || this._modeMessages.default;
 
+        // Clear existing table content
+        while (this._table.firstChild) {
+            this._table.removeChild(this._table.firstChild);
+        }
+
         messages.forEach(msg => {
             this._table.appendChild(this._createRow(msg));
         });
@@ -442,21 +479,17 @@ export class InstructionsTable extends HTMLElement {
     _destroyInstructionsTable() {
         this.remove();
 
+        this.shadowRoot.adoptedStyleSheets = [];
+
         this._container = null;
+        this._isExpanded = false;
         this._instructionsBox = null;
         this._table = null;
         this._instructionsIconButton = null;
         this._instructionsTableContainer = null;
-
+        this._fragment = null;
         this._modeMessages = null;
 
-        this._fragment = null;
-
-        while (this.shadowRoot.firstChild) {
-            this.shadowRoot.removeChild(this.shadowRoot.firstChild);
-        }
-        this.shadowRoot.adoptedStyleSheets = []; // Clear the adopted stylesheets
-        this._isExpanded = false;
 
         // Clean up dragging
         if (this._dragCleanup) {

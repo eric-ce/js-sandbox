@@ -1,5 +1,5 @@
-import { capitalizeString, showCustomNotification } from "../../lib/helper/helper";
-import { MeasureModeLeaflet } from "./MeasureModeLeaflet";
+import { capitalizeString, showCustomNotification } from "../../lib/helper/helper.js";
+import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 
 /** 
  * @typedef NormalizedEventData

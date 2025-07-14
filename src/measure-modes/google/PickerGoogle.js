@@ -1,6 +1,5 @@
-import { showCustomNotification } from "../../lib/helper/cesiumHelper";
-import { capitalizeString } from "../../lib/helper/helper";
-import { MeasureModeGoogle } from "./MeasureModeGoogle";
+import { capitalizeString, showCustomNotification } from "../../lib/helper/helper.js";
+import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
 
 
 /**

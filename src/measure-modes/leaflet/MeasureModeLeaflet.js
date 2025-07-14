@@ -1,6 +1,7 @@
 import { MeasureModeBase } from "../MeasureModeBase.js";
 import dataPool from "../../lib/data/DataPool.js";
-import { areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
+import { areCoordinatesEqual, calculateDistance, calculateMiddlePos, convertToLatLng } from "../../lib/helper/leafletHelper.js";
+import { deconstructIdForMetadata, formatMeasurementValue, showCustomNotification } from "../../lib/helper/helper.js";
 
 /**
  * @typedef MeasurementGroup
@@ -108,7 +109,8 @@ class MeasureModeLeaflet extends MeasureModeBase {
 
             // Iterate through layers to find pending annotations for this mode
             collection.eachLayer(layer => {
-                if (layer.id.includes(targetId) && layer.status !== 'completed') {
+                const layerStatus = layer?.feature?.properties?.status
+                if (layer.id.includes(targetId) && layerStatus !== 'completed') {
                     layersToRemove.push(layer);
                 }
             });
@@ -116,6 +118,231 @@ class MeasureModeLeaflet extends MeasureModeBase {
             // Remove the identified layers
             layersToRemove.forEach(layer => collection.removeLayer(layer));
         });
+    }
+
+
+    /*******************************
+     * COMMON METHOD USED IN MODES *
+     *******************************/
+    /**
+    * Creates a new polyline or updates an existing one based on positions.
+    * Manages the reference within the provided polylinesArray.
+    * @param {{lat: number, lng: number}[]} positions - Array of positions to create or update the line.
+    * @param {L.polyline[]} polylinesArray - The array (passed by reference) that holds the polyline instance. This array will be modified. Caution: this is not the polylineCollection.
+    * @param {Object} [options={}] - Options for the line.
+    * @returns {L.polyline | null} The created or updated polyline instance, or null if failed.
+    */
+    _createOrUpdateLine(positions, polylinesArray, options = {}) {
+        // 1. DEFAULTS & INPUT VALIDATION
+        if (!Array.isArray(polylinesArray) || !Array.isArray(positions) || positions.length === 0) {
+            console.warn("_createOrUpdateLine: input parameters are invalid.");
+            return;
+        }
+
+        // default options
+        const {
+            status = "pending", // Default pending status
+            color = this.stateManager.getColorState("move"),
+            interactive = false,
+            id = `annotate_${this.mode}_line_${this.measure.id}`,
+            ...rest
+        } = options;
+
+
+        // Determine if `positions` represents multiple line segments (typically for drag)
+        const isNested = positions.length > 0 && Array.isArray(positions[0]);
+
+        // 2. REMOVAL PHASE
+        if (polylinesArray.length > 0) {
+            // For nested positions (drag) or simple cases (TwoPointsDistance), remove all existing lines.
+            // For non-nested in MultiDistance (move), remove only the 'moving' line.
+            if (isNested || this.mode === 'distance') {
+                // remove all lines in the lines array
+                polylinesArray.forEach(lineToRemove => this.drawingHelper._removePolyline(lineToRemove));
+                polylinesArray.length = 0; // Clear the array
+            }
+            // Case: remove lines that has status "moving"
+            else {
+                for (let i = polylinesArray.length - 1; i >= 0; i--) {
+                    const line = polylinesArray[i];
+                    // Ensure line exists and has a status property before checking
+                    if (line && line?.feature?.properties?.status === "moving") {
+                        this.drawingHelper._removePolyline(line);
+                        polylinesArray.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        // 3. CREATION PHASE
+        if (isNested) {
+            // -- Create multiple polylines for nested positions --
+            positions.forEach(posSet => {
+                const newLineInstance = this.drawingHelper._addPolyline(posSet, {
+                    color,
+                    id, // Consider making ID more specific if needed (e.g., adding status)
+                    interactive,
+                    status,
+                    ...rest
+                });
+                if (!newLineInstance) return;
+
+                // -- Handle References Update --
+                polylinesArray.push(newLineInstance);
+            })
+        } else {
+            // -- Create a new single polyline --
+            const newLineInstance = this.drawingHelper._addPolyline(positions, {
+                color,
+                id, // Consider making ID more specific if needed (e.g., adding status)
+                interactive,
+                status,
+                ...rest
+            });
+            if (!newLineInstance) return;
+
+            // -- Handle References Update --
+            polylinesArray.push(newLineInstance);
+        }
+    }
+
+    /**
+     * Updates a single label's visual appearance and metadata.
+     * Reused in different modes to ensure consistent label updates.
+     * @param {L.tooltip} label - The label instance to update
+     * @param {{lat:number,lng:number}[]} positions - Array of positions for this label
+     * @param {string} labelText - The text to display in the label
+     * @param {Object} [options={}] - Update options
+     * @returns {L.tooltip | null} The updated label
+     * @private
+     */
+    _updateLabel(label, positions, labelText, options = {}) {
+        if (!label || typeof labelText !== "string") {
+            console.warn("Invalid label or labelText provided for update.");
+            return null;
+        }
+
+        const { status, color, interactive, id } = options;
+
+        // Label position
+        const numPos = positions.length;
+        const labelPosition = numPos === 1 ? positions[0] : calculateMiddlePos(positions);
+
+        // -- Handle Label Visual Update --
+        label.setLatLng(labelPosition);
+
+        // Create HTML element for label content
+        const contentElement = document.createElement('span');
+        contentElement.style.color = color;
+        contentElement.textContent = labelText;
+        contentElement.style.whiteSpace = 'pre';  // Preserve whitespace
+
+        label.setContent(contentElement);  // Update label content
+
+        // Update interactive state
+        const oldInteractiveState = label.options.interactive;
+        if (oldInteractiveState !== interactive) {
+            label.options.interactive = interactive;
+            if (typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
+                this.drawingHelper._refreshLayerInteractivity(label);
+            }
+        }
+
+        // -- Handle Label Metadata Update --
+        if (!label?.feature?.properties) {
+            label.feature = { properties: {} }; // Ensure feature properties exist
+        }
+        Object.assign(label.feature.properties, {
+            status,
+            positions: positions.map(pos => ({ ...pos })),
+            ...(id && deconstructIdForMetadata(id))
+        });
+        label.feature.id = id;
+        label.id = id;
+
+        return label;
+    }
+
+    /**
+     * Updates all pending items in a collection to completed status and makes them interactive.
+     * @param {Array} collection - The collection of items to update (points, polylines, or labels)
+     * @param {string} filterPrefix - The ID prefix to filter items by (e.g., `annotate_${this.mode}`)
+     * @returns {void}
+     */
+    _updatePendingItemsToCompleted(collection, filterPrefix) {
+        if (!Array.isArray(collection)) return;
+
+        const pendingItems = collection.filter(item =>
+            item.id?.includes(filterPrefix) && item?.feature?.properties?.status === "pending"
+        );
+
+        pendingItems.forEach(item => {
+            // Set status to completed
+            if (item?.feature?.properties?.status) {
+                item.feature.properties.status = "completed";
+            }
+
+            // Make the item interactive
+            if (item.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
+                item.options.interactive = true;
+                this.drawingHelper._refreshLayerInteractivity(item);
+            }
+        });
+    }
+
+    /******************
+     * COMMON FEATURE *
+     ******************/
+    /**
+     * Removes an entire line set, including related points, labels, and polygons.
+     * @param {L.Polyline} polyline - The polyline to remove.
+     * @returns {void}
+     */
+    _removeLineSet(polyline) {
+        if (!polyline) return;
+
+        // confirmation 
+        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
+        if (!userConfirmation) {
+            this._refreshMapDrag();
+            return; // If the user does not confirm, exit
+        }
+
+        const measureId = Number(polyline.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
+        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
+        points.forEach(point => {
+            this.drawingHelper._removePointMarker(point); // Remove the point marker
+        });
+        labels.forEach(label => {
+            this.drawingHelper._removeLabel(label); // Remove the label
+        });
+        polylines.forEach(polyline => {
+            this.drawingHelper._removePolyline(polyline); // Remove the polyline
+        });
+        polygons.forEach(polygon => {
+            this.drawingHelper._removePolygon(polygon); // Remove the polygon
+        });
+
+        // remove the measure data from dataPool
+        dataPool.removeMeasureById(measureId);
+
+        // Refresh the map dragging, to solve issue the middle click keep dragging
+        this._refreshMapDrag();
+
+        // Show notification
+        showCustomNotification(`Line set removed from measure ${measureId}`, this._container);
+    }
+
+
+    /**********
+     * HELPER *
+     **********/
+    /**
+     * Refreshes the map dragging to ensure it is responsive after changes.
+     */
+    _refreshMapDrag() {
+        this.map?.dragging.disable();
+        this.map?.dragging.enable();
     }
 }
 

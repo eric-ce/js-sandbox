@@ -1,5 +1,6 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { MeasureModeLeaflet } from "./MeasureModeLeaflet";
+import { deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.js";
+import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 
 /**
  * @typedef MeasurementGroup
@@ -151,11 +152,10 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             interactive: true, // Make the point marker interactive
+            status: "completed",
             listeners: this.#markerListeners,
         });
-
         if (!point) return;
-        point.status = "completed"; // Set status to pending
 
         // Update the this.coords cache and this.measure coordinates
         this.coordsCache.push(this.#coordinate);
@@ -217,7 +217,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
     _removePointInfo(marker) {
         // Get the measure id
         const idParts = marker.id.split("_");
-        const measureId = idParts[idParts.length - 1]; // Extract the measure ID from the marker ID
+        const measureId = idParts.slice(-1)[0]; // Extract the measure ID from the marker ID
 
         // -- Confirm deletion --
         // Use js confirm dialog to confirm deletion
@@ -226,10 +226,11 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
         // -- Remove point --
         this.drawingHelper._removePointMarker(marker);
-        console.log(this.labelCollection)
+
         // -- Remove label --
         const labelToRemove = this.labelCollection.getLayers().find(label => label.id.includes(measureId));
         if (!labelToRemove) return null;
+
         this.drawingHelper._removeLabel(labelToRemove);
 
         // -- Remove data --
@@ -317,11 +318,14 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
             status = null,
             color = "rgba(0,0,0,1)",
             interactive = false,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
             ...rest
         } = options;
 
-        const formattedText = `lat: ${positions[0].lat.toFixed(6)}, lng: ${positions[0].lng.toFixed(6)}`;
-        const labelPos = positions[0]; // Use the first position for the label
+        // const labelPos = positions[0]; // Use the first position for the label
+        const formattedText =
+            `lat: ${positions[0].lat.toFixed(6)}\u00B0` +
+            `\nlng: ${positions[0].lng.toFixed(6)}\u00B0`;
 
         let labelInstance = null;
 
@@ -334,35 +338,23 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
                 console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
                 labelsArray.length = 0; // Clear the array to trigger creation below
             } else {
-                // -- Handle Label Visual Update --
-                labelInstance.setLatLng(labelPos); // update position
-
-                // Create HTML element for label content
-                const contentElement = document.createElement('span');
-                contentElement.style.color = color;
-                contentElement.textContent = formattedText;
-
-                // Set the content of the label
-                labelInstance.setContent(contentElement); // update content
-
-                // Update interactive state
-                const oldInteractiveState = labelInstance.options.interactive;
-                // Compare the old with current interactive state, only update interactive if different
-                if (oldInteractiveState !== interactive) {
-                    // Update the interactive
-                    labelInstance.options.interactive = interactive;
-                    // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(labelInstance);
-                    }
-                }
+                // Update label visuals and metadata
+                labelInstance = this._updateLabel(labelInstance, positions, formattedText, {
+                    status,
+                    color,
+                    interactive,
+                    id,
+                    ...rest
+                });
             }
         }
 
         // -- Create new label --
         if (!labelInstance) {
             labelInstance = this.drawingHelper._addLabel(positions, formattedText, null, {
-                id: `annotate_${this.mode}_label_${this.measure.id}`,
+                id,
+                color,
+                status,
                 interactive,
                 ...rest
             });
@@ -380,10 +372,6 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
             console.warn("_createOrUpdateLabel: No valid label instance found.");
             return null;
         }
-
-        // -- Handle Metadata Update --
-        labelInstance.status = status; // Set status
-        labelInstance.positions = positions.map(pos => ({ ...pos })); // Store positions copy
 
         return { labelInstance };
     }
@@ -412,7 +400,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
             fontSize: "14px",
             lineHeight: "1.5",
             zIndex: "1001",
-            whiteSpace: "pre-line",
+            whiteSpace: "pre",
             boxShadow: "0px 1px 2px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15)" // M3 Dark theme elevation 2 shadow (approx)
         });
 
@@ -446,8 +434,8 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         // Update overlay content
         const { lat, lng } = mapPoint;
         this.#coordinateInfoOverlay.textContent =
-            `Lat: ${lat.toFixed(6)}` +
-            `\nLng: ${lng.toFixed(6)}`;
+            `Lat: ${lat.toFixed(6)}\u00B0` +
+            `\nLng: ${lng.toFixed(6)}\u00B0`;
 
         // Position overlay using screen coordinates with offset to avoid cursor overlap
         const { x, y } = screenPoint;
