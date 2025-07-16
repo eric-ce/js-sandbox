@@ -16,10 +16,16 @@ import {
     PointPrimitive,
     PolylineMaterialAppearance,
     PolylineGeometry,
-    PerInstanceColorAppearance
+    PerInstanceColorAppearance,
+    SceneTransforms,
+    Entity,
+    EllipsoidSurfaceAppearance
 } from "cesium";
 import { formatMeasurementValue } from "./helper.js";
 
+/** @typedef {import('cesium').Cartesian3} Cartesian3 */
+/** @typedef {import('cesium').Cartographic} Cartographic */
+/** @typedef {{latitude: number, longitude: number, height?: number}} CartographicDegrees */
 
 /***********************
  * HELPER  FOR GENERAL *
@@ -98,11 +104,11 @@ export function convertToCartesian3(coordinate) {
     }
     // If it's Cartographic, convert it to Cartesian3.
     if (coordType === 'cartographic') {
-        return Cesium.Cartesian3.fromRadians(coordinate.longitude, coordinate.latitude, coordinate.height);
+        return Cartesian3.fromRadians(coordinate.longitude, coordinate.latitude, coordinate.height);
     }
     // If it's Cartographic degrees, convert it to Cartesian3.
     if (coordType === 'cartographicDegrees') {
-        return Cesium.Cartesian3.fromDegrees(coordinate.longitude, coordinate.latitude, coordinate.height);
+        return Cartesian3.fromDegrees(coordinate.longitude, coordinate.latitude, coordinate.height);
     }
 
     return null;
@@ -119,18 +125,18 @@ export function convertToCartographicDegrees(coordinate) {
 
     // If it's Cartesian3, convert it to Cartographic degrees.
     if (coordType === 'cartesian3') {
-        const cartographic = Cesium.Cartographic.fromCartesian(coordinate);
+        const cartographic = Cartographic.fromCartesian(coordinate);
         return {
-            longitude: Cesium.Math.toDegrees(cartographic.longitude),
-            latitude: Cesium.Math.toDegrees(cartographic.latitude),
+            longitude: CesiumMath.toDegrees(cartographic.longitude),
+            latitude: CesiumMath.toDegrees(cartographic.latitude),
             height: cartographic.height,
         };
     }
     // If it's Cartographic, convert it to Cartographic degrees.
     if (coordType === 'cartographic') {
         return {
-            longitude: Cesium.Math.toDegrees(coordinate.longitude),
-            latitude: Cesium.Math.toDegrees(coordinate.latitude),
+            longitude: CesiumMath.toDegrees(coordinate.longitude),
+            latitude: CesiumMath.toDegrees(coordinate.latitude),
             height: coordinate.height,
         };
     }
@@ -153,7 +159,7 @@ export function convertToCartographicRadians(coordinate) {
 
     // If it's Cartesian3, convert it to Cartographic radians.
     if (coordType === 'cartesian3') {
-        const cartographic = Cesium.Cartographic.fromCartesian(coordinate);
+        const cartographic = Cartographic.fromCartesian(coordinate);
         return new Cartographic(
             cartographic.longitude,
             cartographic.latitude,
@@ -168,8 +174,8 @@ export function convertToCartographicRadians(coordinate) {
     // If it's already in Cartographic radians, return it as is.
     if (coordType === 'cartographicDegrees') {
         const cartographic = {
-            longitude: Cesium.Math.toRadians(coordinate.longitude),
-            latitude: Cesium.Math.toRadians(coordinate.latitude),
+            longitude: CesiumMath.toRadians(coordinate.longitude),
+            latitude: CesiumMath.toRadians(coordinate.latitude),
             height: coordinate.height,
         };
 
@@ -219,9 +225,9 @@ export function checkCoordinateType(coordinate) {
  * Each coordinate is clamped to the terrain height using the Cesium viewer's terrain provider sampleTerrainMostDetailed() method.
  * Coordinates with undefined terrain heights are skipped.
  *
- * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian3 coordinates to be clamped.
+ * @param {Cartesian3[]} cartesianArray - An array of Cartesian3 coordinates to be clamped.
  * @param {Cesium.Scene} scene - The Cesium scene instance used to obtain terrain height.
- * @returns {Promise<Cesium.Cartesian3[]>} A promise that resolves to an array of clamped Cartesian3 coordinates.
+ * @returns {Promise<Cartesian3[]>} A promise that resolves to an array of clamped Cartesian3 coordinates.
  * @throws {Error} Throws an error if the input parameters are invalid.
  */
 export async function convertCartesianArrayToClamped(cartesianArray, scene) {
@@ -231,7 +237,7 @@ export async function convertCartesianArrayToClamped(cartesianArray, scene) {
     }
 
     // Convert Cartesian3 to Cartographic
-    const cartographicArray = cartesianArray.map(cartesian => Cesium.Cartographic.fromCartesian(cartesian));
+    const cartographicArray = cartesianArray.map(cartesian => Cartographic.fromCartesian(cartesian));
     if (!Array.isArray(cartographicArray) || cartographicArray.length === 0) {
         console.error("Convert Cartographic failed, check passed coordinate.");
         return null;
@@ -247,7 +253,7 @@ export async function convertCartesianArrayToClamped(cartesianArray, scene) {
             return null; // Skip if height is undefined
         }
 
-        const clampedCartesian = Cesium.Cartesian3.fromRadians(
+        const clampedCartesian = Cartesian3.fromRadians(
             cartographic.longitude,
             cartographic.latitude,
             cartographic.height
@@ -423,10 +429,10 @@ export function createPointPrimitive(coordinate, options = {}) {
 
 /**
  * Create a line primitive with custom width and color.
- * @param {Cesium.Primitive} Primitive - The Cesium primitive
- * @param {Cesium.Cartesian3[] | Cesium.Cartographic[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {Primitive} Primitive - The Cesium primitive
+ * @param {Cartesian3[] | Cartographic[]} coordinateArray - The array of Cartesian3 coordinates of the line.
  * @param {object} [options={}] - Optional configuration for the line primitive.
- * @returns {Cesium.Primitive} - The line primitive
+ * @returns {Primitive} - The line primitive
  */
 export function createPolylinePrimitive(Primitive, coordinateArray, options = {}) {
     // -- Validate dependencies --
@@ -497,13 +503,13 @@ export function createPolylinePrimitive(Primitive, coordinateArray, options = {}
 
 /**
  * Create a line arrow primitive.
- * @param {Cesium.Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {Cartesian3[]} coordinateArray - The array of Cartesian3 coordinates of the line.
  * @param {String} modeString - The measure mode string
  * @param {Number} width - The width of the line
  * @param {Cesium.Color} [color = Cesium.Color.YELLOWGREEN] - The color of the line
  * @param {Number} offsetDistance - The distance to offset the arrow from the line
- * @param {Cesium.Primitive} Primitive - The Cesium primitive
- * @returns {Cesium.Primitive} - The line arrow primitive
+ * @param {Primitive} Primitive - The Cesium primitive
+ * @returns {Primitive} - The line arrow primitive
  */
 export function createLineArrowPrimitive(coordinateArray, modeString, width = 10, color = Cesium.Color.YELLOWGREEN, offsetDistance, Primitive) {
     // Exit early if coordinateArray is not defined or has less than 2 positions
@@ -514,8 +520,8 @@ export function createLineArrowPrimitive(coordinateArray, modeString, width = 10
     const [startPos, endPos] = convertedCoordinates;
 
     // Calculate the direction vector
-    const direction = Cesium.Cartesian3.subtract(endPos, startPos, new Cesium.Cartesian3());
-    const distance = Cesium.Cartesian3.magnitude(direction);
+    const direction = Cartesian3.subtract(endPos, startPos, new Cartesian3());
+    const distance = Cartesian3.magnitude(direction);
 
     // Check for zero-length direction vector
     if (distance === 0) {
@@ -525,19 +531,19 @@ export function createLineArrowPrimitive(coordinateArray, modeString, width = 10
 
     // issue: the arrow line is too close to the line, need to offset the arrow line
     // to solve it by normalize the direction vector and multiply by offset distance
-    Cesium.Cartesian3.normalize(direction, direction);
-    const offset = Cesium.Cartesian3.multiplyByScalar(direction, offsetDistance, new Cesium.Cartesian3());
+    Cartesian3.normalize(direction, direction);
+    const offset = Cartesian3.multiplyByScalar(direction, offsetDistance, new Cartesian3());
 
     // Adjust the start and end positions by offset
-    const adjustedStart = Cesium.Cartesian3.add(startPos, offset, new Cesium.Cartesian3());
-    const adjustedEnd = Cesium.Cartesian3.subtract(endPos, offset, new Cesium.Cartesian3());
+    const adjustedStart = Cartesian3.add(startPos, offset, new Cartesian3());
+    const adjustedEnd = Cartesian3.subtract(endPos, offset, new Cartesian3());
 
     // Create the line primitive
     const linePrimitive = createPolylinePrimitive([adjustedStart, adjustedEnd], modeString, width, color, Primitive);
 
     // Change the material to PolylineArrow
-    const material = Cesium.Material.fromType('PolylineArrow', { color: color });
-    const appearance = new Cesium.PolylineMaterialAppearance({ material: material });
+    const material = Material.fromType('PolylineArrow', { color: color });
+    const appearance = new PolylineMaterialAppearance({ material: material });
     linePrimitive.appearance = appearance;
 
     // Update the id and positions of the line primitive
@@ -550,9 +556,9 @@ export function createLineArrowPrimitive(coordinateArray, modeString, width = 10
 /**
  * Create a ground polyline primitive.
  * @param {GroundPolylinePrimitive} GroundPolylinePrimitive - The Cesium ground primitive
- * @param {Cesium.Cartesian3[] | Cesium.Cartographic[]} coordinateArray - The array of Cartesian3 coordinates of the line.
+ * @param {Cartesian3[] | Cartographic[]} coordinateArray - The array of Cartesian3 coordinates of the line.
  * @param {object} [options={}] - Optional configuration for the line primitive.
- * @returns {Cesium.Primitive} - The ground line primitive
+ * @returns {Primitive} - The ground line primitive
  */
 export function createGroundPolylinePrimitive(GroundPolylinePrimitive, coordinateArray, options = {}) {
     // -- Validate dependencies --
@@ -730,9 +736,9 @@ export function createPolygonPrimitive(Primitive, coordinateArray, options = {})
     // --- Polygon Geometry ---
     // Create the polygon geometry
     const polygonGeometry = new Cesium.PolygonGeometry({
-        polygonHierarchy: new Cesium.PolygonHierarchy(cartesianArray),
+        polygonHierarchy: new PolygonHierarchy(cartesianArray),
         perPositionHeight: true,
-        vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT, // Default vertex format
+        vertexFormat: EllipsoidSurfaceAppearance.VERTEX_FORMAT, // Default vertex format
         ...polygonGeometryOptions // User options override defaults
     });
 
@@ -746,8 +752,8 @@ export function createPolygonPrimitive(Primitive, coordinateArray, options = {})
 
     // --- Material and Appearance ---
     // Create the material and appearance
-    const material = new Cesium.Material.fromType('Color', { color: Color.fromCssColorString(color) });
-    const appearance = new Cesium.EllipsoidSurfaceAppearance({ material: material });
+    const material = new Material.fromType('Color', { color: Color.fromCssColorString(color) });
+    const appearance = new EllipsoidSurfaceAppearance({ material: material });
 
     // --- Primitive ---
     // Create the polygon primitive
@@ -775,7 +781,7 @@ export function createPolygonPrimitive(Primitive, coordinateArray, options = {})
 /**
  * Creates a polygon outline primitive.
  * @param {Primitive} Primitive - The Cesium primitive.
- * @param {Cartesian3[]| Cesium.Cartographic[]} coordinateArray - An array of coordinates.
+ * @param {Cartesian3[]| Cartographic[]} coordinateArray - An array of coordinates.
  * @param {object} [options={}] - Optional configuration for the polygon outline primitive.
  * @returns {Primitive | null} - The polygon outline primitive or null if creation fails.
  */
@@ -805,7 +811,7 @@ export function createPolygonOutlinePrimitive(Primitive, coordinateArray, option
     // --- PolygonOutline Geometry ---
     // Create the polygon outline geometry
     const polygonOutlineGeometry = new Cesium.PolygonOutlineGeometry({
-        polygonHierarchy: new Cesium.PolygonHierarchy(cartesianArray),
+        polygonHierarchy: new PolygonHierarchy(cartesianArray),
         perPositionHeight: true,
         ...polygonOutlineGeometryOptions
     });
@@ -990,11 +996,11 @@ export function getRankedPickedObjectType(pickedObjects, modeString) {
 
 /**
  * Interpolates points between two points based on the interval.
- * @param {Cesium.Cartesian3} pointA - The Cartesian coordinate of the first point.
- * @param {Cesium.Cartesian3} pointB - The Cartesian coordinate of the second point.
+ * @param {Cartesian3} pointA - The Cartesian coordinate of the first point.
+ * @param {Cartesian3} pointB - The Cartesian coordinate of the second point.
  * @param {Scene} scene - viewer.scene
  * @param {number} [interval=2] - The interval between the two points.
- * @returns {Cesium.Cartesian3[]} - The interpolated points.
+ * @returns {Cartesian3[]} - The interpolated points.
  */
 export function interpolatePoints(pointA, pointB, interval = 2) {
     const points = [];
@@ -1075,7 +1081,7 @@ export function computeClampedPositions(startPosition, endPosition, scene, inter
     // the height of the surface
     // const groundCartesianArray = interpolatedCartographics.map((cartographic) => {
     //     const height = this.viewer.scene.globe.getHeight(cartographic);
-    //     return Cesium.Cartesian3.fromRadians(
+    //     return Cartesian3.fromRadians(
     //         cartographic.longitude,
     //         cartographic.latitude,
     //         height
@@ -1086,7 +1092,7 @@ export function computeClampedPositions(startPosition, endPosition, scene, inter
     // const groundPositions = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, interpolatedCartographics);
 
     // const groundCartesianArray = interpolatedCartographics.map((cartograhpic) => {
-    //     return Cesium.Cartesian3.fromRadians(
+    //     return Cartesian3.fromRadians(
     //         cartograhpic.longitude,
     //         cartograhpic.latitude,
     //         surfaceHeight
@@ -1094,7 +1100,7 @@ export function computeClampedPositions(startPosition, endPosition, scene, inter
     // });
     // repick the position by convert back to window position to repick the cartesian, drawbacks is the current camera must see the whole target. 
     // const pickedCartesianArray = groundCartesianArray.map((groundCartesian) => {
-    //     const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
+    //     const windowPosition = SceneTransforms.wgs84ToWindowCoordinates(this.viewer.scene, groundCartesian);
     //     if (windowPosition) {
     //         const cartesian = this.viewer.scene.pickPosition(windowPosition);
     //         if (Cesium.defined(cartesian)) {
@@ -1193,14 +1199,14 @@ export function calculateClampedDistanceFromArray(cartesianArray, scene, interva
 
 /**
  * Calculates the distance between each pair of points in the array and the total distance.
- * @param {Cesium.Cartesian3[]} cartesianArray - An array of Cartesian coordinates.
+ * @param {Cartesian3[]} cartesianArray - An array of Cartesian coordinates.
  * @returns  {{ distances: number[], totalDistance: number }} - The distances between each pair of points and the total distance.
  */
 export function calculateDistanceFromArray(cartesianArray) {
     const distances = [];
 
     for (let i = 0; i < cartesianArray.length - 1; i++) {
-        const distance = Cesium.Cartesian3.distance(cartesianArray[i], cartesianArray[i + 1]);
+        const distance = Cartesian3.distance(cartesianArray[i], cartesianArray[i + 1]);
         distances.push(distance);
     }
 
@@ -1246,7 +1252,7 @@ export function getPrimitiveByPointPosition(
     }
 
     // --- Find the line primitives ---
-    // Assuming lineCollection is a plain array of Cesium.Primitive objects
+    // Assuming lineCollection is a plain array of Primitive objects
     if (Array.isArray(polylineCollection) && polylineCollection.length > 0) {
         foundLinePrimitives = polylineCollection.filter(p => {
             const linePositions = p?.feature?.properties?.positions;
@@ -1279,7 +1285,7 @@ export function getPrimitiveByPointPosition(
     }
 
     // --- Find the polygon primitives ---
-    // Assuming polygonCollection is a plain array of Cesium.Primitive objects
+    // Assuming polygonCollection is a plain array of Primitive objects
     if (Array.isArray(polygonCollection) && polygonCollection.length > 0) {
         foundPolygonPrimitives = polygonCollection.filter(p => {
             const polygonPositions = p?.feature?.properties?.positions;
@@ -1467,7 +1473,7 @@ function setupEditableModal(viewerContainer) {
 /**
  * Creates a pointer overlay element for the map container.
  * @param {HTMLElement} container - The map container element where the pointer overlay will be created.
- * @returns {HTMLElement|null} - The created pointer overlay element or null if container is invalid.
+ * @returns {HTMLDivElement|null} - The created pointer overlay element or null if container is invalid.
  */
 export function createPointerOverlay(container) {
     // Input validation
@@ -1507,22 +1513,22 @@ export function createPointerOverlay(container) {
 
 /**
  * update the pointer overlay position and color based on the pickedObjects
- * @param {Cesium.Viewer} viewer 
- * @param {HTMLElement} pointerOverlay 
- * @param {Cesium.Cartesian3} cartesian 
- * @param {Array} pickedObjects 
+ * @param {Viewer} viewer
+ * @param {HTMLDivElement} pointerOverlay
+ * @param {Cartesian3} cartesian
+ * @param {Array} pickedObjects
  */
 export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedObjects) {
-    // const screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+    // const screenPosition = SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
     // cesium api update for world position to WindowCoordinates
-    // const screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+    // const screenPosition = SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
 
     // Convert Map coordinates to the screen position 
     let screenPosition;
-    if (Cesium.SceneTransforms.worldToWindowCoordinates) {
-        screenPosition = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
-    } else if (Cesium.SceneTransforms.wgs84ToWindowCoordinates) {
-        screenPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+    if (SceneTransforms.worldToWindowCoordinates) {
+        screenPosition = SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+    } else if (SceneTransforms.wgs84ToWindowCoordinates) {
+        screenPosition = SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
     }
     // Validate pointerOverlay and screenPosition
     if (!pointerOverlay || !screenPosition) return;
@@ -1550,7 +1556,7 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
             return (typeof pickedObject.id === "string" && pickedObject.id.startsWith("annotate"));
         });
         const annotateEntity = pickedObjects.some(pickedObject => {
-            return (pickedObject.id instanceof Cesium.Entity);
+            return (pickedObject.id instanceof Entity);
         });
 
         // anything other than annotate object will be blue
@@ -1644,7 +1650,7 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 
 // /**
 //  * Generate a unique id for annotation mode with its coordinates.
-//  * @param {Cesium.Cartesian3 | Cesium.Cartesian3[]} cartesian - The Cartesian coordinates of the point(s).
+//  * @param {Cartesian3 | Cartesian3[]} cartesian - The Cartesian coordinates of the point(s).
 //  * @param {string} mode - The mode name of the annotation tool.
 //  * @returns {string} id - The unique id for entity or primitive.
 //  */
@@ -1662,7 +1668,7 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 
 // /**
 //  * Convert a Cartesian3 coordinate to a unique short string ID.
-//  * @param {Cesium.Cartesian3} cartesian - The Cartesian coordinate.
+//  * @param {Cartesian3} cartesian - The Cartesian coordinate.
 //  * @returns {string} - The unique short string.
 //  */
 // function cartesianToId(cartesian) {
@@ -1684,9 +1690,9 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 
 // /**
 //  * Create multiple point primitives from an array of coordinates.
-//  * @param {Cesium.Cartesian3[] | Cesium.Cartographic[]} coordinates - The array of coordinates.
+//  * @param {Cartesian3[] | Cartographic[]} coordinates - The array of coordinates.
 //  * @param {object} [options={}] - Optional configuration for the point primitive.
-//  * @returns {Cesium.PointPrimitive[]} - The array of point primitives.
+//  * @returns {PointPrimitive[]} - The array of point primitives.
 //  */
 // export function createPointPrimitivesFromArray(coordinates, options = {}) {
 //     // validate coordinates
@@ -1708,10 +1714,10 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 
 // /**
 //  * Create multiple line primitives from an array of coordinates.
-//  * @param {Cesium.Primitive} Primitive - The Cesium primitive
-//  * @param {Cesium.Cartesian3[] | Cesium.Cartographic[]} coordinateArray
+//  * @param {Primitive} Primitive - The Cesium primitive
+//  * @param {Cartesian3[] | Cartographic[]} coordinateArray
 //  * @param {object} [options={}] - Optional configuration for the line primitive
-//  * @returns {Cesium.Primitive[]} - The array of line primitives
+//  * @returns {Primitive[]} - The array of line primitives
 //  */
 // export function createPolylinePrimitivesFromArray(Primitive, coordinateArray, options = {}) {
 //     // Validate coordinates
@@ -1741,11 +1747,11 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 
 // /**
 //  * Create multiple label primitives from an array of coordinates and values.
-//  * @param {Cesium.Cartesian3[]| Cesium.Cartographic[]} coordinates
+//  * @param {Cartesian3[]| Cartographic[]} coordinates
 //  * @param {string[]|number[]} valueArray
 //  * @param {"meter"|"squareMeter"} unit - The unit of measurement (default is "meter")
 //  * @param {object} [options={}] - Optional configuration for the label primitive
-//  * @returns {Cesium.LabelPrimitive[]} - The array of label primitives.
+//  * @returns {LabelPrimitive[]} - The array of label primitives.
 //  */
 // export function createLabelPrimitivesFromArray(coordinates, valueArray, unit = "meter", options = {}) {
 //     // Validate coordinates
@@ -1801,9 +1807,9 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 
 // /**
 //  * change a line primitive color and clone the original color if not already stored
-//  * @param {Cesium.Primitive} linePrimitive - the line geometry primitive
+//  * @param {Primitive} linePrimitive - the line geometry primitive
 //  * @param {Cesium.Color} color - the color to change
-//  * @returns {Cesium.Primitive} - the line primitive with the new color
+//  * @returns {Primitive} - the line primitive with the new color
 //  */
 // export function changeLineColor(linePrimitive, color = Cesium.Color.YELLOW) {
 //     if (!linePrimitive) {
@@ -1829,8 +1835,8 @@ export function updatePointerOverlay(viewer, pointerOverlay, cartesian, pickedOb
 
 // /**
 //  * reset the line primitive color by its original color
-//  * @param {Cesium.Primitive} linePrimitive - the line geometry primitive
-//  * @returns {Cesium.Primitive} - the line primitive with the new color
+//  * @param {Primitive} linePrimitive - the line geometry primitive
+//  * @returns {Primitive} - the line primitive with the new color
 //  */
 // export function resetLineColor(linePrimitive) {
 //     if (linePrimitive.originalColor) {
