@@ -1,6 +1,6 @@
 import { Cartesian3 } from "cesium";
 import { MeasureModeBase } from "../MeasureModeBase.js";
-import { areCoordinatesEqual, calculateMiddlePos, convertToCartesian3, createPointerOverlay } from "../../lib/helper/cesiumHelper.js";
+import { areCoordinatesEqual, calculateMiddlePos, convertToCartesian3, convertToCartographicDegrees, createPointerOverlay } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { Chart } from "chart.js/auto";
 import { createCloseButton, deconstructIdForMetadata, makeDraggable, showCustomNotification } from "../../lib/helper/helper.js";
@@ -10,6 +10,8 @@ import { closeIconBlack } from "../../assets/icons.js";
 /** @typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection */
 /** @typedef {import('cesium').LabelCollection} LabelCollection */
 /** @typedef {import('cesium').Cartesian3} Cartesian3 */
+/** @typedef {import('cesium').Cartographic} Cartographic */
+/** @typedef {{latitude: number, longitude: number, height?: number}} CartographicDegrees */
 
 // Dependencies types
 /** @typedef {import('../../lib/input/CesiumInputHandler.js').CesiumInputHandler} CesiumInputHandler */
@@ -51,7 +53,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
     // UI components
     /** @type {HTMLElement} */
-    contextMenu;
+    contextMenu = null;
 
     /**
      * @param {string} modeName - The name of the mode (e.g., "Point", "Line", "Polygon")
@@ -64,6 +66,9 @@ class MeasureModeCesium extends MeasureModeBase {
      */
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+
+        // Initialize context menu - default to hidden
+        this.contextMenu = this._setupContextMenu(this._container, { show: false });
     }
 
 
@@ -244,10 +249,85 @@ class MeasureModeCesium extends MeasureModeBase {
         });
         label.feature.id = id; // Set the feature ID
         label.id = id;
-        console.log('label.feature.properties.status', label.feature.properties.status)
+
         return label; // Return the updated label
     }
 
+    /**
+     * Removes the remaining point and labels when only one point is left in the measure.
+     * @param {Cartesian3[]} positions - The positions to be removed
+     * @returns {void}
+     */
+    _removeRemaining(positions) {
+        const lastPosition = positions[0];
+
+        // Remove the remaining point and labels 
+        const lastPoint = this.drawingHelper._getPointByPosition(lastPosition);
+        const lastLabels = this.drawingHelper._getLabelByPosition([lastPosition]);
+
+        if (lastPoint) {
+            this.drawingHelper._removePointMarker(lastPoint); // Remove the last point primitive
+        }
+        if (Array.isArray(lastLabels) && lastLabels.length > 0) {
+            lastLabels.forEach(label => {
+                this.drawingHelper._removeLabel(label); // Remove the label primitive
+            });
+        }
+        // -- Handle Measure Data --
+        const measureId = Number(lastPoint.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
+        if (isNaN(measureId)) return; // If the measure ID is not a number, exit
+        dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+
+        // -- Reset values --
+        this.resetValuesModeSpecific();
+
+        // -- Destroy chart if exists --
+        if (this.chartDiv && typeof this._destroyChart === "function") {
+            this._destroyChart(); // Destroy the chart if it exists
+        }
+
+        // Show notification
+        showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
+    }
+
+    /**
+     * Gets the necessary context for resuming a measurement from a clicked point.
+     * It checks if the point is the first or last point of a completed measurement.
+     * @param {Primitive} point - The clicked point primitive.
+     * @returns {{pointIndex: number, measureData: MeasurementGroup}|null} - The context, or null if not eligible.
+     * @private
+     */
+    _getPointContextForResume(point) {
+        // Find the measure data by the ID embedded in the point primitive
+        const measureId = Number(point.id.split("_").slice(-1)[0]);
+        if (isNaN(measureId)) return null;
+
+        const measureData = dataPool.getMeasureById(measureId);
+        // Only completed measures can be resumed
+        if (!measureData || measureData.status !== "completed") {
+            return null;
+        }
+
+        // The coordinates in the data pool are CartographicDegrees, convert them for comparison
+        measureData.coordinates = measureData.coordinates.map(cartographicDegrees => convertToCartesian3(cartographicDegrees));
+
+        // Find the index of the clicked point within the measure's coordinates
+        const pointPosition = point.feature?.properties?.positions[0];
+        if (!pointPosition) return null;
+
+        const pointIndex = measureData.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, pointPosition));
+        if (pointIndex === -1) return null;
+
+        // Check if the point is the first or the last one
+        const isFirstPoint = pointIndex === 0;
+        const isLastPoint = pointIndex === measureData.coordinates.length - 1;
+
+        if (isFirstPoint || isLastPoint) {
+            return { pointIndex, measureData };
+        }
+
+        return null;
+    }
 
 
     /***********************************************************
@@ -265,18 +345,21 @@ class MeasureModeCesium extends MeasureModeBase {
     }
 
     /**
-     * Removes the entire line set associated with the given polyline primitive.
-     * @param {Primitive} line - The polyline primitive to look up for its id and remove the entire line set.
+     * Removes the entire primitive set associated with the same measure id used in the picked primitive id.
+     * @param {Primitive} primitive - The primitive to look up for its id and remove the entire primitive set.
      * @returns {void} 
      */
-    _removeLineSet(line) {
-        if (!line) return;
+    _removePrimitiveSet(primitive) {
+        if (!primitive || !primitive.id || !primitive?.id?.startsWith("annotate_")) {
+            console.warn("Invalid primitive provided or primitive does not have a valid ID.");
+            return; // Exit if the primitive is invalid or does not have a valid ID
+        }
 
         // confirmation 
-        const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
-        if (!userConfirmation) return;
+        // const userConfirmation = window.confirm(`Do you want to remove this entire line set?`) // Confirm the removal action
+        // if (!userConfirmation) return;
 
-        const measureId = Number(line.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID    
+        const measureId = Number(primitive.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
 
         const {
             pointPrimitives,
@@ -306,7 +389,170 @@ class MeasureModeCesium extends MeasureModeBase {
         };
 
         // show notification
-        showCustomNotification(`removed line set, id: ${measureId}`, this._container);
+        showCustomNotification(`Removed primitive set, id: ${measureId}`, this._container);
+    }
+
+    _resumeMeasure(pointIndex, measureData) {
+        if (measureData === undefined || pointIndex === undefined) return;
+
+        // Set the component's state to the measure being resumed
+        this.measure = measureData;
+        this.measure.status = "pending";
+        this.distances = [...this.measure._records[0].distances];
+        this.coordsCache = this.measure.coordinates;
+
+        // Determine if resuming from the start or end
+        const isFirstPoint = pointIndex === 0;
+
+        // Set flags to continue measuring
+        this.flags.isMeasurementComplete = false;
+        this.flags.isReverse = isFirstPoint;
+
+        // Optional: Add a user notification
+        showCustomNotification(`Resuming measure id: ${this.measure.id}`, this._container);
+    }
+
+    /**
+     * Copy the given coordinate to the clipboard.
+     * @param {Cartesian3|Cartographic|CartographicDegrees} coordinate 
+     * @returns {string|null} - The text copied to clipboard or null if conversion failed.
+     */
+    _copyCoordinateToClipboard(coordinate) {
+        if (!coordinate) return null;
+
+        const cartographicDegrees = convertToCartographicDegrees(coordinate);
+        if (!cartographicDegrees) {
+            console.warn("Failed to convert coordinate to cartographic degrees.");
+            return null;
+        }
+        const latitude = cartographicDegrees.latitude.toFixed(4);
+        const longitude = cartographicDegrees.longitude.toFixed(4);
+        const height = cartographicDegrees.height ? cartographicDegrees.height.toFixed(2) : '0';
+
+        // text to copy using regex to filter out any words only left -, numbers and decimal points
+        const textToCopy = `${latitude}, ${longitude}, ${height}`;
+
+        // copy to clipboard
+        navigator.clipboard.writeText(textToCopy)
+
+        return textToCopy;
+    }
+
+    _setAddModeByLine(linePrimitive) {
+        // Validate input parameters
+        if (!linePrimitive || linePrimitive.feature?.properties?.status === "moving") return;
+
+        // -- Set measure id --
+        const measureId = Number(linePrimitive.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
+
+        // -- User confirmation --
+        const userConfirmation = window.confirm(`Do you want to add a new point to this line segment? Measure id: ${measureId}`);
+        if (!userConfirmation) return; // If the user does not confirm, exit
+
+        // Set the measure data
+        this.measure = this._findMeasureById(measureId);
+        if (!this.measure) return; // If the measure is not found, exit
+        this.coordsCache = this.measure.coordinates;
+        this.distances = [...this.measure._records[0].distances]; // Get the distances from the measure data
+
+        // Update measure data and dataPool
+        this.measure.status = "pending"; // Set the measure status to pending
+        dataPool.updateOrAddMeasure({ ...this.measure });
+
+        // Set flags for add mode
+        this.flags.isAddMode = true; // Set the add mode flag to true
+
+        // Store references 
+        this.interactiveAnnotations.polylines = [linePrimitive];  // Store the line primitive in the interactive annotations
+
+        // Due to update method logic only update on existing label, so it need to clone it again to update two labels 
+        const linePrimitivePositions = linePrimitive.feature?.properties?.positions;
+        const existingLabel = this.drawingHelper._getLabelByPosition(linePrimitivePositions)[0];
+        if (!existingLabel) return; // If no label is found, exit
+        const clonedLabel = this.labelCollection.add(existingLabel);
+        this.interactiveAnnotations.labels = [existingLabel, clonedLabel];
+
+        this.interactiveAnnotations.totalLabels = [...this.drawingHelper._getLabelByPosition(this.coordsCache[this.coordsCache.length - 1])]; // Get the total label by the last position of the coordsCache
+
+        // Show notification
+        showCustomNotification(`Add mode is enabled. Click on the map to add a new point for segment, measure id: ${measureId}`, this._container);
+    }
+
+    _addAction() {
+        const line = this.interactiveAnnotations.polylines[0];
+        if (!line || line?.feature?.properties?.status === "moving") {
+            console.warn("No valid line to add a point to.");
+            return;
+        }
+
+        // -- Update this.coordsCache --
+        const linePositions = line?.feature?.properties?.positions;
+        const linePos1Index = this.coordsCache.findIndex(pos => areCoordinatesEqual(pos, linePositions[0]));
+        const linePos2Index = this.coordsCache.findIndex(pos => areCoordinatesEqual(pos, linePositions[1]));
+        if (linePos1Index === -1 || linePos2Index === -1) return; // If positions are not found, exit
+        const minIndex = Math.min(linePos1Index, linePos2Index);
+        this.coordsCache.splice(minIndex + 1, 0, this.coordinate); // Insert the new coordinate after the first position of the line
+
+        // -- Create new point --
+        this.drawingHelper._addPointMarker(this.coordinate, {
+            color: this.stateManager.getColorState("pointColor"),
+            id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "completed"
+        });
+
+        const newPositions = [[linePositions[0], this.coordinate], [this.coordinate, linePositions[1]]]; // Create new positions for the line
+
+        // -- Create or update the line --
+        this._createOrUpdateLine(newPositions, this.interactiveAnnotations.polylines, {
+            color: this.stateManager.getColorState("line"),
+            status: "completed"
+        });
+
+        // -- Create or update the label --
+        const { distances, interpolatedPositions } = this._createOrUpdateLabel(newPositions, this.interactiveAnnotations.labels, {
+            showBackground: true,
+            status: "completed"
+        });
+        if (distances.length === 0) return;
+
+
+        // -- Handle Distances record --
+        const currentDistances = this.distances;
+        currentDistances.splice(minIndex, 1, ...distances);
+        this.distances = currentDistances;
+
+        // -- Handle interpolated positions --
+        if (Array.isArray(interpolatedPositions) && interpolatedPositions.length > 0) {
+            this.measure.interpolatedPoints.splice(minIndex, 1, ...interpolatedPositions);
+        }
+
+        // -- Handle Chart if it exists --
+        if (typeof this._createOrUpdateChart === "function") {
+            const interpolatedCartesian = this.measure.interpolatedPoints.flat(1);
+            const interpolatedCartographicDegrees = interpolatedCartesian.map(pos => convertToCartographicDegrees(pos));
+            this._createOrUpdateChart(interpolatedCartesian, interpolatedCartographicDegrees);
+        }
+
+        // -- Update total distance label --
+        const { totalDistance } = this._createOrUpdateTotalLabel(this.coordsCache, this.interactiveAnnotations.totalLabels, {
+            showBackground: true,
+            status: "completed"
+        });
+
+        // -- Update measure data --
+        if (distances.length > 0 && typeof totalDistance === "number") {
+            const record = { distances: [...this.distances], totalDistance };
+            this.measure._records[0] = record; // Update distances record
+        }
+        this.measure.status = "completed"; // Set the measure status to completed
+        this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
+        dataPool.updateOrAddMeasure({ ...this.measure }); // Update data pool with the measure data
+
+        // -- Reset values --
+        this.resetValuesModeSpecific(); // Reset the mode-specific values
+
+        // reset the flags to be ready for the next measurement
+        this.flags.isMeasurementComplete = true; // Set the measurement as complete
     }
 
 
@@ -506,11 +752,9 @@ class MeasureModeCesium extends MeasureModeBase {
      * CONTEXT MENU SPECIFIC *
      *************************/
     // TODO: new feature: context menu to replace complicated left or middle click events
-    _setupContextMenu(container, itemOptions = [], options = {}) {
+    _setupContextMenu(container, options = {}) {
         const {
             show = true,
-            x = 0,
-            y = 0
         } = options;
 
         if (!container) {
@@ -524,18 +768,57 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // Apply styles directly to the element
         Object.assign(this.contextMenu.style, {
-            background: "white",
+            background: "#fefefe",
             border: "1px solid #ddd",
             borderRadius: "4px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
             padding: "4px 0",
             minWidth: "120px",
-            display: show ? 'block' : 'none',
             position: "absolute",
-            left: `${x}px`,
-            top: `${y}px`,
             zIndex: "1000"
         });
+
+        // Append the context menu to the specified container
+        container.appendChild(this.contextMenu);
+
+        // Store to the state manager for later use
+        this.stateManager.setElementState("contextMenu", this.contextMenu);
+        this._setContextMenuVisibility(show); // Set initial visibility
+
+        return this.contextMenu;
+    }
+
+    /**
+     * Update the context menu with new items and position. Fallbacks to setup context menu if not exists.
+     * @param {HTMLElement} container - the map container where the context menu should be displayed
+     * @param {{x:number, y:number}} position - the position where the context menu should be displayed
+     * @param {Array<{text:string, event:function}>} itemOptions - the context menu items options
+     *      e.g: [{text: "remove point", event: function() { }},{text: "remove line", event: function() { }}]
+     * @param {*} options - additional options for the context menu
+     * @returns {HTMLElement|null} - the updated context menu element or null if not created
+     */
+    _updateContextMenu(container, position, itemOptions = [], options = {}) {
+        let contextMenu = this.stateManager.getElementState("contextMenu");
+
+        if (!contextMenu) {
+            contextMenu = this._setupContextMenu(container, options);
+        }
+
+        if (!contextMenu || !position.x || !position.y) return;
+
+        this._setContextMenuVisibility(true); // Ensure the context menu is visible
+
+        // FIXME: the position needs to located at the mouse position.
+        // Update the position of the context menu
+        contextMenu.style.left = `${position.x}px`;
+        contextMenu.style.top = `${position.y}px`;
+
+        // Clear ul element if it exists
+        // This is to ensure we don't duplicate items in the context menu
+        const existingList = contextMenu.querySelector("ul");
+        if (existingList) {
+            existingList.remove();
+        }
 
         // list of menu items using ul li 
         const menuList = document.createElement("ul");
@@ -546,7 +829,8 @@ class MeasureModeCesium extends MeasureModeBase {
             padding: "0"
         });
 
-        // Add menu items with direct styling
+        menuList.innerHTML = ""; // Clear existing items
+        // Add new items
         itemOptions.forEach(item => {
             const menuItem = document.createElement("li");
             menuItem.classList.add("an-context-menu-list-item");
@@ -555,21 +839,24 @@ class MeasureModeCesium extends MeasureModeBase {
             Object.assign(menuItem.style, {
                 padding: "8px 12px",
                 cursor: "pointer",
-                borderBottom: "1px solid #eee"
+                borderBottom: "1px solid #eee",
+                transition: "background-color 0.3s ease"
             });
 
             // Add hover effects
             menuItem.addEventListener("mouseenter", () => {
-                menuItem.style.backgroundColor = "#f5f5f5";
+                menuItem.style.backgroundColor = "#ece5e5";
             });
             menuItem.addEventListener("mouseleave", () => {
                 menuItem.style.backgroundColor = "transparent";
             });
 
+            // Click event handler
             menuItem.addEventListener("click", event => {
                 item.event(event);
                 this._setContextMenuVisibility(false);
             });
+
             menuList.appendChild(menuItem);
         });
 
@@ -577,52 +864,20 @@ class MeasureModeCesium extends MeasureModeBase {
         if (menuList.lastElementChild) {
             menuList.lastElementChild.style.borderBottom = "none";
         }
-        this.contextMenu.appendChild(menuList);
 
-        // Append the context menu to the specified container
-        container.appendChild(this.contextMenu);
+        // Append the menu list to the context menu
+        contextMenu.appendChild(menuList);
 
-        return this.contextMenu;
-    }
+        // Add a one-time listener to close the menu on the next click anywhere
+        setTimeout(() => document.addEventListener('click', () => this._setContextMenuVisibility(false), { once: true }), 0);
 
-    /**
-     * Update the context menu with new items and position. Fallbacks to setup context menu if not exists.
-     * @param {HTMLElement} container - the map container where the context menu should be displayed
-     * @param {{x:number, y:number}} position - the position where the context menu should be displayed
-     * @param {*} itemOptions - the context menu items options
-     *      e.g: [{text: "remove point", event: function() { }},{text: "remove line", event: function() { }}]
-     * @param {*} options - additional options for the context menu
-     * @returns {HTMLElement|null} - the updated context menu element or null if not created
-     */
-    _updateContextMenu(container, position, itemOptions = [], options = {}) {
-        if (!this.contextMenu) return;
-
-        // FIXME: the position needs to located at the mouse position.
-        // Update the position of the context menu
-        this.contextMenu.style.left = `${position.x}px`;
-        this.contextMenu.style.top = `${position.y}px`;
-
-        // Clear existing items
-        const menuList = this.contextMenu.querySelector(".an-context-menu-list");
-        if (menuList) {
-            menuList.innerHTML = ""; // Clear existing items
-            // Add new items
-            itemOptions.forEach(item => {
-                const menuItem = document.createElement("li");
-                menuItem.textContent = item.text;
-                menuItem.addEventListener("click", item.event);
-                menuList.appendChild(menuItem);
-            });
-        } else {
-            console.warn("Menu list not found in context menu.");
-        }
-
-        return this.contextMenu || null;
+        return contextMenu || null;
     }
 
     _setContextMenuVisibility(visible) {
-        if (this.contextMenu) {
-            this.contextMenu.style.display = visible ? 'block' : 'none';
+        const contextMenu = this.stateManager.getElementState("contextMenu");
+        if (contextMenu) {
+            contextMenu.style.display = visible ? 'block' : 'none';
         } else {
             console.warn("Context menu is not initialized.");
         }

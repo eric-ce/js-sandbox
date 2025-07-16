@@ -25,6 +25,7 @@ export class StateManager {
                 isToolsExpanded: false,
             },
             element: {
+                contextMenu: null,
                 // helpTable: null,
                 // logTable: null,
                 // toolbar: null,

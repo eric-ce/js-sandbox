@@ -9,6 +9,7 @@ import {
     areCoordinatesEqual,
     calculateMiddlePos,
     getRankedPickedObjectType,
+    convertToCartographicDegrees,
 } from "../../lib/helper/cesiumHelper.js";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import dataPool from "../../lib/data/DataPool.js";
@@ -296,6 +297,55 @@ class TwoPointsDistanceCesium extends MeasureModeCesium {
                 // this.handleHoverHighlighting(pickedObjects[0]);
                 break;
         }
+    }
+
+    /***********************
+     * RIGHT CLICK FEATURE *
+     ***********************/
+    handleRightClick = async (eventData) => {
+        // -- Handle Picked Object Priority -- 
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
+
+
+        if (pickedObject && pickedObjectType) {
+            const items = this._getContextMenuItemsForAnnotation(pickedObject, pickedObjectType);
+            if (items.length === 0) return; // If no items to show, exit
+
+            // -- Update the context menu with the items --
+            this._updateContextMenu(this._container, eventData.screenPoint, items);
+        }
+    };
+
+    _getContextMenuItemsForAnnotation(pickedObject, pickedObjectType) {
+        // Validate the picked object and type
+        if (!pickedObject) {
+            return [];
+        }
+
+        const itemList = [];
+
+        // Copy coordinate action
+        const coordinateItem = {
+            text: "Copy Coordinate",
+            event: () => { this._copyCoordinateToClipboard(this.#coordinate) }
+        }
+        // Remove primitive set action
+        const removePrimitiveSetItem = {
+            text: "Remove Primitive Set",
+            event: () => { this._removePrimitiveSet(pickedObject.primitive) }
+        }
+        itemList.push(coordinateItem, removePrimitiveSetItem); // Add common actions
+
+        // Handle specific actions based on the picked object type
+        if (pickedObjectType === "label") {
+            const label = pickedObject.primitive;
+            itemList.push({
+                text: "Edit label",
+                event: () => { editableLabel(this._container, label) }
+            })
+        }
+
+        return itemList;
     }
 
 
