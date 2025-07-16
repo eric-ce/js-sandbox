@@ -1,7 +1,5 @@
 import * as Cesium from "cesium";
-
 import "cesiumStyle";
-
 import { MeasureToolbox } from "./components/MeasureToolbox.js";
 import {
     PointPrimitiveCollection,
@@ -10,6 +8,8 @@ import {
     GroundPolylinePrimitive,
     PolylineCollection,
 } from "cesium";
+
+import CesiumNavigation from "cesium-navigation-es6";
 
 export class MapCesium extends HTMLElement {
     constructor() {
@@ -71,12 +71,28 @@ export class MapCesium extends HTMLElement {
         this.cesiumStyle.href = `/Widgets/widgets.css`;
         this.shadowRoot.appendChild(this.cesiumStyle);
 
+
+
         this._cesiumContainerSetup();
         this.viewer = this._setViewer();
 
         if (this.viewer && this.viewer instanceof Cesium.Viewer) {
             this._setCesiumLocation(this.viewer);
             await this._loadTileset(this.viewer);
+
+            // -- Compass Feature --
+            this.navigationStyle = document.createElement("link");
+            this.navigationStyle.rel = "stylesheet";
+            this.navigationStyle.href = `/styles/cesium-navigation.css`;
+            this.shadowRoot.appendChild(this.navigationStyle);
+
+            new CesiumNavigation(this.viewer, {
+                enableCompass: true,
+                enableZoomControls: true,
+                enableDistanceLegend: true,
+                enableCompassOuterRing: true,
+            });
+            // -- End Compass Feature --
 
             const cesiumMeasure = this.shadowRoot.querySelector("cesium-measure");
             this.measureToolbox = cesiumMeasure ? cesiumMeasure : this.initializeMeasureToolbox();
