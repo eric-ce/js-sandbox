@@ -158,7 +158,7 @@ class CesiumHighlightHandler {
      * @returns {void}
      */
     _ensureOriginalStyleStored(primitive, primitiveType) {
-        if (!primitive || this.originalStylesMap.has(primitive)) {
+        if (!primitive || (typeof primitive.isDestroyed === 'function' && primitive.isDestroyed()) || this.originalStylesMap.has(primitive)) {
             return;
         }
         const originalStyle = {};
@@ -205,7 +205,7 @@ class CesiumHighlightHandler {
      * @returns {void}
      */
     _updatePrimitiveAppearance(primitive, primitiveType) {
-        if (!primitive) return;
+        if (!primitive || (typeof primitive.isDestroyed === 'function' && primitive.isDestroyed())) return;
 
         const originalStyle = this.originalStylesMap.get(primitive);
         // It's possible originalStyle is not yet stored if _ensureOriginalStyleStored hasn't run for it,
@@ -225,8 +225,7 @@ class CesiumHighlightHandler {
                 // const labelOutlineColor = isSelected ? selectColor : (isHovered ? hoverColor : (originalStyle?.outlineColor || primitive.outlineColor));
                 const labelFillColor = isSelected ? selectColor : (isHovered ? hoverColor : (originalStyle?.fillColor || primitive.fillColor));
                 // const labelOutlineWidth = isSelected ? 2 : (isHovered ? 2 : (originalStyle?.outlineWidth !== undefined ? originalStyle.outlineWidth : primitive.outlineWidth));
-
-                if (primitive.fillColor) primitive.fillColor = labelFillColor;
+                if (primitive?.fillColor) primitive.fillColor = labelFillColor;
                 // if (primitive.outlineColor) primitive.outlineColor = labelOutlineColor;
                 // if (typeof primitive.outlineWidth === 'number') primitive.outlineWidth = labelOutlineWidth;
                 break;

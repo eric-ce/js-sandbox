@@ -171,6 +171,25 @@ export class MeasureComponentBase extends HTMLElement {
         this.#cesiumPkg = pkg;
     }
 
+    /**
+     * Gets the map container HTML element by the current map instance.
+     * This abstracts the different methods used by Cesium, Google Maps, and Leaflet.
+     * @returns {HTMLElement | null} The map's container element or null if not available.
+     */
+    get container() {
+        if (!this.mapName || !this.map) return null;
+        switch (this.mapName) {
+            case 'cesium':
+                return this.map.container;
+            case 'google':
+                return this.map.getDiv();
+            case 'leaflet':
+                return this.map.getContainer();
+            default:
+                return null;
+        }
+    }
+
 
     async connectedCallback() {
         // Apply style for the web component
@@ -498,7 +517,7 @@ export class MeasureComponentBase extends HTMLElement {
 
         // update this.toolbar positions after UI is created
         requestAnimationFrame(() => {
-            const container = this._getContainer();
+            const container = this.container;
             if (container) {
                 const containerRect = container.getBoundingClientRect();
                 const toolbarRect = this.toolbar.getBoundingClientRect();
@@ -888,7 +907,7 @@ export class MeasureComponentBase extends HTMLElement {
     _createInstructionsTable() {
         this.instructionsTable = document.createElement("instructions-table");
         // set properties for instructions table
-        const mapContainer = this._getContainer();
+        const mapContainer = this.container;
         this.instructionsTable.container = mapContainer;
         this.instructionsTable.modeId = this.activeModeId;
 
@@ -914,22 +933,10 @@ export class MeasureComponentBase extends HTMLElement {
         this.dataLogTable.stateManager = this.stateManager;
         this.dataLogTable.emitter = this.emitter;
         this.dataLogTable.mapName = this.mapName;
-        const mapContainer = this._getContainer();
+        const mapContainer = this.container;
         this.dataLogTable.container = mapContainer;
 
         mapContainer.appendChild(this.dataLogTable);
-    }
-
-    _getContainer() {
-        if (this.mapName === "cesium") {
-            return this.map.container; // Cesium uses container directly
-        }
-        if (this.mapName === "google") {
-            return this.map.getDiv(); // Google Maps uses getDiv()
-        }
-        if (this.mapName === "leaflet") {
-            return this.map.getContainer(); // Leaflet uses getContainer()
-        }
     }
 
 
@@ -1014,27 +1021,41 @@ export class MeasureComponentBase extends HTMLElement {
             // FIXME: add id, color and other properties options to graphics
             switch (data.mode) {
                 case "area":
-                    annotations.polygon = this._addPolygon(data.coordinates);
-                    annotations.markers = this._addPointMarkersFromArray(data.coordinates);
+                    annotations.polygon = this._addPolygon(data.coordinates, {
+                        id: `annotate_${data.mode}_polygon_${data.id}`,
+                        color: this.stateManager.getColorState("polygon"),
+                        status: "completed"
+                    });
+                    annotations.markers = this._addPointMarkersFromArray(data.coordinates, {
+                        color: this.stateManager.getColorState("pointColor"),
+                        id: `annotate_${data.mode}_point_${data.id}`,
+                        status: "completed"
+                    });
                     annotations.labels = [
-                        this._addLabel(data.coordinates, data._records[0], "squareMeter"),
+                        this._addLabel(data.coordinates, data._records[0], "squareMeter", {
+                            id: `annotate_${data.mode}_label_${data.id}`,
+                            status: "completed"
+                        }),
                     ];
                     break;
                 case "pointInfo":
                     // -- Add points --
                     const [cartographicDegrees] = data.coordinates;
-                    annotations.markers = this._addPointMarkersFromArray(data.coordinates);
+                    annotations.markers = this._addPointMarkersFromArray(data.coordinates, {
+                        color: this.stateManager.getColorState("pointColor"),
+                        id: `annotate_${data.mode}_point_${data.id}`,
+                        status: "completed"
+                    });
                     // -- Add labels --
                     const formattedText =
                         `lat: ${cartographicDegrees.latitude.toFixed(6)}\u00B0` +
                         `\nlng: ${cartographicDegrees.longitude.toFixed(6)}\u00B0` +
                         (cartographicDegrees.height ? `\nheight: ${cartographicDegrees.height.toFixed(2)} m` : "");
                     annotations.labels = [
-                        this._addLabel(
-                            [data.coordinates[0], data.coordinates[0]],
-                            formattedText,
-                            null,
-                        ),
+                        this._addLabel([data.coordinates[0], data.coordinates[0]], formattedText, null, {
+                            status: "completed",
+                            id: `annotate_${data.mode}_label_${data.id}`
+                        }),
                     ];
                     break;
                 case "multi-distances":
@@ -1042,35 +1063,52 @@ export class MeasureComponentBase extends HTMLElement {
                 case "profile-distances":
                     // FIXME: add id, color and other properties options
                     // -- Add points and lines --
-                    annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                    annotations.polylines = this._addPolylinesFromArray(data.coordinates);
+                    annotations.markers = this._addPointMarkersFromArray(data.coordinates, {
+                        color: this.stateManager.getColorState("pointColor"),
+                        id: `annotate_${data.mode}_point_${data.id}`,
+                        status: "completed"
+                    });
+                    annotations.polylines = this._addPolylinesFromArray(data.coordinates, {
+                        color: this.stateManager.getColorState("line"),
+                        id: `annotate_${data.mode}_line_${data.id}`,
+                        status: "completed"
+                    });
 
                     // -- Add labels -- 
                     const { distances, totalDistance } = data._records[0] || {};
-                    annotations.labels = this._addLabelsFromArray(
-                        data.coordinates,
-                        distances,
-                        "meter",
-                    );
+                    annotations.labels = this._addLabelsFromArray(data.coordinates, distances, "meter", {
+                        id: `annotate_${data.mode}_label_${data.id}`,
+                        status: "completed"
+                    });
                     // -- Add total label --
                     if (data.status === "completed") {
                         const endCoords = data.coordinates[data.coordinates.length - 1];
 
                         const formattedText = `Total: ${formatMeasurementValue(totalDistance, "meter")}`;
-                        const totalLabel = this._addLabel(
-                            [endCoords, endCoords],
-                            formattedText,
-                            null
-                        );
+                        const totalLabel = this._addLabel([endCoords, endCoords], formattedText, null, {
+                            id: `annotate_${data.mode}_total_label_${data.id}`,
+                            status: "completed"
+                        });
 
                         if (!totalLabel || annotations.labels.length === 0) return;
                         annotations.labels.push(totalLabel);
                     }
                     break;
                 default:
-                    annotations.markers = this._addPointMarkersFromArray(data.coordinates);
-                    annotations.polylines = this._addPolylinesFromArray(data.coordinates);
-                    annotations.labels = this._addLabelsFromArray(data.coordinates, data._records, "meter");
+                    annotations.markers = this._addPointMarkersFromArray(data.coordinates, {
+                        color: this.stateManager.getColorState("pointColor"),
+                        id: `annotate_${data.mode}_point_${data.id}`,
+                        status: "completed"
+                    });
+                    annotations.polylines = this._addPolylinesFromArray(data.coordinates, {
+                        color: this.stateManager.getColorState("line"),
+                        id: `annotate_${data.mode}_line_${data.id}`,
+                        status: "completed"
+                    });
+                    annotations.labels = this._addLabelsFromArray(data.coordinates, data._records, "meter", {
+                        id: `annotate_${data.mode}_label_${data.id}`,
+                        status: "completed"
+                    });
                     break;
             }
         } catch (error) {
@@ -1165,24 +1203,28 @@ export class MeasureComponentBase extends HTMLElement {
         annotations.labels?.forEach((label) => this._removeLabel(label));
     }
 
-    // Abstract methods that must be implemented by subclasses
-    _addPointMarker(position, color, options) {
+
+    /******************************************
+     *            ABSTRACT METHODS            *
+     * THAT MUST BE IMPLEMENTED BY SUBCLASSES *
+     ******************************************/
+    _addPointMarker(position, options) {
         throw new Error("_addPointMarker must be implemented by subclass");
     }
 
-    _addPointMarkersFromArray(positions, color, options) {
+    _addPointMarkersFromArray(positions, options) {
         throw new Error("_addPointMarkersFromArray must be implemented by subclass");
     }
 
-    _addPolyline(positions, color, options) {
+    _addPolyline(positions, options) {
         throw new Error("_addPolyline must be implemented by subclass");
     }
 
-    _addPolylinesFromArray(positions, color, options) {
+    _addPolylinesFromArray(positions, options) {
         throw new Error("_addPolylinesFromArray must be implemented by subclass");
     }
 
-    _addPolygon(positions, color, options) {
+    _addPolygon(positions, options) {
         throw new Error("_addPolygon must be implemented by subclass");
     }
     _addLabel(positions, text, unit, options) {

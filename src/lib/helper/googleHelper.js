@@ -148,6 +148,7 @@ export function createPointMarker(map, position, options = {}) {
         weight = 0,
         scale = 5,
         zIndex = 1,
+        status,  // exclude status, it should stored at feature properties
         ...rest
     } = options;
 
@@ -209,6 +210,7 @@ export function createAdvancedPointMarker(map, position, options = {}) {
         top = "50%",
         left = "50%",
         transform = "translate(-50%, -50%)",
+        status, // exclude status, it should stored at feature properties
         ...rest
     } = options;
 
@@ -290,6 +292,7 @@ export function createPolyline(map, positions, options = {}) {
         clickable = false,
         title = "Polyline",
         id = "annotate_line",
+        status, // exclude status, it should stored at feature properties
         ...rest
     } = options;
 
@@ -350,12 +353,13 @@ export function createPolygon(map, positions, options = {}) {
     const {
         clickable = false,
         id = "annotate_polygon",
+        strokeColor = "rgba(255,0,0,1)",
         color = "rgba(255,0,0,1)",
-        fillColor = "rgba(255,0,0,1)",
         opacity = 0.35,
         weight = 2,
         zIndex = 1,
         title = "Polygon",
+        status, // exclude status, it should stored at feature properties
         ...rest
     } = options;
 
@@ -366,10 +370,10 @@ export function createPolygon(map, positions, options = {}) {
             paths: polygonPositions,
             title,
             clickable,
-            strokeColor: color,
+            strokeColor,
             strokeOpacity: 0.8,
             strokeWeight: weight,
-            fillColor,
+            fillColor: color,
             fillOpacity: opacity,
             zIndex,
             ...rest
@@ -422,6 +426,7 @@ export function createLabelMarker(map, positions, value, unit = "meter", options
         id = "annotate_label",
         title = "Label Marker",
         clickable = true,
+        status, // exclude status, it should stored at feature properties
         ...rest
     } = options;
 
@@ -512,6 +517,7 @@ export function createAdvancedLabelMarker(map, positions, value, unit = "meter",
         id = "annotate_label",
         title = "Label Marker",
         clickable = true,
+        status, // exclude status, it should stored at feature properties
         ...rest
     } = options;
 

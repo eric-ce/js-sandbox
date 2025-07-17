@@ -137,12 +137,16 @@ export default class CesiumMeasure extends MeasureComponentBase {
         const pointPrimitive = this.#pointCollection.add(point);
 
         // -- Handle metadata --
+        // Enhance primitive prototype for metadata retrieval
+        this._enhancePrimitivePrototypes(pointPrimitive);
+
+        // Store metadata in the primitive
         pointPrimitive.feature = {
             id,
             type: "annotation",
             properties: {
                 mapName: this.mapName,
-                status: status,
+                status,
                 positions: [{ ...position }],
                 ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
             }
@@ -215,6 +219,10 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this.#polylineCollection.push(polylinePrimitive);
 
         // -- Handle metadata --
+        // Enhance primitive prototype for metadata retrieval
+        this._enhancePrimitivePrototypes(polylinePrimitive);
+
+        // Store metadata in the primitive
         polylinePrimitive.feature = {
             id,
             type: "annotation",
@@ -225,6 +233,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
                 ...(id && deconstructIdForMetadata(id)), // deconstruct id for metadata
             }
         }
+
         return polylinePrimitive;
     };
 
@@ -284,7 +293,11 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Add to private collection - will not affect visualization, store for reference only
         this.#polylineCollection.push(polylinePrimitive);
 
-        // -- Handle metadata --  
+        // -- Handle metadata --
+        // Enhance primitive prototype for metadata retrieval
+        this._enhancePrimitivePrototypes(polylinePrimitive);
+
+        // Store metadata in the primitive
         polylinePrimitive.feature = {
             id,
             type: "annotation",
@@ -335,6 +348,10 @@ export default class CesiumMeasure extends MeasureComponentBase {
         const labelPrimitive = this.#labelCollection.add(label);
 
         // -- Handle metadata --
+        // Enhance primitive prototype for metadata retrieval
+        this._enhancePrimitivePrototypes(labelPrimitive);
+
+        // Store metadata in the primitive
         labelPrimitive.feature = {
             id,
             type: "annotation",
@@ -432,6 +449,10 @@ export default class CesiumMeasure extends MeasureComponentBase {
         this.#polygonCollection.push(polygonPrimitive);
 
         // -- Handle metadata --
+        // Enhance primitive prototype for metadata retrieval
+        this._enhancePrimitivePrototypes(polygonPrimitive);
+
+        // Store metadata in the primitive
         polygonPrimitive.feature = {
             id,
             type: "annotation",
@@ -492,10 +513,15 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // Add the polygon primitive to the map
         const polygonOutlinePrimitive = this.map.scene.primitives.add(polygonOutline);
 
+
         // Add to private collection - shared with polygon primitive
         this.#polygonCollection.push(polygonOutlinePrimitive);
 
         // -- Handle metadata --
+        // Enhance primitive prototype for metadata retrieval
+        this._enhancePrimitivePrototypes(polygonOutlinePrimitive);
+
+        // Store metadata in the primitive
         polygonOutlinePrimitive.feature = {
             id,
             type: "annotation",
@@ -509,6 +535,66 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return polygonOutlinePrimitive;
     };
 
+    /**
+     * Enhances Cesium primitive prototypes with custom getters and setters for easier metadata access.
+     * @param {Primitive|label|PointPrimitive} primitive - The Cesium primitive instance to enhance 
+     * @returns {void}
+     * @private
+     */
+    _enhancePrimitivePrototypes(primitive) {
+        // Get the actual prototype of the instance
+        const prototype = Object.getPrototypeOf(primitive);
+
+        // Exit if the prototype has already been enhanced to avoid redundant work
+        if (prototype.hasOwnProperty('status')) {
+            return;
+        }
+
+        // --- Define properties to be added to the prototype ---
+
+        // Getter for the entire 'feature' object
+        Object.defineProperty(prototype, 'feature', {
+            get: function () { return this._feature; },
+            set: function (value) { this._feature = value; },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter for the 'properties' object within the feature
+        Object.defineProperty(prototype, 'properties', {
+            get: function () { return this.feature?.properties; },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter/setter for 'status'
+        Object.defineProperty(prototype, 'status', {
+            get: function () {
+                return this.properties?.status;
+            },
+            set: function (newStatus) {
+                if (this.properties) {
+                    this.properties.status = newStatus;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter/setter for 'storedPositions' to avoid conflict with native 'position'
+        Object.defineProperty(prototype, 'storedPositions', {
+            get: function () {
+                return this.properties?.positions;
+            },
+            set: function (newPositions) {
+                if (this.properties) {
+                    this.properties.positions = newPositions;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+    }
 
 
     /**************************

@@ -53,100 +53,21 @@ export default class GoogleMeasure extends MeasureComponentBase {
         return this.#polygonCollection;
     }
 
+    _initializeMapSpecifics() {
+        this._setupDataLayer();
+    }
 
+    /**
+     * Sets up the Google Maps Data Layer for managing features.
+     * @private
+     */
+    _setupDataLayer() {
+        if (!this.map) return;
 
-    // TODO: refactor annotations to use data layer
-    // _initializeMapSpecifics() {
-    //     this._setupDataLayer();
-    // }
-
-    // /**
-    //  * Sets up the map's Data layer, including styling and event listeners.
-    //  * @private
-    //  */
-    // _setupDataLayer() {
-    //     if (!this.map || !this.map.data) return;
-
-    //     // Set a dynamic style for all features in the Data layer
-    //     this.map.data.setStyle(feature => {
-    //         return {
-    //             icon: {
-    //                 path: google.maps.SymbolPath.CIRCLE,
-    //                 scale: 5,
-    //                 fillColor: feature.getProperty('color') || 'red',
-    //                 fillOpacity: 1.0,
-    //                 strokeWeight: 0
-    //             },
-    //             strokeColor: feature.getProperty('color') || '#ADFF2F',
-    //             strokeWeight: feature.getProperty('weight') || 4,
-    //             strokeOpacity: feature.getProperty('opacity') || 1.0,
-    //             fillColor: feature.getProperty('fillColor') || 'red',
-    //             fillOpacity: feature.getProperty('opacity') || 0.35,
-    //             zIndex: feature.getProperty('zIndex') || 1,
-    //             clickable: feature.getProperty('clickable') ?? true
-    //         };
-    //     });
-
-    //     // -- Highlight Listeners --
-    //     this.map.data.addListener('mouseover', (event) => {
-    //         const eventData = this._createEventData(event, event.feature);
-    //         this.highlightHandler?.applyHoverHighlight(event.feature);
-    //         this.emitter.emit('annotation-hovered', eventData);
-    //     });
-
-    //     this.map.data.addListener('mouseout', (event) => {
-    //         const eventData = this._createEventData(event, null);
-    //         this.highlightHandler?.removeHoverHighlight();
-    //         this.emitter.emit('annotation-hovered', eventData);
-    //     });
-
-    //     // -- Picker Listeners --
-    //     this.map.data.addListener('click', (event) => {
-    //         const eventData = this._createEventData(event, event.feature);
-    //         console.log('eventData', eventData)
-    //         this.emitter.emit('annotation-clicked', eventData);
-    //     });
-
-    //     // -- Custom Event Listeners --
-    //     // Execute custom listener if it exists
-    //     const listenerId = event.feature.getProperty('listenerId');
-    //     if (listenerId && this.#customListeners.has(listenerId)) {
-    //         const listeners = this.#customListeners.get(listenerId);
-    //         if (typeof listeners.click === 'function') {
-    //             // Pass the feature and event data to the custom callback
-    //             listeners.click(event.feature, eventData);
-    //         }
-    //     }
-    // }
-
-    // /**
-    //  * Adds a point feature to the map's Data layer.
-    //  * @param {{lat:number,lng:number}} position
-    //  * @param {object} [options={}]
-    //  * @returns {Feature|null}
-    //  */
-    // _addPointMarkerTest(position, options = {}) {
-    //     if (!this.map || !position) return null;
-
-    //     const { listeners, id, ...rest } = options;
-    //     const feature = new google.maps.Data.Feature({
-    //         geometry: new google.maps.Data.Point(position),
-    //         properties: {
-    //             ...rest,
-    //             id: id || 'annotate_point',
-    //             positions: [{ ...position }] // Store original position
-    //         }
-    //     });
-
-    //     if (listeners) {
-    //         const listenerId = `feature_${this.#listenerIdCounter++}`;
-    //         feature.setProperty('listenerId', listenerId);
-    //         this.#customListeners.set(listenerId, listeners);
-    //     }
-
-    //     this.map.data.add(feature);
-    //     return feature;
-    // }
+        // Create a new data layer and set it on the map
+        this.dataLayer = new google.maps.Data();
+        this.dataLayer.setMap(this.map);
+    }
 
 
     /*****************
@@ -312,6 +233,45 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * CREATE ANNOTATION FEATURE *
      *****************************/
     /**
+     * Adds a point feature to the data layer.
+     * @param {{lat: number, lng: number}} position - The position where the point will be added.
+     * @param {object} [options={}] - Optional configuration for the point feature.
+     * @returns {google.maps.Data.Feature|null} The created data feature or null on failure.
+     * @private
+     */
+    _addDataPoint(position, options = {}) {
+        if (!this.dataLayer || !position) return null;
+
+        const {
+            id = null,
+            status = null,
+            // listeners are handled at the data layer level, not per feature
+        } = options;
+
+        try {
+            const feature = new google.maps.Data.Feature({
+                id,
+                geometry: new google.maps.Data.Point(position),
+                properties: {
+                    type: "annotation",
+                    mapName: this.mapName,
+                    status,
+                    positions: [{ ...position }],
+                    ...(id && deconstructIdForMetadata(id)),
+                }
+            });
+
+            // The data layer will return an array of features added.
+            const [addedFeature] = this.dataLayer.add(feature);
+
+            return addedFeature;
+        } catch (error) {
+            console.error("GoogleMeasure: Error in _addDataPoint:", error);
+            return null;
+        }
+    }
+
+    /**
      * Adds a point marker to the map at the specified position.
      * @param {{lat:number,lng:number}} position - The position where the marker will be added
      * @param {object} [options={}] - Optional configuration for the marker
@@ -332,7 +292,10 @@ export default class GoogleMeasure extends MeasureComponentBase {
             const point = createPointMarker(this.map, position, options);
             if (!point) return null;
 
-            // -- Handle metadata --
+            // Enhance overlay prototype for metadata retrieval
+            this._enhancePrimitivePrototypes(point);
+
+            // Store metadata in the overlay
             point.feature = {
                 id,
                 type: "annotation",
@@ -355,6 +318,8 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             // Store the point in the collection
             this.#pointCollection.push(point);
+
+            this._enhancePrimitivePrototypes(point); // Enhance the prototype for additional properties
 
             return point;
         } catch (error) {
@@ -400,7 +365,10 @@ export default class GoogleMeasure extends MeasureComponentBase {
             const polyline = createPolyline(this.map, positions, options);
             if (!polyline) return null;
 
-            // -- Handle metadata --
+            // Enhance overlay prototype for metadata retrieval
+            this._enhancePrimitivePrototypes(polyline);
+
+            // Store metadata in the overlay
             polyline.feature = {
                 id,
                 type: "annotation",
@@ -476,7 +444,10 @@ export default class GoogleMeasure extends MeasureComponentBase {
             const label = createLabelMarker(this.map, positions, value, unit, options);
             if (!label) return null;
 
-            // -- Handle metadata --
+            // Enhance overlay prototype for metadata retrieval
+            this._enhancePrimitivePrototypes(label);
+
+            // Store metadata in the overlay
             label.feature = {
                 id,
                 type: "annotation",
@@ -557,6 +528,10 @@ export default class GoogleMeasure extends MeasureComponentBase {
             if (!polygon) return null;
 
             // -- Handle metadata --
+            // Enhance overlay prototype for metadata retrieval
+            this._enhancePrimitivePrototypes(polygon);
+
+            // Store metadata in the overlay
             polygon.feature = {
                 id,
                 type: "annotation",
@@ -585,6 +560,67 @@ export default class GoogleMeasure extends MeasureComponentBase {
             console.error("GoogleMeasure: Error in _addPolygon:", error);
             return null;
         }
+    }
+
+    /**
+     * Enhances the prototype of a Google Maps Overlays with custom getters and setters for easier metadata access.
+     * @param {Marker|Polyline|Polygon} overlay - The Google Maps overlay instance to enhance  
+     * @returns {void}
+     * @private
+     */
+    _enhancePrimitivePrototypes(overlay) {
+        // Get the actual prototype of the instance
+        const prototype = Object.getPrototypeOf(overlay);
+
+        // Exit if the prototype has already been enhanced to avoid redundant work
+        if (prototype.hasOwnProperty('status')) {
+            return;
+        }
+
+        // --- Define properties to be added to the prototype ---
+
+        // Getter for the entire 'feature' object
+        Object.defineProperty(prototype, 'feature', {
+            get: function () { return this._feature; },
+            set: function (value) { this._feature = value; },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter for the 'properties' object within the feature
+        Object.defineProperty(prototype, 'properties', {
+            get: function () { return this.feature?.properties; },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter/setter for 'status'
+        Object.defineProperty(prototype, 'status', {
+            get: function () {
+                return this.properties?.status;
+            },
+            set: function (newStatus) {
+                if (this.properties) {
+                    this.properties.status = newStatus;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter/setter for 'storedPositions' to avoid conflict with native 'position'
+        Object.defineProperty(prototype, 'storedPositions', {
+            get: function () {
+                return this.properties?.positions;
+            },
+            set: function (newPositions) {
+                if (this.properties) {
+                    this.properties.positions = newPositions;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
     }
 
 
@@ -764,7 +800,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
         if (!domEvent) return { x: NaN, y: NaN };
 
         // Get the map container element
-        const container = this._getContainer();
+        const container = this.container;
         if (!container) return { x: NaN, y: NaN };
 
         // Get the bounding rectangle of the map container

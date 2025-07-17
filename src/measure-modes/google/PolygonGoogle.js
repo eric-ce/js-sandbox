@@ -380,7 +380,15 @@ class PolygonGoogle extends MeasureModeGoogle {
                 polygonInstance.setPaths(positions); // update position
                 polygonInstance.setOptions({ strokeColor: color, clickable }); // Change color to indicate moving state
             }
+
+            // -- Handle Polygon Metadata Update --
+            Object.assign(polygonInstance.feature.properties, {
+                status,
+                positions: positions.map(p => ({ ...p })),
+                ...(id && deconstructIdForMetadata(id))
+            });
             polygonInstance.id = id; // Update id
+            polygonInstance.featureId = id;
         }
 
         // --- Create Polygon ---
@@ -402,14 +410,6 @@ class PolygonGoogle extends MeasureModeGoogle {
             // -- Handle References Update -- 
             polygonsArray.push(polygonInstance); // Store polygon reference for interaction use
         }
-
-        // --- Common Updates (for both existing and newly created) ---
-        // -- Handle Polygon Metadata Update --
-        Object.assign(polygonInstance.feature.properties, {
-            status,
-            positions: positions.map(p => ({ ...p })),
-            ...(id && deconstructIdForMetadata(id))
-        });
 
         return polygonInstance; // Return the polygon instance
     }
