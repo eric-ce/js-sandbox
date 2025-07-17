@@ -108,7 +108,6 @@ export default class LeafletMeasure extends MeasureComponentBase {
 
         // -- Add to the collection --
         this.#pointCollection.addLayer(pointMarker);
-
         return pointMarker;
     }
 

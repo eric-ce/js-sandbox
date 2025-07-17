@@ -764,7 +764,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
         if (!domEvent) return { x: NaN, y: NaN };
 
         // Get the map container element
-        const container = this._getContainer();
+        const container = this.container;
         if (!container) return { x: NaN, y: NaN };
 
         // Get the bounding rectangle of the map container

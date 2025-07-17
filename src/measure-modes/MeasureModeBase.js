@@ -96,7 +96,7 @@ class MeasureModeBase {
 
         this.mapName = drawingHelper.mapName; // Map name (e.g., "cesium", "google", "leaflet")
 
-        this._container = this.drawingHelper._getContainer();  // The specific map container element by mapName
+        this._container = this.drawingHelper.container; // The specific map container element by mapName
 
         this.pointCollection = this.drawingHelper.pointCollection; // Array to store points
         this.polylineCollection = this.drawingHelper.polylineCollection; // Array to store lines
@@ -243,6 +243,12 @@ class MeasureModeBase {
         if (pointer) {
             pointer.remove();
             this.stateManager.setOverlayState('pointer', null);
+        }
+
+        const contextMenu = this.stateManager.getElementState('contextMenu');
+        if (contextMenu) {
+            contextMenu.remove();
+            this.stateManager.setElementState('contextMenu', null);
         }
     }
 
