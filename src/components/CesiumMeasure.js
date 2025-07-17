@@ -156,66 +156,6 @@ export default class CesiumMeasure extends MeasureComponentBase {
     };
 
     /**
-     * Enhances Cesium primitive prototypes with custom getters and setters for easier metadata access.
-     * This is done once to ensure all created primitives have a consistent API.
-     * @private
-     */
-    _enhancePrimitivePrototypes(primitive) {
-        // Get the actual prototype of the instance
-        const prototype = Object.getPrototypeOf(primitive);
-
-        // Exit if the prototype has already been enhanced to avoid redundant work
-        if (prototype.hasOwnProperty('status')) {
-            return;
-        }
-
-        // --- Define properties to be added to the prototype ---
-
-        // Getter for the entire 'feature' object
-        Object.defineProperty(prototype, 'feature', {
-            get: function () { return this._feature; },
-            set: function (value) { this._feature = value; },
-            enumerable: true,
-            configurable: true
-        });
-
-        // Getter for the 'properties' object within the feature
-        Object.defineProperty(prototype, 'properties', {
-            get: function () { return this.feature?.properties; },
-            enumerable: true,
-            configurable: true
-        });
-
-        // Getter/setter for 'status'
-        Object.defineProperty(prototype, 'status', {
-            get: function () {
-                return this.properties?.status;
-            },
-            set: function (newStatus) {
-                if (this.properties) {
-                    this.properties.status = newStatus;
-                }
-            },
-            enumerable: true,
-            configurable: true
-        });
-
-        // Getter/setter for 'storedPositions' to avoid conflict with native 'position'
-        Object.defineProperty(prototype, 'storedPositions', {
-            get: function () {
-                return this.properties?.positions;
-            },
-            set: function (newPositions) {
-                if (this.properties) {
-                    this.properties.positions = newPositions;
-                }
-            },
-            enumerable: true,
-            configurable: true
-        });
-    }
-
-    /**
      * Adds multiple point markers to the map at the specified positions.
      * @param {Cartesian3[]} positions - Array of positions where the markers will be added
      * @param {object} options - Options for the point primitives
@@ -595,6 +535,66 @@ export default class CesiumMeasure extends MeasureComponentBase {
         return polygonOutlinePrimitive;
     };
 
+    /**
+     * Enhances Cesium primitive prototypes with custom getters and setters for easier metadata access.
+     * @param {Primitive|label|PointPrimitive} primitive - The Cesium primitive instance to enhance 
+     * @returns {void}
+     * @private
+     */
+    _enhancePrimitivePrototypes(primitive) {
+        // Get the actual prototype of the instance
+        const prototype = Object.getPrototypeOf(primitive);
+
+        // Exit if the prototype has already been enhanced to avoid redundant work
+        if (prototype.hasOwnProperty('status')) {
+            return;
+        }
+
+        // --- Define properties to be added to the prototype ---
+
+        // Getter for the entire 'feature' object
+        Object.defineProperty(prototype, 'feature', {
+            get: function () { return this._feature; },
+            set: function (value) { this._feature = value; },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter for the 'properties' object within the feature
+        Object.defineProperty(prototype, 'properties', {
+            get: function () { return this.feature?.properties; },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter/setter for 'status'
+        Object.defineProperty(prototype, 'status', {
+            get: function () {
+                return this.properties?.status;
+            },
+            set: function (newStatus) {
+                if (this.properties) {
+                    this.properties.status = newStatus;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter/setter for 'storedPositions' to avoid conflict with native 'position'
+        Object.defineProperty(prototype, 'storedPositions', {
+            get: function () {
+                return this.properties?.positions;
+            },
+            set: function (newPositions) {
+                if (this.properties) {
+                    this.properties.positions = newPositions;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+    }
 
 
     /**************************
