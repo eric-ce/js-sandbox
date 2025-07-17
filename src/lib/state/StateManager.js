@@ -41,14 +41,14 @@ export class StateManager {
             color: {
                 add: "rgba(255, 255, 0, 1)",        // Cesium.Color.YELLOW
                 // default: "rgba(154, 205, 50, 1)",   // Cesium.Color.YELLOWGREEN
-                hover: "rgba(240, 230, 140, 1)",   // Cesium.Color.KHAKI
+                hover: "rgba(255, 255, 0, 0.7)",   // Cesium.Color.YELLOW.withAlpha(0.7)
                 hoverChartPoint: "rgba(240, 248, 255, 1)", // Cesium.Color.ALICEBLUE
                 // layerColor: null,
                 line: "rgba(154, 205, 50, 1)",      // Cesium.Color.YELLOWGREEN
                 // lineCacheColor: null,
                 move: "rgba(255, 255, 0, 1)",        // Cesium.Color.YELLOW
                 pointColor: "rgba(255, 0, 0, 1)",     // Cesium.Color.RED
-                polygon: "rgba(0, 128, 0, 0.8)",    // Cesium.Color.GREEN.withAlpha(0.8)
+                polygon: "rgba(32, 178, 170, 0.5)",    // Cesium.Color.LIGHTSEAGREEN.withAlpha(0.5)
                 polygonOutline: "rgba(255, 255, 0, 1)", // Cesium.Color.YELLOW
                 select: "rgba(0, 0, 255, 1)",       // Cesium.Color.BLUE
                 submitted: "rgba(0, 100, 0, 1)",      // Cesium.Color.DARKGREEN
