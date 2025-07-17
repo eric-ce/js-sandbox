@@ -261,50 +261,63 @@ class PointInfoCesium extends MeasureModeCesium {
     }
 
 
-    /*************************
-     * MIDDLE CLICK FEATURES *
-     *************************/
+    /************************
+     * RIGHT CLICK FEATURES *
+     ************************/
     /**
-     * Handles middle-click events on the map.
-     * Remove point primitive and its label within pointInfo mode.
-     * @param {NormalizedEventData} eventData 
+     * Handles right-click events on the map.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
+     * @returns {Void}
      */
-    handleMiddleClick = async (eventData) => {
+    handleRightClick = async (eventData) => {
+        // -- Handle Picked Object Priority -- 
         const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
 
-        if (pickedObjectType === "point") {
-            const pointPrimitive = pickedObject.primitive;
 
-            // Find the point primitive to remove
-            const pointToRemove = this.pointCollection._pointPrimitives.find(primitive => primitive.id === pointPrimitive.id);
-            if (!pointToRemove) return null;
+        // If no picked object, exit early
+        if (!pickedObjectType) return;
 
-            // Get the measure id
-            const idParts = pointToRemove.id.split("_");
-            const measureId = idParts.slice(-1)[0]; // Gets the last element and modifies idParts
+        // -- Handle picked object context menu --
+        if (pickedObject && pickedObjectType && this.coordsCache.length === 0) {
+            const items = this._getContextMenuItemsForAnnotation(pickedObject, pickedObjectType);
+            if (items.length === 0) return; // error handling - If no items to show, exit
 
-            // -- Confirm deletion --
-            // Use js confirm dialog to confirm deletion
-            const confirmDelete = window.confirm(`Do you want to delete this point at measure id ${measureId}?`);
-            if (!confirmDelete) return;
-
-            // -- Remove point--
-            this.drawingHelper._removePointMarker(pointToRemove);
-
-            // -- Remove label --
-            let labelToRemove;
-            // Find the label by id
-            labelToRemove = this.labelCollection._labels.find(label => label.id === `annotate_${this.mode}_label_${measureId}`);
-            if (!labelToRemove) {
-                // Fall back to find by position
-                labelToRemove = this.labelCollection._labels.find(label => areCoordinatesEqual(label.position, pointToRemove.position));
-            }
-            if (!labelToRemove) return null;
-            this.drawingHelper._removeLabel(labelToRemove);
-
-            // -- Remove data --
-            dataPool.removeMeasureById(measureId);  // Remove data from data pool
+            // -- Update the context menu with the items --
+            this._updateContextMenu(this._container, eventData.screenPoint, items);
         }
+    }
+
+    _getContextMenuItemsForAnnotation(pickedObject, pickedObjectType) {
+        // Validate the picked object and type
+        if (!pickedObject) {
+            return [];
+        }
+
+        const itemList = [];
+
+        // Copy coordinate action
+        const coordinateItem = {
+            text: "Copy Coordinate",
+            event: () => { this._copyCoordinateToClipboard(this.#coordinate) }
+        }
+        // Remove primitive set action
+        const removePrimitiveSetItem = {
+            text: "Remove Primitive Set",
+            event: () => { this._removePrimitiveSet(pickedObject.primitive) }
+        }
+        itemList.push(coordinateItem, removePrimitiveSetItem); // Add common actions
+
+        // Handle specific actions based on the picked object type
+        switch (pickedObjectType) {
+            case "label":
+                const label = pickedObject.primitive;
+                itemList.push({ text: "Edit label", event: () => { editableLabel(this._container, label) } });
+                break;
+            default:
+                break;
+        }
+
+        return itemList;
     }
 
 
