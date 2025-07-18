@@ -490,33 +490,52 @@ export function makeDraggable(element, container, onDragStateChange) {
  * @returns {string} The formatted measurement string with appropriate unit suffix.
  */
 export function formatMeasurementValue(value, unit) {
-    if (typeof value === "string" && unit === "meter") {
-        return value;
+    if (value == null || value === "") return "";
+    if (typeof value === "string") return value;
+
+    // Convert to number and validate
+    const numValue = Number(value);
+    if (isNaN(numValue)) return value.toString();
+
+    // Configuration object defining conversion rules for each unit type
+    // Each unit has an array of conversion rules ordered from largest to smallest threshold
+    const unitConfig = {
+        // Linear distance conversions: km → m → cm
+        meter: [
+            { threshold: 1000, factor: 1 / 1000, suffix: "km" },
+            { threshold: 1, factor: 1, suffix: "m" },
+            { threshold: 0, factor: 100, suffix: "cm" },
+        ],
+        // Area conversions: km² → m² → cm²
+        squareMeter: [
+            { threshold: 1000000, factor: 1 / 1000000, suffix: "km²" },
+            { threshold: 1, factor: 1, suffix: "m²" },
+            { threshold: 0, factor: 10000, suffix: "cm²" },
+        ],
+    };
+
+    // Get the conversion rules for the specified unit type
+    const config = unitConfig[unit];
+    if (!config) {
+        // Unknown unit type - return the value as-is without conversion
+        return value.toString();
     }
-    if (typeof value === "number") {
-        const numValue = Number(value);
-        if (unit === "meter") {
-            // Handle both meter and centimeter formatting
-            if (numValue >= 1000) {
-                return (numValue / 1000).toFixed(2) + "km";
-            } else if (numValue < 1) {
-                return (numValue * 100).toFixed(2) + "cm";
-            } else {
-                return numValue.toFixed(2) + "m";
-            }
-        }
-        if (unit === "squareMeter") {
-            // Handle both square meter and square centimeter formatting
-            if (numValue >= 1000000) {
-                return (numValue / 1000000).toFixed(2) + "km²";
-            } else if (numValue < 1) {
-                return (numValue * 10000).toFixed(2) + "cm²";
-            } else {
-                return numValue.toFixed(2) + "m²";
-            }
+
+    // Find the first threshold that the value meets or exceeds
+    // The array is ordered from largest to smallest threshold for efficiency
+    for (const { threshold, factor, suffix } of config) {
+        if (numValue >= threshold) {
+            // Apply the conversion factor and format to 2 decimal places
+            // factor: multiplier to convert from base unit to target unit
+            // Example: 1500m with factor 1/1000 = 1.50km
+            return (numValue * factor).toFixed(2) + suffix;
         }
     }
-    return value.toString() || ""; // Fallback to string conversion if no unit matches
+
+    // Fallback for edge cases (e.g., negative numbers that don't meet any threshold)
+    // Use the smallest unit (last in array) for conversion
+    const lastUnit = config[config.length - 1];
+    return (numValue * lastUnit.factor).toFixed(2) + lastUnit.suffix;
 }
 
 /**
@@ -645,3 +664,19 @@ export function deconstructIdForMetadata(id) {
     };
 }
 
+/**
+ * Converts a camelCase or snake_case string to a human-readable format with spaces.
+ * @param {string} str - The camelCase or snake_case string to convert.
+ * @returns {string} The converted human-readable string.
+ */
+export function camelCaseToWords(str) {
+    // Replace underscores with spaces and camelCase with spaces before capital letters
+    return (
+        str
+            .replace(/_/g, " ")
+            .replace(/([a-z])([A-Z])/g, "$1 $2")
+            .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
+            // Optionally, capitalize the first letter of each word
+            .replace(/\b\w/g, (char) => char.toUpperCase())
+    );
+}

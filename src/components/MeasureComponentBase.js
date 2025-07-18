@@ -1085,7 +1085,7 @@ export class MeasureComponentBase extends HTMLElement {
                         const endCoords = data.coordinates[data.coordinates.length - 1];
 
                         const formattedText = `Total: ${formatMeasurementValue(totalDistance, "meter")}`;
-                        const totalLabel = this._addLabel([endCoords, endCoords], formattedText, null, {
+                        const totalLabel = this._addLabel([endCoords, endCoords], formattedText, "meter", {
                             id: `annotate_${data.mode}_total_label_${data.id}`,
                             status: "completed"
                         });

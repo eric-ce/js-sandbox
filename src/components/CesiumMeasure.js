@@ -12,7 +12,7 @@ import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, cr
 // import { LogTable } from './shared/LogTable.js';
 // import { HelpTable } from './shared/HelpTable.js';
 import { MeasureComponentBase } from "./MeasureComponentBase.js";
-import { capitalizeString, deconstructIdForMetadata } from "../lib/helper/helper.js";
+import { camelCaseToWords, capitalizeString, deconstructIdForMetadata } from "../lib/helper/helper.js";
 
 
 /**@typedef {import('cesium').Cartesian3} Cartesian3 - the x,y,z coordinate that used in cesium map*/
@@ -892,26 +892,27 @@ export default class CesiumMeasure extends MeasureComponentBase {
         const { id } = primitive;
         if (!id) return null; // Ensure id exists
 
-        const { positions, status } = primitive.feature.properties;
+        const excludedKeys = ["positions"]
 
-        const [annotation, annotate_mode, annotate_type, measureId] = id.split("_");
-        const descriptionData = {
-            "ID": id,
-            "Annotate Mode": annotate_mode,
-            "Annotate Type": annotate_type || "N/A",
-            "Measure ID": measureId || "N/A",
-            "Status": status || "N/A"
-        };
+        const descriptionData = {};
+        Object.entries(primitive.feature.properties).forEach(([key, value]) => {
+            // Skips the excluded keys
+            if (excludedKeys.includes(key)) return;
+
+            // Convert camelCase to words and capitalize the first letter
+            const formattedKey = camelCaseToWords(key);
+            descriptionData[formattedKey] = value;
+        });
         // handle positions
-        if (positions.length > 0) {
-            const flatPositions = positions.flat();
-            flatPositions.forEach((pos, index) => {
-                const cartographicDegrees = convertToCartographicDegrees(pos);
-                Object.entries(cartographicDegrees).forEach(([key, value]) => {
-                    descriptionData[`Pos ${index + 1} ${key}`] = JSON.stringify(value);
-                });
-            });
-        }
+        // if (positions.length > 0) {
+        //     const flatPositions = positions.flat();
+        //     flatPositions.forEach((pos, index) => {
+        //         const cartographicDegrees = convertToCartographicDegrees(pos);
+        //         Object.entries(cartographicDegrees).forEach(([key, value]) => {
+        //             descriptionData[`Pos ${index + 1} ${key}`] = JSON.stringify(value);
+        //         });
+        //     });
+        // }
         return descriptionData;
     }
 
