@@ -416,18 +416,24 @@ class MultiDistancesClampedCesium extends MeasureModeCesium {
                 break;
             case "point":
                 const point = pickedObject.primitive;
-                // Remove point action
+
+                // -- Remove point action --
                 itemList.push(
                     { text: "Remove point", event: () => { this._removePointFromMeasure(point) } },
                 );
-                // -- Resume measure action -- 
-                // If the point is the first or last point in the measure, allow resuming the measure
+
+                // -- Handle Resume Measure --
                 const resumeContext = this._getPointContextForResume(point);
-                if (resumeContext) {
-                    const { pointIndex, measureData } = resumeContext;
+                // Check if resumeContext is valid and it is not a perimeter measure case
+                const canResume = resumeContext &&
+                    !areCoordinatesEqual(
+                        resumeContext.measureData.coordinates[0],
+                        resumeContext.measureData.coordinates[resumeContext.measureData.coordinates.length - 1]
+                    );
+                if (canResume) {
                     itemList.push({
                         text: "Resume measure",
-                        event: () => { this._resumeMeasure(pointIndex, measureData) }
+                        event: () => this._resumeMeasure(resumeContext.pointIndex, resumeContext.measureData)
                     });
                 }
                 break;

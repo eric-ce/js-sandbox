@@ -67,8 +67,13 @@ class MeasureModeCesium extends MeasureModeBase {
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
+        // Find existing context menu first if it exists reuse it if not create a new one
+        this.contextMenu = this.stateManager.getElementState("contextMenu");
+        if (!this.contextMenu) {
+            this.contextMenu = this._setupContextMenu(this._container, { show: false });
+        }
         // Initialize context menu - default to hidden
-        this.contextMenu = this._setupContextMenu(this._container, { show: false });
+        // this.contextMenu = this._setupContextMenu(this._container, { show: false });
     }
 
 
@@ -429,7 +434,7 @@ class MeasureModeCesium extends MeasureModeBase {
         const longitude = cartographicDegrees.longitude.toFixed(4);
         const height = cartographicDegrees.height ? cartographicDegrees.height.toFixed(2) : '0';
 
-        // text to copy using regex to filter out any words only left -, numbers and decimal points
+        // Prepare the text to copy
         const textToCopy = `${latitude}, ${longitude}, ${height}`;
 
         // copy to clipboard
@@ -808,7 +813,6 @@ class MeasureModeCesium extends MeasureModeBase {
 
         this._setContextMenuVisibility(true); // Ensure the context menu is visible
 
-        // FIXME: the position needs to located at the mouse position.
         // Update the position of the context menu
         contextMenu.style.left = `${position.x}px`;
         contextMenu.style.top = `${position.y}px`;
@@ -853,6 +857,10 @@ class MeasureModeCesium extends MeasureModeBase {
 
             // Click event handler
             menuItem.addEventListener("click", event => {
+                // Prevent default behavior
+                event.stopPropagation();
+                event.preventDefault();
+                // Call the item's event function
                 item.event(event);
                 this._setContextMenuVisibility(false);
             });
