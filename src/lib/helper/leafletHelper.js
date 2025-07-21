@@ -282,7 +282,7 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
         direction = "center",
         permanent = true,
         opacity = 0.8,
-        offset = [0, -30],
+        offset = [0, -35],
         id = "annotate_label",
         color = "rgba(0, 0, 0, 1)",
         interactive = false,

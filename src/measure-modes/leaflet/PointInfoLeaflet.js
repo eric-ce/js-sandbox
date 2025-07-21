@@ -105,6 +105,9 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
         /** @type {MeasurementGroup} */
         this.measure = this._createDefaultMeasure();
+
+        // Listen to right click event
+        // this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
     }
 
 
@@ -113,6 +116,9 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      **********/
     get interactiveAnnotations() {
         return this.#interactiveAnnotations;
+    }
+    get coordinate() {
+        return this.#coordinate;
     }
 
 
@@ -209,36 +215,6 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         }
     }
 
-    /**
-     * To remove a point marker and its associated label.
-     * @param {L.CircleMarker} marker - The marker to be removed.
-     * @return {void}
-     */
-    _removePointInfo(marker) {
-        // Get the measure id
-        const idParts = marker.id.split("_");
-        const measureId = idParts.slice(-1)[0]; // Extract the measure ID from the marker ID
-
-        // -- Confirm deletion --
-        // Use js confirm dialog to confirm deletion
-        const confirmDelete = window.confirm(`Do you want to delete this point at measure id ${measureId}?`);
-        if (!confirmDelete) return;
-
-        // -- Remove point --
-        this.drawingHelper._removePointMarker(marker);
-
-        // -- Remove label --
-        const labelToRemove = this.labelCollection.getLayers().find(label => label.id.includes(measureId));
-        if (!labelToRemove) return null;
-
-        this.drawingHelper._removeLabel(labelToRemove);
-
-        // -- Remove data --
-        dataPool.removeMeasureById(measureId); // Remove data from data pool
-
-        // Show notification
-        showCustomNotification(`Point removed from measure ${measureId}`, this._container);
-    }
 
     /******************
      * EVENT HANDLING *
@@ -458,6 +434,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      * Resets values specific to the mode.
      */
     resetValuesModeSpecific() {
+        // this.emitter.off('annotation-contextmenu-leaflet', this._handleContextMenu);
         // Reset flags
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
@@ -479,3 +456,38 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 }
 
 export { PointInfoLeaflet };
+
+
+/**************
+ * DEPRECATED *
+ **************/
+// /**
+//  * To remove a point marker and its associated label.
+//  * @param {L.CircleMarker} marker - The marker to be removed.
+//  * @return {void}
+//  */
+// _removePointInfo(marker) {
+//     // Get the measure id
+//     const idParts = marker.id.split("_");
+//     const measureId = idParts.slice(-1)[0]; // Extract the measure ID from the marker ID
+
+//     // -- Confirm deletion --
+//     // Use js confirm dialog to confirm deletion
+//     const confirmDelete = window.confirm(`Do you want to delete this point at measure id ${measureId}?`);
+//     if (!confirmDelete) return;
+
+//     // -- Remove point --
+//     this.drawingHelper._removePointMarker(marker);
+
+//     // -- Remove label --
+//     const labelToRemove = this.labelCollection.getLayers().find(label => label.id.includes(measureId));
+//     if (!labelToRemove) return null;
+
+//     this.drawingHelper._removeLabel(labelToRemove);
+
+//     // -- Remove data --
+//     dataPool.removeMeasureById(measureId); // Remove data from data pool
+
+//     // Show notification
+//     showCustomNotification(`Point removed from measure ${measureId}`, this._container);
+// }

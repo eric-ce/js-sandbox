@@ -42,8 +42,12 @@ class PickerLeaflet extends MeasureModeLeaflet {
         super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
     }
 
-    activate() {
-        super.activate();
+    /**
+     * Attach Leaflet-specific event listeners.
+     * @override
+     */
+    _attachMapSpecificListeners() {
+        super._attachMapSpecificListeners();
 
         this.inputHandler.off("leftclick", this.handleLeftClick);
         this.inputHandler.off("mousemove", this.handleMouseMove);
@@ -54,13 +58,17 @@ class PickerLeaflet extends MeasureModeLeaflet {
         }
     }
 
-    deactivate() {
+    /**
+     * Remove Leaflet-specific event listeners.
+     * @override
+     */
+    _removeMapSpecificListeners() {
+        super._removeMapSpecificListeners();
+
         if (this.emitter) {
             this.emitter.off("annotation-clicked-leaflet", this.handleLeftClick);
             this.emitter.off("annotation-hovered-leaflet", this.handleMouseMove);
         }
-
-        super.deactivate();
     }
 
 
@@ -73,7 +81,7 @@ class PickerLeaflet extends MeasureModeLeaflet {
      * @returns {Void}
      */
     handleLeftClick = async (eventData) => {
-        const { target: annotation } = eventData;
+        const { layer: annotation } = eventData;
         if (!annotation) return;
 
         const { id: pickedObjectId } = annotation;
@@ -99,7 +107,7 @@ class PickerLeaflet extends MeasureModeLeaflet {
      */
     handleMouseMove = async (eventData) => {
         if (!eventData) return;
-        const { target: annotation, screenPoint } = eventData;
+        const { layer: annotation, screenPoint } = eventData;
         if (!annotation || !screenPoint || !screenPoint.x || !screenPoint.y) {
             this._hideModeOverlay();
             return;
@@ -110,7 +118,7 @@ class PickerLeaflet extends MeasureModeLeaflet {
             this._hideModeOverlay();
             return;
         }
-        const [annotate, pickedObjectMode] = pickedObjectId.split('_');
+        const [_, pickedObjectMode] = pickedObjectId.split('_');
         if (!pickedObjectMode) {
             this._hideModeOverlay();
             return;
@@ -124,7 +132,7 @@ class PickerLeaflet extends MeasureModeLeaflet {
 
         // Update mode info overlay if already exists
         if (this.#modeInfoOverlay) {
-            this._updateModeOverlay(pickedObjectId, screenPoint)
+            this._updateModeOverlay(pickedObjectId, screenPoint);
         }
     }
 

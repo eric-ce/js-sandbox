@@ -1,5 +1,5 @@
 import dataPool from "../../lib/data/DataPool.js";
-import { calculateDistance, calculateMiddlePos, areCoordinatesEqual, convertToLatLng } from "../../lib/helper/leafletHelper.js";
+import { calculateDistance, calculateMiddlePos, areCoordinatesEqual, convertToLatLng, checkLayerType } from "../../lib/helper/leafletHelper.js";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.js";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
 
@@ -68,22 +68,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         },
     };
 
-    #polylineListeners = {
-        mousedown: (polyline, event) => {
-            if (event.domEvent.button === 1) {
-                // Prevent map drag, default behavior
-                event.domEvent?.stopPropagation();
-                event.domEvent?.preventDefault();
-                // When the measure is completed or not started yet, make it interactive
-                // Switch mode case: isMeasurementComplete flags is not used (false) when at the beginning before the measure starts
-                if (this.coordsCache.length === 0) {
-                    // Handle polyline click logic here, if needed
-                    this._removeLineSet(polyline);
-                }
-            }
-        }
-    }
-
     /**
      * 
      * @param {LeafletInputHandler} inputHandler 
@@ -109,11 +93,15 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         this.measure = this._createDefaultMeasure();
     }
 
+
     /**********
      * GETTER *
      **********/
     get interactiveAnnotations() {
         return this.#interactiveAnnotations;
+    }
+    get coordinate() {
+        return this.#coordinate;
     }
 
 
@@ -174,7 +162,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
                 status: "completed",
                 color: this.stateManager.getColorState("line"),
                 interactive: true,
-                listeners: this.#polylineListeners
             });
 
             // -- APPROACH 2: Update/ Reuse existing label --
@@ -197,7 +184,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             this.coordsCache = [];
             this.#interactiveAnnotations.polylines = []; // Clear moving polylines
             this.#interactiveAnnotations.labels = [];  // Clear moving labels
-
         }
     }
 
@@ -318,7 +304,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             status: "completed",
             color: this.stateManager.getColorState("line"),
             interactive: true,
-            listeners: this.#polylineListeners
         });
 
         // -- Finalize Label Graphics --
@@ -343,8 +328,6 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
     /**********
      * HELPER *
      **********/
-
-
     /**
       * Create or update the label.
       * If the label exists in labelsArray, update its position and text, else create a new one.

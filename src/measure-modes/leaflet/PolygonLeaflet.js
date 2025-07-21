@@ -88,6 +88,9 @@ class PolygonLeaflet extends MeasureModeLeaflet {
 
         /** @type {MeasurementGroup} */
         this.measure = this._createDefaultMeasure(); // Create a new measure object
+
+        // Listen to right click event
+        // this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
     }
 
     /**********
@@ -97,9 +100,9 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         return this.#interactiveAnnotations;
     }
 
-    // get coordinate() {
-    //     return this.#coordinate;
-    // }
+    get coordinate() {
+        return this.#coordinate;
+    }
 
 
     /******************
@@ -259,6 +262,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         this.#interactiveAnnotations.polygons = []; // Clear the polygon reference
         this.#interactiveAnnotations.labels = []; // Clear the moving labels reference
     }
+
 
     /******************
      * EVENT HANDLING *

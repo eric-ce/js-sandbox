@@ -42,6 +42,18 @@ export default class LeafletMeasure extends MeasureComponentBase {
         this.#labelCollection = L.featureGroup().addTo(this.map);
         this.#polygonCollection = L.featureGroup().addTo(this.map);
 
+        // -- Add Highlight Event Listeners to Collections --
+        this._addHighlightEventListenersToCollection(this.#pointCollection);
+        this._addHighlightEventListenersToCollection(this.#polylineCollection);
+        this._addHighlightEventListenersToCollection(this.#labelCollection);
+        this._addHighlightEventListenersToCollection(this.#polygonCollection);
+
+        // -- Add Picker Event Listeners to Collections --
+        this._addPickerEventListenersToCollection(this.#pointCollection);
+        this._addPickerEventListenersToCollection(this.#polylineCollection);
+        this._addPickerEventListenersToCollection(this.#labelCollection);
+        this._addPickerEventListenersToCollection(this.#polygonCollection);
+
         // -- Handle Vectors Z-Index (Pane) --
         this.map.getPane('markerPane').style.zIndex = 650; // Higher than default markerPane (600)
         this.map.getPane('overlayPane').style.zIndex = 450; // Higher than default overlayPane (400)
@@ -97,14 +109,20 @@ export default class LeafletMeasure extends MeasureComponentBase {
             }
         };
 
+        // Enhance the pointMarker prototype for metadata access
+        this._enhanceLayerPrototypes(pointMarker);
+
         // Add highlight event listeners
-        this._addHighlightEventListeners(pointMarker);
+        // this._addHighlightEventListeners(pointMarker);
 
         // Add Picker event listeners
-        this._addPickerEventListeners(pointMarker);
+        // this._addPickerEventListeners(pointMarker);
 
         // Add custom event listeners
         this._addCustomEventListeners(pointMarker, listeners);
+
+        // Add right click context menu event listener
+        this._addContextMenuEventListener(pointMarker);
 
         // -- Add to the collection --
         this.#pointCollection.addLayer(pointMarker);
@@ -173,14 +191,20 @@ export default class LeafletMeasure extends MeasureComponentBase {
             }
         };
 
+        // Enhance the polyline prototype for metadata access
+        this._enhanceLayerPrototypes(polyline);
+
         // Add highlight event listeners
-        this._addHighlightEventListeners(polyline);
+        // this._addHighlightEventListeners(polyline);
 
         // Add Picker event listeners
-        this._addPickerEventListeners(polyline);
+        // this._addPickerEventListeners(polyline);
 
         // Add custom event listeners
         this._addCustomEventListeners(polyline, listeners);
+
+        // Add right click context menu event listener
+        this._addContextMenuEventListener(polyline);
 
         // -- Add to the collection --
         this.#polylineCollection.addLayer(polyline);
@@ -240,14 +264,20 @@ export default class LeafletMeasure extends MeasureComponentBase {
             }
         };
 
+        // Enhance the polygon prototype for metadata access
+        this._enhanceLayerPrototypes(polygon);
+
         // Add highlight event listeners
-        this._addHighlightEventListeners(polygon);
+        // this._addHighlightEventListeners(polygon);
 
         // Add Picker event listeners
-        this._addPickerEventListeners(polygon);
+        // this._addPickerEventListeners(polygon);
 
         // Add custom event listeners
         this._addCustomEventListeners(polygon, listeners);
+
+        // Add right click context menu event listener
+        this._addContextMenuEventListener(polygon);
 
         // -- Add to the collection --
         this.#polygonCollection.addLayer(polygon);
@@ -292,14 +322,20 @@ export default class LeafletMeasure extends MeasureComponentBase {
             }
         };
 
+        // Enhance the label prototype for metadata access
+        this._enhanceLayerPrototypes(label);
+
         // Add highlight event listeners
-        this._addHighlightEventListeners(label);
+        // this._addHighlightEventListeners(label);
 
         // Add Picker event listeners
-        this._addPickerEventListeners(label);
+        // this._addPickerEventListeners(label);
 
         // Add custom event listeners
         this._addCustomEventListeners(label, listeners);
+
+        // Add right click context menu event listener
+        this._addContextMenuEventListener(label);
 
         // -- Add to the collection --
         this.#labelCollection.addLayer(label);
@@ -327,16 +363,88 @@ export default class LeafletMeasure extends MeasureComponentBase {
         return addedLabels; // Return the array of successfully added polylines
     }
 
-    _addHighlightEventListeners(layer) {
-        if (!layer || !this.highlightHandler) return;
+    /**
+    * Enhances the prototype of a Google Maps Overlays with custom getters and setters for easier metadata access.
+    * @param {Marker|Polyline|Polygon} overlay - The Google Maps overlay instance to enhance  
+    * @returns {void}
+    * @private
+    */
+    _enhanceLayerPrototypes(overlay) {
+        // Get the actual prototype of the instance
+        const prototype = Object.getPrototypeOf(overlay);
 
-        // Highlight event listeners
-        layer.on('mouseover', (event) => {
+        // Exit if the prototype has already been enhanced to avoid redundant work
+        if (prototype.hasOwnProperty('status')) {
+            return;
+        }
+
+        // --- Define properties to be added to the prototype ---
+
+        // Getter for the entire 'feature' object
+        Object.defineProperty(prototype, 'feature', {
+            get: function () { return this._feature; },
+            set: function (value) { this._feature = value; },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter for the 'properties' object within the feature
+        Object.defineProperty(prototype, 'properties', {
+            get: function () { return this.feature?.properties; },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter/setter for 'status'
+        Object.defineProperty(prototype, 'status', {
+            get: function () {
+                return this.properties?.status;
+            },
+            set: function (newStatus) {
+                if (this.properties) {
+                    this.properties.status = newStatus;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+
+        // Getter/setter for 'storedPositions' to avoid conflict with native 'position'
+        Object.defineProperty(prototype, 'storedPositions', {
+            get: function () {
+                return this.properties?.positions;
+            },
+            set: function (newPositions) {
+                if (this.properties) {
+                    this.properties.positions = newPositions;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+    }
+
+
+    /*****************
+     * EVENT HANDLER *
+     *****************/
+    /**
+     * Adds highlight event listeners to a collection of Leaflet layers.
+     * @param {L.LayerGroup} collection - The collection of layers to add listeners to.
+     * @returns {void}
+     */
+    _addHighlightEventListenersToCollection(collection) {
+        if (!collection || !this.highlightHandler) return;
+
+        // Highlight event listeners on the entire collection
+        collection.on('mouseover', (event) => {
+            const layer = event.layer; // Get the specific layer that was hovered
             this.highlightHandler.applyHoverHighlight(layer);
             const eventData = this._createEventData(event, layer);
             this.emitter.emit('annotation-hovered-leaflet', eventData);
         });
-        layer.on('mouseout', (event) => {
+
+        collection.on('mouseout', (event) => {
             // highlightHandler's removeHoverHighlight should know which object was hovered
             this.highlightHandler.removeHoverHighlight();
             const eventData = this._createEventData(event, null);
@@ -344,15 +452,27 @@ export default class LeafletMeasure extends MeasureComponentBase {
         });
     }
 
-    _addPickerEventListeners(layer) {
-        if (!layer) return;
+    /**
+     * Adds picker event listeners to a collection of Leaflet layers.
+     * @param {L.LayerGroup} collection - The collection of layers to add listeners to.
+     * @returns {void}
+     */
+    _addPickerEventListenersToCollection(collection) {
+        if (!collection) return;
 
-        layer.on('click', (event) => {
+        collection.on('click', (event) => {
+            const layer = event.layer; // Get the specific layer that was clicked
             const eventData = this._createEventData(event, layer);
             this.emitter.emit('annotation-clicked-leaflet', eventData);
         });
     }
 
+    /**
+     * Adds custom event listeners to a Leaflet layer.
+     * @param {L.CircleMarker|L.Polyline|L.Polygon|L.Tooltip|L.Layer} layer 
+     * @param {{string: function}} listeners - An object event handlers with event names as key and corresponding callback functions as values.
+     * @returns {void}
+     */
     _addCustomEventListeners(layer, listeners) {
         if (!layer || !listeners || typeof listeners !== 'object') return;
 
@@ -368,6 +488,25 @@ export default class LeafletMeasure extends MeasureComponentBase {
     }
 
     /**
+     * Adds a context menu event listener to a Leaflet layer.
+     * Context menu refers to the right-click event in Leaflet.  
+     * @param {L.CircleMarker|L.Polyline|L.Polygon|L.Tooltip|L.Layer} layer - The Leaflet layer to add the context menu listener to.
+     * @returns {void}
+     */
+    _addContextMenuEventListener(layer) {
+        if (!layer) return;
+
+        layer.on('contextmenu', (event) => {
+            // Prevent the default browser context menu
+            L.DomEvent.preventDefault(event.originalEvent);
+            L.DomEvent.stopPropagation(event.originalEvent);
+
+            const eventData = this._createEventData(event, layer);
+            this.emitter.emit('annotation-contextmenu-leaflet', eventData);
+        });
+    }
+
+    /**
      * Normalizes a Leaflet event into a consistent format
      * @private
      * @param {L.Event} leafletEvent - The original Leaflet event
@@ -375,15 +514,14 @@ export default class LeafletMeasure extends MeasureComponentBase {
      */
     _createEventData(event, layer = null) {
         return {
-            mapPoint: event.latlng ?
-                { lat: event.latlng.lat, lng: event.latlng.lng } : null,
+            mapPoint: event.latlng ? { lat: event.latlng.lat, lng: event.latlng.lng } : null,
             screenPoint: event.containerPoint ?
                 { x: event.containerPoint.x, y: event.containerPoint.y } :
                 { x: NaN, y: NaN },
             domEvent: event.originalEvent,
             leafletEvent: event,
-            target: layer || null,
-            layer: event.layer || null
+            target: event.target || null,
+            layer: layer || null,
         };
     }
 
@@ -655,3 +793,36 @@ export default class LeafletMeasure extends MeasureComponentBase {
 }
 
 customElements.define("leaflet-measure", LeafletMeasure);
+
+
+
+/***********************
+ *  DEPRECATED METHOD  *
+ * TO BE DELETED LATER *
+ ***********************/
+// _addHighlightEventListeners(layer) {
+//     if (!layer || !this.highlightHandler) return;
+
+//     // Highlight event listeners
+//     layer.on('mouseover', (event) => {
+//         this.highlightHandler.applyHoverHighlight(layer);
+//         const eventData = this._createEventData(event, layer);
+//         this.emitter.emit('annotation-hovered-leaflet', eventData);
+//     });
+//     layer.on('mouseout', (event) => {
+//         // highlightHandler's removeHoverHighlight should know which object was hovered
+//         this.highlightHandler.removeHoverHighlight();
+//         const eventData = this._createEventData(event, null);
+//         this.emitter.emit('annotation-hovered-leaflet', eventData);
+//     });
+// }
+
+
+// _addPickerEventListeners(layer) {
+//     if (!layer) return;
+
+//     layer.on('click', (event) => {
+//         const eventData = this._createEventData(event, layer);
+//         this.emitter.emit('annotation-clicked-leaflet', eventData);
+//     });
+// }

@@ -135,6 +135,9 @@ class MeasureModeBase {
 
         // Set a default cursor (subclasses might override)
         this.inputHandler.setCursor('crosshair');
+
+        // Allow subclasses to attach map-specific listeners
+        this._attachMapSpecificListeners();
     }
 
     /**
@@ -143,8 +146,10 @@ class MeasureModeBase {
      */
     deactivate() {
         if (!this.flags.isActive) return; // Prevent double deactivation
-
         console.log(`Deactivating ${this.constructor.name} (mode: ${this.mode}).`);
+
+        // Remove map-specific listeners first
+        this._removeMapSpecificListeners();
 
         // --- Remove Common Input Handlers ---
         this.inputHandler.off('leftclick', this.handleLeftClick);
@@ -179,6 +184,7 @@ class MeasureModeBase {
     /**
      * Handles left click events. Must be implemented by subclasses.
      * @param {object} eventData - Normalized event data from InputHandler.
+     * @abstract
      */
     handleLeftClick = async (eventData) => {
         // Base implementation could check if active, otherwise throw error or log warning
@@ -190,6 +196,7 @@ class MeasureModeBase {
     /**
      * Handles mouse move events. Must be implemented by subclasses.
      * @param {object} eventData - Normalized event data from InputHandler.
+     * @abstract
      */
     handleMouseMove = async (eventData) => {
         if (!this.flags.isActive) return;
@@ -199,22 +206,53 @@ class MeasureModeBase {
         // throw new Error(`handleMouseMove must be implemented by subclass ${this.constructor.name}`);
     }
 
+    /**
+     * Handles right click events. Must be implemented by subclasses.
+     * @param {object} eventData - Normalized event data from InputHandler.
+     * @abstract
+     */
     handleRightClick = async (eventData) => {
         if (!this.flags.isActive) return;
         console.warn(`handleRightClick not implemented in ${this.constructor.name}`);
         // throw new Error(`handleRightClick must be implemented by subclass ${this.constructor.name}`);
     }
 
+    /**
+     * Handles left double click events. Must be implemented by subclasses.
+     * @param {object} eventData - Normalized event data from InputHandler.
+     * @abstract
+     */
     handleLeftDoubleClick = async (eventData) => {
         if (!this.flags.isActive) return;
         console.warn(`handleDoubleClick not implemented in ${this.constructor.name}`);
         // throw new Error(`handleDoubleClick must be implemented by subclass ${this.constructor.name}`);
     }
 
+    /**
+     * Handles middle click events. Must be implemented by subclasses.
+     * @param {object} eventData - Normalized event data from InputHandler.
+     * @abstract
+     */
     handleMiddleClick = async (eventData) => {
         if (!this.flags.isActive) return;
         console.warn(`handleMiddleClick not implemented in ${this.constructor.name}`);
         // throw new Error(`handleMiddleClick must be implemented by subclass ${this.constructor.name}`);
+    }
+
+    /**
+     * Normalizes event data from the Leaflet event to a common format.
+     * @abstract
+     */
+    _attachMapSpecificListeners() {
+        console.warn(`_attachMapSpecificListeners not implemented in ${this.constructor.name}`);
+    }
+
+    /**
+     * Removes map-specific listeners. Must be implemented by subclasses.
+     * @abstract
+     */
+    _removeMapSpecificListeners() {
+        console.warn(`_removeMapSpecificListeners not implemented in ${this.constructor.name}`);
     }
 
 
