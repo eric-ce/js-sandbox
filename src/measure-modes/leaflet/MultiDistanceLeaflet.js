@@ -57,6 +57,9 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
      */
     #pointMarkerListeners = {
         mousedown: (marker, event) => {
+            // Only handle left mouse button (button 0)
+            if (event.domEvent?.button !== 0) return;
+
             if (this.dragHandler && this.flags.isActive) {
                 // Prevent map drag, default behavior
                 event.domEvent.stopPropagation();

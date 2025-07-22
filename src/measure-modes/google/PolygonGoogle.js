@@ -61,6 +61,9 @@ class PolygonGoogle extends MeasureModeGoogle {
      */
     #markerListeners = {
         mousedown: (marker, event) => { // Use mousedown for drag
+            // Only handle left mouse button (button 0)
+            if (event.domEvent?.button !== 0) return;
+
             // Check if drag handler exists and is active
             if (this.dragHandler && this.flags.isActive) {
                 // Prevent map drag, default behavior
