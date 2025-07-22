@@ -8,11 +8,10 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
  * @property {string} id - Unique identifier for the measurement
  * @property {string} mode - Measurement mode (e.g., "distance")
  * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
  * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("leaflet")
  */
 /** 
  * @typedef NormalizedEventData
@@ -391,6 +390,11 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         this.flags.isMeasurementComplete = true;
     }
 
+
+    /**********************
+     *    RIGHT CLICK     *
+     * CONTEXT MENU EVENT *
+     **********************/
     _getModeSpecificContextMenuItems(layer) {
         const itemList = [];
         const layerType = checkLayerType(layer);
@@ -419,26 +423,6 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         }
 
         return itemList;
-    }
-
-    _resumeMeasure(pointIndex, measureData) {
-        if (measureData === undefined || pointIndex === undefined) return;
-
-        // Set the component's state to the measure being resumed
-        this.measure = measureData;
-        this.measure.status = "pending";
-        this.distances = [...this.measure._records[0].distances];
-        this.coordsCache = this.measure.coordinates;
-
-        // Determine if resuming from the start or end
-        const isFirstPoint = pointIndex === 0;
-
-        // Set flags to continue measuring
-        this.flags.isMeasurementComplete = false;
-        this.flags.isReverse = isFirstPoint;
-
-        // Optional: Add a user notification
-        showCustomNotification(`Resuming measure id: ${this.measure.id}`, this._container);
     }
 
     _getPointContextForResume(point) {
@@ -474,6 +458,27 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         return null;
     }
+
+    _resumeMeasure(pointIndex, measureData) {
+        if (measureData === undefined || pointIndex === undefined) return;
+
+        // Set the component's state to the measure being resumed
+        this.measure = measureData;
+        this.measure.status = "pending";
+        this.distances = [...this.measure._records[0].distances];
+        this.coordsCache = this.measure.coordinates;
+
+        // Determine if resuming from the start or end
+        const isFirstPoint = pointIndex === 0;
+
+        // Set flags to continue measuring
+        this.flags.isMeasurementComplete = false;
+        this.flags.isReverse = isFirstPoint;
+
+        // Optional: Add a user notification
+        showCustomNotification(`Resuming measure id: ${this.measure.id}`, this._container);
+    }
+
 
     /**
      * Removes a point marker during measurement.

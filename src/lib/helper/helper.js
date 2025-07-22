@@ -257,6 +257,147 @@ export function createExpandCollapseButton(options = {}) {
     return _createBaseButton({ ...defaults, ...options });
 }
 
+/**
+ * Creates a context menu DOM element with standard styling.
+ * @param {HTMLElement} container - The container to append the menu to
+ * @param {Object} options - Configuration options
+ * @returns {HTMLElement} The created context menu element
+ */
+export function createContextMenu(container, options = {}) {
+    const { show = false } = options;
+
+    if (!container) {
+        console.warn("Container is not provided for context menu setup.");
+        return null;
+    }
+
+    const contextMenu = document.createElement("div");
+    contextMenu.classList.add("an-context-menu");
+
+    Object.assign(contextMenu.style, {
+        background: "#fefefe",
+        border: "1px solid #ddd",
+        borderRadius: "4px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+        padding: "4px 0",
+        minWidth: "120px",
+        position: "absolute",
+        zIndex: "1000",
+        display: show ? 'block' : 'none'
+    });
+
+    container.appendChild(contextMenu);
+    return contextMenu;
+}
+
+/**
+ * Updates context menu position and content.
+ * @param {HTMLElement} contextMenu - The context menu element
+ * @param {Object} position - {x, y} position coordinates
+ * @param {Array} itemOptions - Menu item configurations
+ */
+export function updateContextMenu(contextMenu, position, itemOptions = []) {
+    if (!contextMenu || !position.x || !position.y) return;
+
+    // Update position
+    contextMenu.style.left = `${position.x}px`;
+    contextMenu.style.top = `${position.y}px`;
+    contextMenu.style.display = 'block';
+
+    // Clear existing content
+    const existingList = contextMenu.querySelector("ul");
+    if (existingList) existingList.remove();
+
+    // Create new menu list
+    const menuList = createMenuList(itemOptions);
+    contextMenu.appendChild(menuList);
+
+    // Auto-close on click elsewhere
+    setTimeout(() => document.addEventListener('click', () => hideContextMenu(contextMenu), { once: true }), 0);
+}
+
+/**
+ * Hides the context menu.
+ * @param {HTMLElement} contextMenu - The context menu element
+ */
+export function hideContextMenu(contextMenu) {
+    if (contextMenu) {
+        contextMenu.style.display = 'none';
+    }
+}
+
+/**
+ * Creates a menu list with items.
+ * @param {Array} itemOptions - Menu item configurations
+ * @returns {HTMLElement} The menu list element
+ * @private
+ */
+function createMenuList(itemOptions) {
+    const menuList = document.createElement("ul");
+    menuList.className = "an-context-menu-list";
+    Object.assign(menuList.style, {
+        listStyle: "none",
+        margin: "0",
+        padding: "0"
+    });
+
+    itemOptions.forEach(item => {
+        const menuItem = createMenuItem(item);
+        menuList.appendChild(menuItem);
+    });
+
+    // Remove border from last item
+    if (menuList.lastElementChild) {
+        menuList.lastElementChild.style.borderBottom = "none";
+    }
+
+    return menuList;
+}
+
+/**
+ * Creates a single menu item.
+ * @param {Object} item - Menu item configuration
+ * @returns {HTMLElement} The menu item element
+ * @private
+ */
+function createMenuItem(item) {
+    const menuItem = document.createElement("li");
+    menuItem.classList.add("an-context-menu-list-item");
+    menuItem.textContent = item.text;
+
+    Object.assign(menuItem.style, {
+        padding: "8px 12px",
+        cursor: "pointer",
+        borderBottom: "1px solid #eee",
+        transition: "background-color 0.3s ease"
+    });
+
+    // Add hover effects
+    menuItem.addEventListener("mouseenter", () => {
+        menuItem.style.backgroundColor = "#ece5e5";
+    });
+    menuItem.addEventListener("mouseleave", () => {
+        menuItem.style.backgroundColor = "transparent";
+    });
+
+    // Click event handler - FIXED: Hide menu after executing item action
+    menuItem.addEventListener("click", event => {
+        event.stopPropagation();
+        event.preventDefault();
+
+        // Execute the menu item action
+        item.event(event);
+
+        // Hide the context menu after item execution
+        const contextMenu = event.target.closest('.an-context-menu');
+        if (contextMenu) {
+            hideContextMenu(contextMenu);
+        }
+    });
+
+    return menuItem;
+}
+
 
 /***********************************
  *        UTILITY FUNCTIONS        *

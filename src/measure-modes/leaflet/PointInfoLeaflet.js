@@ -7,11 +7,10 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.js";
  * @property {string} id - Unique identifier for the measurement
  * @property {string} mode - Measurement mode (e.g., "distance")
  * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
  * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("leaflet")
  */
 /** 
  * @typedef NormalizedEventData
@@ -56,28 +55,13 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      */
     #markerListeners = {
         mousedown: (marker, event) => {
-            if (event.domEvent) {
-                // MIDDLE CLICK EVENT: Check for middle mouse button (button === 1)
-                if (event.domEvent.button === 1) {
-                    // Prevent map drag, default behavior
-                    event.domEvent.stopPropagation();
-                    event.domEvent.preventDefault();
+            if (this.dragHandler && this.flags.isActive) {
+                // Prevent map drag, default behavior
+                event.domEvent?.stopPropagation();
+                event.domEvent?.preventDefault();
 
-                    this.map?.dragging.disable();
-                    this._removePointInfo(marker); // Call removePointInfo for middle click
-                    this.map?.dragging.enable();
-                }
-                // LEFT DOWN EVENT: Check for left mouse button (button === 0) for dragging
-                else if (event.domEvent.button === 0) {
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent?.stopPropagation();
-                        event.domEvent?.preventDefault();
-
-                        // Tell the drag handler to start dragging this specific marker
-                        this.dragHandler._handleDragStart(marker, event);
-                    }
-                }
+                // Tell the drag handler to start dragging this specific marker
+                this.dragHandler._handleDragStart(marker, event);
             }
         }
     };

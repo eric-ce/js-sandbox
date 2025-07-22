@@ -29,15 +29,13 @@ import { makeDraggable, formatMeasurementValue } from "../lib/helper/helper.js";
 
 /**
  * @typedef MeasurementGroup
- * @property {{labels: [], markers: [], polygon: object, polylines: []}} annotations
  * @property {string} id - Unique identifier for the measurement
  * @property {string} mode - Measurement mode (e.g., "distance")
  * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
  * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name
  */
 
 /** @typedef {import('../lib/data/DataPool.js').DataPool} DataPool */
@@ -789,6 +787,8 @@ export class MeasureComponentBase extends HTMLElement {
                 this.instructionsTable._enableDragging();   // Enable dragging with built-in resize handling
                 this.dataLogTable._enableDragging();   // Enable dragging with built-in resize handling
             });
+
+            return instance; // Return the activated instance
         } catch (error) {
             console.error(`Error activating mode ${modeId}:`, error);
             this._resetModeState();
@@ -1182,6 +1182,14 @@ export class MeasureComponentBase extends HTMLElement {
 
         // Start processing the first batch
         processNextBatch();
+    }
+
+    /**
+     * Gets the currently active mode instance.
+     * @returns {Object|null} The active mode instance
+     */
+    getActiveModeInstance() {
+        return this.activeModeInstance; // or however you store the current mode instance
     }
 
 

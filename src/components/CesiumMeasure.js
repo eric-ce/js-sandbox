@@ -68,8 +68,6 @@ export default class CesiumMeasure extends MeasureComponentBase {
         // setup moving dot with mouse
         // const pointer = createPointerOverlay(this.map.container);
         // this.stateManager.setOverlayState("pointer", pointer);
-
-        // TODO: pick object to display data in the info table
     }
 
 

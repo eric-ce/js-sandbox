@@ -8,11 +8,10 @@ import { deconstructIdForMetadata, formatMeasurementValue, showCustomNotificatio
  * @property {string} id - Unique identifier for the measurement
  * @property {string} mode - Measurement mode (e.g., "distance")
  * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
  * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("leaflet")
  */
 
 /** @typedef {import('../../lib/data/DataPool.js').DataPool} DataPool */
@@ -31,6 +30,8 @@ import { deconstructIdForMetadata, formatMeasurementValue, showCustomNotificatio
  * Common shared helper function should be declared in `leafletHelper.js`, This is mainly for logic override when needed.
  */
 class MeasureModeLeaflet extends MeasureModeBase {
+    contextMenu;
+
     /**
      * @param {string} modeName - The name of the mode 
      * @param {LeafletInputHandler} inputHandler 
@@ -45,6 +46,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
 
         this.contextMenu = this._setupContextMenu(this._container, { show: false });
     }
+
 
     /*******************
      * OVERRIDE METHOD *

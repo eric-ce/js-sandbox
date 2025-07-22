@@ -67,13 +67,8 @@ class MeasureModeCesium extends MeasureModeBase {
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
-        // Find existing context menu first if it exists reuse it if not create a new one
-        this.contextMenu = this.stateManager.getElementState("contextMenu");
-        if (!this.contextMenu) {
-            this.contextMenu = this._setupContextMenu(this._container, { show: false });
-        }
         // Initialize context menu - default to hidden
-        // this.contextMenu = this._setupContextMenu(this._container, { show: false });
+        this.contextMenu = this._setupContextMenu(this._container, { show: false });
     }
 
 
@@ -439,6 +434,8 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // copy to clipboard
         navigator.clipboard.writeText(textToCopy)
+
+        showCustomNotification(`Copied coordinate: ${textToCopy}`, this._container);
 
         return textToCopy;
     }
