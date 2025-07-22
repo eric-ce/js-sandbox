@@ -76,13 +76,13 @@ export class GoogleMapsInputHandler {
 
             // --- IMPORTANT ---
             // If the original eventType was 'middleclick', the callback MUST check eventData.domEvent.button
-            if (eventType.toLowerCase() === 'middleclick') {
-                if (eventData.domEvent?.button !== 1) {
-                    return; // Not actually a middle button event, so don't call the user's callback
-                }
-                // Optional: Prevent default middle-click behavior (like autoscroll/panning)
-                eventData.domEvent?.preventDefault();
-            }
+            // if (eventType.toLowerCase() === 'middleclick') {
+            //     if (eventData.domEvent?.button !== 1) {
+            //         return; // Not actually a middle button event, so don't call the user's callback
+            //     }
+            //     // Optional: Prevent default middle-click behavior (like autoscroll/panning)
+            //     eventData.domEvent?.preventDefault();
+            // }
             // --- END IMPORTANT ---
 
 

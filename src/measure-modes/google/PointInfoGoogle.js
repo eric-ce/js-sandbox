@@ -17,9 +17,8 @@ import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
  * @property {string} id - Unique identifier for the measurement
  * @property {string} mode - Measurement mode (e.g., "distance")
  * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
  * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
  * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
  */
@@ -52,29 +51,18 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @private
      */
     #markerListeners = {
-        mousedown: (marker, event) => { // Use mousedown for both drag and middle-click
-            if (event.domEvent) {
-                // MIDDLE CLICK EVENT: Check for middle mouse button (button === 1)
-                if (event.domEvent.button === 1) {
-                    // Prevent map drag, default behavior
-                    event.domEvent.stopPropagation();
-                    event.domEvent.preventDefault();
+        mousedown: (marker, event) => {
+            // Check if drag handler exists and is active
+            if (this.dragHandler && this.flags.isActive) {
+                // Prevent map drag, default behavior
+                event.domEvent.stopPropagation();
+                event.domEvent.preventDefault();
 
-                    this._removePointInfo(marker); // Call removePointInfo for middle click
-                }
-                // LEFT DOWN EVENT: Check for left mouse button (button === 0) for dragging
-                else if (event.domEvent.button === 0) {
-                    if (this.dragHandler && this.flags.isActive) {
-                        // Prevent map drag, default behavior
-                        event.domEvent.stopPropagation();
-                        event.domEvent.preventDefault();
-
-                        this.dragHandler._handleDragStart(marker, event); // Tell the drag handler to start dragging this specific marker
-                    }
-                }
+                // Tell the drag handler to start dragging this specific marker
+                this.dragHandler._handleDragStart(marker, event);
             }
         }
-    };
+    }
 
 
     /**
@@ -110,6 +98,10 @@ class PointInfoGoogle extends MeasureModeGoogle {
      **********/
     get interactiveAnnotations() {
         return this.#interactiveAnnotations;
+    }
+
+    get coordinate() {
+        return this.#coordinate;
     }
 
 
@@ -206,36 +198,6 @@ class PointInfoGoogle extends MeasureModeGoogle {
         if (this.#coordinateInfoOverlay) { // Still check if overlay exists before update - defensive programming
             this.updateCoordinateInfoOverlay(this.#coordinate, screenPoint);
         }
-    }
-
-    /**
-     * To remove a point marker and its associated label.
-     * @param {google.maps.Marker} marker - The marker to remove. 
-     * @returns {null|void} - Returns null if the marker is not found, otherwise returns void.
-     */
-    _removePointInfo(marker) {
-        // Get the measure id
-        const idParts = marker.id.split("_");
-        const measureId = idParts.slice(-1)[0]; // Extract the measure ID from the marker ID
-
-        // -- Confirm deletion --
-        // Use js confirm dialog to confirm deletion
-        const confirmDelete = window.confirm(`Do you want to delete this point at measure id ${measureId}?`);
-        if (!confirmDelete) return;
-
-        // -- Remove point --
-        this.drawingHelper._removePointMarker(marker);
-
-        // -- Remove label --
-        const labelToRemove = this.labelCollection.find(label => label.id.includes(measureId));
-        if (!labelToRemove) return null;
-        this.drawingHelper._removeLabel(labelToRemove);
-
-        // -- Remove data --
-        dataPool.removeMeasureById(measureId); // Remove data from data pool
-
-        // -- Show notification --
-        showCustomNotification(`removed point, id ${measureId}`, this._container);
     }
 
 

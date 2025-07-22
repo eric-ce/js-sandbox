@@ -22,9 +22,8 @@ import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng
  * @property {string} id - Unique identifier for the measurement
  * @property {string} mode - Measurement mode (e.g., "distance")
  * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
  * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
+ * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
  * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
  * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
  */
@@ -109,9 +108,9 @@ class PolygonGoogle extends MeasureModeGoogle {
         return this.#interactiveAnnotations;
     }
 
-    // get coordinate() {
-    //     return this.#coordinate;
-    // }
+    get coordinate() {
+        return this.#coordinate;
+    }
 
 
     /******************

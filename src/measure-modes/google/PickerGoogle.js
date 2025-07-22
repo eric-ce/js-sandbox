@@ -7,7 +7,7 @@ import { MeasureModeGoogle } from "./MeasureModeGoogle.js";
  * @property {object} domEvent - The original DOM event
  * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
  * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
- * @property {google.maps.Marker|google.maps.Polyline|google.maps.Polygon} annotation - The annotation graphics object
+ * @property {google.maps.Marker|google.maps.Polyline|google.maps.Polygon|null} overlay - The annotation graphics object
  */
 
 class PickerGoogle extends MeasureModeGoogle {
@@ -31,10 +31,11 @@ class PickerGoogle extends MeasureModeGoogle {
     }
 
     /**
-     * Activates the picker mode and sets up event listeners.
+     * Attach Leaflet-specific event listeners.
+     * @override
      */
-    activate() {
-        super.activate();
+    _attachMapSpecificListeners() {
+        super._attachMapSpecificListeners();
 
         this.inputHandler.off('leftclick', this.handleLeftClick);
         this.inputHandler.off('mousemove', this.handleMouseMove);
@@ -47,16 +48,17 @@ class PickerGoogle extends MeasureModeGoogle {
     }
 
     /**
-     * Deactivates the picker mode and cleans up event listeners.
+     * Remove Leaflet-specific event listeners.
+     * @override
      */
-    deactivate() {
+    _removeMapSpecificListeners() {
         // Remove emitter listeners when picker is deactivated
         if (this.emitter) {
             this.emitter.off('annotation-clicked-google', this.handleLeftClick);
             this.emitter.off('annotation-hovered-google', this.handleMouseMove);
         }
 
-        super.deactivate();
+        super._removeMapSpecificListeners();
     }
 
 
@@ -69,10 +71,10 @@ class PickerGoogle extends MeasureModeGoogle {
      * @returns {Promise<void>}
      */
     handleLeftClick = async (eventData) => {
-        const { annotation } = eventData;
-        if (!annotation) return;
+        const { overlay } = eventData;
+        if (!overlay) return;
 
-        const { id: pickedObjectId } = annotation;
+        const { id: pickedObjectId } = overlay;
         if (!pickedObjectId || typeof pickedObjectId !== 'string') return;
 
         const [annotationType, pickedObjectMode, pickedObjectType] = pickedObjectId.split('_');
@@ -108,7 +110,7 @@ class PickerGoogle extends MeasureModeGoogle {
             this._hideModeOverlay();
             return;
         }
-        const [annotate, pickedObjectMode] = pickedObjectId.split('_');
+        const [_, pickedObjectMode] = pickedObjectId.split('_');
         if (!pickedObjectMode) {
             this._hideModeOverlay();
             return;

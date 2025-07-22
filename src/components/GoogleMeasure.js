@@ -53,22 +53,6 @@ export default class GoogleMeasure extends MeasureComponentBase {
         return this.#polygonCollection;
     }
 
-    _initializeMapSpecifics() {
-        this._setupDataLayer();
-    }
-
-    /**
-     * Sets up the Google Maps Data Layer for managing features.
-     * @private
-     */
-    _setupDataLayer() {
-        if (!this.map) return;
-
-        // Create a new data layer and set it on the map
-        this.dataLayer = new google.maps.Data();
-        this.dataLayer.setMap(this.map);
-    }
-
 
     /*****************
      * FIND GRAPHICS *
@@ -233,45 +217,6 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * CREATE ANNOTATION FEATURE *
      *****************************/
     /**
-     * Adds a point feature to the data layer.
-     * @param {{lat: number, lng: number}} position - The position where the point will be added.
-     * @param {object} [options={}] - Optional configuration for the point feature.
-     * @returns {google.maps.Data.Feature|null} The created data feature or null on failure.
-     * @private
-     */
-    _addDataPoint(position, options = {}) {
-        if (!this.dataLayer || !position) return null;
-
-        const {
-            id = null,
-            status = null,
-            // listeners are handled at the data layer level, not per feature
-        } = options;
-
-        try {
-            const feature = new google.maps.Data.Feature({
-                id,
-                geometry: new google.maps.Data.Point(position),
-                properties: {
-                    type: "annotation",
-                    mapName: this.mapName,
-                    status,
-                    positions: [{ ...position }],
-                    ...(id && deconstructIdForMetadata(id)),
-                }
-            });
-
-            // The data layer will return an array of features added.
-            const [addedFeature] = this.dataLayer.add(feature);
-
-            return addedFeature;
-        } catch (error) {
-            console.error("GoogleMeasure: Error in _addDataPoint:", error);
-            return null;
-        }
-    }
-
-    /**
      * Adds a point marker to the map at the specified position.
      * @param {{lat:number,lng:number}} position - The position where the marker will be added
      * @param {object} [options={}] - Optional configuration for the marker
@@ -293,7 +238,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             if (!point) return null;
 
             // Enhance overlay prototype for metadata retrieval
-            this._enhancePrimitivePrototypes(point);
+            this._enhanceOverlayPrototypes(point);
 
             // Store metadata in the overlay
             point.feature = {
@@ -316,10 +261,13 @@ export default class GoogleMeasure extends MeasureComponentBase {
             // Add custom event listeners
             this._addCustomEventListeners(point, listeners);
 
+            // Add context menu event listener
+            this._addContextMenuEventListener(point);
+
             // Store the point in the collection
             this.#pointCollection.push(point);
 
-            this._enhancePrimitivePrototypes(point); // Enhance the prototype for additional properties
+            this._enhanceOverlayPrototypes(point); // Enhance the prototype for additional properties
 
             return point;
         } catch (error) {
@@ -366,7 +314,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             if (!polyline) return null;
 
             // Enhance overlay prototype for metadata retrieval
-            this._enhancePrimitivePrototypes(polyline);
+            this._enhanceOverlayPrototypes(polyline);
 
             // Store metadata in the overlay
             polyline.feature = {
@@ -388,6 +336,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             // Add custom event listeners
             this._addCustomEventListeners(polyline, listeners);
+
+            // Add context menu event listener
+            this._addContextMenuEventListener(polyline)
 
             // Store the polyline in the collection
             this.#polylineCollection.push(polyline);
@@ -445,7 +396,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
             if (!label) return null;
 
             // Enhance overlay prototype for metadata retrieval
-            this._enhancePrimitivePrototypes(label);
+            this._enhanceOverlayPrototypes(label);
 
             // Store metadata in the overlay
             label.feature = {
@@ -467,6 +418,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             // Add custom event listeners
             this._addCustomEventListeners(label, listeners);
+
+            // Add context menu event listener
+            this._addContextMenuEventListener(label);
 
             // Store the label in the collection
             this.#labelCollection.push(label);
@@ -529,7 +483,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             // -- Handle metadata --
             // Enhance overlay prototype for metadata retrieval
-            this._enhancePrimitivePrototypes(polygon);
+            this._enhanceOverlayPrototypes(polygon);
 
             // Store metadata in the overlay
             polygon.feature = {
@@ -552,6 +506,9 @@ export default class GoogleMeasure extends MeasureComponentBase {
             // Add custom event listeners
             this._addCustomEventListeners(polygon, listeners);
 
+            // Add context menu event listener
+            this._addContextMenuEventListener(polygon);
+
             // Store the polygon in the collection
             this.#polygonCollection.push(polygon);
 
@@ -568,7 +525,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @returns {void}
      * @private
      */
-    _enhancePrimitivePrototypes(overlay) {
+    _enhanceOverlayPrototypes(overlay) {
         // Get the actual prototype of the instance
         const prototype = Object.getPrototypeOf(overlay);
 
@@ -679,11 +636,26 @@ export default class GoogleMeasure extends MeasureComponentBase {
         for (const eventName in listeners) {
             if (typeof listeners[eventName] === 'function') {
                 overlay.addListener(eventName, (event) => {
-                    const eventData = this._createEventData(event);
+                    const eventData = this._createEventData(event, overlay);
                     listeners[eventName](overlay, eventData);
                 });
             }
         }
+    }
+
+    /**
+     * Adds a context menu event listener to a Google overlay.
+     * Context menu refers to the right-click event in Google Maps.
+     * @param {google.maps.Marker|google.maps.Polyline|google.maps.Polygon} overlay - The Google overlay to add the context menu listener to.
+     * @returns {void}
+     */
+    _addContextMenuEventListener(overlay) {
+        if (!overlay) return;
+
+        overlay.addListener('rightclick', (event) => {
+            const eventData = this._createEventData(event, overlay);
+            this.emitter.emit('annotation-contextmenu-google', eventData);
+        });
     }
 
     /**
@@ -693,12 +665,12 @@ export default class GoogleMeasure extends MeasureComponentBase {
      * @returns {object} Normalized event data
      * @private
      */
-    _createEventData(event, annotation = null) {
+    _createEventData(event, overlay = null) {
         return {
             mapPoint: event.latLng ? { lat: event.latLng.lat(), lng: event.latLng.lng() } : null,
             screenPoint: this._getContainerRelativeCoords(event.domEvent),
             domEvent: event.domEvent,
-            annotation
+            overlay,
         };
     }
 
