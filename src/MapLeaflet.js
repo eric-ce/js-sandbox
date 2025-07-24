@@ -1,6 +1,6 @@
 import L from "leaflet";
-import { mapStyle } from "./styles/mapStyle";
-import { MeasureToolbox } from "./components/MeasureToolbox";
+import { mapStyle } from "./styles/mapStyle.js";
+import { MeasureToolbox } from "./components/MeasureToolbox.js";
 export default class MapLeaflet extends HTMLElement {
     constructor() {
         super();
@@ -139,7 +139,9 @@ export default class MapLeaflet extends HTMLElement {
         if (!this.map) return; // Return if map is not initialized
 
         const measureToolbox = new MeasureToolbox(this.app, this.type);
+
         measureToolbox.leafletMap = this.map;
+
         return measureToolbox;
     }
 }

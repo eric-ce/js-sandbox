@@ -3,9 +3,9 @@ import {
     defined,
     SceneTransforms,
 } from "cesium";
-import { areCoordinatesEqual, convertToCartographicDegrees, editableLabel, getRankedPickedObjectType, updatePointerOverlay } from "../../lib/helper/cesiumHelper";
+import { areCoordinatesEqual, convertToCartographicDegrees, editableLabel, getRankedPickedObjectType, updatePointerOverlay } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
-import { MeasureModeCesium } from "./MeasureModeCesium";
+import { MeasureModeCesium } from "./MeasureModeCesium.js";
 import { deconstructIdForMetadata } from "../../lib/helper/helper.js";
 
 // -- Cesium types --

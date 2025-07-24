@@ -1,4 +1,4 @@
-import { checkOverlayType } from "../helper/googleHelper";
+import { checkOverlayType } from "../helper/googleHelper.js";
 
 /**
  * @typedef NormalizedEventData

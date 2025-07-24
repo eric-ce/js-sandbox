@@ -240,11 +240,12 @@ export class MapCesium extends HTMLElement {
             Primitive,
             LabelCollection,
             GroundPolylinePrimitive,
-            PolylineCollection,
         }
         const measureToolbox = new MeasureToolbox(this.app, this.type);
+
         measureToolbox.viewer = this.viewer;
         measureToolbox.cesiumPkg = cesiumPkg;
+
         return measureToolbox;
     }
 }

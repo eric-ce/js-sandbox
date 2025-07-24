@@ -1,4 +1,4 @@
-import { checkLayerType } from "../helper/leafletHelper";
+import { checkLayerType } from "../helper/leafletHelper.js";
 
 class LeafletHighlightHandler {
     #hoveredObject = null;

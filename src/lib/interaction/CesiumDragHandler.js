@@ -1,6 +1,6 @@
 import { Cartesian2, Cartesian3, Color, defined } from "cesium";
 import dataPool from "../data/DataPool.js";
-import { convertToCartesian3, getPrimitiveByPointPosition } from "../helper/cesiumHelper";
+import { convertToCartesian3, getPrimitiveByPointPosition } from "../helper/cesiumHelper.js";
 
 
 // --Cesium types --
