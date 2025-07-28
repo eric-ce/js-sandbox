@@ -104,6 +104,10 @@ class PointInfoCesium extends MeasureModeCesium {
         return this.#interactiveAnnotations;
     }
 
+    get coordinate() {
+        return this.#coordinate;
+    }
+
 
     /**********************
      *   EVENT HANDLER    *
@@ -269,54 +273,7 @@ class PointInfoCesium extends MeasureModeCesium {
      * @returns {Void}
      */
     handleRightClick = async (eventData) => {
-        // -- Handle Picked Object Priority -- 
-        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
-
-
-        // If no picked object, exit early
-        if (!pickedObjectType) return;
-
-        // -- Handle picked object context menu --
-        if (pickedObject && pickedObjectType && this.coordsCache.length === 0) {
-            const items = this._getContextMenuItemsForAnnotation(pickedObject, pickedObjectType);
-            if (items.length === 0) return; // error handling - If no items to show, exit
-
-            // -- Update the context menu with the items --
-            this._updateContextMenu(this._container, eventData.screenPoint, items);
-        }
-    }
-
-    _getContextMenuItemsForAnnotation(pickedObject, pickedObjectType) {
-        // Validate the picked object and type
-        if (!pickedObject) {
-            return [];
-        }
-
-        const itemList = [];
-
-        // Copy coordinate action
-        const coordinateItem = {
-            text: "Copy Coordinate",
-            event: () => { this._copyCoordinateToClipboard(this.#coordinate) }
-        }
-        // Remove primitive set action
-        const removePrimitiveSetItem = {
-            text: "Remove Primitive Set",
-            event: () => { this._removePrimitiveSet(pickedObject.primitive) }
-        }
-        itemList.push(coordinateItem, removePrimitiveSetItem); // Add common actions
-
-        // Handle specific actions based on the picked object type
-        switch (pickedObjectType) {
-            case "label":
-                const label = pickedObject.primitive;
-                itemList.push({ text: "Edit label", event: () => { editableLabel(this._container, label) } });
-                break;
-            default:
-                break;
-        }
-
-        return itemList;
+        await super.handleRightClick(eventData); // Call the super method to handle right-click
     }
 
 
@@ -535,7 +492,7 @@ class PointInfoCesium extends MeasureModeCesium {
 
         // Reset variables
         this.coordsCache = [];
-        this.coordinate = null;
+        this.#coordinate = null;
         this.#interactiveAnnotations.labels = [];
 
         // Reset the measure data

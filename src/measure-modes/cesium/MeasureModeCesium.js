@@ -1,9 +1,9 @@
 import { Cartesian3 } from "cesium";
 import { MeasureModeBase } from "../MeasureModeBase.js";
-import { areCoordinatesEqual, calculateMiddlePos, convertToCartesian3, convertToCartographicDegrees, createPointerOverlay } from "../../lib/helper/cesiumHelper.js";
+import { areCoordinatesEqual, calculateMiddlePos, convertToCartesian3, convertToCartographicDegrees, createPointerOverlay, editableLabel, getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.js";
 import dataPool from "../../lib/data/DataPool.js";
 import { Chart } from "chart.js/auto";
-import { createCloseButton, deconstructIdForMetadata, makeDraggable, showCustomNotification } from "../../lib/helper/helper.js";
+import { createCloseButton, createContextMenu, deconstructIdForMetadata, hideContextMenu, makeDraggable, showCustomNotification, updateContextMenu } from "../../lib/helper/helper.js";
 import { closeIconBlack } from "../../assets/icons.js";
 
 // Cesium types
@@ -68,7 +68,8 @@ class MeasureModeCesium extends MeasureModeBase {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
         // Initialize context menu - default to hidden
-        this.contextMenu = this._setupContextMenu(this._container, { show: false });
+        this.contextMenu = createContextMenu(this._container, { show: false });
+        this.stateManager.setElementState("contextMenu", this.contextMenu);
     }
 
 
@@ -334,14 +335,137 @@ class MeasureModeCesium extends MeasureModeBase {
      *                     COMMON FEATURE                      *
      * THE STANDALONE FEATURE OR SERIES METHOD FORMS A FEATURE *
      ***********************************************************/
-    _setupPointerOverlay() {
-        // update pointerOverlay: the moving dot with mouse
-        let pointerElement = this.stateManager.getOverlayState("pointer");
-        if (!pointerElement) {
-            pointerElement = createPointerOverlay(this._container); // Create pointer overlay if not exists
+    /*************************
+     * CONTEXT MENU FEATURES *
+     *************************/
+    /**
+    * Handle right click on the map.
+    * To Hide the context menu if right click at empty space on the map
+    * @override
+    */
+    async handleRightClick(eventData) {
+        // -- Handle Picked Object Priority -- 
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, null);
+
+        // -- Handle not picked object --
+        if (!pickedObjectType || !pickedObject || pickedObject?.primitive?.feature?.properties?.status !== "completed") {
+            // Finish the measurement if it has finishMeasure method
+            if (typeof this._finishMeasure === "function") {
+                this._finishMeasure();
+            }
+
+            // Hide the context menu
+            if (this.contextMenu) {
+                this._setContextMenuVisibility(false);
+            }
+
+            return;  // Exit to skip the rest of the logic
         }
-        this.stateManager.setOverlayState("pointer", pointerElement);
-        return pointerElement;
+
+        // -- Handle context menu of picked object  --
+        // If a picked object is found, show the context menu with options
+        if (pickedObjectType && pickedObject) {
+            const items = this._getContextMenuItemsForAnnotation(pickedObject, pickedObjectType);
+            if (!Array.isArray(items) || items.length === 0) {
+                this._setContextMenuVisibility(false);
+                return; // If no items to show, exit
+            }
+
+            // -- Update the context menu with the items --
+            this._updateContextMenu(this._container, eventData.screenPoint, items);
+        }
+    }
+
+    _getContextMenuItemsForAnnotation(pickedObject, pickedObjectType) {
+        // Validate the picked object and type
+        if (!pickedObject) {
+            return [];
+        }
+
+        // -- Common actions --
+        const commonItems = [
+            {
+                text: "Copy Coordinate",
+                event: () => { this._copyCoordinateToClipboard(this.coordinate); }
+            },
+            {
+                text: "Remove Primitive Set",
+                event: () => { this._removePrimitiveSet(pickedObject.primitive); }
+            }
+        ];
+
+        // -- Get the picked object mode --
+        // Determine the pickedObject mode from its properties metadata or ID
+        let pickedObjectMode = null;
+        if (pickedObject?.feature?.properties?.mode) {
+            pickedObjectMode = pickedObject.feature.properties.mode;
+        } else if (pickedObject?.id?.startsWith('annotate_')) {
+            pickedObjectMode = pickedObject.id.split('_')[1];
+        }
+
+        // Modes that support advanced actions
+        const advancedAnnotationModes = [
+            'multi-distances',
+            'multi-distances-clamped',
+            'profile-distances'
+        ];
+
+        const additionalItems = [];
+
+        // AdvancedAnnotationModes handle its own context menu items
+        if (advancedAnnotationModes.includes(pickedObjectMode)) {
+            const modeInstance = this.drawingHelper.getModeInstanceByName(pickedObjectMode)
+            if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
+            console.log("current mode:", this.drawingHelper.getActiveModeInstance());
+            console.log(this.mode)
+            // Let the mode instance handle its own context menu items
+            const itemList = modeInstance._getContextMenuAdditionalItems(pickedObject, pickedObjectType);
+            additionalItems.push(...itemList);  // Add the items from the mode instance
+        }
+
+        // Handle specific actions based on the picked object type
+        switch (pickedObjectType) {
+            case "label":
+                const label = pickedObject.primitive;
+                additionalItems.push({ text: "Edit label", event: () => { editableLabel(this._container, label) } });
+                break;
+            case "line":
+                break;
+            case "point":
+                break;
+            default:
+                break;
+        }
+
+        return [...commonItems, ...additionalItems];
+    }
+
+    /**
+     * Get or set the mode instance for a given mode name.
+     * This method match this.mode with the modeName to see if the mode is already active.
+     * If the mode is already active, it retrieves the instance of the active mode.
+     * otherwise it activates the mode and returns the mode instance.
+     * @param {string} modeName  - The name of the mode to get or set.
+     * @returns {Object|null} - The mode instance or null if invalid.
+     */
+    _getOrSetModeInstance(modeName) {
+        // Validate param
+        if (typeof modeName !== "string") return null;
+
+        // Check if the mode is already active
+        const currentActiveModeInstance = this.drawingHelper.getActiveModeInstance();
+        if (!currentActiveModeInstance) return null;
+
+        const currentActiveModeName = currentActiveModeInstance.mode;
+        const isAlreadyInMode = currentActiveModeName === modeName;
+
+        // -- Handle mode activation --
+        // If already in the mode, get the instance
+        if (isAlreadyInMode) {
+            return currentActiveModeInstance; // Return the current active mode instance
+        } else {  // Otherwise, activate the mode
+            return this.drawingHelper._activateMode(modeName) || null;
+        }
     }
 
     /**
@@ -442,23 +566,29 @@ class MeasureModeCesium extends MeasureModeBase {
 
     _setAddModeByLine(linePrimitive) {
         // Validate input parameters
-        if (!linePrimitive || linePrimitive.feature?.properties?.status === "moving") return;
+        if (!linePrimitive || linePrimitive?.feature?.properties?.status === "moving") return;
 
         // -- Set measure id --
         const measureId = Number(linePrimitive.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
 
         // -- User confirmation --
-        const userConfirmation = window.confirm(`Do you want to add a new point to this line segment? Measure id: ${measureId}`);
-        if (!userConfirmation) return; // If the user does not confirm, exit
+        // const userConfirmation = window.confirm(`Do you want to add a new point to this line segment? Measure id: ${measureId}`);
+        // if (!userConfirmation) return; // If the user does not confirm, exit
 
         // Set the measure data
-        this.measure = this._findMeasureById(measureId);
-        if (!this.measure) return; // If the measure is not found, exit
-        this.coordsCache = this.measure.coordinates;
-        this.distances = [...this.measure._records[0].distances]; // Get the distances from the measure data
+        const measureData = this._findMeasureById(measureId);
+        if (!measureData) return; // If the measure is not found, exit
+        measureData.status = "pending"; // Set the measure status to pending
+
+        // Set relevant properties of the mode instance by measureData 
+        this.measure = measureData; // Set the measure data to the mode instance
+        this.coordsCache = measureData.coordinates; // Set the coordsCache to the measure coordinates
+        this.distances = [...measureData._records[0].distances]; // Get the distances from the measure data
 
         // Update measure data and dataPool
-        this.measure.status = "pending"; // Set the measure status to pending
+        // modeInstance.measure.status = "pending"; // Set the measure status to pending
+
+        // Update data pool with the measure data (to update the specific data status)
         dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Set flags for add mode
@@ -557,6 +687,15 @@ class MeasureModeCesium extends MeasureModeBase {
         this.flags.isMeasurementComplete = true; // Set the measurement as complete
     }
 
+    _setupPointerOverlay() {
+        // update pointerOverlay: the moving dot with mouse
+        let pointerElement = this.stateManager.getOverlayState("pointer");
+        if (!pointerElement) {
+            pointerElement = createPointerOverlay(this._container); // Create pointer overlay if not exists
+        }
+        this.stateManager.setOverlayState("pointer", pointerElement);
+        return pointerElement;
+    }
 
     /**************************
      * CHART FEATURE SPECIFIC *
@@ -750,46 +889,9 @@ class MeasureModeCesium extends MeasureModeBase {
     }
 
 
-    /*************************
-     * CONTEXT MENU SPECIFIC *
-     *************************/
-    // TODO: new feature: context menu to replace complicated left or middle click events
-    _setupContextMenu(container, options = {}) {
-        const {
-            show = true,
-        } = options;
-
-        if (!container) {
-            console.warn("Container is not provided for context menu setup.");
-            return;
-        }
-
-        // Create the context menu element
-        this.contextMenu = document.createElement("div");
-        this.contextMenu.classList.add("an-context-menu");
-
-        // Apply styles directly to the element
-        Object.assign(this.contextMenu.style, {
-            background: "#fefefe",
-            border: "1px solid #ddd",
-            borderRadius: "4px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            padding: "4px 0",
-            minWidth: "120px",
-            position: "absolute",
-            zIndex: "1000"
-        });
-
-        // Append the context menu to the specified container
-        container.appendChild(this.contextMenu);
-
-        // Store to the state manager for later use
-        this.stateManager.setElementState("contextMenu", this.contextMenu);
-        this._setContextMenuVisibility(show); // Set initial visibility
-
-        return this.contextMenu;
-    }
-
+    /*********************************
+     * CONTEXT MENU SPECIFIC UTILITY *
+     *********************************/
     /**
      * Update the context menu with new items and position. Fallbacks to setup context menu if not exists.
      * @param {HTMLElement} container - the map container where the context menu should be displayed
@@ -803,88 +905,20 @@ class MeasureModeCesium extends MeasureModeBase {
         let contextMenu = this.stateManager.getElementState("contextMenu");
 
         if (!contextMenu) {
-            contextMenu = this._setupContextMenu(container, options);
+            contextMenu = createContextMenu(container, options);
+            this.stateManager.setElementState("contextMenu", contextMenu);
         }
 
-        if (!contextMenu || !position.x || !position.y) return;
-
-        this._setContextMenuVisibility(true); // Ensure the context menu is visible
-
-        // Update the position of the context menu
-        contextMenu.style.left = `${position.x}px`;
-        contextMenu.style.top = `${position.y}px`;
-
-        // Clear ul element if it exists
-        // This is to ensure we don't duplicate items in the context menu
-        const existingList = contextMenu.querySelector("ul");
-        if (existingList) {
-            existingList.remove();
-        }
-
-        // list of menu items using ul li 
-        const menuList = document.createElement("ul");
-        menuList.className = "an-context-menu-list";
-        Object.assign(menuList.style, {
-            listStyle: "none",
-            margin: "0",
-            padding: "0"
-        });
-
-        menuList.innerHTML = ""; // Clear existing items
-        // Add new items
-        itemOptions.forEach(item => {
-            const menuItem = document.createElement("li");
-            menuItem.classList.add("an-context-menu-list-item");
-            menuItem.textContent = item.text;
-
-            Object.assign(menuItem.style, {
-                padding: "8px 12px",
-                cursor: "pointer",
-                borderBottom: "1px solid #eee",
-                transition: "background-color 0.3s ease"
-            });
-
-            // Add hover effects
-            menuItem.addEventListener("mouseenter", () => {
-                menuItem.style.backgroundColor = "#ece5e5";
-            });
-            menuItem.addEventListener("mouseleave", () => {
-                menuItem.style.backgroundColor = "transparent";
-            });
-
-            // Click event handler
-            menuItem.addEventListener("click", event => {
-                // Prevent default behavior
-                event.stopPropagation();
-                event.preventDefault();
-                // Call the item's event function
-                item.event(event);
-                this._setContextMenuVisibility(false);
-            });
-
-            menuList.appendChild(menuItem);
-        });
-
-        // Remove border from last item
-        if (menuList.lastElementChild) {
-            menuList.lastElementChild.style.borderBottom = "none";
-        }
-
-        // Append the menu list to the context menu
-        contextMenu.appendChild(menuList);
-
-        // Add a one-time listener to close the menu on the next click anywhere
-        setTimeout(() => document.addEventListener('click', () => this._setContextMenuVisibility(false), { once: true }), 0);
-
-        return contextMenu || null;
+        updateContextMenu(contextMenu, position, itemOptions);
+        return contextMenu;
     }
 
     _setContextMenuVisibility(visible) {
         const contextMenu = this.stateManager.getElementState("contextMenu");
-        if (contextMenu) {
-            contextMenu.style.display = visible ? 'block' : 'none';
+        if (visible) {
+            if (contextMenu) contextMenu.style.display = 'block';
         } else {
-            console.warn("Context menu is not initialized.");
+            hideContextMenu(contextMenu);
         }
     }
 

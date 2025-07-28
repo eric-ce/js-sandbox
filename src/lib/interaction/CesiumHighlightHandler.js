@@ -1,4 +1,4 @@
-import { getRankedPickedObjectType } from "../helper/cesiumHelper.mjs";
+import { getRankedPickedObjectType } from "../helper/cesiumHelper.js";
 import { Color } from "cesium";
 
 

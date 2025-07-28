@@ -259,9 +259,9 @@ export function createExpandCollapseButton(options = {}) {
 
 /**
  * Creates a context menu DOM element with standard styling.
- * @param {HTMLElement} container - The container to append the menu to
- * @param {Object} options - Configuration options
- * @returns {HTMLElement} The created context menu element
+ * @param {HTMLDivElement} container - The container to append the menu to
+ * @param {Object} [options={}] - Configuration options
+ * @returns {HTMLDivElement} The created context menu element
  */
 export function createContextMenu(container, options = {}) {
     const { show = false } = options;
@@ -292,9 +292,9 @@ export function createContextMenu(container, options = {}) {
 
 /**
  * Updates context menu position and content.
- * @param {HTMLElement} contextMenu - The context menu element
- * @param {Object} position - {x, y} position coordinates
- * @param {Array} itemOptions - Menu item configurations
+ * @param {HTMLDivElement} contextMenu - The context menu element
+ * @param {{x: number, y: number}} position - {x, y} position coordinates
+ * @param {Array<{text: string, event: function}>} itemOptions - Menu item configurations
  */
 export function updateContextMenu(contextMenu, position, itemOptions = []) {
     if (!contextMenu || !position.x || !position.y) return;
@@ -318,7 +318,7 @@ export function updateContextMenu(contextMenu, position, itemOptions = []) {
 
 /**
  * Hides the context menu.
- * @param {HTMLElement} contextMenu - The context menu element
+ * @param {HTMLDivElement} contextMenu - The context menu element
  */
 export function hideContextMenu(contextMenu) {
     if (contextMenu) {
@@ -328,8 +328,8 @@ export function hideContextMenu(contextMenu) {
 
 /**
  * Creates a menu list with items.
- * @param {Array} itemOptions - Menu item configurations
- * @returns {HTMLElement} The menu list element
+ * @param {Array<{text: string, event: function}>} itemOptions - Menu item configurations
+ * @returns {HTMLUListElement} The menu list element
  * @private
  */
 function createMenuList(itemOptions) {
@@ -356,8 +356,8 @@ function createMenuList(itemOptions) {
 
 /**
  * Creates a single menu item.
- * @param {Object} item - Menu item configuration
- * @returns {HTMLElement} The menu item element
+ * @param {{text: string, event: function}} item - Menu item configuration
+ * @returns {HTMLLIElement} The menu item element
  * @private
  */
 function createMenuItem(item) {

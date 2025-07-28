@@ -52,6 +52,7 @@ class MeasureModeGoogle extends MeasureModeBase {
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
 
+        // Initialize context menu - default to hidden
         this.contextMenu = createContextMenu(this._container, { show: false });
         this.stateManager.setElementState("contextMenu", this.contextMenu);
     }

@@ -335,7 +335,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
 
         // Handle different scenarios based on the state of the tool
         // the condition to determine if it is measuring
-        const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete
+        const isMeasuring = this.coordsCache.length > 0 && !this.flags.isMeasurementComplete && !this.flags.isAddMode;
 
         switch (pickedObjectType) {
             case "label":
@@ -426,52 +426,21 @@ class ProfileDistancesCesium extends MeasureModeCesium {
      * @returns {Promise<void>}
      */
     handleRightClick = async (eventData) => {
-        // -- Handle Picked Object Priority -- 
-        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
-
-        // -- finish the measurement --
-        // If no picked object, finish the measurement
-        if (!pickedObjectType) {
-            this._finishMeasure();
-            return;
-        }
-
-        // -- Handle picked object context menu --
-        if (pickedObject && pickedObjectType && this.coordsCache.length === 0) {
-            const items = this._getContextMenuItemsForAnnotation(pickedObject, pickedObjectType);
-            if (items.length === 0) return; // error handling - If no items to show, exit
-
-            // -- Update the context menu with the items --
-            this._updateContextMenu(this._container, eventData.screenPoint, items);
-        }
+        await super.handleRightClick(eventData);  // Call the super method to handle the right-click event
     }
 
-    _getContextMenuItemsForAnnotation(pickedObject, pickedObjectType) {
-        // Validate the picked object and type
-        if (!pickedObject) {
-            return [];
-        }
-
+    /**
+     * Get the context menu items for this multi-distances-clamped mode specific.
+     * @param {object} pickedObject 
+     * @param {"label"|"point"|"line"|"polygon"} pickedObjectType - The type of the picked object
+     * @returns {Array<{ text: string, event: Function }>} - The context menu items
+     * @override
+     */
+    _getContextMenuAdditionalItems(pickedObject, pickedObjectType) {
         const itemList = [];
-
-        // Copy coordinate action
-        const coordinateItem = {
-            text: "Copy Coordinate",
-            event: () => { this._copyCoordinateToClipboard(this.#coordinate) }
-        }
-        // Remove primitive set action
-        const removePrimitiveSetItem = {
-            text: "Remove Primitive Set",
-            event: () => { this._removePrimitiveSet(pickedObject.primitive) }
-        }
-        itemList.push(coordinateItem, removePrimitiveSetItem); // Add common actions
 
         // Handle specific actions based on the picked object type
         switch (pickedObjectType) {
-            case "label":
-                const label = pickedObject.primitive;
-                itemList.push({ text: "Edit label", event: () => { editableLabel(this._container, label) } });
-                break;
             case "point":
                 const point = pickedObject.primitive;
 
@@ -491,14 +460,23 @@ class ProfileDistancesCesium extends MeasureModeCesium {
                 if (canResume) {
                     itemList.push({
                         text: "Resume measure",
-                        event: () => this._resumeMeasure(resumeContext.pointIndex, resumeContext.measureData)
+                        event: () => {
+                            this._getOrSetModeInstance("profile-distances"); // Ensure the mode instance is set up
+                            this._resumeMeasure(resumeContext.pointIndex, resumeContext.measureData)
+                        }
                     });
                 }
 
                 break;
             case "line":
                 const line = pickedObject.primitive;
-                itemList.push({ text: "Add point to line segment", event: () => { this._setAddModeByLine(line) } });
+                itemList.push({
+                    text: "Add point to line segment",
+                    event: () => {
+                        this._getOrSetModeInstance("profile-distances"); // Ensure the mode instance is set up
+                        this._setAddModeByLine(line)
+                    }
+                });
                 break;
             default:
                 break;

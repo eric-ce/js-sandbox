@@ -1192,6 +1192,10 @@ export class MeasureComponentBase extends HTMLElement {
         return this.activeModeInstance; // or however you store the current mode instance
     }
 
+    getModeInstanceByName(modeName) {
+        return this.#modeInstances[modeName] || null;
+    }
+
 
     /********************************************************
      *           VISUALIZATION OF MAP ANNOTATIONS           *
