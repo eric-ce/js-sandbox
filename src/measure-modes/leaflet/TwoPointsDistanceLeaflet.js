@@ -79,13 +79,13 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("TwoPointsDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("TwoPointsDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
         }
 
-        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;

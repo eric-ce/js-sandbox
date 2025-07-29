@@ -49,8 +49,8 @@ class MeasureModeGoogle extends MeasureModeBase {
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
 
         // Initialize context menu - default to hidden
         this.contextMenu = createContextMenu(this._container, { show: false });
@@ -302,7 +302,7 @@ class MeasureModeGoogle extends MeasureModeBase {
 
         // Get the menu items specific to the clicked overlay
         const items = this._getContextMenuItemsForAnnotation(overlay);
-        if (items.length === 0) {
+        if (!Array.isArray(items) || items.length === 0) {
             this._setContextMenuVisibility(false);
             return; // If no items to show, exit
         }
@@ -319,29 +319,36 @@ class MeasureModeGoogle extends MeasureModeBase {
     _getContextMenuItemsForAnnotation(overlay) {
         if (!overlay) return [];
 
-        const itemList = [];
-        // Add common items
-        itemList.push(
+        // -- Common actions --
+        const commonItems = [
             { text: "Copy Coordinate", event: () => { this._copyCoordinateToClipboard(this.coordinate) } },
             { text: "Remove Layer Set", event: () => this._removeOverlaySet(overlay) }
-        );
+        ];
 
         // -- Handle Mode-Specific Items --
         // Determine the overlay mode from its properties metadata or ID
-        const overlayMode = overlay?.feature?.properties?.mode || overlay.id?.split('_')[1];
-
-        switch (overlayMode) {
-            // Get mode-specific items based on the overlay's mode
-            case 'multi-distances':
-                const multiDistanceItems = this._getMultiDistanceContextMenuItems(overlay);
-                itemList.push(...multiDistanceItems);
-                break;
-            // Add other modes as needed
-            default:
-                break;
+        let overlayMode = null;
+        if (overlay?.feature?.properties?.mode) {
+            overlayMode = overlay.feature.properties.mode;
+        } else if (overlay?.id?.startsWith("annotate_")) {
+            overlayMode = overlay.id.split('_')[1];
         }
 
-        return itemList;
+        // Modes that support advanced actions
+        const advancedAnnotationModes = ["multi-distances"];
+
+        const additionalItems = [];
+
+        // AdvancedAnnotationModes handle its own context menu items
+        if (advancedAnnotationModes.includes(overlayMode)) {
+            const modeInstance = this.drawingHelper.getModeInstanceByName(overlayMode);
+            if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
+            // Let the mode instance handle its own context menu items
+            const itemList = modeInstance._getContextMenuAdditionalItems(overlay);
+            additionalItems.push(...itemList);  // Add the items from the mode instance
+        }
+
+        return [...commonItems, ...additionalItems];
     }
 
     /**
@@ -406,389 +413,32 @@ class MeasureModeGoogle extends MeasureModeBase {
         return textToCopy;
     }
 
-    /****************************
-     *  CONTEXT MENU ITEMS FOR  *
-     * MULTI DISTANCES SPECIFIC *
-     ****************************/
     /**
-     * Get the context menu items for the multi-distances measurement mode.
-     * @param {google.maps.Marker} overlay - The overlay marker for which to get context menu items.
-     * @returns {Array<{text: string, event: Function}>} - An array of context menu items.
+     * Get or set the mode instance for a given mode name.
+     * This method match this.mode with the modeName to see if the mode is already active.
+     * If the mode is already active, it retrieves the instance of the active mode.
+     * otherwise it activates the mode and returns the mode instance.
+     * @param {string} modeName  - The name of the mode to get or set.
+     * @returns {Object|null} - The mode instance or null if invalid.
      */
-    _getMultiDistanceContextMenuItems(overlay) {
-        // Validate input
-        if (!overlay) return [];
+    _getOrSetModeInstance(modeName) {
+        // Validate param
+        if (typeof modeName !== "string") return null;
 
-        const itemList = [];
-        const modeName = "multi-distances"; // The default mode name in this method
+        // Check if the mode is already active
+        const currentActiveModeInstance = this.drawingHelper.getActiveModeInstance();
+        if (!currentActiveModeInstance) return null;
 
-        // Check the overlay type to determine the context menu items
-        const overlayType = checkOverlayType(overlay);
-        switch (overlayType) {
-            case "point":
-                // -- Handle Remove Point --
-                itemList.push({
-                    text: "Remove Point",
-                    event: () => this._removePointFromMultiDistances(overlay, modeName)
-                });
+        const currentActiveModeName = currentActiveModeInstance.mode;
+        const isAlreadyInMode = currentActiveModeName === modeName;
 
-                // -- Handle Resume Measure --
-                const resumeContext = this._getPointContextForResume(overlay);
-                // Check if resumeContext is valid and it is not a perimeter measure case
-                const canResume = resumeContext &&
-                    !areCoordinatesEqual(
-                        resumeContext.measureData.coordinates[0],
-                        resumeContext.measureData.coordinates[resumeContext.measureData.coordinates.length - 1]
-                    )
-                if (canResume) {
-                    itemList.push({
-                        text: "Resume measure",
-                        event: () => this._resumeMultiDistancesMeasure(resumeContext.pointIndex, resumeContext.measureData)
-                    });
-                }
-                break;
-            default:
-                return [];
-        }
-
-        return itemList;
-    }
-
-    /**
-     * Removes a point from the multi-distances mode specific.
-     * @param {google.maps.Marker} overlay - The overlay marker to remove.
-     * @param {string} modeName - The name of the measurement mode.
-     */
-    _removePointFromMultiDistances(overlay, modeName) {
-        // Validate input parameters
-        if (!overlay || !overlay?.feature?.properties) return;
-
-        // Find measure data by id
-        const measureId = Number(overlay.id.split("_").slice(-1)[0]); // Extract the measure ID from the overlay ID
-        const measureData = dataPool.getMeasureById(measureId); // Get the measure data by ID
-        if (!measureData || measureData.mode !== "multi-distances") {
-            console.warn("Invalid measure data for multi-distances mode.");
-            return;
-        }
-        // Set measure data to pending status
-        measureData.status = "pending";
-        // Convert coordinates to latLng format
-        let positions = measureData.coordinates.map(coord => ({ ...convertToLatLng(coord) }));
-
-
-        // -- Handle Point Removal in data -- 
-        // Remove the point from the measure data coordinates
-        const pointPosition = overlay.feature?.properties?.positions[0];
-        if (!pointPosition) return;
-
-        // Find the point index in the measure coordinates
-        const pointPositionIndices = positions
-            .map((coordinate, index) => areCoordinatesEqual(coordinate, pointPosition) ? index : -1)
-            .filter(index => index !== -1); // Get the indices of the point, need to consider two cases: perimeter and normal case
-        if (pointPositionIndices.length === 0) return; // If the point is not found, exit
-
-        // Update positions
-        positions = positions.filter((_, index) => !pointPositionIndices.includes(index));  // Set positions to filter out pointPositionIndices
-        // -- End of Point Removal in data --
-
-
-        // -- Handle Visual Removal for point, polyline and label --
-        let totalLabel = null; // Keep total label reference for later use
-        // Remove the point marker from the map
-        this.drawingHelper._removePointMarker(overlay);
-
-        // Remove associated polyline
-        const polylines = this.drawingHelper._getLineByPositions([pointPosition]);
-        if (!Array.isArray(polylines) || polylines.length === 0) return; // If no lines are found, exit
-        polylines.forEach(line => {
-            this.drawingHelper._removePolyline(line); // Remove the line
-        });
-        // Remove associated label
-        const labelMarkers = this.drawingHelper._getLabelByPosition([pointPosition]);
-        if (!Array.isArray(labelMarkers) || labelMarkers.length === 0) return; // If no labels are found, exit
-        labelMarkers.forEach(label => {
-            // Safety check: assume moving or total labels should not be removed here
-            const isMovingLabel = label?.feature?.properties?.status === "moving";
-            const isTotalLabel = label.id.startsWith(`annotate_${modeName}_total-label`);
-
-            if (isTotalLabel) {
-                totalLabel = label;  // Keep the total label reference for later use
-            }
-
-            // Remove the label except moving or total labels
-            if (isMovingLabel || isTotalLabel) return;
-            this.drawingHelper._removeLabel(label);
-        });
-        // -- End of Visual Removal --
-
-
-        // -- Handle Reconnecting graphic and data --
-        // Find neighboring coordinate
-        const { previous, current, next } = getNeighboringValues(measureData.coordinates, pointPositionIndices[0]); // find the point position neighboring positions.
-
-        const firstCoordinate = measureData.coordinates[0];
-        const lastCoordinate = measureData.coordinates[measureData.coordinates.length - 1];
-        const isPerimeter = areCoordinatesEqual(firstCoordinate, lastCoordinate);
-        const recordDistances = [...measureData._records[0]["distances"]];
-
-        // -- Handling Perimeter Case --
-        if (isPerimeter) {
-            // Case: the removing point is in the middle of the positions
-            if (previous && next) {
-                // Case: The minimum shape is a triangle that consists of 4 points. Less than 4 means it is not a shape
-                if (positions.length === 3) {
-                    positions.pop(); // Remove the last point if it is less than 4 points
-                    // -- Handle Distances record --
-                    recordDistances.splice(pointPositionIndices[0] - 1, 2);
-                } else {
-                    const reconnectedPositions = [previous, next];
-                    // Create new polyline
-                    this.drawingHelper._addPolyline(reconnectedPositions, {
-                        id: `annotate_${modeName}_line_${measureId}`,
-                        positions: reconnectedPositions,
-                        status: "completed",
-                        clickable: true,
-                        color: this.stateManager.getColorState("line")
-                    });
-                    // Create new label
-                    const distance = calculateDistance(reconnectedPositions[0], reconnectedPositions[1]);
-                    this.drawingHelper._addLabel(reconnectedPositions, distance, "meter", {
-                        id: `annotate_${modeName}_label_${measureId}`,
-                        status: "completed",
-                        clickable: true,
-                    });
-                    // Update measure data record distances properties
-                    // Don't calculate all distances from coordsCache due to performance and consistency
-                    recordDistances.splice(pointPositionIndices[0] - 1, 2, distance); // remove and insert the new distance
-                }
-            }
-            // Case: The removing point is the first point
-            else if (next) {
-                if (positions.length > 2) {
-                    positions.push(positions[0]); // Reconnect the first point to the last point
-                    const reconnectedPositions = [positions[0], positions[positions.length - 2]];  // the last point primitive is the length-2 because first point equals to last point in perimeter.
-                    // Create new polyline
-                    this.drawingHelper._addPolyline(reconnectedPositions, {
-                        id: `annotate_${modeName}_line_${measureId}`,
-                        color: this.stateManager.getColorState("line"),
-                        clickable: true,
-                        status: "completed",
-                    });
-                    // Create new label
-                    const distance = calculateDistance(reconnectedPositions[0], reconnectedPositions[1]);
-                    this.drawingHelper._addLabel(reconnectedPositions, distance, "meter", {
-                        id: `annotate_${modeName}_label_${measureId}`,
-                        status: "completed",
-                        clickable: true,
-                    });
-                    // -- Handle Distances record --
-                    // remove the first and the last distance in recordDistances and insert distances value to the last index
-                    recordDistances.splice(0, 1); // Remove the first distance
-                    recordDistances.splice(recordDistances.length - 1, 1); // Remove the last distance
-                    recordDistances.push(distance); // Add the new distance to the end of the distances array
-                }
-                // Case: triangle, it will become two point line, which doesn't need reconnect
-                else {
-                    // -- Handle Distances record --
-                    recordDistances.splice(0, 1); // Remove the first distance
-                    recordDistances.splice(recordDistances.length - 1, 1); // Remove the last distance
-                }
-            }
-            // Case: The removing point is the last point
-            else if (previous) {
-                recordDistances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
-            }
-        }
-
-        // -- Handling Normal Case --
-        if (!isPerimeter) {
-            // Case: the removing point is in the middle of the positions
-            if (previous && next) {
-                const reconnectedPositions = [previous, next];
-
-                // Create new polyline
-                this.drawingHelper._addPolyline(reconnectedPositions, {
-                    id: `annotate_${modeName}_line_${measureId}`,
-                    status: "completed",
-                    clickable: true,
-                    color: this.stateManager.getColorState("line")
-                });
-                // Create new label
-                const distance = calculateDistance(reconnectedPositions[0], reconnectedPositions[1]);
-                this.drawingHelper._addLabel(reconnectedPositions, distance, "meter", {
-                    id: `annotate_${modeName}_label_${measureId}`,
-                    status: "completed",
-                    clickable: true,
-                });
-
-                // -- Handle Distances record --
-                // Don't calculate all distances from coordsCache due to performance and consistency
-                recordDistances.splice(pointPositionIndices[0] - 1, 2, distance); // remove and insert the new distance
-            }
-            // Case: The removing point is the first point
-            else if (next) {
-                recordDistances.splice(0, 1); // Remove the first distance
-            }
-            // Case: The removing point is the last point
-            else if (previous) {
-                recordDistances.splice(pointPositionIndices[0] - 1, 1); // Remove the last distance
-            }
-        }
-        // -- End of Handle Reconnection and distance record --
-
-
-        // -- Reposition the total label --
-        const totalDistance = recordDistances.reduce((acc, val) => acc + val, 0); // Calculate total distance
-
-        if (!totalLabel) { // Fallback to find total label in the label collection
-            totalLabel = this.labelCollection.find(label => label.id === `annotate_${modeName}_total-label_${measureId}`) || null; // Find the total label by ID
-        }
-
-        if (totalLabel) {
-            const labelString = `Total: ${formatMeasurementValue(totalDistance, "meter")}`;
-            totalLabel = this._updateLabel(totalLabel, [positions[positions.length - 1]], labelString, {
-                id: `annotate_${modeName}_total-label_${measureId}`,
-                status: "completed",
-                clickable: true
-            });
-        }
-
-        // Case: if only one point left, remove the remaining point and labels
-        if (positions.length === 1) {
-            this._removeRemaining(positions);
-            return;
-        }
-
-        // -- Update current measure data --
-        measureData.status = "completed";  // Set status to completed
-        measureData._records[0]["distances"] = recordDistances;  // Update distances record  
-        measureData._records[0]["totalDistance"] = totalDistance;  // Update total distance
-        measureData.coordinates = positions.map(coord => ({ ...coord }));  // Update coordinates with the new positions
-
-        // Update dataPool with the measure data
-        dataPool.updateOrAddMeasure({ ...measureData });
-
-        // Show notification
-        showCustomNotification(`Point removed from measure ${measureId}`, this._container);
-    }
-
-    /**
-     * Removes the remaining point and its labels from the map.
-     * @param {{lat:number, lng:number}[]} positions - The positions of the points to remove.
-     * @returns {void}
-     */
-    _removeRemaining(positions) {
-        const lastPosition = positions[0];
-
-        //  Remove the remaining point and labels 
-        const lastPoint = this.drawingHelper._getPointByPosition(lastPosition);
-        const lastLabels = this.drawingHelper._getLabelByPosition([lastPosition]);
-
-        if (lastPoint) {
-            this.drawingHelper._removePointMarker(lastPoint); // Remove the last point marker
-        }
-        if (Array.isArray(lastLabels) && lastLabels.length > 0) {
-            lastLabels.forEach(label => {
-                this.drawingHelper._removeLabel(label); // Remove the label marker
-            });
-        }
-
-        // -- Handle Measure Data --
-        const measureId = Number(lastPoint.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
-        if (isNaN(measureId)) return; // If the measure ID is not a number, exit
-
-        dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
-
-        // Show notification
-        showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
-    }
-
-    /**
-     * Get the context for resuming a measurement from a specific point.
-     * @param {google.maps.Marker} point - The point to resume from.
-     * @returns {{pointIndex:number, measureData: MeasurementGroup}|null} - The context for resuming the measurement or null if not found.
-     */
-    _getPointContextForResume(point) {
-        // Find the measure data
-        const measureId = Number(point.id.split("_").slice(-1)[0]);
-        if (isNaN(measureId)) return;
-
-        // -- Handle Measure Data --
-        // Get the measure data from the data pool
-        const measureData = dataPool.getMeasureById(measureId);
-        // Only completed measures can be resumed
-        if (!measureData || measureData.status !== "completed") {
-            return null;
-        }
-
-        // convert measure data coordinates from cartographic degrees to latLng format
-        measureData.coordinates = measureData.coordinates.map(cartographicDegrees => convertToLatLng(cartographicDegrees));
-
-        // Find the index of the clicked point within the measure's coordinates
-        const pointPosition = point.feature?.properties?.positions[0];
-        if (!pointPosition) return null;
-
-        const pointIndex = measureData.coordinates.findIndex(coordinate => areCoordinatesEqual(coordinate, pointPosition));
-        if (pointIndex === -1) return null;
-
-        // Check if the point is the first or the last one
-        const isFirstPoint = pointIndex === 0;
-        const isLastPoint = pointIndex === measureData.coordinates.length - 1;
-
-        if (isFirstPoint || isLastPoint) {
-            return { pointIndex, measureData };
-        }
-        return null;
-    }
-
-    /**
-     * Resumes measuring in multi-distances mode from a specific point index.
-     * This method is used to continue measuring distances from either the first or last point of a
-     * @param {number} pointIndex - The index of the point to resume measuring from, either first or last point.
-     * @param {MeasurementGroup} measureData - The measure data to resume.
-     * @returns {void}
-     */
-    _resumeMultiDistancesMeasure(pointIndex, measureData) {
-        if (measureData === undefined || pointIndex === undefined) return;
-
-        // Check if we're already in multi-distances mode
-        const isAlreadyInMode = this.mode === "multi-distances";
-
-        let modeInstance;
+        // -- Handle mode activation --
+        // If already in the mode, get the instance
         if (isAlreadyInMode) {
-            // If we're already in multi-distances mode, get the actual MultiDistanceGoogle instance
-            modeInstance = this.drawingHelper.getActiveModeInstance();
-        } else {
-            // Otherwise, activate multi-distances mode
-            modeInstance = this.drawingHelper._activateMode("multi-distances");
+            return currentActiveModeInstance; // Return the current active mode instance
+        } else {  // Otherwise, activate the mode
+            return this.drawingHelper._activateMode(modeName) || null;
         }
-
-        if (!modeInstance || modeInstance.mode !== "multi-distances") {
-            console.warn("Failed to get multi-distances mode instance");
-            return;
-        }
-
-        // Set the component's state to the measure being resumed
-        modeInstance.measure = measureData;
-        modeInstance.measure.status = "pending";
-
-        // Use setter method for private distances property
-        if (typeof modeInstance.setDistances === 'function') {
-            modeInstance.setDistances([...measureData._records[0].distances]);
-        }
-
-        modeInstance.coordsCache = measureData.coordinates;
-
-        // Determine if resuming from the start or end
-        const isFirstPoint = pointIndex === 0;
-
-        // Set flags to continue measuring
-        modeInstance.flags.isMeasurementComplete = false;
-        modeInstance.flags.isReverse = isFirstPoint;
-        modeInstance.flags.isActive = true;
-
-        // Optional: Add a user notification
-        showCustomNotification(`Resuming measure id: ${measureData.id}`, this._container);
     }
 
 
@@ -824,12 +474,6 @@ class MeasureModeGoogle extends MeasureModeBase {
             hideContextMenu(contextMenu);
         }
     }
-
-
-    /*******************
-     *     HELPER      *
-     * GENERAL METHODS *
-     *******************/
 }
 
 export { MeasureModeGoogle };

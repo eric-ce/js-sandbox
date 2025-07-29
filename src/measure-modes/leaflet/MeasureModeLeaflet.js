@@ -41,8 +41,8 @@ class MeasureModeLeaflet extends MeasureModeBase {
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
 
         this.contextMenu = this._setupContextMenu(this._container, { show: false });
     }
@@ -324,10 +324,71 @@ class MeasureModeLeaflet extends MeasureModeBase {
      * THE STANDALONE FEATURE OR SERIES METHOD FORMS A FEATURE *
      ***********************************************************/
     /**
-     * Removes an entire layer set, including related points, labels, polylines, and polygons.
-     * @param {L.CircleMarker|L.Tooltip|L.Polyline|L.Polygon} layer - The layer to remove.
+     * Handles the context menu event.
+     * @param {NormalizedEventData} eventData - The event data containing information about the context menu event.
      * @returns {void}
      */
+    _handleContextMenu = (eventData) => {
+        const { layer, screenPoint } = eventData;
+
+        // If no layer was right-clicked, or if a measurement is in progress, do nothing.
+        if (!layer || this.coordsCache.length > 0) {
+            this._setContextMenuVisibility(false);
+            return;
+        }
+
+        // Get the menu items specific to the clicked layer
+        const items = this._getContextMenuItemsForAnnotation(layer);
+        if (!Array.isArray(items) || items.length === 0) {
+            this._setContextMenuVisibility(false);
+            return; // If no items to show, exit
+        }
+
+        // Update and show the context menu at the clicked position
+        this._updateContextMenu(this._container, screenPoint, items);
+    }
+
+    _getContextMenuItemsForAnnotation(layer) {
+        // Validate input parameters
+        if (!layer) return [];
+
+        // -- Common actions --
+        const commonItems = [
+            { text: "Copy Coordinate", event: () => { this._copyCoordinateToClipboard(this.coordinate) } },
+            { text: "Remove Layer Set", event: () => this._removeLayerSet(layer) }
+        ];
+
+        // -- Get the picked object mode --
+        // Determine the layer mode from its properties metadata or ID
+        let layerMode = null;
+        if (layer?.feature?.properties?.mode) {
+            layerMode = layer.feature.properties.mode;
+        } else if (layer?.id?.startsWith("annotate_")) {
+            layerMode = layer.id.split('_')[1];
+        }
+
+        // Modes that support advanced actions
+        const advancedAnnotationModes = ["multi-distances"];
+
+        const additionalItems = [];
+
+        // AdvancedAnnotationModes handle its own context menu items
+        if (advancedAnnotationModes.includes(layerMode)) {
+            const modeInstance = this.drawingHelper.getModeInstanceByName(layerMode);
+            if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
+            // Let the mode instance handle its own context menu items
+            const itemList = modeInstance._getContextMenuAdditionalItems(layer);
+            additionalItems.push(...itemList);  // Add the items from the mode instance
+        }
+
+        return [...commonItems, ...additionalItems];
+    }
+
+    /**
+    * Removes an entire layer set, including related points, labels, polylines, and polygons.
+    * @param {L.CircleMarker|L.Tooltip|L.Polyline|L.Polygon} layer - The layer to remove.
+    * @returns {void}
+    */
     _removeLayerSet(layer) {
         if (!layer) return;
 
@@ -386,59 +447,31 @@ class MeasureModeLeaflet extends MeasureModeBase {
     }
 
     /**
-     * Handles the context menu event.
-     * @param {NormalizedEventData} eventData - The event data containing information about the context menu event.
-     * @returns {void}
+     * Get or set the mode instance for a given mode name.
+     * This method match this.mode with the modeName to see if the mode is already active.
+     * If the mode is already active, it retrieves the instance of the active mode.
+     * otherwise it activates the mode and returns the mode instance.
+     * @param {string} modeName  - The name of the mode to get or set.
+     * @returns {Object|null} - The mode instance or null if invalid.
      */
-    _handleContextMenu = (eventData) => {
-        const { layer, screenPoint } = eventData;
+    _getOrSetModeInstance(modeName) {
+        // Validate param
+        if (typeof modeName !== "string") return null;
 
-        // If no layer was right-clicked, or if a measurement is in progress, do nothing.
-        if (!layer || this.coordsCache.length > 0) {
-            this._setContextMenuVisibility(false);
-            return;
+        // Check if the mode is already active
+        const currentActiveModeInstance = this.drawingHelper.getActiveModeInstance();
+        if (!currentActiveModeInstance) return null;
+
+        const currentActiveModeName = currentActiveModeInstance.mode;
+        const isAlreadyInMode = currentActiveModeName === modeName;
+
+        // -- Handle mode activation --
+        // If already in the mode, get the instance
+        if (isAlreadyInMode) {
+            return currentActiveModeInstance; // Return the current active mode instance
+        } else {  // Otherwise, activate the mode
+            return this.drawingHelper._activateMode(modeName) || null;
         }
-
-        // Get the menu items specific to the clicked layer
-        const items = this._getContextMenuItemsForAnnotation(layer);
-        if (items.length === 0) {
-            this._setContextMenuVisibility(false);
-            return; // If no items to show, exit
-        }
-
-        // Update and show the context menu at the clicked position
-        this._updateContextMenu(this._container, screenPoint, items);
-    }
-
-    _getContextMenuItemsForAnnotation(layer) {
-        if (!layer) return [];
-
-        const itemList = [];
-        // Add common items
-        itemList.push(
-            { text: "Copy Coordinate", event: () => { this._copyCoordinateToClipboard(this.coordinate) } },
-            { text: "Remove Layer Set", event: () => this._removeLayerSet(layer) }
-        );
-
-        // Check if this layer belongs to the current mode
-        const layerMode = layer?.feature?.properties?.mode || layer.id?.split('_')[1]; // Extract mode from "annotate_distance_point_123"
-        if (layerMode === this.mode) {
-            // Add mode-specific items
-            const modeSpecificItems = this._getModeSpecificContextMenuItems(layer);
-            itemList.push(...modeSpecificItems);
-        }
-
-        return itemList;
-    }
-
-    /**
-     * Override this method in child classes to add mode-specific context menu items.
-     * @param {L.CircleMarker|L.Polygon|L.Polyline|L.Tooltip|L.Layer} layer - The clicked layer
-     * @returns {Array<{text: string, event: function}>} Mode-specific menu items
-     * @abstract
-     */
-    _getModeSpecificContextMenuItems(layer) {
-        return []; // Base implementation returns no additional items
     }
 
 

@@ -76,16 +76,16 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @param {StateManager} stateManager
      * @param {EventEmitter} emitter
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("PointInfoGoogle requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("PointInfoGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter)
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;

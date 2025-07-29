@@ -107,13 +107,13 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("MultiDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("MultiDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
         }
 
-        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -398,7 +398,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
      *    RIGHT CLICK     *
      * CONTEXT MENU EVENT *
      **********************/
-    _getModeSpecificContextMenuItems(layer) {
+    _getContextMenuAdditionalItems(layer) {
         const itemList = [];
         const layerType = checkLayerType(layer);
 
@@ -417,7 +417,10 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
                 if (canResume) {
                     itemList.push({
                         text: "Resume measure",
-                        event: () => this._resumeMeasure(resumeContext.pointIndex, resumeContext.measureData)
+                        event: () => {
+                            this._getOrSetModeInstance("multi-distances");
+                            this._resumeMeasure(resumeContext.pointIndex, resumeContext.measureData)
+                        }
                     });
                 }
                 break;
