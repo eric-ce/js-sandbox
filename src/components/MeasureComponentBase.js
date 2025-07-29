@@ -822,7 +822,7 @@ export class MeasureComponentBase extends HTMLElement {
         // Create new instance
         const standardArgs = [
             this.inputHandler, this.dragHandler, this.highlightHandler,
-            this, this.stateManager, this.emitter
+            this, this.stateManager, this.emitter, this.#app
         ];
 
         const args = ModeClass.name.includes("Cesium")

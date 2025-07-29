@@ -869,8 +869,8 @@ export default class CesiumMeasure extends MeasureComponentBase {
 
         // -- Set the selected entity and create description -- 
         const { id } = primitive;
-        const title = descriptionData["Annotate Type"] ?
-            `${capitalizeString(descriptionData["Annotate Type"])} Details` : "Unknown Details";
+        const title = descriptionData["Type"] ?
+            `${capitalizeString(descriptionData["Type"])} Details` : "Unknown Details";
         const selectedEntity = new Entity({
             id: id || null,
             name: title,

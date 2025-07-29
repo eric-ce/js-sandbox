@@ -37,6 +37,8 @@ import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.js";
  * @extends {MeasureModeCesium}
  */
 class PickerCesium extends MeasureModeCesium {
+    modeName = "picker";
+
     // -- Public fields: dependencies --
     /** @type {any} The Cesium package instance. */
     cesiumPkg;
@@ -55,13 +57,13 @@ class PickerCesium extends MeasureModeCesium {
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("PickerCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("PickerCesium requires inputHandler, drawingHelper (with map), stateManager, emitter,and app.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
 
         this.cesiumPkg = cesiumPkg;
     }

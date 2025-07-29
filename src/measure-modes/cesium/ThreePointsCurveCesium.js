@@ -52,6 +52,8 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
 
 class ThreePointsCurveCesium extends MeasureModeCesium {
+    modeName = "curve";
+
     // -- Public fields: dependencies --
     /** @type {any} The Cesium package instance. */
     cesiumPkg;
@@ -81,13 +83,13 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
     * @param {EventEmitter} emitter 
     * @param {*} cesiumPkg 
     */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("ThreePointsCurveCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("ThreePointsCurveCesium requires inputHandler, drawingHelper (with map), stateManager, emitter and app.");
         }
 
-        super("curve", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("curve", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;

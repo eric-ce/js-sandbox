@@ -41,6 +41,8 @@ class MeasureModeBase {
     emitter;
     /** @type {"cesium"|"google"|"leaflet"} The name of the map */
     mapName;
+    /** @type {object} The application context */
+    app;
     /** @type {HTMLElement} The map container element. */
     _container;
 
@@ -69,13 +71,13 @@ class MeasureModeBase {
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
         // -- Validate Dependencies --
         if (!modeName || typeof modeName !== 'string') {
             throw new Error("MeasureModeBase requires a valid modeName string.");
         }
-        if (!inputHandler || !drawingHelper || !stateManager || !emitter) {
-            throw new Error("MeasureModeBase requires inputHandler, drawingHelper, stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !stateManager || !emitter || !app) {
+            throw new Error("MeasureModeBase requires inputHandler, drawingHelper, stateManager, emitter, and app.");
         }
         if (!drawingHelper.map) {
             throw new Error("MeasureModeBase requires drawingHelper to have a valid 'map' instance.");
@@ -93,6 +95,7 @@ class MeasureModeBase {
         this.map = drawingHelper.map;
         this.stateManager = stateManager;
         this.emitter = emitter;
+        this.app = app;
 
         this.mapName = drawingHelper.mapName; // Map name (e.g., "cesium", "google", "leaflet")
 
@@ -137,7 +140,9 @@ class MeasureModeBase {
         this.inputHandler.setCursor('crosshair');
 
         // Allow subclasses to attach map-specific listeners
-        this._attachMapSpecificListeners();
+        if (typeof this._attachMapSpecificListeners === 'function') {
+            this._attachMapSpecificListeners();
+        }
     }
 
     /**

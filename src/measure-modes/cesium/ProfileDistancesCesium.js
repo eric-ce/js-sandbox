@@ -54,6 +54,8 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
 
 
 class ProfileDistancesCesium extends MeasureModeCesium {
+    modeName = "profile-distances";
+
     // -- Public fields: dependencies --
     /** @type {any} The Cesium package instance. */
     cesiumPkg;
@@ -88,13 +90,13 @@ class ProfileDistancesCesium extends MeasureModeCesium {
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("ProfileDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("ProfileDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, emitter and app.");
         }
 
-        super("profile-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("profile-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;

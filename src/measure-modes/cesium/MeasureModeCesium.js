@@ -41,6 +41,8 @@ import { closeIconBlack } from "../../assets/icons.js";
  * Common shared helper function should be declared in `cesiumHelper.js`, This is mainly for logic override when needed.
  */
 class MeasureModeCesium extends MeasureModeBase {
+    cesiumPkg;
+
     // Chart related
     /** @type {import("chart.js/auto").Chart} */
     chartInstance;
@@ -64,8 +66,10 @@ class MeasureModeCesium extends MeasureModeBase {
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+
+        this.cesiumPkg = cesiumPkg; // Store the Cesium package instance
 
         // Initialize context menu - default to hidden
         this.contextMenu = createContextMenu(this._container, { show: false });
@@ -344,8 +348,10 @@ class MeasureModeCesium extends MeasureModeBase {
     * @override
     */
     async handleRightClick(eventData) {
+        const { pickedFeature, screenPoint } = eventData;
+
         // -- Handle Picked Object Priority -- 
-        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, null);
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(pickedFeature, null);
 
         // -- Handle not picked object --
         if (!pickedObjectType || !pickedObject || pickedObject?.primitive?.feature?.properties?.status !== "completed") {
@@ -372,15 +378,13 @@ class MeasureModeCesium extends MeasureModeBase {
             }
 
             // -- Update the context menu with the items --
-            this._updateContextMenu(this._container, eventData.screenPoint, items);
+            this._updateContextMenu(this._container, screenPoint, items);
         }
     }
 
     _getContextMenuItemsForAnnotation(pickedObject, pickedObjectType) {
-        // Validate the picked object and type
-        if (!pickedObject) {
-            return [];
-        }
+        // Validate input parameters
+        if (!pickedObject) return [];
 
         // -- Common actions --
         const commonItems = [
@@ -416,8 +420,6 @@ class MeasureModeCesium extends MeasureModeBase {
         if (advancedAnnotationModes.includes(pickedObjectMode)) {
             const modeInstance = this.drawingHelper.getModeInstanceByName(pickedObjectMode)
             if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
-            console.log("current mode:", this.drawingHelper.getActiveModeInstance());
-            console.log(this.mode)
             // Let the mode instance handle its own context menu items
             const itemList = modeInstance._getContextMenuAdditionalItems(pickedObject, pickedObjectType);
             additionalItems.push(...itemList);  // Add the items from the mode instance

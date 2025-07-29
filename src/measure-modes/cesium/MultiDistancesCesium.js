@@ -56,6 +56,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
  * @extends {MeasureModeCesium}
  */
 class MultiDistancesCesium extends MeasureModeCesium {
+    modeName = "multi-distances";
     // -- Public fields: dependencies --
     /** @type {any} The Cesium package instance. */
     cesiumPkg;
@@ -88,13 +89,13 @@ class MultiDistancesCesium extends MeasureModeCesium {
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("MultiDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("MultiDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
         }
 
-        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -105,7 +106,6 @@ class MultiDistancesCesium extends MeasureModeCesium {
         this.cesiumPkg = cesiumPkg;
 
         this.measure = super._createDefaultMeasure();
-        console.log(this.flags)
     }
 
 
@@ -148,7 +148,6 @@ class MultiDistancesCesium extends MeasureModeCesium {
      * @returns {Promise<void>}
      */
     handleLeftClick = async (eventData) => {
-        console.log("triggered")
         // use move position for the position
         const cartesian = this.#coordinate
         if (!defined(cartesian)) return;
@@ -158,9 +157,6 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Handle interactive event --
         const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
-        console.log("🚀 - handled:", handled);
-        console.log(this.flags)
-
 
         // -- Normal Measure --
         // If the click was not on a handled primitive and not in drag mode, start normal measuring
@@ -307,10 +303,6 @@ class MultiDistancesCesium extends MeasureModeCesium {
             dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
-
-    // _selectAction(primitive) {
-    //     console.log("selected:", primitive);
-    // }
 
 
     /***********************

@@ -58,8 +58,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.js";
  */
 class HeightCesium extends MeasureModeCesium {
     // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
+    modeName = "height"; // Name of the measurement mode
 
     /** @type {Cartesian3} */
     #coordinate = null;
@@ -88,22 +87,22 @@ class HeightCesium extends MeasureModeCesium {
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter) {
-            throw new Error("HeightCesium requires inputHandler, drawingHelper (with map), stateManager, and emitter.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("HeightCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
         }
 
-        super("height", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter);
+        super("height", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
 
-        this.cesiumPkg = cesiumPkg;
-
         this.coordsCache = [];
         this.measure = super._createDefaultMeasure();
+
+        this.app = app;
     }
 
 
