@@ -441,6 +441,7 @@ export class MeasureComponentBase extends HTMLElement {
                 name: "Area",
                 icon: polygonIcon,
                 mapAvailability: ["cesium", "google", "leaflet"],
+                roles: ["tester"],  // FIXME: testing for user roles 
                 getClass: (type) => {
                     if (type === 'google') return PolygonGoogle;
                     if (type === 'cesium') return PolygonCesium;
@@ -472,8 +473,14 @@ export class MeasureComponentBase extends HTMLElement {
             // Add other modes (Curve, MultiDistance, etc.) similarly
         ];
 
-        // --- Filter modes available for the current map type ---
-        this.availableModeConfigs = allModeConfigs.filter(m => m.mapAvailability.includes(mapName));
+        // --- Filter available modes by user role --
+        const userRoles = this.getUserRole(this.app);
+
+        // --- Filter modes available for the current map type and user role ---
+        this.availableModeConfigs = allModeConfigs.filter(m =>
+            m.mapAvailability.includes(mapName) &&
+            (!m.roles || m.roles.some(role => userRoles.includes(role)))
+        );
 
         if (!this._buttonContainer) return;
 
@@ -1186,14 +1193,28 @@ export class MeasureComponentBase extends HTMLElement {
 
     /**
      * Gets the currently active mode instance.
-     * @returns {Object|null} The active mode instance
+     * @returns {Object|null} The current active mode instance
      */
     getActiveModeInstance() {
         return this.activeModeInstance; // or however you store the current mode instance
     }
 
+    /**
+     * Gets a mode instance by its name.
+     * @param {string} modeName - The name of the mode to retrieve.
+     * @returns {Object|null} The mode instance or null if not found.
+     */
     getModeInstanceByName(modeName) {
         return this.#modeInstances[modeName] || null;
+    }
+
+    /**
+     * Gets the user role from the application instance.
+     * @returns {string[]} An array of user roles.
+     */
+    getUserRole() {
+        // FIXME: replace this method with the project user role get method
+        return this.app.currentUser.sessions.navigator.roles;
     }
 
 
