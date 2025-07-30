@@ -1,0 +1,511 @@
+import {
+    Cartesian3,
+    defined,
+    SceneTransforms,
+} from "cesium";
+import { areCoordinatesEqual, convertToCartographicDegrees, editableLabel, getRankedPickedObjectType, updatePointerOverlay } from "../../lib/helper/cesiumHelper.mjs";
+import dataPool from "../../lib/data/DataPool.mjs";
+import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
+import { deconstructIdForMetadata } from "../../lib/helper/helper.mjs";
+
+// -- Cesium types --
+/** @typedef {import('cesium').Label} Label*/
+/** @typedef {import('cesium').PointPrimitive} PointPrimitive */
+/** @typedef {import('cesium').Cartesian3} Cartesian3 */
+/** @typedef {import('cesium').Cartesian2} Cartesian2 */
+
+// -- Data types -- 
+/** @typedef {{labels: Label[]}} InteractiveAnnotationsState */
+/**
+ * @typedef MeasurementGroup
+ * @property {string} id - Unique identifier for the measurement
+ * @property {string} mode - Measurement mode (e.g., "distance")
+ * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
+ * @property {'pending'|'completed'} status - Current state of the measurement
+ * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
+ * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
+ * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("cesium")
+ */
+/**
+ * @typedef NormalizedEventData
+ * @property {object} domEvent - The original DOM event
+ * @property {Cartesian3} mapPoint - The point on the map where the event occurred
+ * @property {any[]} pickedFeature - The feature that was picked at the event location
+ * @property {Cartesian2} screenPoint - The screen coordinates of the event
+ */
+// -- Dependencies types --
+/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
+/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
+/** @typedef {import('../../components/CesiumMeasure.mjs').CesiumMeasure} CesiumMeasure */
+
+
+/**
+ * Class representing a point information measurement mode in Cesium.
+ * @extends {MeasureModeCesium}
+ */
+class PointInfoCesium extends MeasureModeCesium {
+    modeName = "pointInfo";
+
+    // -- Public fields: dependencies --
+    /** @type {any} The Cesium package instance. */
+    cesiumPkg;
+
+    /** @type {Cartesian3} */
+    #coordinate = null;
+
+    /** @type {InteractiveAnnotationsState} - References to temporary primitive objects used for interactive drawing*/
+    #interactiveAnnotations = {
+        labels: []
+    };
+
+    /** @type {MeasurementGroup} */
+    measure = null;
+
+    /** @type {Cartesian3[]} */
+    coordCache = [];
+
+    /** @type {HTMLElement} - the overlay to show the coordinate info */
+    #coordinateInfoOverlay;
+
+    /**
+     * @param {CesiumInputHandler} inputHandler 
+     * @param {CesiumDragHandler} dragHandler 
+     * @param {CesiumHighlightHandler} highlightHandler 
+     * @param {CesiumMeasure} drawingHelper 
+     * @param {StateManager} stateManager 
+     * @param {EventEmitter} emitter 
+     * @param {*} cesiumPkg 
+     */
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+        // Validate input parameters
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
+            throw new Error("TwoPointsDistanceCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        }
+
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+
+        // flags specific to this mode
+        this.flags.isMeasurementComplete = false;
+        this.flags.isDragMode = false;
+
+        this.cesiumPkg = cesiumPkg;
+
+        this.coordsCache = [];
+        this.measure = super._createDefaultMeasure();
+    }
+
+
+    /**********
+     * GETTER *
+     **********/
+    get interactiveAnnotations() {
+        return this.#interactiveAnnotations;
+    }
+
+    get coordinate() {
+        return this.#coordinate;
+    }
+
+
+    /**********************
+     *   EVENT HANDLER    *
+     * FOR NORMAL MEASURE *
+     **********************/
+    /********************
+     * LEFT CLICK EVENT *
+     ********************/
+    /**
+     * Handles left-click events on the map.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
+     * @returns {Void}
+     */
+    handleLeftClick = async (eventData) => {
+        // use move position for the position
+        const cartesian = this.#coordinate
+        if (!defined(cartesian)) return;
+
+        const { type: pickedObjectType, object: pickedObject } = getRankedPickedObjectType(eventData.pickedFeature, this.mode);
+
+        // Try to handle click on an existing primitive first
+        const handled = this._handleAnnotationClick(pickedObject, pickedObjectType);
+
+        // If the click was not on a handled primitive and not in drag mode, start measuring
+        if (!handled && !this.flags.isDragMode) {
+            this._startMeasure();
+        }
+    }
+
+    _handleAnnotationClick(pickedObject, pickedObjectType) {
+        // Validate the picked object and type
+        if (!pickedObject || !pickedObjectType) {
+            return false;
+        }
+
+        // Handle different scenarios based on the clicked primitive type and the state of the tool
+        switch (pickedObjectType) {
+            case "label":
+                // only when it is not during measuring can edit the label. 
+                if (this.coordsCache.length === 0) {
+                    // DO NOT use the flag isMeasurementComplete because reset will reset the flag
+                    editableLabel(this._container, pickedObject.primitive);
+                }
+                return true;
+            case "point":
+                // this._removePointInfoMarker(pickedObject.primitive);
+                return true;
+            case "line":
+                return false;   // False mean do not handle line click, because it could click on moving line
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Initiates the measurement process by creating a new group or adding a point.
+     */
+    _startMeasure() {
+        if (this.flags.isMeasurementComplete) {
+            this.flags.isMeasurementComplete = false;
+            this.coordsCache = [];
+        }
+
+        // Initiate cache if it is empty, start a new group and assign cache to it
+        if (this.coordsCache.length === 0) {
+            // Reset for a new measure using the default structure
+            this.measure = this._createDefaultMeasure();
+
+            // Establish data relation
+            this.measure.coordinates = this.coordsCache; // when cache changed measure data changed, due to reference by address.
+        }
+
+        // Check if the current coordinate is near any existing point (distance < 0.3)
+        const nearPoint = this._isNearPoint(this.#coordinate);
+        if (nearPoint) return; // Do not create a new point if near an existing one
+
+
+        // -- Handle Point --
+        // create a new point primitive
+        const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
+            color: this.stateManager.getColorState("pointColor"),
+            id: `annotate_${this.mode}_point_${this.measure.id}`,
+            status: "completed"
+        });
+        if (!pointPrimitive) return; // If point creation fails, exit
+        pointPrimitive.status = "completed"; // Set status to pending for the point primitive
+
+        // Update the this.coords cache and this.measure coordinates
+        this.coordsCache.push(this.#coordinate);
+
+
+        // -- Handle Label -- 
+        const { cartographicDegrees } = this._createOrUpdateLabel(this.coordsCache, this.#interactiveAnnotations.labels, {
+            showBackground: true,
+            status: "completed"
+        });
+
+        // -- Handle Data --
+        this.measure._records.push(cartographicDegrees.latitude, cartographicDegrees.longitude, cartographicDegrees.height);
+        this.measure.status = "completed";
+
+        // -- Update Data Pool --
+        dataPool.updateOrAddMeasure({ ...this.measure });
+
+        // -- Update State --
+        this.flags.isMeasurementComplete = true;
+
+        // -- Reset Values --
+        // Clean up the current measure state, to prepare for the next measure
+        this.coordsCache = [];
+        this.#interactiveAnnotations.labels = [];
+    }
+
+
+    /***********************
+     * MOUSE MOVE FEATURES *
+     ***********************/
+    /**
+     * Handles mouse move events on the map.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
+     * @returns {Void}
+     */
+    handleMouseMove = async (eventData) => {
+        const { mapPoint: cartesian, pickedFeature: pickedObjects, screenPoint } = eventData;
+
+        // update coordinate
+        if (!defined(cartesian)) return;
+        this.#coordinate = cartesian;
+
+        // Validate picked objects
+        if (!defined(pickedObjects)) {
+            this._hideCoordinateInfoOverlay();
+            this._hidePointerOverlay();
+            return;
+        }
+
+        // update pointerOverlay: the moving dot with mouse
+        const pointerElement = this._setupPointerOverlay();
+        if (pointerElement) {
+            const pointerOverlay = updatePointerOverlay(this.map, pointerElement, cartesian, pickedObjects)
+            this.stateManager.setOverlayState("pointer", pointerOverlay);
+        }
+
+        // -- Coordinate info overlay --
+        // Create the coordinate info overlay if it does not exist
+        if (!this.#coordinateInfoOverlay) {
+            this.#coordinateInfoOverlay = this._createCoordinateInfoOverlay();
+        }
+
+        // Update coordinate info overlay if it already exists
+        if (this.#coordinateInfoOverlay) {  // Still check if overlay exists before update - defensive programming
+            this._updateCoordinateInfoOverlay(screenPoint, this.#coordinate);
+        }
+    }
+
+
+    /************************
+     * RIGHT CLICK FEATURES *
+     ************************/
+    /**
+     * Handles right-click events on the map.
+     * @param {NormalizedEventData} eventData - The event data containing information about the click event.
+     * @returns {Void}
+     */
+    handleRightClick = async (eventData) => {
+        await super.handleRightClick(eventData); // Call the super method to handle right-click
+    }
+
+
+    /******************
+     * EVENT HANDLING *
+     *    FOR DRAG    *
+     ******************/
+    /**
+     * Handle graphics updates during dragging operation.
+     * @param {MeasurementGroup} measure - The measure object data from drag operation.
+     * @returns {void}
+     */
+    updateGraphicsOnDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
+        const position = this.dragHandler.coordinate;
+
+        // -- Handle label --
+        this._createOrUpdateLabel([position], this.dragHandler.draggedObjectInfo.labels, {
+            status: "moving",
+            showBackground: false
+        });
+
+        // -- Hide the coordinate info overlay --
+        if (this.#coordinateInfoOverlay) {
+            this.#coordinateInfoOverlay.style.display = 'none';
+        }
+    }
+
+    /**
+     * Finalize graphics updates for the end of drag operation
+     * @param {MeasurementGroup} measure - The measure object data from drag operation.
+     * @returns {void}
+     */
+    finalizeDrag(measure) {
+        // Set the measure to the dragged measure to represent the current measure data
+        // !Important: it needs to reset at end of drag
+        this.measure = measure;
+
+        const position = this.dragHandler.coordinate;
+
+        // -- Finalize Label Graphics --
+        const { cartographicDegrees } = this._createOrUpdateLabel([position], this.dragHandler.draggedObjectInfo.labels, {
+            status: "completed",
+            showBackground: true
+        });
+
+        // --- Update Measure Data ---
+        measure._records = [cartographicDegrees.latitude, cartographicDegrees.longitude, cartographicDegrees.height]; // Update new records
+        measure.coordinates = [{ ...position }]; // Update coordinates
+        measure.status = "completed"; // Update the measure status
+    }
+
+
+    /*******************
+     * HELPER FEATURES *
+     *******************/
+    /**
+     * 
+     * @param {Cartesian3[]} positions - the positions to create or update the label. 
+     * @param {Label[]} labelsArray - the array to store the label primitive reference of the operation not the label collection.
+     * @param {object} options - options for label creation or update.
+     * @returns 
+     */
+    _createOrUpdateLabel(positions, labelsArray, options = {}) {
+        // Validate input
+        if (!Array.isArray(positions) || !Array.isArray(labelsArray)) {
+            console.warn("Invalid input: positions and labelsArray should be arrays.");
+            return { cartographicDegrees: null, labelPrimitive: null }; // Validate input positions
+        };
+
+        // default options
+        const {
+            status = null,
+            showBackground = true,
+            id = `annotate_${this.mode}_label_${this.measure.id}`,
+        } = options;
+
+        const cartographicDegrees = convertToCartographicDegrees(positions[0]);
+        const formattedText =
+            `lat: ${cartographicDegrees.latitude.toFixed(6)}\u00B0` +
+            `\nlng: ${cartographicDegrees.longitude.toFixed(6)}\u00B0` +
+            `\nelv: ${cartographicDegrees.height.toFixed(2)}m`;
+
+        let labelPrimitive = null;
+
+        // -- Update label if existed--
+        if (labelsArray.length > 0) {
+            labelPrimitive = labelsArray[0]; // Get reference to the existing label primitive
+
+            if (!labelPrimitive) {
+                console.warn("_createOrUpdateLabel: Invalid object found in labelsArray. Attempting to remove and recreate.");
+                labelsArray.length = 0; // Clear the array to trigger creation below
+            } else {
+                // Update label visuals and metadata
+                labelPrimitive = this._updateLabel(labelPrimitive, positions, formattedText, {
+                    showBackground,
+                    status,
+                    id,
+                });
+            }
+        }
+
+        // -- Create new label (if no label existed in labelsArray or contained invalid object) --
+        if (!labelPrimitive) {
+            labelPrimitive = this.drawingHelper._addLabel(positions, formattedText, null, {
+                id: id,
+                showBackground: showBackground,
+                status: status,
+            });
+
+            // -- Handle References Update --
+            labelPrimitive && labelsArray.push(labelPrimitive);
+        }
+
+        if (!labelPrimitive) {
+            console.error("_createOrUpdateLabel: Failed to create new label primitive.");
+            return { cartographicDegrees, labelPrimitive: null }; // Return cartographicDegrees but null primitive
+        }
+
+        return { cartographicDegrees, labelPrimitive };
+    }
+
+    _createCoordinateInfoOverlay() {
+        this.#coordinateInfoOverlay = document.createElement("div");
+        this.#coordinateInfoOverlay.className = "coordinate-info-overlay cesium-coordinate-info-overlay";
+
+        // Apply styles for the overlay
+        Object.assign(this.#coordinateInfoOverlay.style, {
+            position: "absolute",
+            pointerEvents: "none",
+            padding: "6px 12px",
+            display: "none",
+            backgroundColor: "rgba(31, 31, 31, 0.8)", // M3 Dark theme surface color (approx)
+            color: "#E2E2E2",             // M3 Dark theme on-surface text color (approx)
+            borderRadius: "12px",
+            fontFamily: "'Roboto', Arial, sans-serif",
+            fontSize: "14px",
+            lineHeight: "1.5",
+            zIndex: "1001",
+            whiteSpace: "pre-line",
+            boxShadow: "0px 1px 2px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15)" // M3 Dark theme elevation 2 shadow (approx)
+        });
+
+        this._container.appendChild(this.#coordinateInfoOverlay);
+        return this.#coordinateInfoOverlay;
+    }
+
+    /**
+     * Updates the coordinate info overlay with the current coordinate information.
+     * @param {Cartesian2} screenPoint - The screen coordinates where the overlay should be displayed.
+     * @param {Cartesian3} cartesian - The current Cartesian3 coordinate.
+     */
+    _updateCoordinateInfoOverlay(screenPoint, cartesian) {
+        // -- Check if the overlay is defined --
+        if (!this.#coordinateInfoOverlay) return null;
+
+        // -- Convert to cartographic degrees --
+        const cartographicDegrees = convertToCartographicDegrees(cartesian);
+        if (!cartographicDegrees) return null;
+
+        // -- Update overlay content using destructuring --
+        const { latitude, longitude, height } = cartographicDegrees;
+        const displayInfo =
+            `lat: ${latitude.toFixed(6)}\u00B0` +
+            `\nlng: ${longitude.toFixed(6)}\u00B0` +
+            `\nelv: ${height.toFixed(2)}m`;
+        this.#coordinateInfoOverlay.textContent = displayInfo || " ";
+
+        // -- Handle screen position --
+        if (!screenPoint) {
+            const { scene } = this.map;
+            if (SceneTransforms.worldToWindowCoordinates) {
+                screenPoint = SceneTransforms.worldToWindowCoordinates(scene, cartesian);
+            } else if (SceneTransforms.wgs84ToWindowCoordinates) {
+                screenPoint = SceneTransforms.wgs84ToWindowCoordinates(scene, cartesian);
+            } else {
+                console.error("SceneTransforms.worldToWindowCoordinates or SceneTransforms.wgs84ToWindowCoordinates is not available in the current version of Cesium.");
+            }
+        }
+
+        // -- Set overlay style and position using destructuring --
+        const { x, y } = screenPoint;
+        Object.assign(this.#coordinateInfoOverlay.style, {
+            display: 'block',
+            left: `${x + 20}px`,
+            top: `${y - 20}px`
+        });
+    }
+
+
+    _hideCoordinateInfoOverlay() {
+        // Hide the coordinate info overlay
+        if (this.#coordinateInfoOverlay) {
+            this.#coordinateInfoOverlay.style.display = 'none';
+            this.#coordinateInfoOverlay.textContent = '';
+        }
+    }
+
+    _hidePointerOverlay() {
+        const pointerOverlay = this.stateManager.getOverlayState("pointer");
+        if (pointerOverlay) {
+            pointerOverlay.style.display = 'none';
+        }
+    }
+
+    /**
+     * Resets values specific to the mode.
+     */
+    resetValuesModeSpecific() {
+        // Reset flags
+        this.flags.isMeasurementComplete = false;
+        this.flags.isDragMode = false;
+
+        // Reset variables
+        this.coordsCache = [];
+        this.#coordinate = null;
+        this.#interactiveAnnotations.labels = [];
+
+        // Reset the measure data
+        this.measure = super._createDefaultMeasure();
+
+        // Reset coordinate tooltip overlay
+        if (this.#coordinateInfoOverlay) {
+            this.#coordinateInfoOverlay.remove();
+            this.#coordinateInfoOverlay = null;
+        }
+    }
+}
+
+export { PointInfoCesium };

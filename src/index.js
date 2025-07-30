@@ -1,10 +1,10 @@
 import * as Cesium from "cesium";
 import 'mainStyle';
-// import { MeasureToolbox } from "./MeasureToolbox.js";
-import { MapCesium } from "./MapCesium.js";
-import { MapLeaflet } from "./MapLeaflet.js";
-import { MapGoogle } from "./MapGoogle.js";
-import { mapStyle } from "./styles/mapStyle.js";
+// import { MeasureToolbox } from "./MeasureToolbox.mjs";
+import { MapCesium } from "./MapCesium.mjs";
+import { MapLeaflet } from "./MapLeaflet.mjs";
+import { MapGoogle } from "./MapGoogle.mjs";
+import { mapStyle } from "./styles/mapStyle.mjs";
 import EventEmitter from "eventemitter3";
 class Navigator {
     constructor() {
