@@ -23,12 +23,16 @@ export class StateManager {
                 isDragMode: false,
                 isAddMode: false,
                 isToolsExpanded: false,
+                featureTasks: null,
             },
             element: {
                 contextMenu: null,
                 // helpTable: null,
                 // logTable: null,
                 // toolbar: null,
+            },
+            behavior: {
+                featureTasks: null, // Holds the current feature task state
             },
             // position: {
             //     logBox: { top: "280px", right: "0px" },
@@ -55,7 +59,22 @@ export class StateManager {
             },
         };
     }
-    // Active Mode Methods
+
+
+    /*************************************
+     * GET AND SET METHOD FOR PROPERTIES *
+     *************************************/
+
+    /***************
+     * ACTIVE MODE *
+     ***************/
+    /**
+     * Gets the ID of the currently active measurement mode.
+     * @returns {string | null} The active mode ID or null if inactive.
+     */
+    getActiveMode() {
+        return this._state.activeModeId;
+    }
     /**
      * Sets the currently active measurement mode ID.
      * Emits an 'activeModeChanged' event via the internal emitter.
@@ -74,15 +93,11 @@ export class StateManager {
         }
     }
 
-    /**
-     * Gets the ID of the currently active measurement mode.
-     * @returns {string | null} The active mode ID or null if inactive.
-     */
-    getActiveMode() {
-        return this._state.activeModeId;
-    }
 
-    // FLAG STATE METHODS
+
+    /********
+     * FLAG *
+     ********/
     getFlagState(key) {
         if (key) {
             if (key in this._state.flags) {
@@ -105,7 +120,10 @@ export class StateManager {
         }
     }
 
-    // BUTTON STATE METHODS
+
+    /**********
+     * BUTTON *
+     **********/
     getButtonState(key) {
         if (key) {
             if (key in this._state.button) {
@@ -127,6 +145,10 @@ export class StateManager {
         }
     }
 
+
+    /***********
+     * ELEMENT *
+     ***********/
     // ELEMENT STATE METHODS
     getElementState(key) {
         if (key) {
@@ -149,7 +171,35 @@ export class StateManager {
         }
     }
 
-    // // POSITION STATE METHODS
+
+    /************
+     * BEHAVIOR *
+     ************/
+    getBehaviorState(key) {
+        if (key) {
+            if (key in this._state.behavior) {
+                return this._state.behavior[key];
+            } else {
+                console.warn(`Property '${key}' does not exist in behavior state.`);
+                return undefined;
+            }
+        }
+        return { ...this._state.behavior };
+    }
+
+    setBehaviorState(key, value) {
+        if (key in this._state.behavior) {
+            this._state.behavior[key] = value;
+            this.emitter.emit("stateChange", { section: "behavior", key, value });
+        } else {
+            console.warn(`Property '${key}' does not exist in behavior state.`);
+        }
+    }
+
+
+    /************
+     * POSITION *
+     ************/
     // getPositionState(key) {
     //     if (key) {
     //         if (key in this._state.position) {
@@ -177,7 +227,10 @@ export class StateManager {
     //     }
     // }
 
-    // OVERLAY STATE METHODS
+
+    /***********
+     * OVERLAY *
+     ***********/
     getOverlayState(key) {
         if (key) {
             if (key in this._state.overlay) {
@@ -199,7 +252,9 @@ export class StateManager {
         }
     }
 
-    // COLOR STATE METHODS
+    /*********
+     * COLOR *
+     *********/
     getColorState(key) {
         if (key) {
             if (key in this._state.color) {
@@ -221,7 +276,11 @@ export class StateManager {
         }
     }
 
-    // --- NEW: Event Listener Proxy Methods ---
+
+
+    /****************
+     * UTIL METHODS *
+     ****************/
     /**
      * Registers an event listener directly on the StateManager's emitter
      * for specific state manager events (like 'activeModeChanged').

@@ -364,20 +364,30 @@ class MeasureModeCesium extends MeasureModeBase {
             if (this.contextMenu) {
                 this._setContextMenuVisibility(false);
             }
-
             return;  // Exit to skip the rest of the logic
         }
 
         // -- Handle context menu of picked object  --
         // If a picked object is found, show the context menu with options
+        const items = [];
         if (pickedObjectType && pickedObject) {
-            const items = this._getContextMenuItemsForAnnotation(pickedObject, pickedObjectType);
+            // -- Get the context menu items for the picked object --
+            const annotationItems = this._getContextMenuItemsForAnnotation(pickedObject, pickedObjectType);
+            items.push(...annotationItems);
+
+            // -- Add feature tasks items if the user role includes "tester" --
+            if (this.drawingHelper.getUserRole().includes("tester")) {
+                const featureTasksItems = this._getContextMenuItemsForFeatureTasks(pickedObject, pickedObjectType);
+                items.push(...featureTasksItems);
+            }
+
+            // If no items to show, hide the context menu
             if (!Array.isArray(items) || items.length === 0) {
                 this._setContextMenuVisibility(false);
                 return; // If no items to show, exit
             }
 
-            // -- Update the context menu with the items --
+            // Update the context menu with the items
             this._updateContextMenu(this._container, screenPoint, items);
         }
     }
@@ -411,7 +421,8 @@ class MeasureModeCesium extends MeasureModeBase {
         const advancedAnnotationModes = [
             'multi-distances',
             'multi-distances-clamped',
-            'profile-distances'
+            'profile-distances',
+            'area'
         ];
 
         const additionalItems = [];
@@ -440,6 +451,25 @@ class MeasureModeCesium extends MeasureModeBase {
         }
 
         return [...commonItems, ...additionalItems];
+    }
+
+    _getContextMenuItemsForFeatureTasks() {
+        return [{
+            text: "Feature Tasks",
+            submenu: [
+                { text: "Add Missing Bay", event: () => { this._addMissingBay() } },
+                { text: "Add Missing Pole", event: () => { this._addMissingPole() } },
+            ]
+        }];
+    }
+
+    _addMissingBay() {
+        this.stateManager.setBehaviorState('featureTasks', 'addMissingBay');
+        showCustomNotification("Feature task 'Add Missing Bay' is activated.", this._container);
+    }
+    _addMissingPole() {
+        this.stateManager.setBehaviorState('featureTasks', 'addMissingPole');
+        showCustomNotification("Feature task 'Add Missing Pole' is activated.", this._container);
     }
 
     /**

@@ -89,6 +89,7 @@ class DataPool {
         }
 
         console.log(this._data);
+        console.log("bay data:", this._data.filter(measure => measure.featureTasks === 'addMissingBay'));
     }
 
     /**

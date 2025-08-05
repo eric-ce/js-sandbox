@@ -322,6 +322,7 @@ class MeasureModeBase {
             _records: [],
             interpolatedPoints: [],
             mapName: this.mapName ?? "unknown",
+            featureTasks: this.stateManager.getBehaviorState('featureTasks')
         };
     }
 

@@ -297,12 +297,17 @@ export function createContextMenu(container, options = {}) {
  * @param {Array<{text: string, event: function}>} itemOptions - Menu item configurations
  */
 export function updateContextMenu(contextMenu, position, itemOptions = []) {
-    if (!contextMenu || !position.x || !position.y) return;
+    if (!contextMenu || typeof position.x !== 'number' || typeof position.y !== 'number') return;
 
     // Update position
-    contextMenu.style.left = `${position.x}px`;
-    contextMenu.style.top = `${position.y}px`;
-    contextMenu.style.display = 'block';
+    Object.assign(contextMenu.style, {
+        display: 'block',
+        left: `${position.x}px`,
+        top: `${position.y}px`
+    });
+    // contextMenu.style.left = `${position.x}px`;
+    // contextMenu.style.top = `${position.y}px`;
+    // contextMenu.style.display = 'block';
 
     // Clear existing content
     const existingList = contextMenu.querySelector("ul");
@@ -356,7 +361,7 @@ function createMenuList(itemOptions) {
 
 /**
  * Creates a single menu item.
- * @param {{text: string, event: function}} item - Menu item configuration
+ * @param {{text: string, event: function, submenu?: Array<{text: string, event: function}>}} item - Menu item configuration
  * @returns {HTMLLIElement} The menu item element
  * @private
  */
@@ -369,33 +374,161 @@ function createMenuItem(item) {
         padding: "8px 12px",
         cursor: "pointer",
         borderBottom: "1px solid #eee",
-        transition: "background-color 0.3s ease"
+        transition: "background-color 0.3s ease",
+        position: "relative" // Enable positioning for submenu
     });
+
+    // Add arrow indicator for items with submenu
+    if (item.submenu && item.submenu.length > 0) {
+        const arrow = document.createElement("span");
+        arrow.textContent = "▶";
+        arrow.style.cssText = "position: absolute; right: 8px; font-size: 10px;";
+        menuItem.appendChild(arrow);
+    }
 
     // Add hover effects
     menuItem.addEventListener("mouseenter", () => {
         menuItem.style.backgroundColor = "#ece5e5";
-    });
-    menuItem.addEventListener("mouseleave", () => {
-        menuItem.style.backgroundColor = "transparent";
-    });
 
-    // Click event handler - FIXED: Hide menu after executing item action
-    menuItem.addEventListener("click", event => {
-        event.stopPropagation();
-        event.preventDefault();
-
-        // Execute the menu item action
-        item.event(event);
-
-        // Hide the context menu after item execution
-        const contextMenu = event.target.closest('.an-context-menu');
-        if (contextMenu) {
-            hideContextMenu(contextMenu);
+        // Show submenu if it exists
+        if (item.submenu && item.submenu.length > 0) {
+            showSubmenu(menuItem, item.submenu);
         }
     });
 
+    menuItem.addEventListener("mouseleave", () => {
+        menuItem.style.backgroundColor = "transparent";
+
+        // Hide submenu with slight delay to allow mouse movement to submenu
+        setTimeout(() => {
+            const submenu = menuItem.querySelector('.an-submenu');
+            if (submenu && !submenu.matches(':hover') && !menuItem.matches(':hover')) {
+                submenu.remove();
+            }
+        }, 100);
+    });
+
+    // Click event handler - only for items without submenu
+    if (!item.submenu || item.submenu.length === 0) {
+        menuItem.addEventListener("click", event => {
+            event.stopPropagation();
+            event.preventDefault();
+
+            // Execute the menu item action
+            item.event(event);
+
+            // Hide the context menu after item execution
+            const contextMenu = event.target.closest('.an-context-menu');
+            if (contextMenu) {
+                hideContextMenu(contextMenu);
+            }
+        });
+    }
+
     return menuItem;
+}
+
+/**
+ * Shows a submenu for a menu item.
+ * @param {HTMLLIElement} parentItem - The parent menu item
+ * @param {Array<{text: string, event: function}>} submenuItems - Submenu item configurations
+ * @private
+ */
+function showSubmenu(parentItem, submenuItems) {
+    // Remove existing submenu
+    const existingSubmenu = parentItem.querySelector('.an-submenu');
+    if (existingSubmenu) {
+        existingSubmenu.remove();
+    }
+
+    // Create submenu container
+    const submenu = document.createElement('div');
+    submenu.classList.add('an-submenu');
+
+    Object.assign(submenu.style, {
+        position: 'absolute',
+        left: '100%',
+        top: '0',
+        background: '#fefefe',
+        border: '1px solid #ddd',
+        borderRadius: '4px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        padding: '4px 0',
+        minWidth: '120px',
+        zIndex: '1001'
+    });
+
+    // Create submenu list
+    const submenuList = document.createElement('ul');
+    submenuList.className = 'an-context-menu-list';
+    Object.assign(submenuList.style, {
+        listStyle: 'none',
+        margin: '0',
+        padding: '0'
+    });
+
+    // Add submenu items
+    submenuItems.forEach(subItem => {
+        const submenuItem = document.createElement('li');
+        submenuItem.classList.add('an-context-menu-list-item');
+        submenuItem.textContent = subItem.text;
+
+        Object.assign(submenuItem.style, {
+            padding: '8px 12px',
+            cursor: 'pointer',
+            borderBottom: '1px solid #eee',
+            transition: 'background-color 0.3s ease'
+        });
+
+        // Submenu item hover effects
+        submenuItem.addEventListener('mouseenter', () => {
+            submenuItem.style.backgroundColor = '#ece5e5';
+        });
+        submenuItem.addEventListener('mouseleave', () => {
+            submenuItem.style.backgroundColor = 'transparent';
+        });
+
+        // Submenu item click handler
+        submenuItem.addEventListener('click', event => {
+            event.stopPropagation();
+            event.preventDefault();
+
+            subItem.event(event);
+
+            // Hide the entire context menu
+            const contextMenu = event.target.closest('.an-context-menu');
+            if (contextMenu) {
+                hideContextMenu(contextMenu);
+            }
+        });
+
+        submenuList.appendChild(submenuItem);
+    });
+
+    // Remove border from last submenu item
+    if (submenuList.lastElementChild) {
+        submenuList.lastElementChild.style.borderBottom = 'none';
+    }
+
+    submenu.appendChild(submenuList);
+
+    // Keep submenu visible on hover
+    submenu.addEventListener('mouseenter', () => {
+        // Keep both parent and submenu highlighted
+        parentItem.style.backgroundColor = '#ece5e5';
+    });
+
+    submenu.addEventListener('mouseleave', () => {
+        // Remove submenu after short delay
+        setTimeout(() => {
+            if (!parentItem.matches(':hover')) {
+                submenu.remove();
+                parentItem.style.backgroundColor = 'transparent';
+            }
+        }, 100);
+    });
+
+    parentItem.appendChild(submenu);
 }
 
 
