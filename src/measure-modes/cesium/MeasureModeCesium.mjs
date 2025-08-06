@@ -422,7 +422,6 @@ class MeasureModeCesium extends MeasureModeBase {
             'multi-distances',
             'multi-distances-clamped',
             'profile-distances',
-            'area'
         ];
 
         const additionalItems = [];
@@ -453,20 +452,46 @@ class MeasureModeCesium extends MeasureModeBase {
         return [...commonItems, ...additionalItems];
     }
 
-    _getContextMenuItemsForFeatureTasks() {
+    _getContextMenuItemsForFeatureTasks(pickedObject, pickedObjectType) {
         return [{
             text: "Feature Tasks",
             submenu: [
-                { text: "Add Missing Bay", event: () => { this._addMissingBay() } },
-                { text: "Add Missing Pole", event: () => { this._addMissingPole() } },
+                { text: "Add Missing Bay", event: () => { this._addMissingBay(pickedObject) } },
+                { text: "Add Missing Pole", event: () => { this._addMissingPole(pickedObject) } },
             ]
         }];
     }
 
-    _addMissingBay() {
+    _addMissingBay(pickedObject) {
         this.stateManager.setBehaviorState('featureTasks', 'addMissingBay');
         showCustomNotification("Feature task 'Add Missing Bay' is activated.", this._container);
+
+        // switch to the mode of the picked object
+        const pickedObjectMode = pickedObject?.feature?.properties?.mode || pickedObject.id.split('_')[1];
+        this._getOrSetModeInstance(pickedObjectMode);
+
+        // Add a stop button to stop the feature task
+        if (this.drawingHelper._buttonContainer.querySelector(".stop-feature-task")) {
+            return; // If the stop button already exists, do not add again
+        }
+        const stopButton = document.createElement("button");
+        stopButton.textContent = "Stop";
+        stopButton.title = "Stop feature tasks";
+        stopButton.classList.add("annotate-button", "animate-on-show", "active", "stop-feature-task");
+        stopButton.style.top = "0.5rem";
+        stopButton.style.left = "0px";
+        stopButton.setAttribute("aria-pressed", "false");
+        stopButton.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            this.stateManager.setBehaviorState('featureTasks', null);
+            showCustomNotification("Feature tasks stopped.", this._container);
+            stopButton.remove();
+        });
+        this.drawingHelper._buttonContainer && this.drawingHelper._buttonContainer.appendChild(stopButton);
     }
+
     _addMissingPole() {
         this.stateManager.setBehaviorState('featureTasks', 'addMissingPole');
         showCustomNotification("Feature task 'Add Missing Pole' is activated.", this._container);

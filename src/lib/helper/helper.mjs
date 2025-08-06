@@ -382,7 +382,7 @@ function createMenuItem(item) {
     if (item.submenu && item.submenu.length > 0) {
         const arrow = document.createElement("span");
         arrow.textContent = "▶";
-        arrow.style.cssText = "position: absolute; right: 8px; font-size: 10px;";
+        arrow.style.cssText = "position: absolute; right: 0.5rem; top: 0.7rem; font-size: 10px;";
         menuItem.appendChild(arrow);
     }
 
