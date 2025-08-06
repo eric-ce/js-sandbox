@@ -33,6 +33,7 @@
     "cesium-navigation-es6": "^3.0.9",
     "chart.js": "^4.4.3",
     "eventemitter3": "^5.0.1",
-    "leaflet": "^1.9.4"
+    "leaflet": "^1.9.4",
+    "tabulator-tables": "^6.3.1"
   }
 }

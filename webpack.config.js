@@ -52,8 +52,10 @@ module.exports = {
                 { from: path.join(cesiumSource, "ThirdParty"), to: "ThirdParty" },
                 { from: path.join(__dirname, leafletSource), to: "leaflet" },
                 { from: path.join(__dirname, leafletSource, 'images'), to: "leaflet/images" },
-                // cesium navigation compass styles
+                // Add cesium navigation compass styles
                 { from: path.join(__dirname, 'node_modules/cesium-navigation-es6/dist/styles/cesium-navigation.css'), to: 'styles/cesium-navigation.css' },
+                // Add Tabulator CSS
+                { from: path.join(__dirname, 'node_modules/tabulator-tables/dist/css/tabulator_midnight.min.css'), to: 'styles/tabulator_midnight.min.css' },
             ],
         }),
         new webpack.DefinePlugin({
