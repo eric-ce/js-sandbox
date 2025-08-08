@@ -1,42 +1,12 @@
 import L from "leaflet";
 import { mapStyle } from "./styles/mapStyle.mjs";
 import { MeasureToolbox } from "./components/MeasureToolbox.mjs";
-export default class MapLeaflet extends HTMLElement {
+import { MapBase } from "./MapBase.mjs";
+export default class MapLeaflet extends MapBase {
     constructor() {
         super();
-        this.attachShadow({ mode: "open" });
-        this._map = null;
-
-        this._mapEmitter = null;
         this.type = "map-leaflet";
-
-        this._isListening = true; // Flag to track if the listener is active
-
-        this.measureToolbox = null;
-
-        // mimic navigator app variable for user and user roles
-        this.app = {
-            log: ["testing"],
-            currentUser: {
-                sessions: {
-                    navigator: {
-                        roles: ["fireTrail", "developer", "tester", "flyThrough"]
-                    }
-                }
-            }
-        }
-    }
-
-    get mapEmitter() {
-        return this._mapEmitter;
-    }
-
-    set mapEmitter(emitter) {
-        this._mapEmitter = emitter;
-    }
-
-    get map() {
-        return this._map;
+        this._isListening = true; // Leaflet starts with listener active
     }
 
     async connectedCallback() {
@@ -57,35 +27,19 @@ export default class MapLeaflet extends HTMLElement {
 
         try {
             await this._initialize().then(() => {
-                this.measureToolbox = this.initializeMeasureToolbox();
+                this._attachAnnotationToolbox();
             })
         } catch (error) {
             console.error("Error initializing Leaflet Maps:", error);
         }
     }
 
-    async _initialize() {
-        this._map = await this._createMap();
-
-        this._mapEmitter.on("camera:changed", ({ mapName, lat, lng, zoom }) => {
-            if (mapName === this.type) return;
-
-            // Temporarily remove the moveend listener
-            this._removeMapListener();
-
-            this._map.once('moveend', () => {
-                // Add the listener back after the animation completes
-                setTimeout(() => {
-                    this._addMapListener();
-                }, 100);
-            });
-
-            this._map.flyTo([lat, lng], zoom || 16, {
-                duration: 1.5
-            });
-        });
-
-        this._addMapListener();
+    disconnectedCallback() {
+        this._removeMapListener();
+        if (this._map) {
+            this._map.remove();
+            this._map = null;
+        }
     }
 
     async _createMap() {
@@ -93,10 +47,10 @@ export default class MapLeaflet extends HTMLElement {
         L.Icon.Default.imagePath = '/leaflet/images/';
 
         // Initialize the map centered at a given coordinate with a zoom level.
-        const map = L.map(this.div).setView([51.505, -0.09], 13);
+        const map = L.map(this.div).setView([51.505, -0.09], 18);
 
         // Add a tile layer from OpenStreetMap.
-        const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(map);
@@ -107,15 +61,40 @@ export default class MapLeaflet extends HTMLElement {
         return map;
     }
 
+    _panTo(bounds) {
+        // Add a guard clause to prevent errors if the map is destroyed.
+        if (!this._map) {
+            return;
+        }
+
+        this._map.once('moveend', () => {
+            // Add the listener back after the animation completes
+            setTimeout(() => {
+                this._addMapListener();
+            }, 100);
+        });
+
+        this._map.flyToBounds([
+            [bounds.south, bounds.west],
+            [bounds.north, bounds.east]
+        ], { duration: 1.0 });
+    }
+
+    _getBounds() {
+        const bounds = this._map.getBounds();
+        return {
+            north: bounds.getNorth(),
+            south: bounds.getSouth(),
+            east: bounds.getEast(),
+            west: bounds.getWest()
+        };
+    }
+
     // Handler for map movement
     _handleMapMove = () => {
-        const center = this._map.getCenter();
-        const zoom = this._map.getZoom();
         this._mapEmitter.emit("camera:changed", {
             mapName: this.type,
-            lat: center.lat,
-            lng: center.lng,
-            zoom
+            bounds: this._getBounds()
         });
     }
 
@@ -135,14 +114,15 @@ export default class MapLeaflet extends HTMLElement {
         }
     }
 
-    initializeMeasureToolbox() {
-        if (!this.map) return; // Return if map is not initialized
+    _attachAnnotationToolbox() {
+        if (!this.map || !this.annotationToolbox) return; // Return if map is not initialized
 
-        const measureToolbox = new MeasureToolbox(this.app, this.type);
+        // Set properties for the annotation toolbox
+        this.annotationToolbox.leafletMap = this.map;
+        this.annotationToolbox.type = this.type; // Set the type for the toolbox
 
-        measureToolbox.leafletMap = this.map;
-
-        return measureToolbox;
+        // Initialize the toolbox component by mapType
+        this.annotationToolbox.initializeToolboxComponent(this.type);
     }
 }
 

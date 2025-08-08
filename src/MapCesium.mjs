@@ -10,60 +10,22 @@ import {
 } from "cesium";
 
 import CesiumNavigation from "cesium-navigation-es6";
+import { MapBase } from "./MapBase.mjs";
 
-export class MapCesium extends HTMLElement {
+export class MapCesium extends MapBase {
     constructor() {
         super();
-        this.attachShadow({ mode: "open" });
-        this.div = null;
-
-        this._viewer = null;
-
-        // mimic navigator app variable for user and user roles
-        this.app = {
-            log: ["testing"],
-            currentUser: {
-                sessions: {
-                    navigator: {
-                        roles: ["fireTrail", "developer", "tester", "flyThrough"]
-                    }
-                }
-            }
-        }
-
-        this.measureToolbox = null;
-
-        // !Important: Do not copy emitter: for sync view features only
-        this._mapEmitter = null;
-
         this.type = "map-cesium";
-
-        this._isListening = false; // Flag to track if the listener is active
-    }
-
-    get mapEmitter() {
-        return this._mapEmitter;
-    }
-
-    set mapEmitter(emitter) {
-        this._mapEmitter = emitter;
-    }
-    /*********************
-     * GETTER AND SETTER *
-     *********************/
-    set viewer(viewer) {
-        this._viewer = viewer;
     }
 
     get viewer() {
-        return this._viewer;
+        return this._map; // Use the base class _map property
     }
 
+    set viewer(viewer) {
+        this._map = viewer;
+    }
 
-    /*************************************************
-     *             DO NOT COPY BELOW             *
-     * AS IT HAS BEEN SETUP ELSEWHERE IN THE PROJECT *
-     *************************************************/
     async connectedCallback() {
         // apply cesium style due to shadow dom
         this.cesiumStyle = document.createElement("link");
@@ -71,60 +33,26 @@ export class MapCesium extends HTMLElement {
         this.cesiumStyle.href = `/Widgets/widgets.css`;
         this.shadowRoot.appendChild(this.cesiumStyle);
 
-
-
         this._cesiumContainerSetup();
-        this.viewer = this._setViewer();
+
+        await this._initialize();
 
         if (this.viewer && this.viewer instanceof Cesium.Viewer) {
-            this._setCesiumLocation(this.viewer);
-            await this._loadTileset(this.viewer);
+            // Attach navigation controls
+            this._attachNavigation();
 
-            // -- Compass Feature --
-            this.navigationStyle = document.createElement("link");
-            this.navigationStyle.rel = "stylesheet";
-            this.navigationStyle.href = `/styles/cesium-navigation.css`;
-            this.shadowRoot.appendChild(this.navigationStyle);
-
-            new CesiumNavigation(this.viewer, {
-                enableCompass: true,
-                enableZoomControls: true,
-                enableDistanceLegend: true,
-                enableCompassOuterRing: true,
-            });
-            // -- End Compass Feature --
-
-            const cesiumMeasure = this.shadowRoot.querySelector("cesium-measure");
-            this.measureToolbox = cesiumMeasure ? cesiumMeasure : this.initializeMeasureToolbox();
+            // Attach annotation toolbox
+            this._attachAnnotationToolbox();
         }
-
-        this._mapEmitter.on("camera:changed", ({ mapName, lat, lng, zoom }) => {
-            if (mapName === this.type) return;
-
-            // Remove the listener before programmatically moving the camera
-            this._removeMapListener();
-
-            this.viewer.camera.flyTo({
-                destination: Cesium.Cartesian3.fromDegrees(lng, lat, this.convertZoomToHeight(zoom) || 1000),
-                orientation: {
-                    heading: 0.0,
-                    pitch: -Cesium.Math.PI_OVER_TWO,
-                    roll: 0.0
-                },
-                complete: () => {
-                    // Add the listener back after animation completes
-                    setTimeout(() => {
-                        this._addMapListener();
-                    }, 100);
-                },
-                duration: 1.5
-            });
-        });
-
-        this._addMapListener();
     }
 
-
+    disconnectedCallback() {
+        this._removeMapListener();
+        if (this.viewer && !this.viewer.isDestroyed()) {
+            this.viewer.destroy();
+            this._map = null;
+        }
+    }
 
     _cesiumContainerSetup() {
         this.div = document.createElement("div");
@@ -137,18 +65,87 @@ export class MapCesium extends HTMLElement {
         this.shadowRoot.appendChild(this.div);
     }
 
-    _setViewer() {
-        return new Cesium.Viewer(this.div, {
+    _attachNavigation() {
+        this.navigationStyle = document.createElement("link");
+        this.navigationStyle.rel = "stylesheet";
+        this.navigationStyle.href = `/styles/cesium-navigation.css`;
+        this.shadowRoot.appendChild(this.navigationStyle);
+
+        new CesiumNavigation(this.viewer, {
+            enableCompass: true,
+            enableZoomControls: true,
+            enableDistanceLegend: true,
+            enableCompassOuterRing: true,
+        });
+    }
+
+    _attachAnnotationToolbox() {
+        if (!this.app || !this.annotationToolbox) return;
+
+        const cesiumPkg = {
+            PointPrimitiveCollection,
+            Primitive,
+            LabelCollection,
+            GroundPolylinePrimitive,
+            PolylineCollection,
+        }
+
+        // Set properties for the annotation toolbox
+        this.annotationToolbox.viewer = this.viewer;
+        this.annotationToolbox.cesiumPkg = cesiumPkg;
+        this.annotationToolbox.type = this.type;
+
+        // Initialize the toolbox component by mapType
+        this.annotationToolbox.initializeToolboxComponent(this.type);
+    }
+
+
+    async _createMap() {
+        const viewer = new Cesium.Viewer(this.div, {
             terrain: Cesium.Terrain.fromWorldTerrain({
                 requestVertexNormals: true,
                 requestWaterMask: true,
             }),
         });
-    }
-
-    async _initializeCesium(viewer) {
         this._setCesiumLocation(viewer);
         await this._loadTileset(viewer);
+        return viewer;
+    }
+
+    _panTo(bounds) {
+        const rectangle = Cesium.Rectangle.fromDegrees(
+            bounds.west,
+            bounds.south,
+            bounds.east,
+            bounds.north
+        );
+
+        this.viewer.camera.flyTo({
+            destination: rectangle,
+            orientation: {
+                heading: 0.0,
+                pitch: -Cesium.Math.PI_OVER_TWO,
+                roll: 0.0
+            },
+            complete: () => {
+                // Add the listener back after animation completes
+                setTimeout(() => {
+                    this._addMapListener();
+                }, 100);
+            },
+            duration: 1.5
+        });
+    }
+
+    _getBounds() {
+        const rect = this.viewer.camera.computeViewRectangle();
+        if (!rect) return null;
+        return {
+            north: Cesium.Math.toDegrees(rect.north),
+            south: Cesium.Math.toDegrees(rect.south),
+            east: Cesium.Math.toDegrees(rect.east),
+            west: Cesium.Math.toDegrees(rect.west)
+        };
     }
 
     async _loadTileset(viewer) {
@@ -184,16 +181,16 @@ export class MapCesium extends HTMLElement {
 
     // Handler for camera movement
     _handleCameraChanged = () => {
-        const position = this.viewer.scene.camera.positionCartographic;
-        this._mapEmitter.emit("camera:changed", {
-            mapName: this.type,
-            lat: Cesium.Math.toDegrees(position.latitude),
-            lng: Cesium.Math.toDegrees(position.longitude),
-            zoom: this.convertHeightToZoom(position.height)
-        });
+        const bounds = this._getBounds();
+        if (bounds) {
+            this._mapEmitter.emit("camera:changed", {
+                mapName: this.type,
+                bounds: bounds
+            });
+        }
     };
 
-    // Add the map listener - use consistent method name with MapLeaflet
+    // Add the map listener
     _addMapListener() {
         if (this.viewer) {
             this.viewer.scene.camera.moveEnd.addEventListener(this._handleCameraChanged);
@@ -201,7 +198,7 @@ export class MapCesium extends HTMLElement {
         }
     }
 
-    // Remove the map listener - use consistent method name with MapLeaflet
+    // Remove the map listener
     _removeMapListener() {
         if (this.viewer) {
             this.viewer.scene.camera.moveEnd.removeEventListener(this._handleCameraChanged);
@@ -216,37 +213,6 @@ export class MapCesium extends HTMLElement {
     convertHeightToZoom(height) {
         const zoom = Math.log2(40000000 / height) + 1;
         return Math.round(zoom);
-    }
-
-    /*********************
-     * DO NOT COPY ABOVE *
-     *********************/
-
-    // initialize measure toolbox for cesium
-    initializeMeasureToolbox() {
-        // this.measureToolbox = document.createElement("cesium-measure");
-        // this.measureToolbox.viewer = this.viewer;
-        // this.measureToolbox.cesiumPkg = {
-        //     PointPrimitiveCollection,
-        //     Primitive,
-        //     LabelCollection,
-        //     GroundPolylinePrimitive,
-        //     PolylineCollection,
-        // }
-        // this.measureToolbox.app = this.app;
-        // this.shadowRoot.appendChild(this.measureToolbox);
-        const cesiumPkg = {
-            PointPrimitiveCollection,
-            Primitive,
-            LabelCollection,
-            GroundPolylinePrimitive,
-        }
-        const measureToolbox = new MeasureToolbox(this.app, this.type);
-
-        measureToolbox.viewer = this.viewer;
-        measureToolbox.cesiumPkg = cesiumPkg;
-
-        return measureToolbox;
     }
 }
 

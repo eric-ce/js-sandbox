@@ -1,12 +1,11 @@
 import { Loader } from "@googlemaps/js-api-loader";
 import { mapStyle } from "./styles/mapStyle.mjs";
 import { MeasureToolbox } from "./components/MeasureToolbox.mjs";
+import { MapBase } from "./MapBase.mjs";
 
-export class MapGoogle extends HTMLElement {
+export class MapGoogle extends MapBase {
     constructor() {
         super();
-        this.attachShadow({ mode: "open" });
-        this._map = null;
         this.type = "map-google";
 
         // Use your API key here or pull it from an environment variable
@@ -17,45 +16,7 @@ export class MapGoogle extends HTMLElement {
             version: "weekly",
             libraries: ["geometry", "visualization", "drawing"] // add libraries like "places" if needed
         });
-
-        // mimic navigator app variable for user and user roles
-        this.app = {
-            log: ["testing"],
-            currentUser: {
-                sessions: {
-                    navigator: {
-                        roles: ["fireTrail", "developer", "tester", "flyThrough"]
-                    }
-                }
-            }
-        }
-
-        this.measureToolbox = null;
-
-        this._mapEmitter = null;
-
-        this._isListening = false; // Flag to track if the listener is active
     }
-
-    /*********************
-     * GETTER AND SETTER *
-     *********************/
-    get mapEmitter() {
-        return this._mapEmitter;
-    }
-
-    set mapEmitter(emitter) {
-        this._mapEmitter = emitter;
-    }
-
-    get map() {
-        return this._map;
-    }
-
-    set map(map) {
-        this._map = map;
-    }
-
 
     async connectedCallback() {
         // Apply the map style
@@ -72,8 +33,8 @@ export class MapGoogle extends HTMLElement {
         try {
             await this._loader.load();
             await this._initialize().then(() => {
-                this.measureToolbox = this.initializeMeasureToolbox();
-            })
+                this._attachAnnotationToolbox();
+            });
 
         } catch (error) {
             console.error("Error initializing Google Maps:", error);
@@ -81,35 +42,18 @@ export class MapGoogle extends HTMLElement {
         }
     }
 
-    async _initialize() {
-        this.map = await this._createMap();
+    disconnectedCallback() {
+        this._removeMapListener();
+    }
 
+    async _initialize() {
+        await super._initialize();
         // Optionally trigger a resize to ensure proper rendering
         setTimeout(() => {
             if (this._map) {
                 google.maps.event.trigger(this._map, "resize");
             }
         }, 100);
-
-        // Set up the camera change event listener
-        this._addMapListener();
-
-        // Listen for camera changes from other maps
-        this._mapEmitter.on("camera:changed", ({ mapName, lat, lng, zoom }) => {
-            if (mapName === this.type) return;
-
-            // Remove listener before programmatic movement
-            this._removeMapListener();
-
-            // Move the map
-            this._map.panTo({ lat, lng });
-            this._map.setZoom(zoom || 16);
-
-            // Add the listener back after movement is likely complete
-            setTimeout(() => {
-                this._addMapListener();
-            }, 1000); // Google Maps animation typically takes around 500-750ms
-        });
     }
 
     async _createMap() {
@@ -124,30 +68,48 @@ export class MapGoogle extends HTMLElement {
                 mapTypeIds: ['tile', 'roadmap', 'satellite', 'hybrid', 'terrain'],
                 style: 2 //google.maps.MapTypeControlStyle.DROPDOWN_MENU
             }
-            // mapId: "c4e6833a187fa179"
         };
-
-        // Load the Google Maps library
-        // const { Map } = await google.maps.importLibrary("maps");
-        // Load the Marker library
-        // await google.maps.importLibrary("marker");
 
         const map = new google.maps.Map(this.div, mapOptions);
 
         return map;
     }
 
+    _panTo(bounds) {
+        const googleBounds = new google.maps.LatLngBounds(
+            new google.maps.LatLng(bounds.south, bounds.west),
+            new google.maps.LatLng(bounds.north, bounds.east)
+        );
+        this._map.fitBounds(googleBounds);
+
+        // Add the listener back after movement is likely complete
+        setTimeout(() => {
+            this._addMapListener();
+        }, 1000); // Google Maps animation typically takes around 500-750ms
+    }
+
+    _getBounds() {
+        const bounds = this._map.getBounds();
+        if (!bounds) return null;
+        const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+        return {
+            north: ne.lat(),
+            south: sw.lat(),
+            east: ne.lng(),
+            west: sw.lng()
+        };
+    }
+
     // Handler for map movement
     _handleMapIdle = () => {
-        const center = this._map.getCenter();
-        const zoom = this._map.getZoom();
-
-        this._mapEmitter.emit("camera:changed", {
-            mapName: this.type,
-            lat: center.lat(),
-            lng: center.lng(),
-            zoom
-        });
+        const bounds = this._getBounds();
+        if (bounds) {
+            this._mapEmitter.emit("camera:changed", {
+                mapName: this.type,
+                bounds: bounds
+            });
+        }
     };
 
     // Add the map listener
@@ -158,7 +120,7 @@ export class MapGoogle extends HTMLElement {
                 "idle",
                 this._handleMapIdle
             );
-            this._isListening = true; // Set flag consistent with MapLeaflet
+            this._isListening = true;
         }
     }
 
@@ -167,7 +129,7 @@ export class MapGoogle extends HTMLElement {
         if (this._mapListener) {
             google.maps.event.removeListener(this._mapListener);
             this._mapListener = null;
-            this._isListening = false; // Set flag consistent with MapLeaflet
+            this._isListening = false;
         }
     }
 
@@ -182,37 +144,17 @@ export class MapGoogle extends HTMLElement {
         `;
     }
 
-    // Resize, panTo, and addMarker methods remain the same
-    resize() {
-        if (this._map) {
-            google.maps.event.trigger(this._map, "resize");
-        }
-    }
-
-    panTo(lat, lng) {
-        if (this._map) {
-            this._map.panTo(new google.maps.LatLng(lat, lng));
-        }
-    }
-
     // initialize measure toolbox for google
-    initializeMeasureToolbox() {
-        if (!this.map) return; // Return if map is not initialized
+    _attachAnnotationToolbox() {
+        if (!this.map || !this.annotationToolbox) return; // Return if map is not initialized
 
-        const measureToolbox = new MeasureToolbox(this.app, this.type);
+        // Set properties for the annotation toolbox
+        this.annotationToolbox.googleMap = this.map;
+        this.annotationToolbox.type = this.type; // Set the type for the toolbox
 
-        measureToolbox.googleMap = this.map;
-
-        return measureToolbox;
+        // Initialize the toolbox component by mapType
+        this.annotationToolbox.initializeToolboxComponent(this.type);
     }
-
-
-    // disconnectedCallback() {
-    //     if (this._map) {
-    //         google.maps.event.clearInstanceListeners(this._map);
-    //         this._map = null;
-    //     }
-    // }
 }
 
 customElements.define("map-google", MapGoogle);
