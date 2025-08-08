@@ -7,15 +7,15 @@ import {
     checkLayerType,
     areCoordinatesEqual,
 } from "../lib/helper/leafletHelper.mjs";
-import { MeasureComponentBase } from "./MeasureComponentBase.mjs";
+import { AnnotationComponentBase } from "./AnnotationComponentBase.mjs";
 
 
 /**
- * LeafletMeasure class to provide measurement drawing functionalities in Leaflet. 
- * Overrides methods from MeasureComponentBase to implement Leaflet-specific features.
- * @extends {MeasureComponentBase}
+ * leafletAnnotation class to provide measurement drawing functionalities in Leaflet. 
+ * Overrides methods from AnnotationComponentBase to implement Leaflet-specific features.
+ * @extends {AnnotationComponentBase}
  */
-export default class LeafletMeasure extends MeasureComponentBase {
+export default class LeafletAnnotation extends AnnotationComponentBase {
     /** @type {L.FeatureGroup | null} - store the markers */
     #pointCollection = null;
     /** @type {L.FeatureGroup | null} - store the polyline vectors */
@@ -131,7 +131,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
 
     _addPointMarkersFromArray(positions, options = {}) {
         if (!this.map || !Array.isArray(positions) || positions.length === 0) {
-            console.warn("LeafletMeasure: Point collection not initialized for bulk add.");
+            console.warn("leafletAnnotation: Point collection not initialized for bulk add.");
             return []; // Return empty array on failure
         }
 
@@ -214,7 +214,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
 
     _addPolylinesFromArray(positions, options = {}) {
         if (!this.map || !Array.isArray(positions) || positions.length === 0) {
-            console.warn("LeafletMeasure: Invalid or empty positions array for _addPolylinesFromArray.");
+            console.warn("leafletAnnotation: Invalid or empty positions array for _addPolylinesFromArray.");
             return [];
         }
 
@@ -792,7 +792,7 @@ export default class LeafletMeasure extends MeasureComponentBase {
     }
 }
 
-customElements.define("leaflet-measure", LeafletMeasure);
+customElements.define("leaflet-annotation", LeafletAnnotation);
 
 
 

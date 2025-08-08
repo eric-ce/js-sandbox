@@ -19,7 +19,7 @@ import { closeIconBlack } from "../../assets/icons.mjs";
 /** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
 /** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
 /** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/CesiumMeasure.mjs').CesiumMeasure} CesiumMeasure */
+/** @typedef {import('../../components/CesiumAnnotation.mjs').CesiumAnnotation} CesiumAnnotation */
 
 // Measure data 
 /**
@@ -62,7 +62,7 @@ class MeasureModeCesium extends MeasureModeBase {
      * @param {CesiumInputHandler} inputHandler - The map input event handler abstraction.
      * @param {CesiumDragHandler} dragHandler - The drag handler abstraction (can be null if not used).
      * @param {CesiumHighlightHandler} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {CesiumMeasure} drawingHelper - The map-specific drawing helper/manager.
+     * @param {CesiumAnnotation} drawingHelper - The map-specific drawing helper/manager.
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */

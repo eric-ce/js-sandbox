@@ -5,9 +5,9 @@
 import { StateManager } from "../lib/state/StateManager.mjs";
 // import EventEmitter from "eventemitter3";
 import sharedEmitter from "../lib/events/ShareEmitter.mjs";
-import { CesiumMeasure } from "./CesiumMeasure.mjs";
-import { GoogleMeasure } from "./GoogleMeasure.mjs";
-import { LeafletMeasure } from "./LeafletMeasure.mjs";
+import { CesiumAnnotation } from "./CesiumAnnotation.mjs";
+import { GoogleAnnotation } from "./GoogleAnnotation.mjs";
+import { LeafletAnnotation } from "./LeafletAnnotation.mjs";
 import dataPool from "../lib/data/DataPool.mjs";
 // import { map } from "leaflet";
 
@@ -26,13 +26,12 @@ export class MeasureToolbox {
     log;
     emitter = sharedEmitter; // Initialized directly
     stateManager;
-    cesiumMeasure = null;
-    googleMeasure = null;
-    leafletMeasure = null;
+    cesiumAnnotationToolbox = null;
+    googleAnnotationToolbox = null;
+    leafletAnnotationToolbox = null;
 
-    constructor(app, type) {
+    constructor(app) {
         this.#app = app;
-        this.#type = type;
         this.log = app.log;
 
         // state manager
@@ -58,8 +57,6 @@ export class MeasureToolbox {
     set viewer(viewer) {
         // Set the private field
         this.#viewer = viewer;
-        // Use the private field in the call
-        this.initializeMeasureToolbox(this.#type);
     }
 
     get cesiumPkg() {
@@ -70,8 +67,6 @@ export class MeasureToolbox {
     set cesiumPkg(pkg) {
         // Set the private field
         this.#cesiumPkg = pkg;
-        // Use the private field in the call
-        this.initializeMeasureToolbox(this.#type);
     }
 
     get googleMap() {
@@ -82,8 +77,6 @@ export class MeasureToolbox {
     set googleMap(map) {
         // Set the private field
         this.#googleMap = map;
-        // Use the private field in the call
-        this.initializeMeasureToolbox(this.#type);
     }
 
     get leafletMap() {
@@ -94,8 +87,6 @@ export class MeasureToolbox {
     set leafletMap(map) {
         // Set the private field
         this.#leafletMap = map;
-        // Use the private field in the call
-        this.initializeMeasureToolbox(this.#type);
     }
 
     get type() {
@@ -103,24 +94,29 @@ export class MeasureToolbox {
         return this.#type;
     }
 
+    set type(type) {
+        // Set the private field
+        this.#type = type;
+    }
+
     /************
      * FEATURES *
      ************/
     // Initialize toolbox, determines which map needs to initialize based on opened map
-    initializeMeasureToolbox(mapType) {
+    initializeToolboxComponent(mapType) {
         if (!mapType) return;
 
         switch (mapType) {
             case 'map-cesium':
-                this.initializeCesiumMeasure();
+                this.initializeCesiumAnnotation();
                 break;  // Add this break
 
             case 'map-google':
-                this.initializeGoogleMeasure();
+                this.initializeGoogleAnnotation();
                 break;  // Add this break
 
             case 'map-leaflet':
-                this.initializeLeafletMeasure();
+                this.initializeLeafletAnnotation();
                 break;  // Add this break
 
             default:
@@ -129,64 +125,65 @@ export class MeasureToolbox {
         }
     }
 
-    // Initialize cesium measure
-    initializeCesiumMeasure() {
+    // Initialize cesium annotation
+    initializeCesiumAnnotation() {
         // Use getters which access private fields
         if (!this.viewer || !this.cesiumPkg) return;
 
         // If already exists and is in DOM, don't recreate
-        if (this.cesiumMeasure && this.cesiumMeasure.isConnected) return;
+        if (this.cesiumAnnotationToolbox && this.cesiumAnnotationToolbox.isConnected) return;
 
-        this.cesiumMeasure = document.createElement("cesium-measure");
-        this.cesiumMeasure.map = this.viewer; // Use getter
-        this.cesiumMeasure.mapName = "cesium";
-        this.cesiumMeasure.cesiumPkg = this.cesiumPkg; // Use getter
-        this.cesiumMeasure.app = this.app; // Use getter
-        this.cesiumMeasure.emitter = this.emitter;
-        this.cesiumMeasure.stateManager = this.stateManager;
+        this.cesiumAnnotationToolbox = document.createElement("cesium-annotation");
+        this.cesiumAnnotationToolbox.map = this.viewer; // Use getter
+        this.cesiumAnnotationToolbox.mapName = "cesium";
+        this.cesiumAnnotationToolbox.cesiumPkg = this.cesiumPkg; // Use getter
+        this.cesiumAnnotationToolbox.app = this.app; // Use getter
+        this.cesiumAnnotationToolbox.emitter = this.emitter;
+        this.cesiumAnnotationToolbox.stateManager = this.stateManager;
 
         const mapCesium = document.querySelector("map-cesium");
         mapCesium.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapCesium) return;
-        mapCesium.shadowRoot.appendChild(this.cesiumMeasure);
+        mapCesium.shadowRoot.appendChild(this.cesiumAnnotationToolbox);
     }
-    // Initialize google measure
-    initializeGoogleMeasure() {
+
+    // Initialize google annotation
+    initializeGoogleAnnotation() {
         // Use getter
         if (!this.googleMap) return;
 
-        if (this.googleMeasure && this.googleMeasure.isConnected) return;
+        if (this.googleAnnotationToolbox && this.googleAnnotationToolbox.isConnected) return;
 
-        this.googleMeasure = document.createElement("google-measure");
-        this.googleMeasure.map = this.googleMap; // Use getter
-        this.googleMeasure.mapName = "google";
-        this.googleMeasure.app = this.app; // Use getter
-        this.googleMeasure.emitter = this.emitter;
-        this.googleMeasure.stateManager = this.stateManager;
+        this.googleAnnotationToolbox = document.createElement("google-annotation");
+        this.googleAnnotationToolbox.map = this.googleMap; // Use getter
+        this.googleAnnotationToolbox.mapName = "google";
+        this.googleAnnotationToolbox.app = this.app; // Use getter
+        this.googleAnnotationToolbox.emitter = this.emitter;
+        this.googleAnnotationToolbox.stateManager = this.stateManager;
 
         const mapGoogle = document.querySelector("map-google");
         mapGoogle.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapGoogle) return;
-        mapGoogle.shadowRoot.appendChild(this.googleMeasure);
+        mapGoogle.shadowRoot.appendChild(this.googleAnnotationToolbox);
     }
 
-    // Initialize leaflet measure
-    initializeLeafletMeasure() {
+    // Initialize leaflet annotation
+    initializeLeafletAnnotation() {
         // Use getter
         if (!this.leafletMap) return;
 
-        if (this.leafletMeasure && this.leafletMeasure.isConnected) return;
+        if (this.leafletAnnotationToolbox && this.leafletAnnotationToolbox.isConnected) return;
 
-        this.leafletMeasure = document.createElement("leaflet-measure");
-        this.leafletMeasure.map = this.leafletMap; // Use getter
-        this.leafletMeasure.mapName = "leaflet";
-        this.leafletMeasure.app = this.app; // Use getter
-        this.leafletMeasure.emitter = this.emitter;
-        this.leafletMeasure.stateManager = this.stateManager;
+        this.leafletAnnotationToolbox = document.createElement("leaflet-annotation");
+        this.leafletAnnotationToolbox.map = this.leafletMap; // Use getter
+        this.leafletAnnotationToolbox.mapName = "leaflet";
+        this.leafletAnnotationToolbox.app = this.app; // Use getter
+        this.leafletAnnotationToolbox.emitter = this.emitter;
+        this.leafletAnnotationToolbox.stateManager = this.stateManager;
 
         const mapLeaflet = document.querySelector("map-leaflet");
         mapLeaflet.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapLeaflet) return;
-        mapLeaflet.shadowRoot.appendChild(this.leafletMeasure);
+        mapLeaflet.shadowRoot.appendChild(this.leafletAnnotationToolbox);
     }
 }

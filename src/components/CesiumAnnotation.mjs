@@ -13,7 +13,7 @@ import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual, createPointerOverlay, convertToCartesian3 } from "../lib/helper/cesiumHelper.mjs";
 // import { LogTable } from './shared/LogTable.mjs';
 // import { HelpTable } from './shared/HelpTable.mjs';
-import { MeasureComponentBase } from "./MeasureComponentBase.mjs";
+import { AnnotationComponentBase } from "./AnnotationComponentBase.mjs";
 import { camelCaseToWords, capitalizeString, deconstructIdForMetadata, makeDraggable } from "../lib/helper/helper.mjs";
 
 
@@ -28,11 +28,11 @@ import { camelCaseToWords, capitalizeString, deconstructIdForMetadata, makeDragg
 /**@typedef {{latitude: number, longitude: number, height?: number}} CartographicDegrees - CartographicDegrees */
 
 /**
- * CesiumMeasure class to provide measurement drawing functionalities in Cesium.
- * Overrides methods from MeasureComponentBase to implement Cesium-specific features.
- * @extends {MeasureComponentBase}
+ * CesiumAnnotation class to provide measurement drawing functionalities in Cesium.
+ * Overrides methods from AnnotationComponentBase to implement Cesium-specific features.
+ * @extends {AnnotationComponentBase}
  */
-export default class CesiumMeasure extends MeasureComponentBase {
+export default class CesiumAnnotation extends AnnotationComponentBase {
     // --- Private Fields ---
     /** @type {PointPrimitiveCollection | null} */
     #pointCollection = null;
@@ -113,7 +113,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
     _addPointMarker(position, options = {}) {
         // -- Validate dependencies --
         if (!this.#pointCollection) {
-            console.warn("CesiumMeasure: Point collection not available for _addPointMarker.");
+            console.warn("CesiumAnnotation: Point collection not available for _addPointMarker.");
             return null; // Ensure collection is initialized
         }
 
@@ -164,11 +164,11 @@ export default class CesiumMeasure extends MeasureComponentBase {
      */
     _addPointMarkersFromArray(positions, options = {}) {
         if (!this.#pointCollection) {
-            console.warn("CesiumMeasure: Point collection not available for _addPointMarkersFromArray.");
+            console.warn("CesiumAnnotation: Point collection not available for _addPointMarkersFromArray.");
             return []; // Return empty array if collection not ready
         }
         if (!Array.isArray(positions) || positions.length === 0) {
-            console.warn("CesiumMeasure: Invalid or empty positions array for _addPointMarkersFromArray.");
+            console.warn("CesiumAnnotation: Invalid or empty positions array for _addPointMarkersFromArray.");
             return []; // Return empty array for invalid input
         }
 
@@ -193,7 +193,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
     _addPolyline(positions, options = {}) {
         // -- Validate dependencies --
         if (!this.cesiumPkg || !this.map) {
-            console.warn("CesiumMeasure: Cesium package or map not available for _addPolyline.");
+            console.warn("CesiumAnnotation: Cesium package or map not available for _addPolyline.");
             return null; // Ensure dependencies are available
         }
 
@@ -274,7 +274,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
     _addGroundPolyline(positions, options = {}) {
         // -- Validate dependencies --
         if (!this.cesiumPkg || !this.map) {
-            console.warn("CesiumMeasure: Cesium package or map not available for _addPolyline.");
+            console.warn("CesiumAnnotation: Cesium package or map not available for _addPolyline.");
             return null; // Ensure dependencies are available
         }
 
@@ -408,7 +408,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
     _addPolygon(positions, options = {}) {
         // -- Validate dependencies --
         if (!Array.isArray(positions) || positions.length < 3) {
-            console.warn("CesiumMeasure: Invalid positions array for polygon.");
+            console.warn("CesiumAnnotation: Invalid positions array for polygon.");
             return null; // Need at least 3 points
         }
 
@@ -431,7 +431,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         } else if (coordType === "cartesian3") {   // Case2: from annotation tool
             polygonPositions = positions;
         } else {
-            console.warn("CesiumMeasure: Invalid coordinate type for polygon positions.");
+            console.warn("CesiumAnnotation: Invalid coordinate type for polygon positions.");
             return null;
         }
 
@@ -477,7 +477,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
     _addPolygonOutline(positions, options = {}) {
         // -- Validate dependencies --
         if (!Array.isArray(positions) || positions.length < 3) {
-            console.warn("CesiumMeasure: Invalid positions array for polygon outline.");
+            console.warn("CesiumAnnotation: Invalid positions array for polygon outline.");
             return null; // Need at least 3 points
         }
 
@@ -499,7 +499,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         } else if (coordType === "cartesian3") {   // Case2: from annotation tool
             polygonPositions = positions;
         } else {
-            console.warn("CesiumMeasure: Invalid coordinate type for polygon positions.");
+            console.warn("CesiumAnnotation: Invalid coordinate type for polygon positions.");
             return null;
         }
         polygonPositions = positions;
@@ -1082,7 +1082,7 @@ export default class CesiumMeasure extends MeasureComponentBase {
         const rect = this.container.getBoundingClientRect();
         const tableContainerRect = tableContainer.getBoundingClientRect();
         if (!rect || rect.width === 0 || tableContainerRect === 0) return;
-        tableContainer.style.transform = `translate(${rect.width - tableContainerRect.width}px, 50px)`;
+        tableContainer.style.transform = `translate(${rect.width - tableContainerRect.width - 100}px, 50px)`;
 
         // Make the table draggable
         // makeDraggable(tableContainer, this.container);
@@ -1507,5 +1507,5 @@ export default class CesiumMeasure extends MeasureComponentBase {
     }
 }
 
-customElements.define("cesium-measure", CesiumMeasure);
+customElements.define("cesium-annotation", CesiumAnnotation);
 

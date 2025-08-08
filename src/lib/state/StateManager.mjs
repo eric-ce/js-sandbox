@@ -86,7 +86,7 @@ export class StateManager {
             const oldModeId = this._state.activeModeId;
             this._state.activeModeId = newModeId;
             console.log(`StateManager: Active mode changed from '${oldModeId}' to '${newModeId}'`);
-            // Emit specific event that MeasureComponentBase will listen for
+            // Emit specific event that AnnotationComponentBase will listen for
             this.emitter.emit('activeModeChanged', newModeId, oldModeId);
             // Emit generic state change as well
             this.emitter.emit('stateChange', { section: 'state', key: 'activeModeId', value: newModeId, oldValue: oldModeId });

@@ -30,7 +30,7 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
 /** @typedef {import('../../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
 /** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
 /** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/LeafletMeasure.mjs').LeafletMeasure} LeafletMeasure */
+/** @typedef {import('../../components/leafletAnnotation.mjs').leafletAnnotation} leafletAnnotation */
 
 /** @typedef {{polylines: L.polyline[], labels: L.tooltip[]}} InteractiveAnnotationsState */
 /** @typedef {{lat:number, lng:number}} Coordinate*/
@@ -75,7 +75,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      * @param {LeafletInputHandler} inputHandler 
      * @param {LeafletDragHandler} dragHandler 
      * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {LeafletMeasure} drawingHelper 
+     * @param {leafletAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      */

@@ -17,7 +17,7 @@ class PickerGoogle extends MeasureModeGoogle {
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {DragHandler} dragHandler
      * @param {HighlightHandler} highlightHandler
-     * @param {MeasureComponentBase} drawingHelper
+     * @param {AnnotationComponentBase} drawingHelper
      * @param {StateManager} stateManager
      * @param {EventEmitter} emitter
      */

@@ -28,7 +28,7 @@ import { MeasureModeGoogle } from "./MeasureModeGoogle.mjs";
  */
 
 /** @typedef {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../../components/MeasureComponentBase').MeasureComponentBase} MeasureComponentBase */
+/** @typedef {import('../../components/AnnotationComponentBase').AnnotationComponentBase} AnnotationComponentBase */
 /** @typedef {import('../../lib/state/StateManager').StateManager} StateManager */
 /** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
 /** @typedef {import('../../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} DragHandler */
@@ -103,7 +103,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {DragHandler} dragHandler
      * @param {HighlightHandler} highlightHandler
-     * @param {MeasureComponentBase} drawingHelper
+     * @param {AnnotationComponentBase} drawingHelper
      * @param {StateManager} stateManager
      * @param {EventEmitter} emitter
      */

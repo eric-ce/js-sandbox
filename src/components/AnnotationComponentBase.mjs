@@ -49,10 +49,10 @@ import { makeDraggable, formatMeasurementValue } from "../lib/helper/helper.mjs"
 /** @typedef {import('../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
 
 /**
- * Base class for all measure components of cesium-measure, google-measure, and leaflet-measure.
+ * Base class for all measure components of cesium-annotation, google-annotation, and leaflet-annotation.
  * It handles UI creation, event handling, and data management for measurement tools.
  */
-export class MeasureComponentBase extends HTMLElement {
+export class AnnotationComponentBase extends HTMLElement {
     // --- Private Fields ---
     /** @type {boolean} */
     #isInitialized = false;
@@ -63,7 +63,7 @@ export class MeasureComponentBase extends HTMLElement {
     /** @type {import('cesium').Viewer | google.maps.Map| L.map| null| undefined} */
     #map = null; // The specific map instance (Viewer, google.maps.Map, etc.)
     /** @type {Object} */
-    #cesiumPkg = null; // Only relevant for CesiumMeasure
+    #cesiumPkg = null; // Only relevant for CesiumAnnotation
     /** @type {Object} */
     #app = null;
     /** @type {import('../lib/state/StateManager').StateManager | null} */

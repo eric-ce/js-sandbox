@@ -29,7 +29,7 @@ import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.mjs";
 /** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
 /** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
 /** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/CesiumMeasure.mjs').CesiumMeasure} CesiumMeasure */
+/** @typedef {import('../../components/CesiumAnnotation.mjs').CesiumAnnotation} CesiumAnnotation */
 
 
 /**
@@ -52,7 +52,7 @@ class PickerCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumMeasure} drawingHelper 
+     * @param {CesiumAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 

@@ -6,11 +6,11 @@ import { generateIdByTimestamp } from '../lib/helper/helper.mjs';
 /** @typedef {import('../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
 /** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
 /** @typedef {import('../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../components/CesiumMeasure.mjs').CesiumMeasure} CesiumMeasure */
+/** @typedef {import('../components/CesiumAnnotation.mjs').CesiumAnnotation} CesiumAnnotation */
 /** @typedef {import('../lib/input/GoogleMapsInputHandler.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
 /** @typedef {import('../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} GoogleDragHandler */
 /** @typedef {import('../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
-/** @typedef {import('../components/GoogleMeasure.mjs').GoogleMeasure} GoogleMeasure */
+/** @typedef {import('../components/GoogleAnnotation.mjs').GoogleAnnotation} GoogleAnnotation */
 
 // -- Cesium types --
 /**@typedef {import('cesium').LabelCollection} LabelCollection - the collection of label primitives in cesium map*/
@@ -31,7 +31,7 @@ class MeasureModeBase {
     dragHandler;
     /** @type {CesiumHighlightHandler | GoogleHighlightHandler | null} The highlight handler abstraction (can be null). */
     highlightHandler;
-    /** @type {CesiumMeasure | GoogleMeasure} The map-specific drawing helper/manager component. */
+    /** @type {CesiumAnnotation | GoogleAnnotation} The map-specific drawing helper/manager component. */
     drawingHelper;
     /** @type {any} The map instance (e.g., Cesium.Viewer, google.maps.Map). */
     map;
@@ -67,7 +67,7 @@ class MeasureModeBase {
      * @param {CesiumInputHandler | GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
      * @param {CesiumDragHandler | GoogleDragHandler | null} dragHandler - The drag handler abstraction (can be null if not used).
      * @param {CesiumHighlightHandler | GoogleHighlightHandler | null} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {CesiumMeasure | GoogleMeasure} drawingHelper - The map-specific drawing helper/manager.
+     * @param {CesiumAnnotation | GoogleAnnotation} drawingHelper - The map-specific drawing helper/manager.
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */

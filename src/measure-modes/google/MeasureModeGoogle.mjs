@@ -9,7 +9,7 @@ import { createContextMenu, deconstructIdForMetadata, formatMeasurementValue, ge
 /** @typedef {import('../../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
 /** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
 /** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/GoogleMeasure.mjs').GoogleMeasure} GoogleMeasure */
+/** @typedef {import('../../components/GoogleAnnotation.mjs').GoogleAnnotation} GoogleAnnotation */
 
 /** @typedef {lat:number, lng:number | latitude: number, longitude: number, height: number} Coordinate */
 
@@ -45,7 +45,7 @@ class MeasureModeGoogle extends MeasureModeBase {
      * @param {GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
      * @param {GoogleDragHandler} dragHandler - The drag handler abstraction (can be null if not used).
      * @param {GoogleHighlightHandler} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {GoogleMeasure} drawingHelper - The map-specific drawing helper/manager.
+     * @param {GoogleAnnotation} drawingHelper - The map-specific drawing helper/manager.
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */
