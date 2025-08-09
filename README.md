@@ -16,7 +16,7 @@ Here is the structure of the project:
 - `features` folder contains all the measure modes that is written in class format. Each of the measure modes handle its own data.
 - `helper` and `stateManager` file is to handle shared used data and functions.
 - `index` and `MapCesium` is to mimic the `cesium-measure` repo environment.
-- `MeasureToolbox` is the main component that contains the whole application including how measure modes interact with each other.
+- `AnnotationToolbox` is the main component that contains the whole application including how measure modes interact with each other.
 
 
 

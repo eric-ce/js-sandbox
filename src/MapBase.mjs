@@ -1,4 +1,4 @@
-import { MeasureToolbox } from "./components/MeasureToolbox.mjs";
+import { AnnotationToolbox } from "./components/AnnotationToolbox.mjs";
 
 export class MapBase extends HTMLElement {
     constructor() {
@@ -59,7 +59,7 @@ export class MapBase extends HTMLElement {
     }
 
     _loadAnnotationInstance() {
-        this.annotationToolbox = new MeasureToolbox(this.app);
+        this.annotationToolbox = new AnnotationToolbox(this.app);
     }
 
     async _initialize() {

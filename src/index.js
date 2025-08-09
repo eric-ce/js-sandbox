@@ -1,6 +1,6 @@
 import * as Cesium from "cesium";
 import 'mainStyle';
-// import { MeasureToolbox } from "./MeasureToolbox.mjs";
+// import { AnnotationToolbox } from "./AnnotationToolbox.mjs";
 import { MapCesium } from "./MapCesium.mjs";
 import { MapLeaflet } from "./MapLeaflet.mjs";
 import { MapGoogle } from "./MapGoogle.mjs";

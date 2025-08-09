@@ -1,6 +1,6 @@
 import L from "leaflet";
 import { mapStyle } from "./styles/mapStyle.mjs";
-import { MeasureToolbox } from "./components/MeasureToolbox.mjs";
+import { AnnotationToolbox } from "./components/AnnotationToolbox.mjs";
 import { MapBase } from "./MapBase.mjs";
 export default class MapLeaflet extends MapBase {
     constructor() {

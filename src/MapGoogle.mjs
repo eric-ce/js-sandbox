@@ -1,6 +1,6 @@
 import { Loader } from "@googlemaps/js-api-loader";
 import { mapStyle } from "./styles/mapStyle.mjs";
-import { MeasureToolbox } from "./components/MeasureToolbox.mjs";
+import { AnnotationToolbox } from "./components/AnnotationToolbox.mjs";
 import { MapBase } from "./MapBase.mjs";
 
 export class MapGoogle extends MapBase {

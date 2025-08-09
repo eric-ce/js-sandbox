@@ -1,6 +1,6 @@
 import * as Cesium from "cesium";
 import "cesiumStyle";
-import { MeasureToolbox } from "./components/MeasureToolbox.mjs";
+import { AnnotationToolbox } from "./components/AnnotationToolbox.mjs";
 import {
     PointPrimitiveCollection,
     Primitive,
@@ -48,10 +48,6 @@ export class MapCesium extends MapBase {
 
     disconnectedCallback() {
         this._removeMapListener();
-        if (this.viewer && !this.viewer.isDestroyed()) {
-            this.viewer.destroy();
-            this._map = null;
-        }
     }
 
     _cesiumContainerSetup() {
@@ -80,7 +76,7 @@ export class MapCesium extends MapBase {
     }
 
     _attachAnnotationToolbox() {
-        if (!this.app || !this.annotationToolbox) return;
+        if (!this.map || !this.app || !this.annotationToolbox) return;
 
         const cesiumPkg = {
             PointPrimitiveCollection,

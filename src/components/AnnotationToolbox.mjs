@@ -7,13 +7,14 @@ import { StateManager } from "../lib/state/StateManager.mjs";
 import sharedEmitter from "../lib/events/ShareEmitter.mjs";
 import { CesiumAnnotation } from "./CesiumAnnotation.mjs";
 import { GoogleAnnotation } from "./GoogleAnnotation.mjs";
-import { LeafletAnnotation } from "./LeafletAnnotation.mjs";
+import { LeafletAnnotation } from "./LeafletAnnotation.mjs"
+// import { LeafletAnnotation } from "./LeafletAnnotation.mjs";
 import dataPool from "../lib/data/DataPool.mjs";
 // import { map } from "leaflet";
 
 
 
-export class MeasureToolbox {
+export class AnnotationToolbox {
     // --- Private Fields ---
     #app;
     #viewer = null;
@@ -99,9 +100,10 @@ export class MeasureToolbox {
         this.#type = type;
     }
 
-    /************
-     * FEATURES *
-     ************/
+
+    /**********************
+     * TOOLBOX COMPONENTS *
+     **********************/
     // Initialize toolbox, determines which map needs to initialize based on opened map
     initializeToolboxComponent(mapType) {
         if (!mapType) return;
@@ -109,15 +111,15 @@ export class MeasureToolbox {
         switch (mapType) {
             case 'map-cesium':
                 this.initializeCesiumAnnotation();
-                break;  // Add this break
+                break;
 
             case 'map-google':
                 this.initializeGoogleAnnotation();
-                break;  // Add this break
+                break;
 
             case 'map-leaflet':
                 this.initializeLeafletAnnotation();
-                break;  // Add this break
+                break;
 
             default:
                 console.error(`Invalid map type: ${this.#type}`);
