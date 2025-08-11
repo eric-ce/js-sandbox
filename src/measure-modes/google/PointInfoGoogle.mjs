@@ -1,4 +1,3 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.mjs";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.mjs";
 
@@ -75,17 +74,19 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @param {AnnotationComponentBase} drawingHelper
      * @param {StateManager} stateManager
      * @param {EventEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PointInfoGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PointInfoGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app)
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -164,7 +165,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
         this.measure.status = "completed";
 
         // -- Update Data Pool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Update State --
         this.flags.isMeasurementComplete = true;

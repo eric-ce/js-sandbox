@@ -11,7 +11,6 @@ import {
     getRankedPickedObjectType
 } from "../../lib/helper/cesiumHelper.mjs";
 import { formatMeasurementValue } from "../../lib/helper/helper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 
 
@@ -54,10 +53,6 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 class PolygonCesium extends MeasureModeCesium {
     modeName = "area";
 
-    // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
-
     /** @type {Cartesian3} */
     #coordinate = null;
 
@@ -84,19 +79,17 @@ class PolygonCesium extends MeasureModeCesium {
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PolygonCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PolygonCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
-
-        this.cesiumPkg = cesiumPkg;
 
         this.coordsCache = [];
         this.measure = super._createDefaultMeasure();
@@ -209,7 +202,7 @@ class PolygonCesium extends MeasureModeCesium {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
     }
 
     /***********************
@@ -336,7 +329,7 @@ class PolygonCesium extends MeasureModeCesium {
             this.measure.status = "completed";
 
             // Update to data pool
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
 
             // set flags
             this.flags.isMeasurementComplete = true;

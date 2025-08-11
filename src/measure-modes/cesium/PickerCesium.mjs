@@ -3,7 +3,6 @@ import {
     defined,
     SceneTransforms,
 } from "cesium";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 import { capitalizeString, showCustomNotification } from "../../lib/helper/helper.mjs";
 import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.mjs";
@@ -39,10 +38,6 @@ import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.mjs";
 class PickerCesium extends MeasureModeCesium {
     modeName = "picker";
 
-    // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
-
     /** @type {HTMLDivElement} - The overlay element for mode selection. */
     #modeInfoOverlay;
     /** @type {Cartesian3} - The coordinate of the picked feature. */
@@ -55,17 +50,17 @@ class PickerCesium extends MeasureModeCesium {
      * @param {CesiumAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app - The application instance
+     * @param {DataPool} dataPool - The data pool instance
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PickerCesium requires inputHandler, drawingHelper (with map), stateManager, emitter,and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PickerCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
-
-        this.cesiumPkg = cesiumPkg;
+        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
     }
 
 

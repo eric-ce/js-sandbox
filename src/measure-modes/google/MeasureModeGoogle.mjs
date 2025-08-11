@@ -1,6 +1,5 @@
 import { MeasureModeBase } from "../MeasureModeBase.mjs";
 import { areCoordinatesEqual, calculateDistance, calculateMiddlePos, checkOverlayType, convertToLatLng } from "../../lib/helper/googleHelper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { createContextMenu, deconstructIdForMetadata, formatMeasurementValue, getNeighboringValues, showCustomNotification, updateContextMenu, hideContextMenu } from "../../lib/helper/helper.mjs";
 
 
@@ -48,9 +47,11 @@ class MeasureModeGoogle extends MeasureModeBase {
      * @param {GoogleAnnotation} drawingHelper - The map-specific drawing helper/manager.
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
+     * @param {object} app - The application instance.
+     * @param {DataPool} dataPool - The data pool instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
 
         // Initialize context menu - default to hidden
         this.contextMenu = createContextMenu(this._container, { show: false });
@@ -66,7 +67,7 @@ class MeasureModeGoogle extends MeasureModeBase {
      * @override
      */
     _attachMapSpecificListeners() {
-        this.emitter.on('annotation-contextmenu-google', this._handleContextMenu);
+        this.emitter.onGoogleContextMenu(this._handleContextMenu);
     }
 
     /**
@@ -103,7 +104,7 @@ class MeasureModeGoogle extends MeasureModeBase {
             return null; // Return null if measureId is not a number
         }
 
-        const measure = dataPool.getMeasureById(measureId); // Get the measure data by ID
+        const measure = this.dataPool.getMeasureById(measureId); // Get the measure data by ID
         if (!measure) return; // If no measure found, exit the function
 
         // Convert cartographic degrees to Google coordinates
@@ -123,7 +124,7 @@ class MeasureModeGoogle extends MeasureModeBase {
         const latLng = { ...convertToLatLng(coordinate) };
         if (!latLng) return null;
 
-        const data = dataPool.getAllMeasures("cartographicDegrees");
+        const data = this.dataPool.getAllMeasures("cartographicDegrees");
         if (Array.isArray(data) && data.length === 0) return null;
 
         const measure = data.find(measure => {
@@ -380,7 +381,7 @@ class MeasureModeGoogle extends MeasureModeBase {
         });
 
         // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
+        this.dataPool.removeMeasureById(measureId);
 
         // show notification
         showCustomNotification(`removed overlay set, id: ${measureId}`, this._container)

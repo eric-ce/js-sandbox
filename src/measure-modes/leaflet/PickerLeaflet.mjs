@@ -33,13 +33,13 @@ class PickerLeaflet extends MeasureModeLeaflet {
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PickerLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PickerLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
     }
 
     /**
@@ -53,8 +53,8 @@ class PickerLeaflet extends MeasureModeLeaflet {
         this.inputHandler.off("mousemove", this.handleMouseMove);
 
         if (this.emitter) {
-            this.emitter.on("annotation-clicked-leaflet", this.handleLeftClick);
-            this.emitter.on("annotation-hovered-leaflet", this.handleMouseMove);
+            this.emitter.onLeafletHovered(this.handleMouseMove);
+            this.emitter.onLeafletClicked(this.handleLeftClick);
         }
     }
 

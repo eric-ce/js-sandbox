@@ -1,4 +1,3 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.mjs";
 import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng } from "../../lib/helper/googleHelper.mjs";
@@ -84,17 +83,19 @@ class PolygonGoogle extends MeasureModeGoogle {
      * @param {AnnotationComponentBase} drawingHelper
      * @param {StateManager} stateManager
      * @param {EventEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PolygonGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PolygonGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app)
+        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -176,7 +177,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure }); // Update the measure in the data pool
+        this.dataPool.updateOrAddMeasure({ ...this.measure }); // Update the measure in the data pool
     }
 
     /**
@@ -258,7 +259,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         this.measure.status = "completed"; // Update the measure status
 
         // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Set flags
         this.flags.isMeasurementComplete = true; // Set the measurement as complete

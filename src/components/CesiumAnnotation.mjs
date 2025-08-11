@@ -7,7 +7,7 @@ import {
     Cesium3DTileFeature,
     Cartesian3,
 } from "cesium";
-import { TabulatorFull as Tabulator } from 'tabulator-tables';
+// import { TabulatorFull as Tabulator } from 'tabulator-tables';
 // import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 
 import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, createPolygonPrimitive, convertToCartographicRadians, convertToCartographicDegrees, checkCoordinateType, createPolygonOutlinePrimitive, createGroundPolylinePrimitive, areCoordinatesEqual, createPointerOverlay, convertToCartesian3 } from "../lib/helper/cesiumHelper.mjs";
@@ -15,7 +15,6 @@ import { createPointPrimitive, createPolylinePrimitive, createLabelPrimitive, cr
 // import { HelpTable } from './shared/HelpTable.mjs';
 import { AnnotationComponentBase } from "./AnnotationComponentBase.mjs";
 import { camelCaseToWords, capitalizeString, deconstructIdForMetadata, makeDraggable } from "../lib/helper/helper.mjs";
-
 
 
 /**@typedef {import('cesium').Cartesian3} Cartesian3 - the x,y,z coordinate that used in cesium map*/
@@ -846,8 +845,6 @@ export default class CesiumAnnotation extends AnnotationComponentBase {
      * DISPLAY INFO TABLE FOR PICKED OBJECT *
      ****************************************/
     _pickedObjectDisplayData(event) {
-        console.log("🚀 event:", event);
-
         // -- Validate dependencies --
         if (!event) return;
 
@@ -871,26 +868,26 @@ export default class CesiumAnnotation extends AnnotationComponentBase {
         if (!descriptionData) return;
 
         // -- Set the selected entity and create description -- 
-        // const { id } = primitive;
-        // const title = descriptionData["Type"] ?
-        //     `${capitalizeString(descriptionData["Type"])} Details` : "Unknown Details";
-        // const selectedEntity = new Entity({
-        //     id: id || null,
-        //     name: title,
-        //     description: this._createPickedObjectDescription(descriptionData)
-        // });
+        const { id } = primitive;
+        const title = descriptionData["Type"] ?
+            `${capitalizeString(descriptionData["Type"])} Details` : "Unknown Details";
+        const selectedEntity = new Entity({
+            id: id || null,
+            name: title,
+            description: this._createPickedObjectDescription(descriptionData)
+        });
 
-        // // Store reference for cleanup
-        // this.#selectedEntity = selectedEntity;
+        // Store reference for cleanup
+        this.#selectedEntity = selectedEntity;
 
-        // // This assigns the entity to Cesium's selection system
-        // this.map.selectedEntity = selectedEntity;
+        // This assigns the entity to Cesium's selection system
+        this.map.selectedEntity = selectedEntity;
 
         // -- Create and show Tabulator table instead of Cesium entity --
-        this._createTabulatorTable(descriptionData, primitive.id);
+        // this._createTabulatorTable(descriptionData, primitive.id);
 
         // Clear any existing selected entity
-        this._clearSelectedEntity();
+        // this._clearSelectedEntity();
     }
 
     _createDescriptionData(primitive) {
@@ -931,14 +928,14 @@ export default class CesiumAnnotation extends AnnotationComponentBase {
      */
     _createTabulatorTable(descriptionData, primitiveId) {
         // Inject Tabulator CSS into shadow root if not already present
-        let link = this.container.querySelector('#tabulator_midnight-css');
-        if (!link) {
-            link = document.createElement('link');
-            link.id = 'tabulator_midnight-css';
-            link.rel = 'stylesheet';
-            link.href = '/styles/tabulator_midnight.min.css'; // Updated path
-            this.container.appendChild(link);
-        }
+        // let link = this.container.querySelector('#tabulator_midnight-css');
+        // if (!link) {
+        //     link = document.createElement('link');
+        //     link.id = 'tabulator_midnight-css';
+        //     link.rel = 'stylesheet';
+        //     link.href = '/styles/tabulator_midnight.min.css'; // Updated path
+        //     this.container.appendChild(link);
+        // }
 
         // Find existing container or create new one
         let tableContainer = this.container.querySelector('#cesium-picked-object-table');
@@ -1293,14 +1290,14 @@ export default class CesiumAnnotation extends AnnotationComponentBase {
         }
     }
 
-    // _createPickedObjectDescription(descriptionData) {
-    //     let description = `${'<table class="cesium-infoBox-defaultTable"><tbody>'}`;
-    //     for (const [propertyId, propertyValue] of Object.entries(descriptionData)) {
-    //         description += `<tr><th>${propertyId}</th><td>${propertyValue}</td></tr>`;
-    //     }
-    //     description += `</tbody></table>`;
-    //     return description;
-    // }
+    _createPickedObjectDescription(descriptionData) {
+        let description = `${'<table class="cesium-infoBox-defaultTable"><tbody>'}`;
+        for (const [propertyId, propertyValue] of Object.entries(descriptionData)) {
+            description += `<tr><th>${propertyId}</th><td>${propertyValue}</td></tr>`;
+        }
+        description += `</tbody></table>`;
+        return description;
+    }
 
 
     /*****************

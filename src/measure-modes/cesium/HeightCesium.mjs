@@ -13,7 +13,6 @@ import {
     updatePointerOverlay,
 } from "../../lib/helper/cesiumHelper.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 
 // -- Cesium types --
@@ -85,15 +84,17 @@ class HeightCesium extends MeasureModeCesium {
      * @param {CesiumAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app
+     * @param {DataPool} dataPool
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("HeightCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("HeightCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("height", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+        super("height", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -101,8 +102,6 @@ class HeightCesium extends MeasureModeCesium {
 
         this.coordsCache = [];
         this.measure = super._createDefaultMeasure();
-
-        this.app = app;
     }
 
 
@@ -206,7 +205,7 @@ class HeightCesium extends MeasureModeCesium {
             this.measure.status = "completed";
 
             // -- Update Data Pool --
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
 
             // -- Update State --
             this.flags.isMeasurementComplete = true;

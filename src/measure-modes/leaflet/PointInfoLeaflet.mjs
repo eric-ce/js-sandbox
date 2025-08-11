@@ -1,4 +1,3 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.mjs";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
 
@@ -77,14 +76,16 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      * @param {leafletAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PointInfoLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PointInfoLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -92,9 +93,6 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
         /** @type {MeasurementGroup} */
         this.measure = this._createDefaultMeasure();
-
-        // Listen to right click event
-        // this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
     }
 
 
@@ -164,7 +162,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         this.measure.status = "completed";
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // set flag that the measure has ended
         this.flags.isMeasurementComplete = true;

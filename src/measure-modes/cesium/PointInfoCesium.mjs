@@ -4,7 +4,6 @@ import {
     SceneTransforms,
 } from "cesium";
 import { areCoordinatesEqual, convertToCartographicDegrees, editableLabel, getRankedPickedObjectType, updatePointerOverlay } from "../../lib/helper/cesiumHelper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 import { deconstructIdForMetadata } from "../../lib/helper/helper.mjs";
 
@@ -50,10 +49,6 @@ import { deconstructIdForMetadata } from "../../lib/helper/helper.mjs";
 class PointInfoCesium extends MeasureModeCesium {
     modeName = "pointInfo";
 
-    // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
-
     /** @type {Cartesian3} */
     #coordinate = null;
 
@@ -78,21 +73,21 @@ class PointInfoCesium extends MeasureModeCesium {
      * @param {CesiumAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app - The application instance
+     * @param {DataPool} dataPool - The data pool instance
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("TwoPointsDistanceCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("TwoPointsDistanceCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
-
-        this.cesiumPkg = cesiumPkg;
 
         this.coordsCache = [];
         this.measure = super._createDefaultMeasure();
@@ -212,7 +207,7 @@ class PointInfoCesium extends MeasureModeCesium {
         this.measure.status = "completed";
 
         // -- Update Data Pool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Update State --
         this.flags.isMeasurementComplete = true;

@@ -1,12 +1,12 @@
 import * as Cesium from "cesium";
 import 'mainStyle';
-// import { AnnotationToolbox } from "./AnnotationToolbox.mjs";
+import { AnnotationToolbox } from "./components/AnnotationToolbox.mjs";
 import { MapCesium } from "./MapCesium.mjs";
 import { MapLeaflet } from "./MapLeaflet.mjs";
 import { MapGoogle } from "./MapGoogle.mjs";
 import { mapStyle } from "./styles/mapStyle.mjs";
 import EventEmitter from "eventemitter3";
-class Navigator {
+class MapCollections {
     constructor() {
         this.div = null;
         this.tabular = null;
@@ -32,9 +32,24 @@ class Navigator {
         ];
 
         this.mapEmitter = new EventEmitter();
+
+        // mimic navigator app 
+        this.app = {
+            map: {
+                mapCollection: this.mapCollection
+            },
+            log: ["testing"],
+            currentUser: {
+                sessions: {
+                    navigator: {
+                        roles: ["fireTrail", "developer", "tester", "flyThrough"]
+                    }
+                }
+            }
+        };
     }
 
-    async initialMap() {
+    async installMap() {
         // setup map style
         document.adoptedStyleSheets = [mapStyle];
 
@@ -42,7 +57,10 @@ class Navigator {
         this.div = this._setupContainer();
         // this._setupMaps();
         this._setupButtons();
+
+        this._loadAnnotationInstance();
     }
+
     _setupTabular() {
         this.tabular = document.createElement("div");
         this.tabular.className = "tabular";
@@ -104,14 +122,14 @@ class Navigator {
             // If map exists but was removed, create a new one
             const newMapElement = document.createElement(`${map.mapName}`);
             newMapElement.classList.add(`${map.mapName}`);
-            this.div.appendChild(newMapElement);
-
-            // set emitter to the map
+            // set properties to the map
             newMapElement.mapEmitter = this.mapEmitter;
+            newMapElement.app = this.app;
+            this.div.appendChild(newMapElement);
             // update this.mapCollection
             map.map = newMapElement;
-            console.log(map.map.parentElement)
         }
+
         map.activated = true;
     }
 
@@ -178,9 +196,13 @@ class Navigator {
             this.div.style.display = "block";
         }
     }
+
+    _loadAnnotationInstance() {
+        this.app.map = { annotationToolbox: new AnnotationToolbox(this.app) };
+    }
 }
 
-// instantiate navigator
-const navigator = new Navigator();
-navigator.initialMap();
+// instantiate map collections
+const mapCollections = new MapCollections();
+mapCollections.installMap();
 

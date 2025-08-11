@@ -1,4 +1,3 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { calculateDistance, calculateMiddlePos, areCoordinatesEqual, convertToLatLng, checkLayerType } from "../../lib/helper/leafletHelper.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.mjs";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
@@ -79,13 +78,13 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("TwoPointsDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("TwoPointsDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -152,7 +151,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         this.coordsCache.push(this.#coordinate);
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length === 2) {
             // -- Update annotations status --
@@ -177,7 +176,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
             this.measure.status = "completed";
 
             // Update to data pool
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
 
             // set flag that the measure has ended
             this.flags.isMeasurementComplete = true;

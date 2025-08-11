@@ -12,7 +12,6 @@ import {
     convertToCartographicDegrees
 } from "../../lib/helper/cesiumHelper.mjs";
 import { getNeighboringValues, formatMeasurementValue, deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 
 
@@ -56,10 +55,6 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 class ProfileDistancesCesium extends MeasureModeCesium {
     modeName = "profile-distances";
 
-    // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
-
     /** @type {Cartesian3} */
     #coordinate = null;
 
@@ -90,21 +85,19 @@ class ProfileDistancesCesium extends MeasureModeCesium {
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("ProfileDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, emitter and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("ProfileDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("profile-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+        super("profile-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
         this.flags.isAddMode = false;
         this.flags.isReverse = false;
-
-        this.cesiumPkg = cesiumPkg;
 
         this.measure = super._createDefaultMeasure();
     }
@@ -253,7 +246,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length > 1 && !this.flags.isMeasurementComplete) {
             // Determine the indices of the previous and current points based on the measurement direction
@@ -304,7 +297,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             }
 
             // Update dataPool with the measure data
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
@@ -582,7 +575,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
 
 
         // Update data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Reset to clean up after finish
         this.resetValuesModeSpecific();
@@ -798,7 +791,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         }
         this.measure.coordinates = positions.map(pos => Cartesian3.clone(pos));
         // Update dataPool with the measure data
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Update current measure variables --
         if (isMeasuring) {

@@ -1,4 +1,3 @@
-import { Color } from "cesium";
 /**
  * Manages the global state for measurement tools.
  */
@@ -85,7 +84,7 @@ export class StateManager {
         if (this._state.activeModeId !== newModeId) {
             const oldModeId = this._state.activeModeId;
             this._state.activeModeId = newModeId;
-            console.log(`StateManager: Active mode changed from '${oldModeId}' to '${newModeId}'`);
+            // console.log(`StateManager: Active mode changed from '${oldModeId}' to '${newModeId}'`);
             // Emit specific event that AnnotationComponentBase will listen for
             this.emitter.emit('activeModeChanged', newModeId, oldModeId);
             // Emit generic state change as well
@@ -275,31 +274,6 @@ export class StateManager {
             console.warn(`Property '${key}' does not exist in color state.`);
         }
     }
-
-
-
-    /****************
-     * UTIL METHODS *
-     ****************/
-    /**
-     * Registers an event listener directly on the StateManager's emitter
-     * for specific state manager events (like 'activeModeChanged').
-     * @param {string} eventName - The name of the event (e.g., 'activeModeChanged').
-     * @param {Function} listener - The callback function.
-     */
-    on(eventName, listener) {
-        this.emitter.on(eventName, listener);
-    }
-
-    /**
-     * Removes an event listener directly from the StateManager's emitter.
-     * @param {string} eventName - The name of the event.
-     * @param {Function} listener - The callback function to remove.
-     */
-    off(eventName, listener) {
-        this.emitter.off(eventName, listener);
-    }
-    // --- End Event Listener Proxy Methods ---
 
     /**
      * Helper to update help text content if the helpTable element exists.

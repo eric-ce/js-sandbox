@@ -21,13 +21,13 @@ class PickerGoogle extends MeasureModeGoogle {
      * @param {StateManager} stateManager
      * @param {EventEmitter} emitter
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PickerGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PickerGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
     }
 
     /**
@@ -42,8 +42,8 @@ class PickerGoogle extends MeasureModeGoogle {
 
         // Add emitter listeners only when picker is active
         if (this.emitter) {
-            this.emitter.on('annotation-clicked-google', this.handleLeftClick);
-            this.emitter.on('annotation-hovered-google', this.handleMouseMove);
+            this.emitter.onGoogleHovered(this.handleMouseMove);
+            this.emitter.onGoogleClicked(this.handleLeftClick);
         }
     }
 

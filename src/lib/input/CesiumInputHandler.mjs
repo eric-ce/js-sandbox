@@ -32,7 +32,6 @@ export class CesiumInputHandler {
         this.handler = new ScreenSpaceEventHandler(this.scene.canvas);
         /** @type {Map<string, Map<Function, Function>>} */
         this.listenerRegistry = new Map(); // Stores { eventTypeString: Map<originalCallback, handlerAction> }
-        console.log("CesiumInputHandler created.");
     }
 
     /**
@@ -114,7 +113,7 @@ export class CesiumInputHandler {
             // Store the actual function set on the handler for potential later removal (if needed)
             // For simplicity here, we rely on destroying the handler or removing by type.
             this.handler.setInputAction(handlerAction, cesiumEventType);
-            console.log(`CesiumInputHandler: Attached Cesium action for ${eventType}`);
+            // console.log(`CesiumInputHandler: Attached Cesium action for ${eventType}`);
         }
 
         // Store the original callback reference
@@ -133,13 +132,13 @@ export class CesiumInputHandler {
         const listenersForType = this.listenerRegistry.get(eventType);
         if (listenersForType && listenersForType.has(callback)) {
             listenersForType.delete(callback); // Remove the specific callback mapping
-            console.log(`CesiumInputHandler: Removed listener callback for ${eventType}`);
+            // console.log(`CesiumInputHandler: Removed listener callback for ${eventType}`);
 
             // If there are NO other listeners remaining for this Cesium Event Type, remove the underlying Cesium action
             if (listenersForType.size === 0) {
                 this.handler.removeInputAction(cesiumEventType);
                 this.listenerRegistry.delete(eventType); // Clean up the outer map too
-                console.log(`CesiumInputHandler: Removed last listener and Cesium action for ${eventType}`);
+                // console.log(`CesiumInputHandler: Removed last listener and Cesium action for ${eventType}`);
             }
         }
     }
@@ -160,7 +159,7 @@ export class CesiumInputHandler {
     destroy() {
         if (this.handler && !this.handler.isDestroyed()) {
             this.handler.destroy(); // This removes all input actions
-            console.log("CesiumInputHandler: ScreenSpaceEventHandler destroyed.");
+            // console.log("CesiumInputHandler: ScreenSpaceEventHandler destroyed.");
         }
         this.handler = null;
         this.listenerRegistry.clear();
@@ -171,6 +170,6 @@ export class CesiumInputHandler {
 
         this.map = null; // Release reference
         this.scene = null;
-        console.log("CesiumInputHandler instance destroyed.");
+        // console.log("CesiumInputHandler instance destroyed.");
     }
 }

@@ -71,7 +71,7 @@ class MeasureModeBase {
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // -- Validate Dependencies --
         if (!modeName || typeof modeName !== 'string') {
             throw new Error("MeasureModeBase requires a valid modeName string.");
@@ -96,6 +96,7 @@ class MeasureModeBase {
         this.stateManager = stateManager;
         this.emitter = emitter;
         this.app = app;
+        this.dataPool = dataPool;
 
         this.mapName = drawingHelper.mapName; // Map name (e.g., "cesium", "google", "leaflet")
 
@@ -118,7 +119,7 @@ class MeasureModeBase {
     activate() {
         if (this.flags.isActive) return; // Prevent double activation
 
-        console.log(`Activating ${this.constructor.name} (mode: ${this.mode}).`);
+        // console.log(`Activating ${this.constructor.name} (mode: ${this.mode}).`);
         this.flags.isActive = true;
 
         // Reset values before attaching listeners
@@ -129,8 +130,8 @@ class MeasureModeBase {
         this.inputHandler.on('leftclick', this.handleLeftClick);
         this.inputHandler.on('mousemove', this.handleMouseMove);
         this.inputHandler.on('rightclick', this.handleRightClick);
-        this.inputHandler.on('leftdoubleclick', this.handleLeftDoubleClick); // Optional, if needed
-        this.inputHandler.on('middleclick', this.handleMiddleClick);
+        // this.inputHandler.on('leftdoubleclick', this.handleLeftDoubleClick); // Optional, if needed
+        // this.inputHandler.on('middleclick', this.handleMiddleClick);
 
         // Activate interaction handlers if they exist
         this.dragHandler?.activate(this);
@@ -151,7 +152,7 @@ class MeasureModeBase {
      */
     deactivate() {
         if (!this.flags.isActive) return; // Prevent double deactivation
-        console.log(`Deactivating ${this.constructor.name} (mode: ${this.mode}).`);
+        // console.log(`Deactivating ${this.constructor.name} (mode: ${this.mode}).`);
 
         // Remove map-specific listeners first
         this._removeMapSpecificListeners();

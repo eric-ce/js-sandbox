@@ -24,7 +24,7 @@ export class LeafletInputHandler {
         this._container = map.getContainer();
         /** @type {Map<string, Map<Function, Function>>} */
         this.listenerRegistry = new Map();
-        console.log("LeafletInputHandler created.");
+        // console.log("LeafletInputHandler created.");
     }
 
     /**
@@ -127,7 +127,7 @@ export class LeafletInputHandler {
 
         // Attach the wrapper to the Leaflet map event
         this.map.on(leafletEventName, leafletHandlerWrapper);
-        console.log(`LeafletInputHandler: Attached listener for ${eventType} (Leaflet: ${leafletEventName})`);
+        // console.log(`LeafletInputHandler: Attached listener for ${eventType} (Leaflet: ${leafletEventName})`);
 
         return leafletHandlerWrapper;
     }
@@ -150,12 +150,12 @@ export class LeafletInputHandler {
 
             // Remove from registry
             listenersForType.delete(callback);
-            console.log(`LeafletInputHandler: Removed listener callback for ${eventType} (Leaflet: ${leafletEventName})`);
+            // console.log(`LeafletInputHandler: Removed listener callback for ${eventType} (Leaflet: ${leafletEventName})`);
 
             // Clean up the outer map if no listeners remain for this type
             if (listenersForType.size === 0) {
                 this.listenerRegistry.delete(eventType);
-                console.log(`LeafletInputHandler: Removed last listener for ${eventType}`);
+                // console.log(`LeafletInputHandler: Removed last listener for ${eventType}`);
             }
         } else {
             console.warn(`LeafletInputHandler: Listener callback not found for removal on ${eventType}.`);
@@ -176,7 +176,7 @@ export class LeafletInputHandler {
      * Destroys the handler and removes all listeners.
      */
     destroy() {
-        console.log("LeafletInputHandler: Destroying...");
+        // console.log("LeafletInputHandler: Destroying...");
         // Iterate through the registry and remove all listeners from the map
         this.listenerRegistry.forEach((listenersForType, eventType) => {
             const leafletEventName = this._getLeafletEventType(eventType);
@@ -195,6 +195,6 @@ export class LeafletInputHandler {
 
         this.map = null; // Release reference
         this._container = null;
-        console.log("LeafletInputHandler instance destroyed.");
+        // console.log("LeafletInputHandler instance destroyed.");
     }
 }

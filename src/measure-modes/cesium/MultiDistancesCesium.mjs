@@ -10,7 +10,6 @@ import {
     getRankedPickedObjectType
 } from "../../lib/helper/cesiumHelper.mjs";
 import { getNeighboringValues, formatMeasurementValue, showCustomNotification } from "../../lib/helper/helper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 
 
@@ -57,9 +56,6 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
  */
 class MultiDistancesCesium extends MeasureModeCesium {
     modeName = "multi-distances";
-    // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
 
     /** @type {Cartesian3} - The current coordinate. */
     #coordinate = null;
@@ -87,23 +83,23 @@ class MultiDistancesCesium extends MeasureModeCesium {
      * @param {CesiumAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app
+     * @param {DataPool} dataPool
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("MultiDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("MultiDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
         this.flags.isAddMode = false;
         this.flags.isReverse = false;
-
-        this.cesiumPkg = cesiumPkg;
 
         this.measure = super._createDefaultMeasure();
     }
@@ -256,7 +252,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length > 1 && !this.flags.isMeasurementComplete) {
             // Determine the indices of the previous and current points based on the measurement direction
@@ -300,7 +296,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             }
 
             // Update dataPool with the measure data
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
@@ -513,7 +509,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
         this.measure.status = "completed"; // Update the measure status
         // Update data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Reset to clean up after finish
         this.resetValuesModeSpecific();
@@ -710,7 +706,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         }
         this.measure.coordinates = positions.map(pos => Cartesian3.clone(pos));
         // Update dataPool with the measure data
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Update current measure variables --
         if (isMeasuring) {

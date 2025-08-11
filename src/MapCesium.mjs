@@ -12,6 +12,8 @@ import {
 import CesiumNavigation from "cesium-navigation-es6";
 import { MapBase } from "./MapBase.mjs";
 
+import { tabulatorStyle } from "./styles/tabulatorStyle.mjs";
+
 export class MapCesium extends MapBase {
     constructor() {
         super();
@@ -33,9 +35,11 @@ export class MapCesium extends MapBase {
         this.cesiumStyle.href = `/Widgets/widgets.css`;
         this.shadowRoot.appendChild(this.cesiumStyle);
 
+        this.shadowRoot.adoptedStyleSheets = [tabulatorStyle]
+
         this._cesiumContainerSetup();
 
-        await this._initialize();
+        await this._initialiseMap();
 
         if (this.viewer && this.viewer instanceof Cesium.Viewer) {
             // Attach navigation controls
@@ -76,6 +80,7 @@ export class MapCesium extends MapBase {
     }
 
     _attachAnnotationToolbox() {
+        this.annotationToolbox = this.app.map.annotationToolbox;
         if (!this.map || !this.app || !this.annotationToolbox) return;
 
         const cesiumPkg = {

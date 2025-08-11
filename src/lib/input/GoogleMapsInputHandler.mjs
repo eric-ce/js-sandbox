@@ -99,7 +99,7 @@ export class GoogleMapsInputHandler {
 
         // Store the reference using the original callback as the key
         listenersForType.set(callback, listenerRef);
-        console.log(`GoogleMapsInputHandler: Attached listener for ${eventType} (maps to ${googleEventType})`);
+        // console.log(`GoogleMapsInputHandler: Attached listener for ${eventType} (maps to ${googleEventType})`);
     }
 
     /**
@@ -113,7 +113,7 @@ export class GoogleMapsInputHandler {
             const listenerRef = listenersForType.get(callback);
             google.maps.event.removeListener(listenerRef);
             listenersForType.delete(callback);
-            console.log(`GoogleMapsInputHandler: Removed listener callback for ${eventType}`);
+            // console.log(`GoogleMapsInputHandler: Removed listener callback for ${eventType}`);
 
             // Optional: Clean up outer map if no listeners remain for this type
             if (listenersForType.size === 0) {
@@ -143,17 +143,17 @@ export class GoogleMapsInputHandler {
      * Destroys the handler and removes all attached listeners.
      */
     destroy() {
-        console.log("GoogleMapsInputHandler: Destroying...");
+        // console.log("GoogleMapsInputHandler: Destroying...");
         this.listenerRegistry.forEach((listenersMap, eventType) => {
             listenersMap.forEach((listenerRef, callback) => {
                 google.maps.event.removeListener(listenerRef);
-                console.log(`  Removed listener for ${eventType}`);
+                // console.log(`  Removed listener for ${eventType}`);
             });
         });
         this.listenerRegistry.clear();
         // Reset cursor
         this.setCursor(null); // Reset to default via map options
         this.map = null; // Release map reference
-        console.log("GoogleMapsInputHandler instance destroyed.");
+        // console.log("GoogleMapsInputHandler instance destroyed.");
     }
 }

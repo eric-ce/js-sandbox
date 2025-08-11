@@ -12,7 +12,6 @@ import {
     getRankedPickedObjectType,
 } from "../../lib/helper/cesiumHelper.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 
 // -- Cesium types --
@@ -54,10 +53,6 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 class ThreePointsCurveCesium extends MeasureModeCesium {
     modeName = "curve";
 
-    // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
-
     /** @type {Cartesian3} */
     #coordinate = null;
 
@@ -81,21 +76,21 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
     * @param {CesiumAnnotation} drawingHelper 
     * @param {StateManager} stateManager 
     * @param {EventEmitter} emitter 
+    * @param {object} app
+    * @param {DataPool} dataPool
     * @param {*} cesiumPkg 
     */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("ThreePointsCurveCesium requires inputHandler, drawingHelper (with map), stateManager, emitter and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("ThreePointsCurveCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("curve", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+        super("curve", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
-
-        this.cesiumPkg = cesiumPkg;
 
         this.coordsCache = [];
         this.measure = super._createDefaultMeasure();
@@ -196,7 +191,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
         this.coordsCache.push(this.#coordinate);
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
 
         // -- Handle Finishing the measure --
@@ -232,7 +227,7 @@ class ThreePointsCurveCesium extends MeasureModeCesium {
             this.measure.status = "completed";
 
             // -- Update Data Pool --
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
 
             // -- Update State --
             this.flags.isMeasurementComplete = true;

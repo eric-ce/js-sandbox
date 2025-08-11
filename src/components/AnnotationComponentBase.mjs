@@ -1,4 +1,3 @@
-import dataPool from "../lib/data/DataPool.mjs";
 import { sharedStyleSheet } from "../styles/sharedStyle.mjs";
 import {
     toolIcon,
@@ -53,7 +52,6 @@ import { makeDraggable, formatMeasurementValue } from "../lib/helper/helper.mjs"
  * It handles UI creation, event handling, and data management for measurement tools.
  */
 export class AnnotationComponentBase extends HTMLElement {
-    // --- Private Fields ---
     /** @type {boolean} */
     #isInitialized = false;
     /** @type {MeasurementGroup[]} */
@@ -82,7 +80,6 @@ export class AnnotationComponentBase extends HTMLElement {
     /** @type {Array<number>} */
     _toggleTimeouts = [];
 
-    // --- Public Fields ---
     log = null;
     /** @type {CesiumInputHandler | GoogleMapsInputHandler | null} */
     inputHandler = null;
@@ -101,11 +98,14 @@ export class AnnotationComponentBase extends HTMLElement {
     /** @type {HTMLElement | null} */
     dataLogTable = null;
     /** @type {HTMLElement | null} */
-    instructionsTable = null;
+    // instructionsTable = null;
     /** @type {Array<object>} */ // Consider a more specific type for mode configs
     availableModeConfigs = [];
     /** @type {{ [modeId: string]: object }} */
     #modeInstances = {}; // Pool to store instantiated modes
+
+    /** @type {import('../lib/data/DataPool.mjs').DataPool} */
+    _dataPool = null;
 
     // -- Event Handler References for Cleanup --
     /** @type {function(Event): void | null} */
@@ -168,6 +168,17 @@ export class AnnotationComponentBase extends HTMLElement {
         if (this.#cesiumPkg === pkg) return; // Avoid re-setting if same instance
         this.#cesiumPkg = pkg;
     }
+
+    get dataPool() {
+        return this._dataPool;
+    }
+    /**
+     * @param {DataPool} dataPool
+     */
+    set dataPool(dataPool) {
+        this._dataPool = dataPool;
+    }
+
 
     /**
      * Gets the map container HTML element by the current map instance.
@@ -276,17 +287,17 @@ export class AnnotationComponentBase extends HTMLElement {
             switch (this.mapName) {
                 case "cesium":
                     this.inputHandler = new CesiumInputHandler(this.map);
-                    this.dragHandler = new CesiumDragHandler(this.map, this.inputHandler, this.emitter);
+                    this.dragHandler = new CesiumDragHandler(this.map, this.inputHandler, this.emitter, this.dataPool);
                     this.highlightHandler = new CesiumHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 case "google":
                     this.inputHandler = new GoogleMapsInputHandler(this.map);
-                    this.dragHandler = new GoogleDragHandler(this.map, this.inputHandler, this.emitter);
+                    this.dragHandler = new GoogleDragHandler(this.map, this.inputHandler, this.emitter, this.dataPool);
                     this.highlightHandler = new GoogleHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 case "leaflet":
                     this.inputHandler = new LeafletInputHandler(this.map);
-                    this.dragHandler = new LeafletDragHandler(this.map, this.inputHandler, this.emitter);
+                    this.dragHandler = new LeafletDragHandler(this.map, this.inputHandler, this.emitter, this.dataPool);
                     this.highlightHandler = new LeafletHighlightHandler(this.map, this.inputHandler, this.emitter, this.stateManager);
                     break;
                 default:
@@ -310,13 +321,13 @@ export class AnnotationComponentBase extends HTMLElement {
         // Listen for data changes to draw persistent measurements
         if (!this.#dataHandler) {
             const handleData = (data) => { this._drawFromDataArray(data); };
-            this.emitter.on("data", handleData);
+            this.emitter.onDataChange(handleData);
             this.#dataHandler = handleData; // Store the handler reference for cleanup
         }
 
         // --- Draw Initial Data ---
-        if (dataPool?.data?.length > 0) {
-            this.#data = [...dataPool.data];
+        if (this.dataPool?.data?.length > 0) {
+            this.#data = [...this.dataPool.data];
             this._drawFromDataArray(this.#data);
         }
 
@@ -707,7 +718,7 @@ export class AnnotationComponentBase extends HTMLElement {
         this.clearCollections();
 
         // 3. clean all data in the dataPool by mapName
-        dataPool.removeDataByMapName(this.mapName);
+        this.dataPool.removeDataByMapName(this.mapName);
     }
 
 
@@ -787,11 +798,11 @@ export class AnnotationComponentBase extends HTMLElement {
             this._updateButtonStates(modeId);
 
             // Show instructions table and data log table
-            this._showInstructionsTable();
+            // this._showInstructionsTable();
             this._showDataLogTable();
             // Enable dragging for the tables
             requestAnimationFrame(() => {  // ensure DOM is ready
-                this.instructionsTable._enableDragging();   // Enable dragging with built-in resize handling
+                // this.instructionsTable._enableDragging();   // Enable dragging with built-in resize handling
                 this.dataLogTable._enableDragging();   // Enable dragging with built-in resize handling
             });
 
@@ -829,7 +840,7 @@ export class AnnotationComponentBase extends HTMLElement {
         // Create new instance
         const standardArgs = [
             this.inputHandler, this.dragHandler, this.highlightHandler,
-            this, this.stateManager, this.emitter, this.#app
+            this, this.stateManager, this.emitter, this.#app, this.dataPool
         ];
 
         const args = ModeClass.name.includes("Cesium")
@@ -896,30 +907,30 @@ export class AnnotationComponentBase extends HTMLElement {
     /****************************
      * HELP TABLE AND LOG TABLE *
      ****************************/
-    _showInstructionsTable() {
-        // Clear reference if element was removed
-        if (this.instructionsTable && !this.instructionsTable.isConnected) {
-            this.instructionsTable = null;
-        }
+    // _showInstructionsTable() {
+    //     // Clear reference if element was removed
+    //     if (this.instructionsTable && !this.instructionsTable.isConnected) {
+    //         this.instructionsTable = null;
+    //     }
 
-        // Create if doesn't exist
-        if (!this.instructionsTable) {
-            this._createInstructionsTable();
-            this.instructionsTable._updatePositions();
-        }
+    //     // Create if doesn't exist
+    //     if (!this.instructionsTable) {
+    //         this._createInstructionsTable();
+    //         this.instructionsTable._updatePositions();
+    //     }
 
-        this.instructionsTable.modeId = this.activeModeId;
-    }
+    //     this.instructionsTable.modeId = this.activeModeId;
+    // }
 
-    _createInstructionsTable() {
-        this.instructionsTable = document.createElement("instructions-table");
-        // set properties for instructions table
-        const mapContainer = this.container;
-        this.instructionsTable.container = mapContainer;
-        this.instructionsTable.modeId = this.activeModeId;
+    // _createInstructionsTable() {
+    //     this.instructionsTable = document.createElement("instructions-table");
+    //     // set properties for instructions table
+    //     const mapContainer = this.container;
+    //     this.instructionsTable.container = mapContainer;
+    //     this.instructionsTable.modeId = this.activeModeId;
 
-        mapContainer.appendChild(this.instructionsTable);
-    }
+    //     mapContainer.appendChild(this.instructionsTable);
+    // }
 
     _showDataLogTable() {
         // Clear reference if element was removed
@@ -938,10 +949,11 @@ export class AnnotationComponentBase extends HTMLElement {
         this.dataLogTable = document.createElement("data-log-table");
         // set properties for log table
         this.dataLogTable.stateManager = this.stateManager;
-        this.dataLogTable.emitter = this.emitter;
         this.dataLogTable.mapName = this.mapName;
         const mapContainer = this.container;
         this.dataLogTable.container = mapContainer;
+        this.dataLogTable.emitter = this.emitter;
+        this.dataLogTable.dataPool = this.dataPool; // Pass data pool for log table
 
         mapContainer.appendChild(this.dataLogTable);
     }

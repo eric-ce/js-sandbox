@@ -26,7 +26,7 @@ export default class MapLeaflet extends MapBase {
         this.shadowRoot.appendChild(this.div);
 
         try {
-            await this._initialize().then(() => {
+            await this._initialiseMap().then(() => {
                 this._attachAnnotationToolbox();
             })
         } catch (error) {
@@ -115,6 +115,7 @@ export default class MapLeaflet extends MapBase {
     }
 
     _attachAnnotationToolbox() {
+        this.annotationToolbox = this.app.map.annotationToolbox;
         if (!this.map || !this.annotationToolbox) return; // Return if map is not initialized
 
         // Set properties for the annotation toolbox

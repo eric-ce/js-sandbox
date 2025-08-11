@@ -1,4 +1,3 @@
-import dataPool from "../data/DataPool.mjs";
 import { getOverlayByPosition } from "../helper/googleHelper.mjs";
 
 
@@ -51,20 +50,29 @@ class GoogleDragHandler {
     polylineCollection;
     polygonCollection;
 
+    _dataPool = null;
+
     // -- Private Fields: variables --
     #coordinate = null;
 
-    constructor(map, inputHandler, emitter, callbacks = {}) {
+    constructor(map, inputHandler, emitter, dataPool) {
         this.map = map;
         this.inputHandler = inputHandler;
         this.emitter = emitter;
+        this._dataPool = dataPool;
 
         this.draggedObjectInfo = this._createDefaultDraggedObjectInfo(); // Initialize the dragged object info
     }
 
+
     get coordinate() {
         return this.#coordinate; // Getter for coordinate
     }
+
+    get dataPool() {
+        return this._dataPool;
+    }
+
 
     activate(modeInstance) {
         // Validate the variables from modeInstance

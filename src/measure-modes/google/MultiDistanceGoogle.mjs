@@ -1,4 +1,3 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { calculateDistance, areCoordinatesEqual, checkOverlayType, convertToLatLng, } from "../../lib/helper/googleHelper.mjs";
 import { getNeighboringValues, showCustomNotification, formatMeasurementValue } from "../../lib/helper/helper.mjs";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.mjs";
@@ -106,17 +105,19 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
      * @param {AnnotationComponentBase} drawingHelper
      * @param {StateManager} stateManager
      * @param {EventEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("MultiDistanceGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("MultiDistanceGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app)
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -206,7 +207,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length > 1) {
             // Determine the indices of the previous and current points based on the measurement direction
@@ -251,7 +252,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             }
 
             // Update dataPool with the measure data
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
@@ -398,7 +399,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         this.measure.status = "completed";
 
         // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Reset to clean up after finish
         this.resetValuesModeSpecific();
@@ -451,7 +452,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         // -- Handle Measure Data --
         // Get the measure data from the data pool
-        const measureData = dataPool.getMeasureById(measureId);
+        const measureData = this.dataPool.getMeasureById(measureId);
         // Only completed measures can be resumed
         if (!measureData || measureData.status !== "completed") {
             return null;
@@ -690,7 +691,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         }
         this.measure.coordinates = positions.map(pos => ({ ...pos })); // Update the measure with the new coordinates
         // Update dataPool with the measure data
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Update current measure variables --
         if (isMeasuring) {
@@ -726,7 +727,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         if (isNaN(measureId)) return; // If the measure ID is not a number, exit
         this.coordsCache = []; // Clear the coordsCache
         this.#distances = []; // Clear the distances cache
-        dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+        this.dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
 
         // Show notification
         showCustomNotification(`Last point removed from measure ${measureId}`, this._container);

@@ -12,27 +12,20 @@ import { convertToUniversalCoordinate } from "../helper/helper.mjs";
  * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name
  */
 
+/** @typedef {import('events').EventEmitter} EventEmitter */
 
 /**
  * DataPool holds all measurement records in a unified structure.
  * It uses a shared EventEmitter (set externally) to notify when data is added, updated, or removed.
  */
-class DataPool {
+export class DataPool {
     /** @type {Array<MeasurementGroup>} */
     _data = [];
     /** @type {import('events').EventEmitter | null} */
     emitter = null;
 
-    constructor() {
-    }
-
-    // Getter and setter for the shared emitter.
-    get emitter() {
-        return this._emitter;
-    }
-
-    set emitter(emitter) {
-        this._emitter = emitter;
+    constructor(emitter) {
+        this.emitter = emitter;
     }
 
     get data() {
@@ -43,7 +36,6 @@ class DataPool {
     /*******************
      * CRUD OPERATIONS *
      *******************/
-
     /*******************
      * CREATE FEATURES *
      *******************/
@@ -281,5 +273,3 @@ class DataPool {
         }).filter(Boolean);
     }
 }
-
-export default new DataPool(); // Export as singleton

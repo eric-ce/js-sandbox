@@ -1,5 +1,4 @@
 import { MeasureModeBase } from "../MeasureModeBase.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { areCoordinatesEqual, calculateDistance, calculateMiddlePos, convertToLatLng } from "../../lib/helper/leafletHelper.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue, showCustomNotification } from "../../lib/helper/helper.mjs";
 
@@ -40,9 +39,11 @@ class MeasureModeLeaflet extends MeasureModeBase {
      * @param {leafletAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app 
+     * @param {DataPool} dataPool 
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
 
         this.contextMenu = this._setupContextMenu(this._container, { show: false });
     }
@@ -56,7 +57,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
      * @override
      */
     _attachMapSpecificListeners() {
-        this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
+        this.emitter.onLeafletContextMenu(this._handleContextMenu);
     }
 
     /**
@@ -82,7 +83,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
             return null; // Return null if measureId is not a number
         }
 
-        const measure = dataPool.getMeasureById(measureId); // Get the measure data by ID
+        const measure = this.dataPool.getMeasureById(measureId); // Get the measure data by ID
         if (!measure) return null; // If no measure found, exit the function
 
         // Convert cartographic degrees to Google coordinates
@@ -102,7 +103,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         const latLng = { ...convertToLatLng(coordinate) };
         if (!latLng) return null;
 
-        const data = dataPool.getAllMeasures("cartographicDegrees");
+        const data = this.dataPool.getAllMeasures("cartographicDegrees");
         if (Array.isArray(data) && data.length === 0) return null;
 
         const measure = data.find(measure => {
@@ -415,7 +416,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         });
 
         // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
+        this.dataPool.removeMeasureById(measureId);
 
         // Refresh the map dragging, to solve issue the middle click keep dragging
         this._refreshMapDrag();

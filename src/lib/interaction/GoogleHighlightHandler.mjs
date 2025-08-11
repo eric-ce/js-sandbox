@@ -8,10 +8,11 @@ class GoogleHighlightHandler {
     #hoveredObject = null;
     #originalHoverStyle = null;
 
-    constructor(map, inputHandler, emitter, callbacks = {}) {
+    constructor(map, inputHandler, emitter, stateManager) {
         this.map = map;
         this.inputHandler = inputHandler;
         this.emitter = emitter;
+        this.stateManager = stateManager;
     }
 
     activate(modeInstance) {

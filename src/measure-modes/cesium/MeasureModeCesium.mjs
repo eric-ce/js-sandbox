@@ -1,7 +1,6 @@
 import { Cartesian3 } from "cesium";
 import { MeasureModeBase } from "../MeasureModeBase.mjs";
 import { areCoordinatesEqual, calculateMiddlePos, convertToCartesian3, convertToCartographicDegrees, createPointerOverlay, editableLabel, getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { Chart } from "chart.js/auto";
 import { createCloseButton, createContextMenu, deconstructIdForMetadata, hideContextMenu, makeDraggable, showCustomNotification, updateContextMenu } from "../../lib/helper/helper.mjs";
 import { closeIconBlack } from "../../assets/icons.mjs";
@@ -66,8 +65,8 @@ class MeasureModeCesium extends MeasureModeBase {
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
 
         this.cesiumPkg = cesiumPkg; // Store the Cesium package instance
 
@@ -91,7 +90,7 @@ class MeasureModeCesium extends MeasureModeBase {
             return null; // Return null if measureId is not a number
         }
 
-        const measure = dataPool.getMeasureById(measureId); // Get the measure data by ID
+        const measure = this.dataPool.getMeasureById(measureId); // Get the measure data by ID
         if (!measure) return; // If no measure found, exit the function
 
         // Convert cartographic degrees to Cartesian3 coordinates
@@ -112,7 +111,7 @@ class MeasureModeCesium extends MeasureModeBase {
         if (!cartesian) return null;
 
         // Get all measure data from the data pool in Cartesian3 format
-        const data = dataPool.getAllMeasures("cartesian");
+        const data = this.dataPool.getAllMeasures("cartesian");
         if (Array.isArray(data) && data.length === 0) return null;
 
         // Find the measure that contains the coordinate
@@ -211,7 +210,7 @@ class MeasureModeCesium extends MeasureModeBase {
         };
 
         // Get all measure data from the data pool in Cartesian3 format
-        const data = dataPool.getAllMeasures("cartesian");
+        const data = this.dataPool.getAllMeasures("cartesian");
 
         if (!Array.isArray(data) && data.length === 0) {
             console.warn("No measures available in the data pool.");
@@ -281,7 +280,7 @@ class MeasureModeCesium extends MeasureModeBase {
         // -- Handle Measure Data --
         const measureId = Number(lastPoint.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
         if (isNaN(measureId)) return; // If the measure ID is not a number, exit
-        dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+        this.dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
 
         // -- Reset values --
         this.resetValuesModeSpecific();
@@ -307,7 +306,7 @@ class MeasureModeCesium extends MeasureModeBase {
         const measureId = Number(point.id.split("_").slice(-1)[0]);
         if (isNaN(measureId)) return null;
 
-        const measureData = dataPool.getMeasureById(measureId);
+        const measureData = this.dataPool.getMeasureById(measureId);
         // Only completed measures can be resumed
         if (!measureData || measureData.status !== "completed") {
             return null;
@@ -562,7 +561,7 @@ class MeasureModeCesium extends MeasureModeBase {
         });
 
         // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
+        this.dataPool.removeMeasureById(measureId);
 
         // Remove the chart if it exists for profile and profile distance modes
         if (this.chartDiv && typeof this._destroyChart === 'function') {
@@ -646,7 +645,7 @@ class MeasureModeCesium extends MeasureModeBase {
         // modeInstance.measure.status = "pending"; // Set the measure status to pending
 
         // Update data pool with the measure data (to update the specific data status)
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Set flags for add mode
         this.flags.isAddMode = true; // Set the add mode flag to true
@@ -735,7 +734,7 @@ class MeasureModeCesium extends MeasureModeBase {
         }
         this.measure.status = "completed"; // Set the measure status to completed
         this.measure.coordinates = this.coordsCache.map(pos => ({ ...pos })); // Update the measure with the new coordinates
-        dataPool.updateOrAddMeasure({ ...this.measure }); // Update data pool with the measure data
+        this.dataPool.updateOrAddMeasure({ ...this.measure }); // Update data pool with the measure data
 
         // -- Reset values --
         this.resetValuesModeSpecific(); // Reset the mode-specific values

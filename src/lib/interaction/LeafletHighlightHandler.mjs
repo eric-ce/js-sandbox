@@ -5,10 +5,11 @@ class LeafletHighlightHandler {
     #originalHoverStyle = null;
     #originalHoverContent = null; // For label tooltip
 
-    constructor(map, inputHandler, emitter, callbacks = {}) {
+    constructor(map, inputHandler, emitter, stateManager) {
         this.map = map;
         this.inputHandler = inputHandler;
         this.emitter = emitter;
+        this.stateManager = stateManager;
     }
 
     activate(modeInstance) {

@@ -1,28 +1,18 @@
 import { AnnotationToolbox } from "./components/AnnotationToolbox.mjs";
 
 export class MapBase extends HTMLElement {
+    static type = "map-base";
+
+    app;
+    div = null;
+    _map = null;
+    _mapEmitter = null;
+    annotationToolbox = null;
+    _isListening = false; // Flag to track if the listener is active
+
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
-
-        this.div = null;
-        this._map = null;
-        this._mapEmitter = null;
-        this.annotationToolbox = null;
-        this._isListening = false; // Flag to track if the listener is active
-        this.type = "map-base";
-
-        // mimic navigator app variable for user and user roles
-        this.app = {
-            log: ["testing"],
-            currentUser: {
-                sessions: {
-                    navigator: {
-                        roles: ["fireTrail", "developer", "tester", "flyThrough"]
-                    }
-                }
-            }
-        };
     }
 
     get mapEmitter() {
@@ -39,6 +29,13 @@ export class MapBase extends HTMLElement {
 
     set map(mapInstance) {
         this._map = mapInstance;
+    }
+
+    get app() {
+        return this._app;
+    }
+    set app(app) {
+        this._app = app;
     }
 
     // Abstract methods to be implemented by subclasses
@@ -58,11 +55,11 @@ export class MapBase extends HTMLElement {
         throw new Error("Subclasses must implement _panTo()");
     }
 
-    _loadAnnotationInstance() {
-        this.annotationToolbox = new AnnotationToolbox(this.app);
-    }
+    // _loadAnnotationInstance() {
+    //     this.annotationToolbox = new AnnotationToolbox(this.app);
+    // }
 
-    async _initialize() {
+    async _initialiseMap() {
         this.map = await this._createMap();
 
         this._mapEmitter.on("camera:changed", ({ mapName, bounds }) => {
@@ -75,6 +72,6 @@ export class MapBase extends HTMLElement {
 
         this._addMapListener();
 
-        this._loadAnnotationInstance();
+        // this._loadAnnotationInstance();
     }
 }

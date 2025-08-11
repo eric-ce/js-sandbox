@@ -3,13 +3,13 @@
  * It creates individual measure components or depends on the map type
  */
 import { StateManager } from "../lib/state/StateManager.mjs";
-// import EventEmitter from "eventemitter3";
-import sharedEmitter from "../lib/events/ShareEmitter.mjs";
+import { ShareEmitter } from "../lib/events/ShareEmitter.mjs";
+import { DataPool } from "../lib/data/DataPool.mjs";
+
 import { CesiumAnnotation } from "./CesiumAnnotation.mjs";
 import { GoogleAnnotation } from "./GoogleAnnotation.mjs";
 import { LeafletAnnotation } from "./LeafletAnnotation.mjs"
 // import { LeafletAnnotation } from "./LeafletAnnotation.mjs";
-import dataPool from "../lib/data/DataPool.mjs";
 // import { map } from "leaflet";
 
 
@@ -25,7 +25,7 @@ export class AnnotationToolbox {
 
     // --- Public Fields ---
     log;
-    emitter = sharedEmitter; // Initialized directly
+    emitter; // Initialized directly
     stateManager;
     cesiumAnnotationToolbox = null;
     googleAnnotationToolbox = null;
@@ -35,11 +35,14 @@ export class AnnotationToolbox {
         this.#app = app;
         this.log = app.log;
 
-        // state manager
+        // Initialize emitter
+        this.emitter = new ShareEmitter();
+
+        // Initialize stateManager
         this.stateManager = new StateManager(this.emitter);
 
-        // set emitter for data pool
-        dataPool.emitter = this.emitter;
+        // Initialize dataPool
+        this.dataPool = new DataPool(this.emitter);
     }
 
     /*********************
@@ -142,6 +145,7 @@ export class AnnotationToolbox {
         this.cesiumAnnotationToolbox.app = this.app; // Use getter
         this.cesiumAnnotationToolbox.emitter = this.emitter;
         this.cesiumAnnotationToolbox.stateManager = this.stateManager;
+        this.cesiumAnnotationToolbox.dataPool = this.dataPool;
 
         const mapCesium = document.querySelector("map-cesium");
         mapCesium.style.position = "relative"; // !important: Ensure the map has a relative position
@@ -162,6 +166,7 @@ export class AnnotationToolbox {
         this.googleAnnotationToolbox.app = this.app; // Use getter
         this.googleAnnotationToolbox.emitter = this.emitter;
         this.googleAnnotationToolbox.stateManager = this.stateManager;
+        this.googleAnnotationToolbox.dataPool = this.dataPool;
 
         const mapGoogle = document.querySelector("map-google");
         mapGoogle.style.position = "relative"; // !important: Ensure the map has a relative position
@@ -182,6 +187,7 @@ export class AnnotationToolbox {
         this.leafletAnnotationToolbox.app = this.app; // Use getter
         this.leafletAnnotationToolbox.emitter = this.emitter;
         this.leafletAnnotationToolbox.stateManager = this.stateManager;
+        this.leafletAnnotationToolbox.dataPool = this.dataPool;
 
         const mapLeaflet = document.querySelector("map-leaflet");
         mapLeaflet.style.position = "relative"; // !important: Ensure the map has a relative position

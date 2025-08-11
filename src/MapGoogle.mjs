@@ -32,7 +32,7 @@ export class MapGoogle extends MapBase {
         // Load the Google Maps API using the Loader
         try {
             await this._loader.load();
-            await this._initialize().then(() => {
+            await this._initialiseMap().then(() => {
                 this._attachAnnotationToolbox();
             });
 
@@ -46,8 +46,8 @@ export class MapGoogle extends MapBase {
         this._removeMapListener();
     }
 
-    async _initialize() {
-        await super._initialize();
+    async _initialiseMap() {
+        await super._initialiseMap();
         // Optionally trigger a resize to ensure proper rendering
         setTimeout(() => {
             if (this._map) {
@@ -146,6 +146,7 @@ export class MapGoogle extends MapBase {
 
     // initialize measure toolbox for google
     _attachAnnotationToolbox() {
+        this.annotationToolbox = this.app.map.annotationToolbox;
         if (!this.map || !this.annotationToolbox) return; // Return if map is not initialized
 
         // Set properties for the annotation toolbox

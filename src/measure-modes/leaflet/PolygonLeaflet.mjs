@@ -1,4 +1,3 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng } from "../../lib/helper/leafletHelper.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.mjs";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
@@ -75,14 +74,16 @@ class PolygonLeaflet extends MeasureModeLeaflet {
      * @param {leafletAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PolygonLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PolygonLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app)
+        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -90,9 +91,6 @@ class PolygonLeaflet extends MeasureModeLeaflet {
 
         /** @type {MeasurementGroup} */
         this.measure = this._createDefaultMeasure(); // Create a new measure object
-
-        // Listen to right click event
-        // this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
     }
 
     /**********
@@ -169,7 +167,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
     }
 
     /**
@@ -254,7 +252,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         this.measure.status = "completed"; // Update the measure status
 
         // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Set flags
         this.flags.isMeasurementComplete = true; // Set the measurement as complete
