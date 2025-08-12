@@ -60,7 +60,7 @@ export class MapGoogle extends MapBase {
         // copy from map-google repo setup
         const mapOptions = {
             zoom: 18,
-            center: { lat: -33.77, lng: 150.78 },
+            center: { lat: 40.039, lng: -75.598 },
             options: { gestureHandling: 'greedy' },
             streetViewControl: false,
             mapTypeId: "roadmap", //google.maps.MapTypeId.ROADMAP,

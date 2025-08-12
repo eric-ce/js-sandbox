@@ -2,17 +2,11 @@ import * as cesiumHelper from "../helper/cesiumHelper.mjs";
 import { convertToUniversalCoordinate } from "../helper/helper.mjs";
 
 /**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name
+ * @typedef {import('../docs/types.mjs').ShareEmitter} ShareEmitter
+ * @typedef {import('../docs/types.mjs').StateManager} StateManager
+ * @typedef {import('../docs/types.mjs').MeasurementGroup} MeasurementGroup
  */
 
-/** @typedef {import('events').EventEmitter} EventEmitter */
 
 /**
  * DataPool holds all measurement records in a unified structure.
@@ -21,8 +15,8 @@ import { convertToUniversalCoordinate } from "../helper/helper.mjs";
 export class DataPool {
     /** @type {Array<MeasurementGroup>} */
     _data = [];
-    /** @type {import('events').EventEmitter | null} */
-    emitter = null;
+    /** @type {ShareEmitter} */
+    emitter;
 
     constructor(emitter) {
         this.emitter = emitter;
@@ -85,25 +79,29 @@ export class DataPool {
     }
 
     /**
-    * Update a measurement record by its id.
-    * @param {Number} id - The id of the measurement record. 
-    * @param {Object} newData - The new data to replace the existing record.
-    * @returns 
+    * Update a measurement record by its id by merging new data.
+    * @param {number} id - The id of the measurement record.
+    * @param {Partial<MeasurementGroup>} partialData - An object containing the properties to update.
+    * @param {boolean} [silent=false] - If true, no events will be emitted.
+    * @returns {MeasurementGroup | undefined} The updated measurement record.
     */
-    updateMeasureById(id, newData) {
+    updateMeasureById(id, partialData, silent = false) {
         const measureIndex = this._data.findIndex(measure => measure.id === id);
         if (measureIndex === -1) {
             console.warn("No measurement found containing the provided id.");
             return;
         }
 
-        // coordinates handling to convert to cartographicDegrees
-        newData.coordinates = this._coordToCartographicDegrees(newData.coordinates);
+        // If coordinates are part of the update, ensure they are in the correct format
+        if (partialData.coordinates) {
+            partialData.coordinates = this._coordToCartographicDegrees(partialData.coordinates);
+        }
 
-        // Update the entire group with newData (you might also merge instead of replace)
-        this._data[measureIndex] = newData;
+        // Merge the partial data into the existing measurement
+        this._data[measureIndex] = { ...this._data[measureIndex], ...partialData };
 
-        if (this.emitter) {
+        // Emit events unless suppressed
+        if (this.emitter && !silent) {
             this.emitter.emit("data:updated", this._data[measureIndex]);
             this.emitter.emit("data", this._data);
         }
@@ -214,33 +212,48 @@ export class DataPool {
         const measureIndex = this._data.findIndex(measure => measure.id === Number(id));
         if (measureIndex === -1) {
             console.warn("No measurement found containing the provided id.");
-            return; // Or return null / undefined explicitly
+            return;
         }
+
+        // Get the measure before removing it
+        const measureToRemove = this._data[measureIndex];
 
         // Remove the measurement from the data pool
         const removedMeasure = this._data.splice(measureIndex, 1)[0];
 
         if (this.emitter) {
-            this.emitter.emit("data:removed", removedMeasure);
-            this.emitter.emit("data", this._data);
+            // Emit removal signal that sync drawing expects
+            this.emitter.emit("data:removed", { id: removedMeasure.id, renderedOn: removedMeasure.renderedOn });
+            // this.emitter.emit("data", this._data);
         }
-        return removedMeasure; // Explicitly return the removed measure
+        return removedMeasure;
     }
 
     /**
      * Removes all measurement records associated with a specific map name.
+     * This is typically called when a map view is closed.
      * @param {"cesium"|"google"|"leaflet"} mapName - The name of the map to filter the measurements.
      * @returns {void}
      */
     removeDataByMapName(mapName) {
         if (!mapName || typeof mapName !== "string") return;
 
-        const initialLength = this._data.length;
-        this._data = this._data.filter(measure => measure.mapName !== mapName);
+        // Find all measures that originated from the specified map
+        const measuresToRemove = this._data.filter(measure => measure.sourceMap === mapName);
+        if (measuresToRemove.length === 0) return;
 
-        if (this.emitter && this._data.length < initialLength) {
-            this.emitter.emit("data:removed", { mapName });
-            this.emitter.emit("data", this._data);
+        // Update the main data array by removing these measures
+        this._data = this._data.filter(measure => measure.sourceMap !== mapName);
+
+        // Emit a removal event for each removed measure so other maps can sync the deletion
+        if (this.emitter) {
+            measuresToRemove.forEach(measure => {
+                this.emitter.emit("data:removed", {
+                    id: measure.id,
+                    renderedOn: measure.renderedOn,
+                    sourceMap: mapName // The source of the removal action
+                });
+            });
         }
     }
 

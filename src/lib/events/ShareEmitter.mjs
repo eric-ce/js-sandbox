@@ -16,6 +16,10 @@ export class ShareEmitter extends EventEmitter {
         this.on("data:updated", callback);
     }
 
+    onDataRemove(callback) {
+        this.on("data:removed", callback);
+    }
+
     onGoogleContextMenu(callback) {
         this.on('annotation-contextmenu-google', callback);
     }

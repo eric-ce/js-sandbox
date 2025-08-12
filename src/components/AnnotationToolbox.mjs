@@ -5,6 +5,7 @@
 import { StateManager } from "../lib/state/StateManager.mjs";
 import { ShareEmitter } from "../lib/events/ShareEmitter.mjs";
 import { DataPool } from "../lib/data/DataPool.mjs";
+import { SyncDrawingManager } from "../lib/events/SyncDrawingManager.mjs";
 
 import { CesiumAnnotation } from "./CesiumAnnotation.mjs";
 import { GoogleAnnotation } from "./GoogleAnnotation.mjs";
@@ -12,7 +13,11 @@ import { LeafletAnnotation } from "./LeafletAnnotation.mjs"
 // import { LeafletAnnotation } from "./LeafletAnnotation.mjs";
 // import { map } from "leaflet";
 
-
+/**
+ * @typedef {import('../lib/docs/types.mjs').ShareEmitter} ShareEmitter
+ * @typedef {import('../lib/docs/types.mjs').StateManager} StateManager
+ * @typedef {import('../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup
+ */
 
 export class AnnotationToolbox {
     // --- Private Fields ---
@@ -27,6 +32,7 @@ export class AnnotationToolbox {
     log;
     emitter; // Initialized directly
     stateManager;
+    syncDrawingManager = null;
     cesiumAnnotationToolbox = null;
     googleAnnotationToolbox = null;
     leafletAnnotationToolbox = null;
@@ -130,6 +136,7 @@ export class AnnotationToolbox {
         }
     }
 
+
     // Initialize cesium annotation
     initializeCesiumAnnotation() {
         // Use getters which access private fields
@@ -146,6 +153,9 @@ export class AnnotationToolbox {
         this.cesiumAnnotationToolbox.emitter = this.emitter;
         this.cesiumAnnotationToolbox.stateManager = this.stateManager;
         this.cesiumAnnotationToolbox.dataPool = this.dataPool;
+
+        // Initialize sync drawing manager for Cesium
+        this.initializeSyncDrawingManager("cesium", this.cesiumAnnotationToolbox);
 
         const mapCesium = document.querySelector("map-cesium");
         mapCesium.style.position = "relative"; // !important: Ensure the map has a relative position
@@ -168,6 +178,9 @@ export class AnnotationToolbox {
         this.googleAnnotationToolbox.stateManager = this.stateManager;
         this.googleAnnotationToolbox.dataPool = this.dataPool;
 
+        // Initialize sync drawing manager for Google
+        this.initializeSyncDrawingManager("google", this.googleAnnotationToolbox);
+
         const mapGoogle = document.querySelector("map-google");
         mapGoogle.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapGoogle) return;
@@ -189,9 +202,51 @@ export class AnnotationToolbox {
         this.leafletAnnotationToolbox.stateManager = this.stateManager;
         this.leafletAnnotationToolbox.dataPool = this.dataPool;
 
+        // Initialize sync drawing manager for Leaflet
+        this.initializeSyncDrawingManager("leaflet", this.leafletAnnotationToolbox);
+
         const mapLeaflet = document.querySelector("map-leaflet");
         mapLeaflet.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapLeaflet) return;
         mapLeaflet.shadowRoot.appendChild(this.leafletAnnotationToolbox);
+    }
+
+    /**
+     * Initialize sync drawing manager for a specific map
+     * @param {"cesium"|"google"|"leaflet"} mapName - The name of the map
+     * @param {import("../lib/docs/types.mjs").AnnotationComponentBase} annotationComponent - The annotation component for the map
+     */
+    initializeSyncDrawingManager(mapName, annotationComponent) {
+        if (!this.syncDrawingManager) {
+            this.syncDrawingManager = {};
+        }
+
+        if (this.syncDrawingManager[mapName]) return;
+
+        this.syncDrawingManager[mapName] = new SyncDrawingManager(annotationComponent);
+        this.syncDrawingManager[mapName].initialize();
+    }
+
+    /**
+     * Cleans up resources for a specific map when it's deactivated.
+     * @param {"cesium"|"google"|"leaflet"} mapName - The name of the map to clean up.
+     */
+    cleanupForMap(mapName) {
+        if (this.syncDrawingManager && this.syncDrawingManager[mapName]) {
+            this.syncDrawingManager[mapName].destroy();
+            delete this.syncDrawingManager[mapName];
+        }
+
+        switch (mapName) {
+            case "cesium":
+                this.cesiumAnnotationToolbox = null;
+                break;
+            case "google":
+                this.googleAnnotationToolbox = null;
+                break;
+            case "leaflet":
+                this.leafletAnnotationToolbox = null;
+                break;
+        }
     }
 }

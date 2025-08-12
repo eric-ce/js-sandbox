@@ -23,29 +23,27 @@ import { PickerCesium, TwoPointsDistanceCesium, PolygonCesium, ThreePointsCurveC
 import { InstructionsTable } from "./shared/InstructionsTable.mjs";
 import { DataLogTable } from "./shared/DataLogTable.mjs";
 import { makeDraggable, formatMeasurementValue } from "../lib/helper/helper.mjs";
-
+import { SyncDrawingManager } from "../lib/events/SyncDrawingManager.mjs";
 
 
 /**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name
+ * @typedef {import('../lib/docs/types.mjs').ShareEmitter} ShareEmitter
+ * @typedef {import('../lib/docs/types.mjs').StateManager} StateManager
+ * @typedef {import('../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup
+ * @typedef {import('../lib/docs/types.mjs').DataPool} DataPool
  */
 
-/** @typedef {import('../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../lib/input/GoogleMapsInputHandler.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} GoogleDragHandler */
-/** @typedef {import('../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
-/** @typedef {import('../lib/interaction/LeafletDragHandler.mjs').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** 
+ * @typedef {import('../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler 
+ * @typedef {import('../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler
+ * @typedef {import('../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler
+ * @typedef {import('../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler
+ * @typedef {import('../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler
+ * @typedef {import('../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler
+ * @typedef {import('../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler
+ * @typedef {import('../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler
+ */
+
 
 /**
  * Base class for all measure components of cesium-annotation, google-annotation, and leaflet-annotation.
@@ -54,8 +52,6 @@ import { makeDraggable, formatMeasurementValue } from "../lib/helper/helper.mjs"
 export class AnnotationComponentBase extends HTMLElement {
     /** @type {boolean} */
     #isInitialized = false;
-    /** @type {MeasurementGroup[]} */
-    #data = []; // Internal data, not for sharing with other components
     /** @type {'cesium' | 'google' | 'leaflet' | null} */
     #mapName = null;
     /** @type {import('cesium').Viewer | google.maps.Map| L.map| null| undefined} */
@@ -67,9 +63,7 @@ export class AnnotationComponentBase extends HTMLElement {
     /** @type {import('../lib/state/StateManager').StateManager | null} */
     #stateManager = null;
     /** @type {import('../lib/events/EventEmitter').EventEmitter | null} */
-    #emitter = null;
-    /** @type {import('../lib/data/DataPool').DataPool | null} */
-    #dataHandler = null; // Reference to the bound data listener
+    #emitter = null;// Reference to the bound data listener
 
     /** @type {HTMLElement | null} */
     _buttonContainer = null;
@@ -106,7 +100,8 @@ export class AnnotationComponentBase extends HTMLElement {
 
     /** @type {import('../lib/data/DataPool.mjs').DataPool} */
     _dataPool = null;
-
+    /** @type {SyncDrawingManager | null} */
+    syncDrawingManager = null;
     // -- Event Handler References for Cleanup --
     /** @type {function(Event): void | null} */
     _pickedObjectDisplayDataHandler = null;
@@ -135,9 +130,9 @@ export class AnnotationComponentBase extends HTMLElement {
         this.#stateManager = manager;
     }
 
-    get data() {
-        return this.#data;
-    }
+    // get data() {
+    //     return this.#data;
+    // }
 
     get emitter() {
         return this.#emitter;
@@ -205,17 +200,20 @@ export class AnnotationComponentBase extends HTMLElement {
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
         // Initialization now depends on map and mapName being set
         if (this.map && this.mapName && !this.#isInitialized) {
-            await this._initialize();
+            await this._initialise();
         }
     }
 
     disconnectedCallback() {
         console.log(`${this.constructor.name}: Disconnecting...`);
-        // Clean up event listeners
-        if (this.#dataHandler && this.emitter) {
-            this.emitter.off("data", this.#dataHandler);
-            this.#dataHandler = null;
+
+        // Notify the AnnotationToolbox to clean up this component's resources.
+        if (this.app?.map?.annotationToolbox) {
+            this.app.map.annotationToolbox.cleanupForMap(this.mapName);
         }
+
+        // Clean up sync drawing manager reference
+        this.syncDrawingManager = null;
 
         // Deactivate current mode
         // this._deactivateCurrentMode();
@@ -248,15 +246,6 @@ export class AnnotationComponentBase extends HTMLElement {
         this.uiButtons = {};
         this.availableModeConfigs = [];
 
-        // Clean up map annotations from sync drawing
-        if (this.#data.length > 0) {
-            this.#data.forEach((item) => {
-                if (item.annotations) {
-                    this._removeAnnotations(item.annotations);
-                }
-            });
-            this.#data = [];
-        }
         this.#isInitialized = false;
         console.log(`${this.constructor.name}: Disconnected cleanup complete.`);
 
@@ -267,7 +256,7 @@ export class AnnotationComponentBase extends HTMLElement {
     /**************
      * INITIALIZE *
      **************/
-    async _initialize() {
+    async _initialise() {
         // Prevent re-initialization if already done
         if (this.#isInitialized) return;
 
@@ -317,19 +306,6 @@ export class AnnotationComponentBase extends HTMLElement {
         // --- Create UI ---
         this._createUI(this.mapName); // Create the toolbar depends on the map type
 
-        // --- Setup Listeners ---
-        // Listen for data changes to draw persistent measurements
-        if (!this.#dataHandler) {
-            const handleData = (data) => { this._drawFromDataArray(data); };
-            this.emitter.onDataChange(handleData);
-            this.#dataHandler = handleData; // Store the handler reference for cleanup
-        }
-
-        // --- Draw Initial Data ---
-        if (this.dataPool?.data?.length > 0) {
-            this.#data = [...this.dataPool.data];
-            this._drawFromDataArray(this.#data);
-        }
 
         // --- Call map-specific initialization hook ---
         this._initializeMapSpecifics(); // Allow derived classes to add setup
@@ -958,251 +934,6 @@ export class AnnotationComponentBase extends HTMLElement {
         mapContainer.appendChild(this.dataLogTable);
     }
 
-
-    /******************************
-     * SYNC DRAWING DATA FOR MAPS *
-     ******************************/
-    /**
-     * Draws the measurement data on the map based on the data array of objects.
-     * @param {Array} data - The data array containing measurement data.
-     * @returns {void}
-     */
-    _drawFromDataArray(data) {
-        // Use Array.isArray for proper type checking
-        if (!Array.isArray(data) || data.length === 0) return;
-
-        // For small datasets, process immediately
-        if (data.length <= 30) {
-            data.forEach((item) => this._drawFromDataObject(item));
-            return;
-        }
-
-        // For larger datasets, use batching
-        this._processBatches(data, (item) => this._drawFromDataObject(item));
-    }
-
-    /**
-     * Draws the measurement data on the map based on the data object.
-     * @param {Object} data - The data object containing measurement data.
-     * @param {string} data.id - Unique identifier for the data object.
-     * @param {string} data.mode - Measurement mode
-     * @param {Array<{latitude: number, longitude: number}>} data.coordinates - Array of coordinate objects.
-     * @returns {void}
-     */
-    _drawFromDataObject(data) {
-        // Check if coordinates property exists
-        if (!data?.coordinates) return;
-        // check if drawing from the map don't sync for the same map
-        if (data.mapName === this.mapName) return;
-
-        const emptyAnnotations = { markers: [], polylines: [], polygon: null, labels: [] };
-        const existingIndex = this.#data.findIndex((item) => item.id === data.id);
-        const existingMeasure = existingIndex >= 0 ? this.#data[existingIndex] : null;
-
-        // Create empty annotations object
-        const annotations = {
-            markers: [],
-            polylines: [],
-            polygon: null,
-            labels: [],
-        };
-
-        // Remove Operation: If no coordinates, remove annotations and exit early
-        if (data.coordinates.length === 0) {
-            if (existingMeasure?.annotations) {
-                this._removeAnnotations(existingMeasure.annotations);
-            }
-            const updatedData = { ...data, annotations: emptyAnnotations };
-            if (existingIndex >= 0) {
-                this.#data[existingIndex] = updatedData;
-            } else {
-                this.#data.push(updatedData);
-            }
-            return;
-        }
-
-        // Update Operation: If data existing, check if coordinates changed
-        if (existingMeasure) {
-            // const coordsEqual = this._areCoordinatesEqual(existingMeasure.coordinates, data.coordinates);
-            const coordsEqual = data.coordinates.every((coord, index) => {
-                this._areCoordinatesEqual(coord, existingMeasure.coordinates[index]);
-            });
-
-            // It means data correctly drawn, coordinates haven't changed and annotations exist, exit early
-            if (coordsEqual && existingMeasure.annotations) return;
-
-            // It means data updates, Clean up existing annotations regardless of mode
-            this._removeAnnotations(existingMeasure.annotations);
-        }
-
-        // Create new annotations based on the mode
-        try {
-            // FIXME: add id, color and other properties options to graphics
-            switch (data.mode) {
-                case "area":
-                    annotations.polygon = this._addPolygon(data.coordinates, {
-                        id: `annotate_${data.mode}_polygon_${data.id}`,
-                        color: this.stateManager.getColorState("polygon"),
-                        status: "completed"
-                    });
-                    annotations.markers = this._addPointMarkersFromArray(data.coordinates, {
-                        color: this.stateManager.getColorState("pointColor"),
-                        id: `annotate_${data.mode}_point_${data.id}`,
-                        status: "completed"
-                    });
-                    annotations.labels = [
-                        this._addLabel(data.coordinates, data._records[0], "squareMeter", {
-                            id: `annotate_${data.mode}_label_${data.id}`,
-                            status: "completed"
-                        }),
-                    ];
-                    break;
-                case "pointInfo":
-                    // -- Add points --
-                    const [cartographicDegrees] = data.coordinates;
-                    annotations.markers = this._addPointMarkersFromArray(data.coordinates, {
-                        color: this.stateManager.getColorState("pointColor"),
-                        id: `annotate_${data.mode}_point_${data.id}`,
-                        status: "completed"
-                    });
-                    // -- Add labels --
-                    const formattedText =
-                        `lat: ${cartographicDegrees.latitude.toFixed(6)}\u00B0` +
-                        `\nlng: ${cartographicDegrees.longitude.toFixed(6)}\u00B0` +
-                        (cartographicDegrees.height ? `\nheight: ${cartographicDegrees.height.toFixed(2)} m` : "");
-                    annotations.labels = [
-                        this._addLabel([data.coordinates[0], data.coordinates[0]], formattedText, null, {
-                            status: "completed",
-                            id: `annotate_${data.mode}_label_${data.id}`
-                        }),
-                    ];
-                    break;
-                case "multi-distances":
-                case "multi-distances-clamped":
-                case "profile-distances":
-                    // FIXME: add id, color and other properties options
-                    // -- Add points and lines --
-                    annotations.markers = this._addPointMarkersFromArray(data.coordinates, {
-                        color: this.stateManager.getColorState("pointColor"),
-                        id: `annotate_${data.mode}_point_${data.id}`,
-                        status: "completed"
-                    });
-                    annotations.polylines = this._addPolylinesFromArray(data.coordinates, {
-                        color: this.stateManager.getColorState("line"),
-                        id: `annotate_${data.mode}_line_${data.id}`,
-                        status: "completed"
-                    });
-
-                    // -- Add labels -- 
-                    const { distances, totalDistance } = data._records[0] || {};
-                    annotations.labels = this._addLabelsFromArray(data.coordinates, distances, "meter", {
-                        id: `annotate_${data.mode}_label_${data.id}`,
-                        status: "completed"
-                    });
-                    // -- Add total label --
-                    if (data.status === "completed") {
-                        const endCoords = data.coordinates[data.coordinates.length - 1];
-
-                        const formattedText = `Total: ${formatMeasurementValue(totalDistance, "meter")}`;
-                        const totalLabel = this._addLabel([endCoords, endCoords], formattedText, "meter", {
-                            id: `annotate_${data.mode}_total_label_${data.id}`,
-                            status: "completed"
-                        });
-
-                        if (!totalLabel || annotations.labels.length === 0) return;
-                        annotations.labels.push(totalLabel);
-                    }
-                    break;
-                default:
-                    annotations.markers = this._addPointMarkersFromArray(data.coordinates, {
-                        color: this.stateManager.getColorState("pointColor"),
-                        id: `annotate_${data.mode}_point_${data.id}`,
-                        status: "completed"
-                    });
-                    annotations.polylines = this._addPolylinesFromArray(data.coordinates, {
-                        color: this.stateManager.getColorState("line"),
-                        id: `annotate_${data.mode}_line_${data.id}`,
-                        status: "completed"
-                    });
-                    annotations.labels = this._addLabelsFromArray(data.coordinates, data._records, "meter", {
-                        id: `annotate_${data.mode}_label_${data.id}`,
-                        status: "completed"
-                    });
-                    break;
-            }
-        } catch (error) {
-            console.error(`${this.constructor.name}: Error drawing annotations for ${data.mode}:`, error);
-            // Clean up any partially created annotations
-            this._removeAnnotations(annotations);
-            return;
-        }
-
-        // Update data store
-        const updatedData = { ...data, annotations };
-
-        if (existingIndex >= 0) {
-            // Update existing data
-            this.#data[existingIndex] = updatedData;
-        } else {
-            // Add new data
-            this.#data.push(updatedData);
-        }
-    }
-
-
-    /******************
-     * HELPER METHODS *
-     ******************/
-    /**
-     * Checks if two coordinate objects are equal by comparing only latitude and longitude.
-     * Height values are intentionally ignored in the comparison.
-     * @param {Object} coord1 - First coordinate object with latitude and longitude properties
-     * @param {Object} coord2 - Second coordinate object with latitude and longitude properties
-     * @returns {boolean}
-     */
-    _areCoordinatesEqual(coord1, coord2) {
-        // Check if both coordinates have valid latitude and longitude
-        if (!coord1 || !coord2) return false;
-        if (typeof coord1.latitude !== "number" || typeof coord1.longitude !== "number")
-            return false;
-        if (typeof coord2.latitude !== "number" || typeof coord2.longitude !== "number")
-            return false;
-
-        // Compare only latitude and longitude, ignoring height
-        return coord1.latitude === coord2.latitude && coord1.longitude === coord2.longitude;
-    }
-
-    /**
-     * Process an array of items in batches to avoid UI blocking in order to improve performance.
-     * @param {Array} items - Array of items to process
-     * @param {Function} processor - Function to call for each item
-     * @param {number} [batchSize=20] - Number of items to process per batch
-     */
-    _processBatches(items, processor, batchSize = 20) {
-        let index = 0;
-
-        const processNextBatch = () => {
-            // Calculate end index for current batch
-            const endIndex = Math.min(index + batchSize, items.length);
-
-            // Process current batch
-            for (let i = index; i < endIndex; i++) {
-                processor(items[i]);
-            }
-
-            // Update index for next batch
-            index = endIndex;
-
-            // If more items remain, schedule next batch
-            if (index < items.length) {
-                requestAnimationFrame(processNextBatch);
-            }
-        };
-
-        // Start processing the first batch
-        processNextBatch();
-    }
-
     /**
      * Gets the currently active mode instance.
      * @returns {Object|null} The current active mode instance
@@ -1227,25 +958,6 @@ export class AnnotationComponentBase extends HTMLElement {
     getUserRole() {
         // FIXME: replace this method with the project user role get method
         return this.app.currentUser.sessions.navigator.roles;
-    }
-
-
-    /********************************************************
-     *           VISUALIZATION OF MAP ANNOTATIONS           *
-     * REPLACED IN SUBCLASSES TO HANDLE SPECIFIC ANNOTATION *
-     ********************************************************/
-    /**
-     * Removes all annotations in the provided annotations object.
-     * @private
-     * @param {Object} annotations - Object containing markers, polylines, and polygon
-     */
-    _removeAnnotations(annotations) {
-        if (!annotations) return;
-
-        annotations.markers?.forEach((marker) => this._removePointMarker(marker));
-        annotations.polylines?.forEach((line) => this._removePolyline(line));
-        if (annotations.polygon) this._removePolygon(annotations.polygon);
-        annotations.labels?.forEach((label) => this._removeLabel(label));
     }
 
 
