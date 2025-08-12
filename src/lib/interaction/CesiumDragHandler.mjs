@@ -11,22 +11,12 @@ import { convertToCartesian3, getPrimitiveByPointPosition } from "../helper/cesi
 /** @typedef {import('cesium').Cartesian2} Cartesian2 */
 
 
-// -- Dependencies types --
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../input/CesiumInputHandler.mjs')} CesiumInputHandler */
 
-// -- Data types --
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
- */
+/** @typedef {import('../docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../docs/types.mjs').MeasurementGroup} MeasurementGroup */
+/** @typedef {import('../docs/types.mjs').DataPool} DataPool */
+
 /**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
@@ -44,7 +34,7 @@ class CesiumDragHandler {
     map;
     /** @type {CesiumInputHandler} */
     inputHandler;
-    /** @type {EventEmitter} */
+    /** @type {ShareEmitter} */
     emitter;
 
     activeModeInstance = null;
@@ -65,9 +55,9 @@ class CesiumDragHandler {
     /**
      * Creates an instance of CesiumDragHandler.
      * @param {Viewer} viewer - The Cesium viewer instance
-     * @param {import('../input/CesiumInputHandler')} inputHandler 
-     * @param {import('eventemitter3').EventEmitter} emitter 
-     * @param {function} callbacks 
+     * @param {CesiumInputHandler} inputHandler 
+     * @param {ShareEmitter} emitter 
+     * @param {DataPool} dataPool 
      */
     constructor(map, inputHandler, emitter, dataPool) {
         this.map = map;

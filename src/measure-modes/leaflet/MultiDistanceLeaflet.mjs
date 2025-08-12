@@ -2,16 +2,6 @@ import { calculateDistance, areCoordinatesEqual, convertToLatLng, checkLayerType
 import { getNeighboringValues, formatMeasurementValue, showCustomNotification } from "../../lib/helper/helper.mjs";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
 
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("leaflet")
- */
 /** 
  * @typedef NormalizedEventData
  * @property {{lat: number, lng:number}} mapPoint - The map coordinates
@@ -21,21 +11,23 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
  * @property {object} target - The target of the event (e.g., map, marker, etc.)
  * @property {object} layer - The Leaflet layer object
  */
-// -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/LeafletInputHandler.mjs').LeafletInputHandler} LeafletInputHandler */
-/** @typedef {import('../../lib/interaction/LeafletDragHandler.mjs').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/leafletAnnotation.mjs').leafletAnnotation} leafletAnnotation */
+
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
 
 /** @typedef {{polylines: L.polyline[], labels: L.tooltip[]}} InteractiveAnnotationsState */
-/** @typedef {{lat:number, lng:number}} Coordinate*/
+/** @typedef {import('../../lib/docs/types.mjs').LatLng} LatLng */
 
 
 class MultiDistanceLeaflet extends MeasureModeLeaflet {
-    /** @type {Coordinate} */
+    /** @type {LatLng} */
     #coordinate = null;
     /** @type {InteractiveAnnotationsState} */
     #interactiveAnnotations = {
@@ -45,7 +37,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
     };
     /** @type {MeasurementGroup} */
     measure = null;
-    /** @type {Coordinate[]} */
+    /** @type {LatLng[]} */
     coordsCache = [];
     /** @type {number[]} */
     #distances = []; // Array to store distances between points
@@ -98,15 +90,14 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
 
     /**
-     * 
-     * @param {LeafletInputHandler} inputHandler 
-     * @param {LeafletDragHandler} dragHandler 
-     * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {leafletAnnotation} drawingHelper 
-     * @param {StateManager} stateManager 
-     * @param {EventEmitter} emitter 
-     * @param {object} app 
-     * @param {DataPool} dataPool 
+     * @param {LeafletInputHandler} inputHandler
+     * @param {LeafletDragHandler} dragHandler
+     * @param {LeafletHighlightHandler} highlightHandler
+     * @param {LeafletAnnotation} drawingHelper
+     * @param {StateManager} stateManager
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
     constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters

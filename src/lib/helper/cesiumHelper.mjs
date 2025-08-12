@@ -25,7 +25,7 @@ import { formatMeasurementValue } from "./helper.mjs";
 
 /** @typedef {import('cesium').Cartesian3} Cartesian3 */
 /** @typedef {import('cesium').Cartographic} Cartographic */
-/** @typedef {{latitude: number, longitude: number, height?: number}} CartographicDegrees */
+/** @typedef {import('../docs/types.mjs').LatLngHeight} LatLngHeight */
 
 /***********************
  * HELPER  FOR GENERAL *

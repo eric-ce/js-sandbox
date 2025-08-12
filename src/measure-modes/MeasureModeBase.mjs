@@ -1,22 +1,31 @@
+import { Viewer } from 'cesium';
 import { generateIdByTimestamp } from '../lib/helper/helper.mjs';
 
 
-/** @typedef {import('../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../components/CesiumAnnotation.mjs').CesiumAnnotation} CesiumAnnotation */
-/** @typedef {import('../lib/input/GoogleMapsInputHandler.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} GoogleDragHandler */
-/** @typedef {import('../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
-/** @typedef {import('../components/GoogleAnnotation.mjs').GoogleAnnotation} GoogleAnnotation */
+/** @typedef {import('../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../lib/docs/types.mjs').CesiumAnnotation} CesiumAnnotation */
+
+/** @typedef {import('../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../lib/docs/types.mjs').GoogleAnnotation} GoogleAnnotation */
+
+/** @typedef {import('../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
+/** @typedef {import('../lib/docs/types.mjs').DataPool} DataPool */
+
+/** @typedef {import('../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../lib/docs/types.mjs').StateManager} StateManager*/
 
 // -- Cesium types --
 /**@typedef {import('cesium').LabelCollection} LabelCollection - the collection of label primitives in cesium map*/
 /**@typedef {import('cesium').Primitive} Primitive - the primitive object in cesium map*/
 /**@typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection - the collection of point primitives in cesium map*/
-
+/**@typedef {import('cesium').Viewer} */
 
 /**
  * MeasureModeBase class is to share the common functionality between all mode based classes
@@ -25,25 +34,25 @@ class MeasureModeBase {
     // -- Public Fields For Dependencies --
     /** @type {string} Unique identifier for this measurement mode (e.g., "distance", "polygon"). */
     mode;
-    /** @type {CesiumInputHandler | GoogleMapsInputHandler} The map input event handler abstraction. */
+    /** @type {CesiumInputHandler | GoogleMapsInputHandler | LeafletInputHandler} The map input event handler abstraction. */
     inputHandler;
-    /** @type {CesiumDragHandler | GoogleDragHandler | null} The drag handler abstraction (can be null). */
+    /** @type {CesiumDragHandler | GoogleDragHandler | LeafletDragHandler | null} The drag handler abstraction (can be null). */
     dragHandler;
-    /** @type {CesiumHighlightHandler | GoogleHighlightHandler | null} The highlight handler abstraction (can be null). */
+    /** @type {CesiumHighlightHandler | GoogleHighlightHandler | LeafletHighlightHandler | null} The highlight handler abstraction (can be null). */
     highlightHandler;
-    /** @type {CesiumAnnotation | GoogleAnnotation} The map-specific drawing helper/manager component. */
+    /** @type {CesiumAnnotation | GoogleAnnotation | LeafletAnnotation} The map-specific drawing helper/manager component. */
     drawingHelper;
-    /** @type {any} The map instance (e.g., Cesium.Viewer, google.maps.Map). */
+    /** @type {Viewer | google.maps.Map | L.Map} The map instance (e.g., Cesium.Viewer, google.maps.Map). */
     map;
     /** @type {StateManager} The application state manager. */
     stateManager;
-    /** @type {EventEmitter} The event emitter instance. */
+    /** @type {ShareEmitter} The event emitter instance. */
     emitter;
     /** @type {"cesium"|"google"|"leaflet"} The name of the map */
     mapName;
     /** @type {object} The application context */
     app;
-    /** @type {HTMLElement} The map container element. */
+    /** @type {HTMLDivElement} The map container element. */
     _container;
 
     // -- Public Fields For state and data --
@@ -64,12 +73,14 @@ class MeasureModeBase {
     /**
      * 
      * @param {string} modeName - The unique identifier for this measurement mode (e.g., "distance", "area").
-     * @param {CesiumInputHandler | GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
-     * @param {CesiumDragHandler | GoogleDragHandler | null} dragHandler - The drag handler abstraction (can be null if not used).
-     * @param {CesiumHighlightHandler | GoogleHighlightHandler | null} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {CesiumAnnotation | GoogleAnnotation} drawingHelper - The map-specific drawing helper/manager.
+     * @param {CesiumInputHandler | GoogleMapsInputHandler | LeafletInputHandler} inputHandler - The map input event handler abstraction.
+     * @param {CesiumDragHandler | GoogleDragHandler | LeafletDragHandler | null} dragHandler - The drag handler abstraction (can be null if not used).
+     * @param {CesiumHighlightHandler | GoogleHighlightHandler | LeafletHighlightHandler | null} highlightHandler - The highlight handler abstraction (can be null if not used).
+     * @param {CesiumAnnotation | GoogleAnnotation | LeafletAnnotation} drawingHelper - The map-specific drawing helper/manager.
      * @param {StateManager} stateManager - The application state manager.
-     * @param {EventEmitter} emitter - The event emitter instance.
+     * @param {ShareEmitter} emitter - The event emitter instance.
+     * @param {object} app - The application context.
+     * @param {DataPool} dataPool - The data pool instance.
      */
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // -- Validate Dependencies --
@@ -322,7 +333,8 @@ class MeasureModeBase {
             status: "pending",
             _records: [],
             interpolatedPoints: [],
-            mapName: this.mapName ?? "unknown",
+            sourceMap: this.mapName, // Maps where this measurement is sourced from
+            renderedOn: [this.mapName], // Maps where this measurement is rendered
             featureTasks: this.stateManager.getBehaviorState('featureTasks')
         };
     }

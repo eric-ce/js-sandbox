@@ -24,7 +24,7 @@ import { camelCaseToWords, capitalizeString, deconstructIdForMetadata, makeDragg
 /**@typedef {import('cesium').PointPrimitive} PointPrimitive - the point primitive object in cesium map*/
 /**@typedef {import('cesium').LabelPrimitive} LabelPrimitive - the label primitive object in cesium map*/
 
-/**@typedef {{latitude: number, longitude: number, height?: number}} CartographicDegrees - CartographicDegrees */
+/**@typedef {import('../lib/docs/types.mjs').LatLngHeight} LatLngHeight - the latitude, longitude, and height in meters */
 
 /**
  * CesiumAnnotation class to provide measurement drawing functionalities in Cesium.

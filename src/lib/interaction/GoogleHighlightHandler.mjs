@@ -1,13 +1,25 @@
 import { checkOverlayType } from "../helper/googleHelper.mjs";
 
+/** @typedef {import('../docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../docs/types.mjs').MeasurementGroup} MeasurementGroup */
 /**
  * @typedef NormalizedEventData
- * @type {Object}
+ * @property {object} domEvent - The original DOM event
+ * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
+ * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
  */
+
 class GoogleHighlightHandler {
     #hoveredObject = null;
     #originalHoverStyle = null;
 
+    /**
+     * @param {google.maps.Map} map
+     * @param {GoogleMapsInputHandler} inputHandler
+     * @param {ShareEmitter} emitter
+     * @param {StateManager} stateManager
+     */
     constructor(map, inputHandler, emitter, stateManager) {
         this.map = map;
         this.inputHandler = inputHandler;

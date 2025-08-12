@@ -10,16 +10,27 @@ import { MeasureModeGoogle } from "./MeasureModeGoogle.mjs";
  * @property {google.maps.Marker|google.maps.Polyline|google.maps.Polygon|null} overlay - The annotation graphics object
  */
 
+/** @typedef {import('../../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').GoogleAnnotation} GoogleAnnotation */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+
+
 class PickerGoogle extends MeasureModeGoogle {
     #modeInfoOverlay = null;
 
     /**
      * @param {GoogleMapsInputHandler} inputHandler
-     * @param {DragHandler} dragHandler
-     * @param {HighlightHandler} highlightHandler
-     * @param {AnnotationComponentBase} drawingHelper
+     * @param {GoogleDragHandler} dragHandler
+     * @param {GoogleHighlightHandler} highlightHandler
+     * @param {GoogleAnnotation} drawingHelper
      * @param {StateManager} stateManager
-     * @param {EventEmitter} emitter
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
     constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters

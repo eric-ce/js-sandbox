@@ -1,20 +1,10 @@
 import { getOverlayByPosition } from "../helper/googleHelper.mjs";
 
+/** @typedef {import('../docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../docs/types.mjs').MeasurementGroup} MeasurementGroup */
+/** @typedef {import('../docs/types.mjs').DataPool} DataPool */
 
-/** @typedef {import('../input/GoogleMapsInputHandler.mjs')} GoogleMapsInputHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
- */
 /**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
@@ -55,6 +45,13 @@ class GoogleDragHandler {
     // -- Private Fields: variables --
     #coordinate = null;
 
+    /**
+     * 
+     * @param {google.maps.Map} map 
+     * @param {GoogleMapsInputHandler} inputHandler 
+     * @param {ShareEmitter} emitter 
+     * @param {DataPool} dataPool 
+     */
     constructor(map, inputHandler, emitter, dataPool) {
         this.map = map;
         this.inputHandler = inputHandler;

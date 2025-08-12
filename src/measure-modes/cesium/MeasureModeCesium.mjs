@@ -5,33 +5,22 @@ import { Chart } from "chart.js/auto";
 import { createCloseButton, createContextMenu, deconstructIdForMetadata, hideContextMenu, makeDraggable, showCustomNotification, updateContextMenu } from "../../lib/helper/helper.mjs";
 import { closeIconBlack } from "../../assets/icons.mjs";
 
-// Cesium types
+
 /** @typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection */
 /** @typedef {import('cesium').LabelCollection} LabelCollection */
 /** @typedef {import('cesium').Cartesian3} Cartesian3 */
 /** @typedef {import('cesium').Cartographic} Cartographic */
 /** @typedef {{latitude: number, longitude: number, height?: number}} CartographicDegrees */
 
-// Dependencies types
-/** @typedef {import('../../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/CesiumAnnotation.mjs').CesiumAnnotation} CesiumAnnotation */
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
 
-// Measure data 
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
- */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').CesiumAnnotation} CesiumAnnotation */
 
 
 /**

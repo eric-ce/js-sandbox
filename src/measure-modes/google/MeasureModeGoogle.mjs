@@ -3,25 +3,17 @@ import { areCoordinatesEqual, calculateDistance, calculateMiddlePos, checkOverla
 import { createContextMenu, deconstructIdForMetadata, formatMeasurementValue, getNeighboringValues, showCustomNotification, updateContextMenu, hideContextMenu } from "../../lib/helper/helper.mjs";
 
 
-/** @typedef {import('../../lib/input/GoogleMapsInputHandler.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} GoogleDragHandler */
-/** @typedef {import('../../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/GoogleAnnotation.mjs').GoogleAnnotation} GoogleAnnotation */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').GoogleAnnotation} GoogleAnnotation */
 
 /** @typedef {lat:number, lng:number | latitude: number, longitude: number, height: number} Coordinate */
 
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
- */
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
 /**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
@@ -46,7 +38,7 @@ class MeasureModeGoogle extends MeasureModeBase {
      * @param {GoogleHighlightHandler} highlightHandler - The highlight handler abstraction (can be null if not used).
      * @param {GoogleAnnotation} drawingHelper - The map-specific drawing helper/manager.
      * @param {StateManager} stateManager - The application state manager.
-     * @param {EventEmitter} emitter - The event emitter instance.
+     * @param {ShareEmitter} emitter - The event emitter instance.
      * @param {object} app - The application instance.
      * @param {DataPool} dataPool - The data pool instance.
      */

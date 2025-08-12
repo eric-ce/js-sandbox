@@ -19,6 +19,7 @@ import { AnnotationComponentBase } from "./AnnotationComponentBase.mjs";
 /**
  * GoogleAnnotation class for managing Google Maps annotation components.
  * This class extends the AnnotationComponentBase and provides methods to add, remove, and manage map graphics such as points, polylines, polygons, and labels.
+ * @extends {AnnotationComponentBase}
  */
 export default class GoogleAnnotation extends AnnotationComponentBase {
     /**@type {Marker[]} */

@@ -3,7 +3,7 @@ import { Color } from "cesium";
 
 
 /** @typedef {import('cesium').Primitive} Primitive */
-
+/** @typedef {import('cesium').Viewer} Viewer */
 /**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
@@ -35,6 +35,13 @@ class CesiumHighlightHandler {
     currentlyHoveredPrimitive = null;
     currentHoverType = null; // Stores the type of the currently hovered primitive
 
+    /**
+     * 
+     * @param {Viewer} map 
+     * @param {CesiumInputHandler} inputHandler 
+     * @param {ShareEmitter} emitter 
+     * @param {StateManager} stateManager 
+     */
     constructor(map, inputHandler, emitter, stateManager) {
         this.map = map;
         this.inputHandler = inputHandler;

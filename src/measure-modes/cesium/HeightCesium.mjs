@@ -17,6 +17,7 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 
 // -- Cesium types --
 /** @typedef {import('cesium').Primitive} Primitive */
+/** @typedef {import('cesium').PointPrimitive} PointPrimitive */
 /** @typedef {import('cesium').Label} Label*/
 /** @typedef {import('cesium').Cartesian3} Cartesian3 */
 /** @typedef {import('cesium').Cartesian2} Cartesian2 */
@@ -24,31 +25,22 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 // -- Data types -- 
 /** @typedef {{points: PointPrimitive[], polylines: Primitive[], labels: Label[]}} InteractiveAnnotationsState */
 /**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("cesium")
- */
-/**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
  * @property {Cartesian3} mapPoint - The point on the map where the event occurred
  * @property {any[]} pickedFeature - The feature that was picked at the event location
  * @property {Cartesian2} screenPoint - The screen coordinates of the event
  */
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
 
 // -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/CesiumAnnotation.mjs').CesiumAnnotation} CesiumAnnotation */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').CesiumAnnotation} CesiumAnnotation */
 
 
 /**
@@ -83,7 +75,7 @@ class HeightCesium extends MeasureModeCesium {
      * @param {CesiumHighlightHandler} highlightHandler 
      * @param {CesiumAnnotation} drawingHelper 
      * @param {StateManager} stateManager 
-     * @param {EventEmitter} emitter 
+     * @param {ShareEmitter} emitter 
      * @param {object} app
      * @param {DataPool} dataPool
      * @param {*} cesiumPkg 

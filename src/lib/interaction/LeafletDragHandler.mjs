@@ -1,20 +1,10 @@
 import { getVectorByPosition, findMeasureByCoordinate, convertToLatLng } from "../helper/leafletHelper.mjs";
 
 
-/** @typedef {import('../input/LeafletInputHandler.mjs')} LeafletInputHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
- */
+/** @typedef {import('../docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../docs/types.mjs').MeasurementGroup} MeasurementGroup */
+/** @typedef {import('../docs/types.mjs').DataPool} DataPool */
 
 /**
  * Handles drag events for Leaflet Maps.
@@ -48,6 +38,12 @@ class LeafletDragHandler {
     // -- Private Fields: variables --
     #coordinate = null;
 
+    /**
+     * @param {L.Map} map
+     * @param {LeafletInputHandler} inputHandler
+     * @param {ShareEmitter} emitter
+     * @param {DataPool} dataPool
+     */
     constructor(map, inputHandler, emitter, dataPool) {
         this.map = map;
         this.inputHandler = inputHandler;

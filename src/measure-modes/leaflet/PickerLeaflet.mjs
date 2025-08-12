@@ -12,26 +12,27 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
  */
 
 // -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/LeafletInputHandler.mjs').LeafletInputHandler} LeafletInputHandler */
-/** @typedef {import('../../lib/interaction/LeafletDragHandler.mjs').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/leafletAnnotation.mjs').leafletAnnotation} leafletAnnotation */
-
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
 
 class PickerLeaflet extends MeasureModeLeaflet {
     /** @type {HTMLDivElement} - Overlay to display picked object information */
     #modeInfoOverlay = null;
 
     /**
-     * @param {LeafletInputHandler} inputHandler 
-     * @param {LeafletDragHandler} dragHandler 
-     * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {leafletAnnotation} drawingHelper 
-     * @param {StateManager} stateManager 
-     * @param {EventEmitter} emitter 
+     * @param {LeafletInputHandler} inputHandler
+     * @param {LeafletDragHandler} dragHandler
+     * @param {LeafletHighlightHandler} highlightHandler
+     * @param {LeafletAnnotation} drawingHelper
+     * @param {StateManager} stateManager
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
     constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         // Validate input parameters

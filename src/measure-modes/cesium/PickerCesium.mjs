@@ -22,13 +22,13 @@ import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.mjs";
  */
 
 // -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/CesiumAnnotation.mjs').CesiumAnnotation} CesiumAnnotation */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').CesiumAnnotation} CesiumAnnotation */
 
 
 /**

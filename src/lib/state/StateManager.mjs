@@ -274,19 +274,4 @@ export class StateManager {
             console.warn(`Property '${key}' does not exist in color state.`);
         }
     }
-
-    /**
-     * Helper to update help text content if the helpTable element exists.
-     * @param {string} text - The text to display.
-     */
-    updateHelpContent(text) {
-        const helpTable = this.getElementState('helpTable');
-        // Check if helpTable has an updateContent method (duck typing)
-        if (helpTable && typeof helpTable.updateContent === 'function') {
-            helpTable.updateContent(text);
-        } else if (helpTable) {
-            // Fallback if no method exists, just set textContent
-            helpTable.textContent = text;
-        }
-    }
 }

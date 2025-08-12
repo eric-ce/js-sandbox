@@ -1,10 +1,20 @@
 import { checkLayerType } from "../helper/leafletHelper.mjs";
 
+/** @typedef {import('../docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
 class LeafletHighlightHandler {
     #hoveredObject = null;
     #originalHoverStyle = null;
     #originalHoverContent = null; // For label tooltip
 
+    /**
+     * @param {L.Map} map
+     * @param {LeafletInputHandler} inputHandler
+     * @param {ShareEmitter} emitter
+     * @param {StateManager} stateManager
+     */
     constructor(map, inputHandler, emitter, stateManager) {
         this.map = map;
         this.inputHandler = inputHandler;
