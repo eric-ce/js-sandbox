@@ -130,10 +130,6 @@ export class AnnotationComponentBase extends HTMLElement {
         this.#stateManager = manager;
     }
 
-    // get data() {
-    //     return this.#data;
-    // }
-
     get emitter() {
         return this.#emitter;
     }
@@ -198,7 +194,8 @@ export class AnnotationComponentBase extends HTMLElement {
     async connectedCallback() {
         // Apply style for the web component
         this.shadowRoot.adoptedStyleSheets = [sharedStyleSheet];
-        // Initialization now depends on map and mapName being set
+
+        // Initialise the tool components 
         if (this.map && this.mapName && !this.#isInitialized) {
             await this._initialise();
         }
@@ -207,12 +204,8 @@ export class AnnotationComponentBase extends HTMLElement {
     disconnectedCallback() {
         console.log(`${this.constructor.name}: Disconnecting...`);
 
-        // Notify the AnnotationToolbox to clean up this component's resources.
-        if (this.app?.map?.annotationToolbox) {
-            this.app.map.annotationToolbox.cleanupForMap(this.mapName);
-        }
-
         // Clean up sync drawing manager reference
+        this.syncDrawingManager.destroy();
         this.syncDrawingManager = null;
 
         // Deactivate current mode
@@ -245,6 +238,10 @@ export class AnnotationComponentBase extends HTMLElement {
 
         this.uiButtons = {};
         this.availableModeConfigs = [];
+
+        if (typeof this.app.map.cleanupToolboxes === "function") {
+            this.app.map.cleanupToolboxes(this.mapName);
+        }
 
         this.#isInitialized = false;
         console.log(`${this.constructor.name}: Disconnected cleanup complete.`);
@@ -309,6 +306,10 @@ export class AnnotationComponentBase extends HTMLElement {
 
         // --- Call map-specific initialization hook ---
         this._initializeMapSpecifics(); // Allow derived classes to add setup
+
+        // -- Sync Drawing Manager --
+        this.syncDrawingManager = new SyncDrawingManager(this.mapName, this.emitter, this.stateManager, this);
+        this.syncDrawingManager.initialize();
 
         this.#isInitialized = true;
     }

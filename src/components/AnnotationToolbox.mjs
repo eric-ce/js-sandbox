@@ -136,7 +136,6 @@ export class AnnotationToolbox {
         }
     }
 
-
     // Initialize cesium annotation
     initializeCesiumAnnotation() {
         // Use getters which access private fields
@@ -154,9 +153,6 @@ export class AnnotationToolbox {
         this.cesiumAnnotationToolbox.stateManager = this.stateManager;
         this.cesiumAnnotationToolbox.dataPool = this.dataPool;
 
-        // Initialize sync drawing manager for Cesium
-        this.initializeSyncDrawingManager("cesium", this.cesiumAnnotationToolbox);
-
         const mapCesium = document.querySelector("map-cesium");
         mapCesium.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapCesium) return;
@@ -165,7 +161,6 @@ export class AnnotationToolbox {
 
     // Initialize google annotation
     initializeGoogleAnnotation() {
-        // Use getter
         if (!this.googleMap) return;
 
         if (this.googleAnnotationToolbox && this.googleAnnotationToolbox.isConnected) return;
@@ -178,9 +173,6 @@ export class AnnotationToolbox {
         this.googleAnnotationToolbox.stateManager = this.stateManager;
         this.googleAnnotationToolbox.dataPool = this.dataPool;
 
-        // Initialize sync drawing manager for Google
-        this.initializeSyncDrawingManager("google", this.googleAnnotationToolbox);
-
         const mapGoogle = document.querySelector("map-google");
         mapGoogle.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapGoogle) return;
@@ -189,7 +181,6 @@ export class AnnotationToolbox {
 
     // Initialize leaflet annotation
     initializeLeafletAnnotation() {
-        // Use getter
         if (!this.leafletMap) return;
 
         if (this.leafletAnnotationToolbox && this.leafletAnnotationToolbox.isConnected) return;
@@ -202,9 +193,6 @@ export class AnnotationToolbox {
         this.leafletAnnotationToolbox.stateManager = this.stateManager;
         this.leafletAnnotationToolbox.dataPool = this.dataPool;
 
-        // Initialize sync drawing manager for Leaflet
-        this.initializeSyncDrawingManager("leaflet", this.leafletAnnotationToolbox);
-
         const mapLeaflet = document.querySelector("map-leaflet");
         mapLeaflet.style.position = "relative"; // !important: Ensure the map has a relative position
         if (!mapLeaflet) return;
@@ -212,40 +200,27 @@ export class AnnotationToolbox {
     }
 
     /**
-     * Initialize sync drawing manager for a specific map
-     * @param {"cesium"|"google"|"leaflet"} mapName - The name of the map
-     * @param {import("../lib/docs/types.mjs").AnnotationComponentBase} annotationComponent - The annotation component for the map
+     * Cleans up resources for the annotation toolboxes.
      */
-    initializeSyncDrawingManager(mapName, annotationComponent) {
-        if (!this.syncDrawingManager) {
-            this.syncDrawingManager = {};
-        }
-
-        if (this.syncDrawingManager[mapName]) return;
-
-        this.syncDrawingManager[mapName] = new SyncDrawingManager(annotationComponent);
-        this.syncDrawingManager[mapName].initialize();
-    }
-
-    /**
-     * Cleans up resources for a specific map when it's deactivated.
-     * @param {"cesium"|"google"|"leaflet"} mapName - The name of the map to clean up.
-     */
-    cleanupForMap(mapName) {
-        if (this.syncDrawingManager && this.syncDrawingManager[mapName]) {
-            this.syncDrawingManager[mapName].destroy();
-            delete this.syncDrawingManager[mapName];
-        }
-
+    cleanupToolboxes(mapName) {
         switch (mapName) {
             case "cesium":
-                this.cesiumAnnotationToolbox = null;
+                if (this.cesiumAnnotationToolbox) {
+                    this.cesiumAnnotationToolbox.remove();
+                    this.cesiumAnnotationToolbox = null;
+                }
                 break;
             case "google":
-                this.googleAnnotationToolbox = null;
+                if (this.googleAnnotationToolbox) {
+                    this.googleAnnotationToolbox.remove();
+                    this.googleAnnotationToolbox = null;
+                }
                 break;
             case "leaflet":
-                this.leafletAnnotationToolbox = null;
+                if (this.leafletAnnotationToolbox) {
+                    this.leafletAnnotationToolbox.remove();
+                    this.leafletAnnotationToolbox = null;
+                }
                 break;
         }
     }

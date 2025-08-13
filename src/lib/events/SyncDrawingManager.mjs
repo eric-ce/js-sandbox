@@ -23,11 +23,11 @@ export class SyncDrawingManager {
     /**
      * @param {AnnotationComponentBase} annotationComponent
      */
-    constructor(annotationComponent) {
+    constructor(mapName, emitter, stateManager, annotationComponent) {
         this.annotationComponent = annotationComponent;
-        this.mapName = annotationComponent.mapName;
-        this.emitter = annotationComponent.emitter;
-        this.stateManager = annotationComponent.stateManager;
+        this.mapName = mapName;
+        this.emitter = emitter;
+        this.stateManager = stateManager;
     }
 
     /**
@@ -108,7 +108,9 @@ export class SyncDrawingManager {
                 return this._areCoordinatesEqual(coord, existingMeasure.coordinates?.[index]);
             });
 
-            if (coordsEqual && existingMeasure.annotations) return;
+            const coordsLengthEqual = this.data[existingIndex]?.coordinates?.length === data?.coordinates?.length;
+
+            if (coordsEqual && existingMeasure.annotations && coordsLengthEqual) return;
 
             // Clean up existing annotations
             this._removeAnnotations(existingMeasure.annotations);
