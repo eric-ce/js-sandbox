@@ -64,6 +64,12 @@ export class GoogleMapsInputHandler {
         }
 
         const handlerFn = (event) => {
+            // If a POI is clicked, Google Maps handles it. Stop our event to prevent conflicts.
+            // The presence of a placeId indicates a click on a built-in POI.
+            if (event.placeId) {
+                return; // Don't fire the callback
+            }
+
             // Normalize Google Maps MouseEvent
             const latLng = event.latLng;
             const pixel = event.pixel; // Note: pixel coords might not always be available depending on event/context
