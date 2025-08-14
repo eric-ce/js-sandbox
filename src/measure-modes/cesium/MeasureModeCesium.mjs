@@ -43,7 +43,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
     // UI components
     /** @type {HTMLElement} */
-    contextMenu = null;
+    contextMenu;
 
     /**
      * @param {string} modeName - The name of the mode (e.g., "Point", "Line", "Polygon")
@@ -59,9 +59,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
         this.cesiumPkg = cesiumPkg; // Store the Cesium package instance
 
-        // Initialize context menu - default to hidden
-        this.contextMenu = createContextMenu(this._container, { show: false });
-        this.stateManager.setElementState("contextMenu", this.contextMenu);
+        this.contextMenu = this.stateManager.getElementState("contextMenu") || null; // Get the context menu from state manager
     }
 
 
@@ -949,10 +947,13 @@ class MeasureModeCesium extends MeasureModeBase {
     _updateContextMenu(container, position, itemOptions = [], options = {}) {
         let contextMenu = this.stateManager.getElementState("contextMenu");
 
-        if (!contextMenu) {
-            contextMenu = createContextMenu(container, options);
-            this.stateManager.setElementState("contextMenu", contextMenu);
+        if (contextMenu) {
+            contextMenu.remove();
+            this.stateManager.setElementState("contextMenu", null); // Clear the previous context menu state
         }
+
+        contextMenu = createContextMenu(container, options);
+        this.stateManager.setElementState("contextMenu", contextMenu);
 
         updateContextMenu(contextMenu, position, itemOptions);
         return contextMenu;

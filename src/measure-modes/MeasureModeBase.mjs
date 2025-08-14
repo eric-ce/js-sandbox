@@ -172,8 +172,8 @@ class MeasureModeBase {
         this.inputHandler.off('leftclick', this.handleLeftClick);
         this.inputHandler.off('mousemove', this.handleMouseMove);
         this.inputHandler.off('rightclick', this.handleRightClick);
-        this.inputHandler.off('leftdoubleclick', this.handleLeftDoubleClick);
-        this.inputHandler.off('middleclick', this.handleMiddleClick);
+        // this.inputHandler.off('leftdoubleclick', this.handleLeftDoubleClick);
+        // this.inputHandler.off('middleclick', this.handleMiddleClick);
 
         // Deactivate interaction handlers
         this.dragHandler?.deactivate();
@@ -232,28 +232,6 @@ class MeasureModeBase {
         if (!this.flags.isActive) return;
         console.warn(`handleRightClick not implemented in ${this.constructor.name}`);
         // throw new Error(`handleRightClick must be implemented by subclass ${this.constructor.name}`);
-    }
-
-    /**
-     * Handles left double click events. Must be implemented by subclasses.
-     * @param {object} eventData - Normalized event data from InputHandler.
-     * @abstract
-     */
-    handleLeftDoubleClick = async (eventData) => {
-        if (!this.flags.isActive) return;
-        console.warn(`handleDoubleClick not implemented in ${this.constructor.name}`);
-        // throw new Error(`handleDoubleClick must be implemented by subclass ${this.constructor.name}`);
-    }
-
-    /**
-     * Handles middle click events. Must be implemented by subclasses.
-     * @param {object} eventData - Normalized event data from InputHandler.
-     * @abstract
-     */
-    handleMiddleClick = async (eventData) => {
-        if (!this.flags.isActive) return;
-        console.warn(`handleMiddleClick not implemented in ${this.constructor.name}`);
-        // throw new Error(`handleMiddleClick must be implemented by subclass ${this.constructor.name}`);
     }
 
     /**
@@ -352,3 +330,26 @@ class MeasureModeBase {
 }
 
 export { MeasureModeBase };
+
+
+// /**
+//  * Handles left double click events. Must be implemented by subclasses.
+//  * @param {object} eventData - Normalized event data from InputHandler.
+//  * @abstract
+//  */
+// handleLeftDoubleClick = async (eventData) => {
+//     if (!this.flags.isActive) return;
+//     console.warn(`handleDoubleClick not implemented in ${this.constructor.name}`);
+//     // throw new Error(`handleDoubleClick must be implemented by subclass ${this.constructor.name}`);
+// }
+
+// /**
+//  * Handles middle click events. Must be implemented by subclasses.
+//  * @param {object} eventData - Normalized event data from InputHandler.
+//  * @abstract
+//  */
+// handleMiddleClick = async (eventData) => {
+//     if (!this.flags.isActive) return;
+//     console.warn(`handleMiddleClick not implemented in ${this.constructor.name}`);
+//     // throw new Error(`handleMiddleClick must be implemented by subclass ${this.constructor.name}`);
+// }

@@ -1,6 +1,6 @@
 import { MeasureModeBase } from "../MeasureModeBase.mjs";
 import { areCoordinatesEqual, calculateDistance, calculateMiddlePos, convertToLatLng } from "../../lib/helper/leafletHelper.mjs";
-import { deconstructIdForMetadata, formatMeasurementValue, showCustomNotification } from "../../lib/helper/helper.mjs";
+import { createContextMenu, deconstructIdForMetadata, formatMeasurementValue, hideContextMenu, showCustomNotification, updateContextMenu } from "../../lib/helper/helper.mjs";
 
 
 /** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
@@ -37,7 +37,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
     constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
         super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
 
-        this.contextMenu = this._setupContextMenu(this._container, { show: false });
+        this.contextMenu = this.stateManager.getElementState("contextMenu") || null; // Get the context menu from state manager
     }
 
 
@@ -58,6 +58,16 @@ class MeasureModeLeaflet extends MeasureModeBase {
      */
     _removeMapSpecificListeners() {
         this.emitter.off('annotation-contextmenu-leaflet', this._handleContextMenu);
+    }
+
+    /**
+     * Handle right click on the map.
+     * @override
+     */
+    async handleRightClick() {
+        // Hide the context menu
+        // this.contextMenu && this._setContextMenuVisibility(false);
+        console.log("overrided in leaflet")
     }
 
 
@@ -471,42 +481,6 @@ class MeasureModeLeaflet extends MeasureModeBase {
     /*************************
      * CONTEXT MENU SPECIFIC *
      *************************/
-    _setupContextMenu(container, options = {}) {
-        const {
-            show = true,
-        } = options;
-
-        if (!container) {
-            console.warn("Container is not provided for context menu setup.");
-            return;
-        }
-
-        // Create the context menu element
-        this.contextMenu = document.createElement("div");
-        this.contextMenu.classList.add("an-context-menu");
-
-        // Apply styles directly to the element
-        Object.assign(this.contextMenu.style, {
-            background: "#fefefe",
-            border: "1px solid #ddd",
-            borderRadius: "4px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            padding: "4px 0",
-            minWidth: "120px",
-            position: "absolute",
-            zIndex: "1000"
-        });
-
-        // Append the context menu to the specified container
-        container.appendChild(this.contextMenu);
-
-        // Store to the state manager for later use
-        this.stateManager.setElementState("contextMenu", this.contextMenu);
-        this._setContextMenuVisibility(show); // Set initial visibility
-
-        return this.contextMenu;
-    }
-
     /**
      * Update the context menu with new items and position. Fallbacks to setup context menu if not exists.
      * @param {HTMLElement} container - the map container where the context menu should be displayed
@@ -519,88 +493,24 @@ class MeasureModeLeaflet extends MeasureModeBase {
     _updateContextMenu(container, position, itemOptions = [], options = {}) {
         let contextMenu = this.stateManager.getElementState("contextMenu");
 
-        if (!contextMenu) {
-            contextMenu = this._setupContextMenu(container, options);
+        if (contextMenu) {
+            contextMenu.remove();
+            this.stateManager.setElementState("contextMenu", null); // Clear the previous context menu state
         }
 
-        if (!contextMenu || !position.x || !position.y) return;
+        contextMenu = createContextMenu(container, options);
+        this.stateManager.setElementState("contextMenu", contextMenu);
 
-        this._setContextMenuVisibility(true); // Ensure the context menu is visible
-
-        // Update the position of the context menu
-        contextMenu.style.left = `${position.x}px`;
-        contextMenu.style.top = `${position.y}px`;
-
-        // Clear ul element if it exists
-        const existingList = contextMenu.querySelector("ul");
-        if (existingList) {
-            existingList.remove();
-        }
-
-        // list of menu items using ul li 
-        const menuList = document.createElement("ul");
-        menuList.className = "an-context-menu-list";
-        Object.assign(menuList.style, {
-            listStyle: "none",
-            margin: "0",
-            padding: "0"
-        });
-
-        menuList.innerHTML = ""; // Clear existing items
-        // Add new items
-        itemOptions.forEach(item => {
-            const menuItem = document.createElement("li");
-            menuItem.classList.add("an-context-menu-list-item");
-            menuItem.textContent = item.text;
-
-            Object.assign(menuItem.style, {
-                padding: "8px 12px",
-                cursor: "pointer",
-                borderBottom: "1px solid #eee",
-                transition: "background-color 0.3s ease"
-            });
-
-            // Add hover effects
-            menuItem.addEventListener("mouseenter", () => {
-                menuItem.style.backgroundColor = "#ece5e5";
-            });
-            menuItem.addEventListener("mouseleave", () => {
-                menuItem.style.backgroundColor = "transparent";
-            });
-
-            // Click event handler
-            menuItem.addEventListener("click", event => {
-                // Prevent default behavior
-                event.stopPropagation();
-                event.preventDefault();
-                // Call the item's event function
-                item.event(event);
-                this._setContextMenuVisibility(false);
-            });
-
-            menuList.appendChild(menuItem);
-        });
-
-        // Remove border from last item
-        if (menuList.lastElementChild) {
-            menuList.lastElementChild.style.borderBottom = "none";
-        }
-
-        // Append the menu list to the context menu
-        contextMenu.appendChild(menuList);
-
-        // Add a one-time listener to close the menu on the next click anywhere
-        setTimeout(() => document.addEventListener('click', () => this._setContextMenuVisibility(false), { once: true }), 0);
-
-        return contextMenu || null;
+        updateContextMenu(contextMenu, position, itemOptions);
+        return contextMenu;
     }
 
     _setContextMenuVisibility(visible) {
         const contextMenu = this.stateManager.getElementState("contextMenu");
-        if (contextMenu) {
-            contextMenu.style.display = visible ? 'block' : 'none';
+        if (visible) {
+            if (contextMenu) contextMenu.style.display = 'block';
         } else {
-            console.warn("Context menu is not initialized.");
+            hideContextMenu(contextMenu);
         }
     }
 

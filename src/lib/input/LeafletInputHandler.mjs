@@ -37,10 +37,10 @@ export class LeafletInputHandler {
             case 'leftclick': return 'click';
             case 'mousemove': return 'mousemove';
             case 'rightclick': return 'contextmenu'; // Leaflet uses 'contextmenu' for right-click
-            case 'leftdoubleclick': return 'dblclick';
-            case 'leftdown': return 'mousedown';
-            case 'leftup': return 'mouseup';
-            case 'middleclick': return 'auxclick'; // Or 'middleclick' depending on browser support/needs
+            // case 'leftdoubleclick': return 'dblclick';
+            // case 'leftdown': return 'mousedown';
+            // case 'leftup': return 'mouseup';
+            // case 'middleclick': return 'auxclick'; // Or 'middleclick' depending on browser support/needs
             // Add other Leaflet events as needed (e.g., 'dragstart', 'dragend', 'zoomend')
             default:
                 console.warn(`LeafletInputHandler: Unsupported event type string: ${typeString}`);

@@ -54,6 +54,12 @@ export default class LeafletAnnotation extends AnnotationComponentBase {
         this._addPickerEventListenersToCollection(this.#labelCollection);
         this._addPickerEventListenersToCollection(this.#polygonCollection);
 
+        // -- Add Context Menu Event listeners to Collections --
+        this._addContextMenuEventListenerToCollection(this.#pointCollection);
+        this._addContextMenuEventListenerToCollection(this.#polylineCollection);
+        this._addContextMenuEventListenerToCollection(this.#labelCollection);
+        this._addContextMenuEventListenerToCollection(this.#polygonCollection);
+
         // -- Handle Vectors Z-Index (Pane) --
         this.map.getPane('markerPane').style.zIndex = 650; // Higher than default markerPane (600)
         this.map.getPane('overlayPane').style.zIndex = 450; // Higher than default overlayPane (400)
@@ -122,7 +128,7 @@ export default class LeafletAnnotation extends AnnotationComponentBase {
         this._addCustomEventListeners(pointMarker, listeners);
 
         // Add right click context menu event listener
-        this._addContextMenuEventListener(pointMarker);
+        // this._addContextMenuEventListener(pointMarker);
 
         // -- Add to the collection --
         this.#pointCollection.addLayer(pointMarker);
@@ -144,11 +150,9 @@ export default class LeafletAnnotation extends AnnotationComponentBase {
             if (marker) {
                 addedMarkers.push(marker);
             }
-            // If _addPointMarker returns null, it's skipped
         });
 
-
-        return addedMarkers; // Return the array of successfully added markers
+        return addedMarkers;
     }
 
     /**
@@ -204,7 +208,7 @@ export default class LeafletAnnotation extends AnnotationComponentBase {
         this._addCustomEventListeners(polyline, listeners);
 
         // Add right click context menu event listener
-        this._addContextMenuEventListener(polyline);
+        // this._addContextMenuEventListener(polyline);
 
         // -- Add to the collection --
         this.#polylineCollection.addLayer(polyline);
@@ -277,7 +281,7 @@ export default class LeafletAnnotation extends AnnotationComponentBase {
         this._addCustomEventListeners(polygon, listeners);
 
         // Add right click context menu event listener
-        this._addContextMenuEventListener(polygon);
+        // this._addContextMenuEventListener(polygon);
 
         // -- Add to the collection --
         this.#polygonCollection.addLayer(polygon);
@@ -335,7 +339,7 @@ export default class LeafletAnnotation extends AnnotationComponentBase {
         this._addCustomEventListeners(label, listeners);
 
         // Add right click context menu event listener
-        this._addContextMenuEventListener(label);
+        // this._addContextMenuEventListener(label);
 
         // -- Add to the collection --
         this.#labelCollection.addLayer(label);
@@ -467,6 +471,20 @@ export default class LeafletAnnotation extends AnnotationComponentBase {
         });
     }
 
+    _addContextMenuEventListenerToCollection(collection) {
+        if (!collection) return;
+
+        collection.on('contextmenu', (event) => {
+            // Prevent the default context menu
+            L.DomEvent.preventDefault(event.originalEvent);
+            L.DomEvent.stopPropagation(event.originalEvent);
+
+            const layer = event.layer; // Get the specific layer that was right-clicked
+            const eventData = this._createEventData(event, layer);
+            this.emitter.emit('annotation-contextmenu-leaflet', eventData);
+        });
+    }
+
     /**
      * Adds custom event listeners to a Leaflet layer.
      * @param {L.CircleMarker|L.Polyline|L.Polygon|L.Tooltip|L.Layer} layer 
@@ -485,25 +503,6 @@ export default class LeafletAnnotation extends AnnotationComponentBase {
                 });
             }
         }
-    }
-
-    /**
-     * Adds a context menu event listener to a Leaflet layer.
-     * Context menu refers to the right-click event in Leaflet.  
-     * @param {L.CircleMarker|L.Polyline|L.Polygon|L.Tooltip|L.Layer} layer - The Leaflet layer to add the context menu listener to.
-     * @returns {void}
-     */
-    _addContextMenuEventListener(layer) {
-        if (!layer) return;
-
-        layer.on('contextmenu', (event) => {
-            // Prevent the default browser context menu
-            L.DomEvent.preventDefault(event.originalEvent);
-            L.DomEvent.stopPropagation(event.originalEvent);
-
-            const eventData = this._createEventData(event, layer);
-            this.emitter.emit('annotation-contextmenu-leaflet', eventData);
-        });
     }
 
     /**
@@ -817,12 +816,30 @@ customElements.define("leaflet-annotation", LeafletAnnotation);
 //     });
 // }
 
-
 // _addPickerEventListeners(layer) {
 //     if (!layer) return;
 
 //     layer.on('click', (event) => {
 //         const eventData = this._createEventData(event, layer);
 //         this.emitter.emit('annotation-clicked-leaflet', eventData);
+//     });
+// }
+
+// /**
+//  * Adds a context menu event listener to a Leaflet layer.
+//  * Context menu refers to the right-click event in Leaflet.
+//  * @param {L.CircleMarker|L.Polyline|L.Polygon|L.Tooltip|L.Layer} layer - The Leaflet layer to add the context menu listener to.
+//  * @returns {void}
+//  */
+// _addContextMenuEventListener(layer) {
+//     if (!layer) return;
+
+//     layer.on('contextmenu', (event) => {
+//         // Prevent the default browser context menu
+//         L.DomEvent.preventDefault(event.originalEvent);
+//         L.DomEvent.stopPropagation(event.originalEvent);
+
+//         const eventData = this._createEventData(event, layer);
+//         this.emitter.emit('annotation-contextmenu-leaflet', eventData);
 //     });
 // }

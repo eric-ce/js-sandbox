@@ -56,7 +56,7 @@ export function createCircleMarker(position, options = {}) {
         fillOpacity = 0.8,
         pane = 'markerPane',
         id = "annotate_marker",
-        interactive = false,
+        interactive = true,
         ...rest
     } = options;
 
@@ -176,7 +176,7 @@ export function createPolyline(positions, options = {}) {
         opacity = 1.0,
         pane = 'overlayPane',
         id = "annotate_polyline",
-        interactive = false,
+        interactive = true,
         ...rest
     } = options
 
@@ -223,6 +223,7 @@ export function createPolygon(positions, options = {}) {
         fillColor = color,
         fillOpacity = 0.2,
         id = "annotate_polygon",
+        interactive = true,
         ...rest
     } = options;
 
@@ -233,6 +234,7 @@ export function createPolygon(positions, options = {}) {
         opacity,
         fillColor,
         fillOpacity,
+        interactive,
         ...rest
     });
 
@@ -285,7 +287,7 @@ export function createLabelTooltip(positions, value, unit = "meter", options = {
         offset = [0, -35],
         id = "annotate_label",
         color = "rgba(0, 0, 0, 1)",
-        interactive = false,
+        interactive = true,
         ...rest
     } = options;
 
