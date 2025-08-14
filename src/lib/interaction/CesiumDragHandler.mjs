@@ -1,5 +1,4 @@
 import { Cartesian2, Cartesian3, Color, defined } from "cesium";
-import dataPool from "../data/DataPool.mjs";
 import { convertToCartesian3, getPrimitiveByPointPosition } from "../helper/cesiumHelper.mjs";
 
 
@@ -12,22 +11,12 @@ import { convertToCartesian3, getPrimitiveByPointPosition } from "../helper/cesi
 /** @typedef {import('cesium').Cartesian2} Cartesian2 */
 
 
-// -- Dependencies types --
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../input/CesiumInputHandler.mjs')} CesiumInputHandler */
 
-// -- Data types --
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
- */
+/** @typedef {import('../docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../docs/types.mjs').MeasurementGroup} MeasurementGroup */
+/** @typedef {import('../docs/types.mjs').DataPool} DataPool */
+
 /**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
@@ -45,10 +34,9 @@ class CesiumDragHandler {
     map;
     /** @type {CesiumInputHandler} */
     inputHandler;
-    /** @type {EventEmitter} */
+    /** @type {ShareEmitter} */
     emitter;
 
-    // -- Public fields: variables --
     activeModeInstance = null;
     isDragging = false;
     draggedObjectInfo = null;
@@ -60,27 +48,34 @@ class CesiumDragHandler {
     polylineCollection;
     polygonCollection;
 
-    // -- Private Fields: variables --
+    _dataPool;
+
     #coordinate = null;
 
     /**
      * Creates an instance of CesiumDragHandler.
      * @param {Viewer} viewer - The Cesium viewer instance
-     * @param {import('../input/CesiumInputHandler')} inputHandler 
-     * @param {import('eventemitter3').EventEmitter} emitter 
-     * @param {function} callbacks 
+     * @param {CesiumInputHandler} inputHandler 
+     * @param {ShareEmitter} emitter 
+     * @param {DataPool} dataPool 
      */
-    constructor(map, inputHandler, emitter, callbacks = {}) {
+    constructor(map, inputHandler, emitter, dataPool) {
         this.map = map;
         this.inputHandler = inputHandler;
         this.emitter = emitter; // Keep emitter if needed for other things
+        this._dataPool = dataPool;
 
         // Internal state to track the dragged object and its related info
         this.draggedObjectInfo = this._createDefaultDraggedObjectInfo(); // Initialize the dragged object info
     }
 
+
     get coordinate() {
         return this.#coordinate;
+    }
+
+    get dataPool() {
+        return this._dataPool;
     }
 
 
@@ -161,7 +156,7 @@ class CesiumDragHandler {
         this.measure.status = "pending";
 
         // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Store position reference --
         // Store the bottom point relative to the dragged point - ONLY for height mode
@@ -179,8 +174,6 @@ class CesiumDragHandler {
             this.polylineCollection,
             this.polygonCollection,
         )
-        console.log("🚀 labelPrimitives:", labelPrimitives);
-
         this.draggedObjectInfo.lines = linePrimitives; // Store the line primitives
         this.draggedObjectInfo.labels = labelPrimitives; // Store the label primitives
         this.draggedObjectInfo.polygons = polygonPrimitives; // Store the polygon primitives
@@ -278,7 +271,7 @@ class CesiumDragHandler {
         // this.draggedObjectInfo.endPoint = this.draggedObjectInfo.beginPoint; // Store the end point
 
         // Update data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
         // -- End handle data --
 
         // Emit drag end event

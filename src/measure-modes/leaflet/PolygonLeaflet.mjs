@@ -1,17 +1,7 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng } from "../../lib/helper/leafletHelper.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.mjs";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("leaflet")
- */
+
 /** 
  * @typedef NormalizedEventData
  * @property {{lat: number, lng:number}} mapPoint - The map coordinates
@@ -21,17 +11,20 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
  * @property {object} target - The target of the event (e.g., map, marker, etc.)
  * @property {object} layer - The Leaflet layer object
  */
-// -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/LeafletInputHandler.mjs').LeafletInputHandler} LeafletInputHandler */
-/** @typedef {import('../../lib/interaction/LeafletDragHandler.mjs').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/LeafletMeasure.mjs').LeafletMeasure} LeafletMeasure */
+
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
 
 /** @typedef {{polylines: L.polyline[], labels: L.tooltip[]}} InteractiveAnnotationsState */
-/** @typedef {{lat:number, lng:number}} Coordinate*/
+/** @typedef {import('../../lib/docs/types.mjs').LatLng} LatLng */
+
 
 class PolygonLeaflet extends MeasureModeLeaflet {
     /** @type {InteractiveAnnotationsState} */
@@ -39,11 +32,11 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         polygons: [],
         labels: []
     }
-    /** @type {Coordinate} */
+    /** @type {LatLng} */
     #coordinate = null;
     /** @type {MeasurementGroup} */
-    measure = null; // measure data used internally 
-    /** @type {Coordinate[]} */
+    measure = null; // measure data used internally
+    /** @type {LatLng[]} */
     coordsCache = [];
 
     /**
@@ -68,21 +61,22 @@ class PolygonLeaflet extends MeasureModeLeaflet {
     };
 
     /**
-     * 
-     * @param {LeafletInputHandler} inputHandler 
-     * @param {LeafletDragHandler} dragHandler 
-     * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {LeafletMeasure} drawingHelper 
+     * @param {LeafletInputHandler} inputHandler
+     * @param {LeafletDragHandler} dragHandler
+     * @param {LeafletHighlightHandler} highlightHandler
+     * @param {LeafletAnnotation} annotationComponent
      * @param {StateManager} stateManager 
-     * @param {EventEmitter} emitter 
+     * @param {ShareEmitter} emitter 
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PolygonLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PolygonLeaflet requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app)
+        super("area", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -90,9 +84,6 @@ class PolygonLeaflet extends MeasureModeLeaflet {
 
         /** @type {MeasurementGroup} */
         this.measure = this._createDefaultMeasure(); // Create a new measure object
-
-        // Listen to right click event
-        // this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
     }
 
     /**********
@@ -139,7 +130,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_area_point_${this.measure.id}`,
             interactive: true,
@@ -169,7 +160,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
     }
 
     /**
@@ -227,7 +218,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
 
 
         // -- Create final point --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: "#FF0000",
             id: `annotate_area_point_${this.measure.id}`,
             interactive: true, // Make the point interactive
@@ -254,7 +245,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         this.measure.status = "completed"; // Update the measure status
 
         // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Set flags
         this.flags.isMeasurementComplete = true; // Set the measurement as complete
@@ -387,8 +378,8 @@ class PolygonLeaflet extends MeasureModeLeaflet {
                     // Update the interactive
                     polygonInstance.options.interactive = interactive;
                     // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(polygonInstance);
+                    if (this.annotationComponent && typeof this.annotationComponent._refreshLayerInteractivity === 'function') {
+                        this.annotationComponent._refreshLayerInteractivity(polygonInstance);
                     }
                 }
 
@@ -406,7 +397,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         // --- Create Polygon ---
         // This block is executed if the polygon instance is not found in the array
         if (!polygonInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
-            polygonInstance = this.drawingHelper._addPolygon(positions, {
+            polygonInstance = this.annotationComponent._addPolygon(positions, {
                 color,
                 id,
                 status,
@@ -489,7 +480,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
 
         // -- Create Label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, area, "squareMeter", {
+            labelInstance = this.annotationComponent._addLabel(positions, area, "squareMeter", {
                 id,
                 interactive,
                 status,

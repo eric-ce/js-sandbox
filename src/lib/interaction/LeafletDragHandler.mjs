@@ -1,21 +1,10 @@
-import dataPool from "../data/DataPool.mjs";
 import { getVectorByPosition, findMeasureByCoordinate, convertToLatLng } from "../helper/leafletHelper.mjs";
 
 
-/** @typedef {import('../input/LeafletInputHandler.mjs')} LeafletInputHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
- */
+/** @typedef {import('../docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../docs/types.mjs').MeasurementGroup} MeasurementGroup */
+/** @typedef {import('../docs/types.mjs').DataPool} DataPool */
 
 /**
  * Handles drag events for Leaflet Maps.
@@ -44,20 +33,35 @@ class LeafletDragHandler {
     labelCollection;
     polylineCollection;
 
+    _dataPool = null;
+
     // -- Private Fields: variables --
     #coordinate = null;
 
-    constructor(map, inputHandler, emitter, callbacks = {}) {
+    /**
+     * @param {L.Map} map
+     * @param {LeafletInputHandler} inputHandler
+     * @param {ShareEmitter} emitter
+     * @param {DataPool} dataPool
+     */
+    constructor(map, inputHandler, emitter, dataPool) {
         this.map = map;
         this.inputHandler = inputHandler;
         this.emitter = emitter;
+        this._dataPool = dataPool;
 
         this.draggedObjectInfo = this._createDefaultDraggedObjectInfo(); // Initialize the dragged object info
     }
 
+
     get coordinate() {
         return this.#coordinate; // Getter for coordinate
     }
+
+    get dataPool() {
+        return this._dataPool;
+    }
+
 
 
     activate(modeInstance) {
@@ -133,7 +137,7 @@ class LeafletDragHandler {
         if (totalLabel) this.draggedObjectInfo.totalLabels = [totalLabel] // Store total label if exists
 
         // Update data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Attach mousemove and mouseup listeners via the InputHandler
         this.mouseMoveListener = this.inputHandler.on('mousemove', this._handleDrag);
@@ -204,7 +208,7 @@ class LeafletDragHandler {
         this.draggedObjectInfo.endPosition = this.#coordinate; // Update the end position
 
         // Update data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Emit consistent event (optional)
         // this.emitter.emit("drag-end", {

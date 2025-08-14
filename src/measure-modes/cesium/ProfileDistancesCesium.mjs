@@ -12,7 +12,6 @@ import {
     convertToCartographicDegrees
 } from "../../lib/helper/cesiumHelper.mjs";
 import { getNeighboringValues, formatMeasurementValue, deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 
 
@@ -26,16 +25,6 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 // -- Data types -- 
 /** @typedef {{polylines: Primitive[], labels: Label[], chartHoveredPoints: PointPrimitive[], addModeLines: PointPrimitive[], totalLabels: Label[]}} InteractiveAnnotationsState */
 /**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("cesium")
- */
-/**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
  * @property {Cartesian3} mapPoint - The point on the map where the event occurred
@@ -43,22 +32,20 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
  * @property {Cartesian2} screenPoint - The screen coordinates of the event
  */
 
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
 // -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/CesiumMeasure.mjs').CesiumMeasure} CesiumMeasure */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').CesiumAnnotation} CesiumAnnotation */
 
 
 class ProfileDistancesCesium extends MeasureModeCesium {
     modeName = "profile-distances";
-
-    // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
 
     /** @type {Cartesian3} */
     #coordinate = null;
@@ -85,26 +72,24 @@ class ProfileDistancesCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumMeasure} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("ProfileDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, emitter and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("ProfileDistancesCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("profile-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+        super("profile-distances", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
         this.flags.isDragMode = false;
         this.flags.isAddMode = false;
         this.flags.isReverse = false;
-
-        this.cesiumPkg = cesiumPkg;
 
         this.measure = super._createDefaultMeasure();
     }
@@ -238,7 +223,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         if (nearPoint) return; // Do not create a new point if near an existing one
 
         // create a new point primitive
-        const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const pointPrimitive = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             status: "pending"
@@ -253,7 +238,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length > 1 && !this.flags.isMeasurementComplete) {
             // Determine the indices of the previous and current points based on the measurement direction
@@ -304,7 +289,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             }
 
             // Update dataPool with the measure data
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
@@ -501,7 +486,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             }
 
             // Create last point
-            const lastPoint = this.drawingHelper._addPointMarker(this.#coordinate, {
+            const lastPoint = this.annotationComponent._addPointMarker(this.#coordinate, {
                 color: this.stateManager.getColorState("pointColor"),
                 id: `annotate_${this.mode}_point_${this.measure.id}`,
                 status: "completed"
@@ -582,7 +567,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
 
 
         // Update data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Reset to clean up after finish
         this.resetValuesModeSpecific();
@@ -607,7 +592,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         if (!userConfirmation) return;
 
         // -- Remove point --
-        this.drawingHelper._removePointMarker(point); // Remove the point primitive
+        this.annotationComponent._removePointMarker(point); // Remove the point primitive
 
         // -- Set Measure and Distances --
         // Find the measure data by ID
@@ -631,10 +616,10 @@ class ProfileDistancesCesium extends MeasureModeCesium {
 
         // -- Find and Remove related annotations --
         // remove related lines
-        const linePrimitives = this.drawingHelper._getLineByPositions([pointPositions[0]]);
+        const linePrimitives = this.annotationComponent._getLineByPositions([pointPositions[0]]);
         if (!Array.isArray(linePrimitives) || linePrimitives.length === 0) return; // If no lines are found, exit
         linePrimitives.forEach(line => {
-            this.drawingHelper._removePolyline(line); // Remove the line primitive
+            this.annotationComponent._removePolyline(line); // Remove the line primitive
 
             const linePositions = line?.feature?.properties?.positions;
             if (!Array.isArray(linePositions) || linePositions.length === 0) return; // If no line positions are found, exit
@@ -651,7 +636,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         });
 
         // remove related labels
-        const labelPrimitives = this.drawingHelper._getLabelByPosition([pointPositions[0]]);
+        const labelPrimitives = this.annotationComponent._getLabelByPosition([pointPositions[0]]);
         if (!Array.isArray(labelPrimitives) || labelPrimitives.length === 0) return; // If no labels are found, exit
         labelPrimitives.forEach(label => {
             // Safety check: assume moving or total labels should not be removed here
@@ -660,7 +645,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             this.#interactiveAnnotations.totalLabels = isTotalLabel ? [label] : [];
             if (isMovingLabel || isTotalLabel) return;
 
-            this.drawingHelper._removeLabel(label); // Remove the label primitive            
+            this.annotationComponent._removeLabel(label); // Remove the label primitive            
 
             // Case: during measuring, remove the label from this.#interactiveAnnotations
             if (this.#interactiveAnnotations.labels.length === 0) return; // If there are no labels, exit
@@ -798,7 +783,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         }
         this.measure.coordinates = positions.map(pos => Cartesian3.clone(pos));
         // Update dataPool with the measure data
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Update current measure variables --
         if (isMeasuring) {
@@ -1056,7 +1041,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             if (isNested) {
                 // remove all lines in the lines array
                 polylinesArray.forEach(lineToRemove => {
-                    this.drawingHelper._removePolyline(lineToRemove);
+                    this.annotationComponent._removePolyline(lineToRemove);
                 });
                 polylinesArray.length = 0; // Clear the array
             }
@@ -1066,7 +1051,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
                     const line = polylinesArray[i];
                     // Ensure line exists and has a status property before checking
                     if (line && line?.feature?.properties?.status === "moving") {
-                        this.drawingHelper._removePolyline(line);
+                        this.annotationComponent._removePolyline(line);
                         polylinesArray.splice(i, 1);
                     }
                 }
@@ -1076,7 +1061,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         if (isNested) {
             // -- Create multiple polylines for nested positions --
             positions.forEach(posSet => {
-                const newLinePrimitive = this.drawingHelper._addGroundPolyline(posSet, {
+                const newLinePrimitive = this.annotationComponent._addGroundPolyline(posSet, {
                     color,
                     id,
                     status,
@@ -1089,7 +1074,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             })
         } else {
             // -- Create a new single polyline --
-            const newLinePrimitive = this.drawingHelper._addGroundPolyline(positions, {
+            const newLinePrimitive = this.annotationComponent._addGroundPolyline(positions, {
                 color,
                 id,
                 status,
@@ -1184,7 +1169,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
             const { distance: segmentDistance, clampedPositions } = calculateClampedDistance([positions[0], positions[1]], this.map.scene);
             if (!segmentDistance) console.warn("Failed to calculate segment distance.");
 
-            const labelPrimitive = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
+            const labelPrimitive = this.annotationComponent._addLabel(positions, segmentDistance, "meter", {
                 id,
                 showBackground,
                 status,
@@ -1260,7 +1245,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
 
         // Create a new total label if it does not exist
         if (!totalLabel) {
-            totalLabel = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
+            totalLabel = this.annotationComponent._addLabel([labelPosition], formattedText, null, {
                 id: id,
                 showBackground: showBackground,
                 status: status,
@@ -1296,14 +1281,14 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         if (this.#interactiveAnnotations.chartHoveredPoints.length > 0) {
             const hoveredPoints = this.#interactiveAnnotations.chartHoveredPoints;
             hoveredPoints.forEach(point => {
-                this.drawingHelper._removePointMarker(point);
+                this.annotationComponent._removePointMarker(point);
             });
             // Clear the reference
             this.#interactiveAnnotations.chartHoveredPoints = [];
         }
 
         // Create a new point marker at the closest position
-        const hoveredPoint = this.drawingHelper._addPointMarker(position, {
+        const hoveredPoint = this.annotationComponent._addPointMarker(position, {
             color,
             id,
             status
@@ -1426,7 +1411,7 @@ class ProfileDistancesCesium extends MeasureModeCesium {
         if (!hoveredPoints || hoveredPoints.length === 0) return; // If no hovered points, exit
 
         hoveredPoints.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point primitive
+            this.annotationComponent._removePointMarker(point); // Remove the point primitive
         });
         this.#interactiveAnnotations.chartHoveredPoints = []; // Clear the reference
     }

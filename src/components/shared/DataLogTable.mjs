@@ -1,21 +1,11 @@
 import { sharedStyleSheet } from '../../styles/sharedStyle.mjs';
 import { dataLogBoxIcon } from '../../assets/icons.mjs';
 import { capitalizeString, createCloseButton, createExpandCollapseButton, makeDraggable } from '../../lib/helper/helper.mjs';
-import dataPool from '../../lib/data/DataPool.mjs';
-
-/**@typedef {import('../../lib/state/StateManager.mjs')} StateManager */
-/**@typedef {import('../../lib/events/ShareEmitter.mjs')} Emitter */
 
 /**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {number} labelNumberIndex - Index used for sequential labeling
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {{latitude: number, longitude: number, height?: number}[]|number[]|string:{latitude: number, longitude: number, height?: number}} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'| string} mapName - Map provider name ("google")
+ * @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter
+ * @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager
+ * @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup
  */
 
 /**
@@ -49,6 +39,8 @@ export class DataLogTable extends HTMLElement {
     _container = null;
     /** @type {"cesium"|"google"|"leaflet"} - The name of the map */
     _mapName = null;
+    /** @type {DataPool} */
+    _dataPool = null;
 
     // Table related variables
     /** @type {LogRecord[]} */
@@ -91,7 +83,8 @@ export class DataLogTable extends HTMLElement {
 
         // listen for data:updated - logs data updates as actions
         this._boundDataActionHandler = (updatedItem) => this._handleDataAction(updatedItem);
-        this._emitter.on('data:updated', this._boundDataActionHandler);
+        this.emitter.onDataUpdate(this._boundDataActionHandler);
+
         // listen for data:removed - logs data removals as actions
         // this._emitter.on('data:removed', (removedItem) => {
         //     this._handleDataRemoval(removedItem);
@@ -126,6 +119,13 @@ export class DataLogTable extends HTMLElement {
     }
     set mapName(mapName) {
         this._mapName = mapName;
+    }
+
+    get dataPool() {
+        return this._dataPool;
+    }
+    set dataPool(dataPool) {
+        this._dataPool = dataPool;
     }
 
 
@@ -709,7 +709,7 @@ export class DataLogTable extends HTMLElement {
      * @private
      */
     _loadInitialData() {
-        const data = dataPool.data;
+        const data = this.dataPool?.data;
         if (!data || data.length === 0) return;
 
         // Process only completed data for initial load

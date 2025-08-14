@@ -1,22 +1,31 @@
+import { Viewer } from 'cesium';
 import { generateIdByTimestamp } from '../lib/helper/helper.mjs';
 
 
-/** @typedef {import('../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../components/CesiumMeasure.mjs').CesiumMeasure} CesiumMeasure */
-/** @typedef {import('../lib/input/GoogleMapsInputHandler.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} GoogleDragHandler */
-/** @typedef {import('../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
-/** @typedef {import('../components/GoogleMeasure.mjs').GoogleMeasure} GoogleMeasure */
+/** @typedef {import('../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../lib/docs/types.mjs').CesiumAnnotation} CesiumAnnotation */
+
+/** @typedef {import('../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../lib/docs/types.mjs').GoogleAnnotation} GoogleAnnotation */
+
+/** @typedef {import('../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
+/** @typedef {import('../lib/docs/types.mjs').DataPool} DataPool */
+
+/** @typedef {import('../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../lib/docs/types.mjs').StateManager} StateManager*/
 
 // -- Cesium types --
 /**@typedef {import('cesium').LabelCollection} LabelCollection - the collection of label primitives in cesium map*/
 /**@typedef {import('cesium').Primitive} Primitive - the primitive object in cesium map*/
 /**@typedef {import('cesium').PointPrimitiveCollection} PointPrimitiveCollection - the collection of point primitives in cesium map*/
-
+/**@typedef {import('cesium').Viewer} */
 
 /**
  * MeasureModeBase class is to share the common functionality between all mode based classes
@@ -25,25 +34,25 @@ class MeasureModeBase {
     // -- Public Fields For Dependencies --
     /** @type {string} Unique identifier for this measurement mode (e.g., "distance", "polygon"). */
     mode;
-    /** @type {CesiumInputHandler | GoogleMapsInputHandler} The map input event handler abstraction. */
+    /** @type {CesiumInputHandler | GoogleMapsInputHandler | LeafletInputHandler} The map input event handler abstraction. */
     inputHandler;
-    /** @type {CesiumDragHandler | GoogleDragHandler | null} The drag handler abstraction (can be null). */
+    /** @type {CesiumDragHandler | GoogleDragHandler | LeafletDragHandler | null} The drag handler abstraction (can be null). */
     dragHandler;
-    /** @type {CesiumHighlightHandler | GoogleHighlightHandler | null} The highlight handler abstraction (can be null). */
+    /** @type {CesiumHighlightHandler | GoogleHighlightHandler | LeafletHighlightHandler | null} The highlight handler abstraction (can be null). */
     highlightHandler;
-    /** @type {CesiumMeasure | GoogleMeasure} The map-specific drawing helper/manager component. */
-    drawingHelper;
-    /** @type {any} The map instance (e.g., Cesium.Viewer, google.maps.Map). */
+    /** @type {CesiumAnnotation | GoogleAnnotation | LeafletAnnotation} The map-specific annotation component. */
+    annotationComponent;
+    /** @type {Viewer | google.maps.Map | L.Map} The map instance (e.g., Cesium.Viewer, google.maps.Map). */
     map;
     /** @type {StateManager} The application state manager. */
     stateManager;
-    /** @type {EventEmitter} The event emitter instance. */
+    /** @type {ShareEmitter} The event emitter instance. */
     emitter;
     /** @type {"cesium"|"google"|"leaflet"} The name of the map */
     mapName;
     /** @type {object} The application context */
     app;
-    /** @type {HTMLElement} The map container element. */
+    /** @type {HTMLDivElement} The map container element. */
     _container;
 
     // -- Public Fields For state and data --
@@ -64,26 +73,28 @@ class MeasureModeBase {
     /**
      * 
      * @param {string} modeName - The unique identifier for this measurement mode (e.g., "distance", "area").
-     * @param {CesiumInputHandler | GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
-     * @param {CesiumDragHandler | GoogleDragHandler | null} dragHandler - The drag handler abstraction (can be null if not used).
-     * @param {CesiumHighlightHandler | GoogleHighlightHandler | null} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {CesiumMeasure | GoogleMeasure} drawingHelper - The map-specific drawing helper/manager.
+     * @param {CesiumInputHandler | GoogleMapsInputHandler | LeafletInputHandler} inputHandler - The map input event handler abstraction.
+     * @param {CesiumDragHandler | GoogleDragHandler | LeafletDragHandler | null} dragHandler - The drag handler abstraction (can be null if not used).
+     * @param {CesiumHighlightHandler | GoogleHighlightHandler | LeafletHighlightHandler | null} highlightHandler - The highlight handler abstraction (can be null if not used).
+     * @param {CesiumAnnotation | GoogleAnnotation | LeafletAnnotation} annotationComponent - The map-specific annotation component
      * @param {StateManager} stateManager - The application state manager.
-     * @param {EventEmitter} emitter - The event emitter instance.
+     * @param {ShareEmitter} emitter - The event emitter instance.
+     * @param {object} app - The application context.
+     * @param {DataPool} dataPool - The data pool instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // -- Validate Dependencies --
         if (!modeName || typeof modeName !== 'string') {
             throw new Error("MeasureModeBase requires a valid modeName string.");
         }
-        if (!inputHandler || !drawingHelper || !stateManager || !emitter || !app) {
-            throw new Error("MeasureModeBase requires inputHandler, drawingHelper, stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !stateManager || !emitter || !app) {
+            throw new Error("MeasureModeBase requires inputHandler, annotationComponent, stateManager, emitter, and app.");
         }
-        if (!drawingHelper.map) {
-            throw new Error("MeasureModeBase requires drawingHelper to have a valid 'map' instance.");
+        if (!annotationComponent.map) {
+            throw new Error("MeasureModeBase requires annotationComponent to have a valid 'map' instance.");
         }
-        if (typeof drawingHelper.mapName !== 'string') {
-            throw new Error("MeasureModeBase requires drawingHelper to have a valid 'mapName' string.");
+        if (typeof annotationComponent.mapName !== 'string') {
+            throw new Error("MeasureModeBase requires annotationComponent to have a valid 'mapName' string.");
         }
 
         // -- Assign Dependencies --
@@ -91,20 +102,21 @@ class MeasureModeBase {
         this.inputHandler = inputHandler;
         this.dragHandler = dragHandler; // Can be null
         this.highlightHandler = highlightHandler; // Can be null
-        this.drawingHelper = drawingHelper;
-        this.map = drawingHelper.map;
+        this.annotationComponent = annotationComponent;
+        this.map = annotationComponent.map;
         this.stateManager = stateManager;
         this.emitter = emitter;
         this.app = app;
+        this.dataPool = dataPool;
 
-        this.mapName = drawingHelper.mapName; // Map name (e.g., "cesium", "google", "leaflet")
+        this.mapName = annotationComponent.mapName; // Map name (e.g., "cesium", "google", "leaflet")
 
-        this._container = this.drawingHelper.container; // The specific map container element by mapName
+        this._container = this.annotationComponent.container; // The specific map container element by mapName
 
-        this.pointCollection = this.drawingHelper.pointCollection; // Array to store points
-        this.polylineCollection = this.drawingHelper.polylineCollection; // Array to store lines
-        this.polygonCollection = this.drawingHelper.polygonCollection; // Array to store polygons
-        this.labelCollection = this.drawingHelper.labelCollection; // Array to store polygons
+        this.pointCollection = this.annotationComponent.pointCollection; // Array to store points
+        this.polylineCollection = this.annotationComponent.polylineCollection; // Array to store lines
+        this.polygonCollection = this.annotationComponent.polygonCollection; // Array to store polygons
+        this.labelCollection = this.annotationComponent.labelCollection; // Array to store polygons
     }
 
 
@@ -118,7 +130,7 @@ class MeasureModeBase {
     activate() {
         if (this.flags.isActive) return; // Prevent double activation
 
-        console.log(`Activating ${this.constructor.name} (mode: ${this.mode}).`);
+        // console.log(`Activating ${this.constructor.name} (mode: ${this.mode}).`);
         this.flags.isActive = true;
 
         // Reset values before attaching listeners
@@ -129,8 +141,8 @@ class MeasureModeBase {
         this.inputHandler.on('leftclick', this.handleLeftClick);
         this.inputHandler.on('mousemove', this.handleMouseMove);
         this.inputHandler.on('rightclick', this.handleRightClick);
-        this.inputHandler.on('leftdoubleclick', this.handleLeftDoubleClick); // Optional, if needed
-        this.inputHandler.on('middleclick', this.handleMiddleClick);
+        // this.inputHandler.on('leftdoubleclick', this.handleLeftDoubleClick); // Optional, if needed
+        // this.inputHandler.on('middleclick', this.handleMiddleClick);
 
         // Activate interaction handlers if they exist
         this.dragHandler?.activate(this);
@@ -151,7 +163,7 @@ class MeasureModeBase {
      */
     deactivate() {
         if (!this.flags.isActive) return; // Prevent double deactivation
-        console.log(`Deactivating ${this.constructor.name} (mode: ${this.mode}).`);
+        // console.log(`Deactivating ${this.constructor.name} (mode: ${this.mode}).`);
 
         // Remove map-specific listeners first
         this._removeMapSpecificListeners();
@@ -160,8 +172,8 @@ class MeasureModeBase {
         this.inputHandler.off('leftclick', this.handleLeftClick);
         this.inputHandler.off('mousemove', this.handleMouseMove);
         this.inputHandler.off('rightclick', this.handleRightClick);
-        this.inputHandler.off('leftdoubleclick', this.handleLeftDoubleClick);
-        this.inputHandler.off('middleclick', this.handleMiddleClick);
+        // this.inputHandler.off('leftdoubleclick', this.handleLeftDoubleClick);
+        // this.inputHandler.off('middleclick', this.handleMiddleClick);
 
         // Deactivate interaction handlers
         this.dragHandler?.deactivate();
@@ -220,28 +232,6 @@ class MeasureModeBase {
         if (!this.flags.isActive) return;
         console.warn(`handleRightClick not implemented in ${this.constructor.name}`);
         // throw new Error(`handleRightClick must be implemented by subclass ${this.constructor.name}`);
-    }
-
-    /**
-     * Handles left double click events. Must be implemented by subclasses.
-     * @param {object} eventData - Normalized event data from InputHandler.
-     * @abstract
-     */
-    handleLeftDoubleClick = async (eventData) => {
-        if (!this.flags.isActive) return;
-        console.warn(`handleDoubleClick not implemented in ${this.constructor.name}`);
-        // throw new Error(`handleDoubleClick must be implemented by subclass ${this.constructor.name}`);
-    }
-
-    /**
-     * Handles middle click events. Must be implemented by subclasses.
-     * @param {object} eventData - Normalized event data from InputHandler.
-     * @abstract
-     */
-    handleMiddleClick = async (eventData) => {
-        if (!this.flags.isActive) return;
-        console.warn(`handleMiddleClick not implemented in ${this.constructor.name}`);
-        // throw new Error(`handleMiddleClick must be implemented by subclass ${this.constructor.name}`);
     }
 
     /**
@@ -313,7 +303,7 @@ class MeasureModeBase {
      * @returns {MeasurementGroup}
      */
     _createDefaultMeasure() {
-        // Ensure drawingHelper and mapName are available
+        // Ensure annotationComponent and mapName are available
         return {
             id: generateIdByTimestamp(),
             mode: this.mode,
@@ -321,7 +311,9 @@ class MeasureModeBase {
             status: "pending",
             _records: [],
             interpolatedPoints: [],
-            mapName: this.mapName ?? "unknown",
+            sourceMap: this.mapName, // Maps where this measurement is sourced from
+            renderedOn: [this.mapName], // Maps where this measurement is rendered
+            featureTasks: this.stateManager.getBehaviorState('featureTasks')
         };
     }
 
@@ -338,3 +330,26 @@ class MeasureModeBase {
 }
 
 export { MeasureModeBase };
+
+
+// /**
+//  * Handles left double click events. Must be implemented by subclasses.
+//  * @param {object} eventData - Normalized event data from InputHandler.
+//  * @abstract
+//  */
+// handleLeftDoubleClick = async (eventData) => {
+//     if (!this.flags.isActive) return;
+//     console.warn(`handleDoubleClick not implemented in ${this.constructor.name}`);
+//     // throw new Error(`handleDoubleClick must be implemented by subclass ${this.constructor.name}`);
+// }
+
+// /**
+//  * Handles middle click events. Must be implemented by subclasses.
+//  * @param {object} eventData - Normalized event data from InputHandler.
+//  * @abstract
+//  */
+// handleMiddleClick = async (eventData) => {
+//     if (!this.flags.isActive) return;
+//     console.warn(`handleMiddleClick not implemented in ${this.constructor.name}`);
+//     // throw new Error(`handleMiddleClick must be implemented by subclass ${this.constructor.name}`);
+// }

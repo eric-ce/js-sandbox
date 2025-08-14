@@ -10,24 +10,35 @@ import { MeasureModeGoogle } from "./MeasureModeGoogle.mjs";
  * @property {google.maps.Marker|google.maps.Polyline|google.maps.Polygon|null} overlay - The annotation graphics object
  */
 
+/** @typedef {import('../../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').GoogleAnnotation} GoogleAnnotation */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+
+
 class PickerGoogle extends MeasureModeGoogle {
     #modeInfoOverlay = null;
 
     /**
      * @param {GoogleMapsInputHandler} inputHandler
-     * @param {DragHandler} dragHandler
-     * @param {HighlightHandler} highlightHandler
-     * @param {MeasureComponentBase} drawingHelper
+     * @param {GoogleDragHandler} dragHandler
+     * @param {GoogleHighlightHandler} highlightHandler
+     * @param {GoogleAnnotation} annotationComponent
      * @param {StateManager} stateManager
-     * @param {EventEmitter} emitter
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PickerGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PickerGoogle requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+        super("picker", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
     }
 
     /**
@@ -42,8 +53,8 @@ class PickerGoogle extends MeasureModeGoogle {
 
         // Add emitter listeners only when picker is active
         if (this.emitter) {
-            this.emitter.on('annotation-clicked-google', this.handleLeftClick);
-            this.emitter.on('annotation-hovered-google', this.handleMouseMove);
+            this.emitter.onGoogleHovered(this.handleMouseMove);
+            this.emitter.onGoogleClicked(this.handleLeftClick);
         }
     }
 
@@ -81,11 +92,11 @@ class PickerGoogle extends MeasureModeGoogle {
         if (!annotationType || annotationType !== 'annotate' || !pickedObjectMode || !pickedObjectType) return;
 
         // validate mode name with available modes
-        const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
+        const isMatchedMode = this.annotationComponent.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
         if (!isMatchedMode) return;
 
-        // Activate the relevant mode using the drawing helper
-        this.drawingHelper._activateMode(pickedObjectMode);
+        // Activate the relevant mode using the annotation component
+        this.annotationComponent._activateMode(pickedObjectMode);
 
         // Notify user about the activation
         showCustomNotification(`Activated ${capitalizeString(pickedObjectMode)} mode`, this._container);

@@ -1,18 +1,7 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { calculateDistance, areCoordinatesEqual, convertToLatLng, checkLayerType } from "../../lib/helper/leafletHelper.mjs";
 import { getNeighboringValues, formatMeasurementValue, showCustomNotification } from "../../lib/helper/helper.mjs";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
 
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("leaflet")
- */
 /** 
  * @typedef NormalizedEventData
  * @property {{lat: number, lng:number}} mapPoint - The map coordinates
@@ -22,21 +11,23 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
  * @property {object} target - The target of the event (e.g., map, marker, etc.)
  * @property {object} layer - The Leaflet layer object
  */
-// -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/LeafletInputHandler.mjs').LeafletInputHandler} LeafletInputHandler */
-/** @typedef {import('../../lib/interaction/LeafletDragHandler.mjs').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/LeafletMeasure.mjs').LeafletMeasure} LeafletMeasure */
+
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
 
 /** @typedef {{polylines: L.polyline[], labels: L.tooltip[]}} InteractiveAnnotationsState */
-/** @typedef {{lat:number, lng:number}} Coordinate*/
+/** @typedef {import('../../lib/docs/types.mjs').LatLng} LatLng */
 
 
 class MultiDistanceLeaflet extends MeasureModeLeaflet {
-    /** @type {Coordinate} */
+    /** @type {LatLng} */
     #coordinate = null;
     /** @type {InteractiveAnnotationsState} */
     #interactiveAnnotations = {
@@ -46,7 +37,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
     };
     /** @type {MeasurementGroup} */
     measure = null;
-    /** @type {Coordinate[]} */
+    /** @type {LatLng[]} */
     coordsCache = [];
     /** @type {number[]} */
     #distances = []; // Array to store distances between points
@@ -99,21 +90,22 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
 
     /**
-     * 
-     * @param {LeafletInputHandler} inputHandler 
-     * @param {LeafletDragHandler} dragHandler 
-     * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {LeafletMeasure} drawingHelper 
-     * @param {StateManager} stateManager 
-     * @param {EventEmitter} emitter 
+     * @param {LeafletInputHandler} inputHandler
+     * @param {LeafletDragHandler} dragHandler
+     * @param {LeafletHighlightHandler} highlightHandler
+     * @param {LeafletAnnotation} annotationComponent
+     * @param {StateManager} stateManager
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("MultiDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("MultiDistanceLeaflet requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -122,9 +114,6 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         /** @type {MeasurementGroup} */
         this.measure = this._createDefaultMeasure();
-
-        // Listen to right click event
-        // this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
     }
 
 
@@ -178,7 +167,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             interactive: true, // Make the point interactive
@@ -195,7 +184,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length > 1) {
             // Determine the indices of the previous and current points based on the measurement direction
@@ -240,7 +229,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             }
 
             // Update dataPool with the measure data
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
@@ -322,7 +311,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             }
 
             // Create last point
-            const lastPoint = this.drawingHelper._addPointMarker(this.#coordinate, {
+            const lastPoint = this.annotationComponent._addPointMarker(this.#coordinate, {
                 color: this.stateManager.getColorState("pointColor"),
                 id: `annotate_${this.mode}_point_${this.measure.id}`,
                 interactive: true,
@@ -384,7 +373,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         this.measure.status = "completed";
 
         // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Reset to clean up after finish
         this.resetValuesModeSpecific();
@@ -438,7 +427,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // -- Handle Measure Data --
         // Get the measure data from the data pool
-        const measureData = dataPool.getMeasureById(measureId);
+        const measureData = this.dataPool.getMeasureById(measureId);
         // Only completed measures can be resumed
         if (!measureData || measureData.status !== "completed") {
             return null;
@@ -505,7 +494,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         // };
 
         // -- Remove point --
-        this.drawingHelper._removePointMarker(point); // Remove the point marker
+        this.annotationComponent._removePointMarker(point); // Remove the point marker
 
         // -- Set Measure and Distances --
         // Find the measure data by ID
@@ -534,14 +523,14 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         positions = positions.filter((_, index) => !pointPositionIndices.includes(index));
 
         // remove related lines
-        const polylines = this.drawingHelper._getLineByPositions([pointPositions[0]]);
+        const polylines = this.annotationComponent._getLineByPositions([pointPositions[0]]);
         if (!Array.isArray(polylines) || polylines.length === 0) {
             this._refreshMapDrag();
             return; // If no lines are found, exit
         }
 
         polylines.forEach(line => {
-            this.drawingHelper._removePolyline(line); // Remove the line
+            this.annotationComponent._removePolyline(line); // Remove the line
 
             const linePositions = line?.feature?.properties?.positions;
             if (!Array.isArray(linePositions) || linePositions.length === 0) return; // If no line positions are found, exit
@@ -558,7 +547,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         });
 
         // remove related labels
-        const labelMarkers = this.drawingHelper._getLabelByPosition([pointPositions[0]]);
+        const labelMarkers = this.annotationComponent._getLabelByPosition([pointPositions[0]]);
         if (!Array.isArray(labelMarkers) || labelMarkers.length === 0) return; // If no labels are found, exit
         labelMarkers.forEach(label => {
             // Safety check: assume moving or total labels should not be removed here
@@ -566,7 +555,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
             const isTotalLabel = label.id.startsWith(`annotate_${this.mode}_total-label`);
             if (isMovingLabel || isTotalLabel) return;
 
-            this.drawingHelper._removeLabel(label); // Remove the label            
+            this.annotationComponent._removeLabel(label); // Remove the label            
 
             // Case: during measuring, remove the label from this.#interactiveAnnotations
             if (this.#interactiveAnnotations.labels.length === 0) return; // If there are no labels, exit
@@ -696,7 +685,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         }
         this.measure.coordinates = positions.map(pos => ({ ...pos })); // Update the measure with the new coordinates
         // Update dataPool with the measure data
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Update current measure variables --
         if (isMeasuring) {
@@ -719,15 +708,15 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         const lastPosition = positions[0];
 
         // Remove the remaining point and labels 
-        const lastPoint = this.drawingHelper._getPointByPosition(lastPosition);
-        const lastLabels = this.drawingHelper._getLabelByPosition([lastPosition]);
+        const lastPoint = this.annotationComponent._getPointByPosition(lastPosition);
+        const lastLabels = this.annotationComponent._getLabelByPosition([lastPosition]);
 
         if (lastPoint) {
-            this.drawingHelper._removePointMarker(lastPoint); // Remove the last point marker
+            this.annotationComponent._removePointMarker(lastPoint); // Remove the last point marker
         }
         if (Array.isArray(lastLabels) && lastLabels.length > 0) {
             lastLabels.forEach(label => {
-                this.drawingHelper._removeLabel(label); // Remove the label marker
+                this.annotationComponent._removeLabel(label); // Remove the label marker
             });
         }
         // -- Handle Measure Data --
@@ -735,7 +724,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         if (isNaN(measureId)) return; // If the measure ID is not a number, exit
         this.coordsCache = []; // Clear the coordsCache
         this.#distances = []; // Clear the distances cache
-        dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+        this.dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
 
         // Show notification
         showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
@@ -1031,7 +1020,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
         if (labelInstances.length === 0) {
             const segmentDistance = calculateDistance(positions[0], positions[1]);
 
-            const labelInstance = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
+            const labelInstance = this.annotationComponent._addLabel(positions, segmentDistance, "meter", {
                 id,
                 status,
                 interactive,
@@ -1105,7 +1094,7 @@ class MultiDistanceLeaflet extends MeasureModeLeaflet {
 
         // -- Create new label if not exists --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
+            labelInstance = this.annotationComponent._addLabel([labelPosition], formattedText, null, {
                 id,
                 interactive,
                 status,

@@ -1,17 +1,6 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { deconstructIdForMetadata, showCustomNotification } from "../../lib/helper/helper.mjs";
 import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
 
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("leaflet")
- */
 /** 
  * @typedef NormalizedEventData
  * @property {{lat: number, lng:number}} mapPoint - The map coordinates
@@ -22,20 +11,22 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
  * @property {object} layer - The Leaflet layer object
  */
 
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/LeafletInputHandler.mjs').LeafletInputHandler} LeafletInputHandler */
-/** @typedef {import('../../lib/interaction/LeafletDragHandler.mjs').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/LeafletMeasure.mjs').LeafletMeasure} LeafletMeasure */
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
 
 /** @typedef {{labels: L.tooltip[]}} InteractiveAnnotationsState */
-/** @typedef {{lat:number, lng:number}} Coordinate*/
+/** @typedef {import('../../lib/docs/types.mjs').LatLng} LatLng */
 
 
 class PointInfoLeaflet extends MeasureModeLeaflet {
-    /** @type {Coordinate} */
+    /** @type {LatLng} */
     #coordinate = null;
     /** @type {InteractiveAnnotationsState} */
     #interactiveAnnotations = {
@@ -43,7 +34,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
     };
     /** @type {MeasurementGroup} */
     measure = null;
-    /** @type {Coordinate[]} */
+    /** @type {LatLng[]} */
     coordsCache = [];
 
     /** @type {HTMLElement} */ // the overlay to show the coordinate info
@@ -74,17 +65,19 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      * @param {LeafletInputHandler} inputHandler 
      * @param {LeafletDragHandler} dragHandler 
      * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {LeafletMeasure} drawingHelper 
+     * @param {leafletAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PointInfoLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PointInfoLeaflet requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -92,9 +85,6 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
         /** @type {MeasurementGroup} */
         this.measure = this._createDefaultMeasure();
-
-        // Listen to right click event
-        // this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
     }
 
 
@@ -141,7 +131,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             interactive: true, // Make the point marker interactive
@@ -164,7 +154,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         this.measure.status = "completed";
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // set flag that the measure has ended
         this.flags.isMeasurementComplete = true;
@@ -314,7 +304,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
         // -- Create new label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, formattedText, null, {
+            labelInstance = this.annotationComponent._addLabel(positions, formattedText, null, {
                 id,
                 color,
                 status,

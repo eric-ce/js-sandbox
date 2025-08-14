@@ -1,4 +1,3 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.mjs";
 import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng } from "../../lib/helper/googleHelper.mjs";
@@ -17,23 +16,17 @@ import { areCoordinatesEqual, calculateArea, calculateMiddlePos, convertToLatLng
  * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
  * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
  */
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
- */
+/** @typedef {import('../../lib/docs/types.mjs').LatLng} LatLng */
 
-/** @typedef {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../../components/MeasureComponentBase').MeasureComponentBase} MeasureComponentBase */
-/** @typedef {import('../../lib/state/StateManager').StateManager} StateManager */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} DragHandler */
-/** @typedef {import('../../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} HighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').GoogleAnnotation} GoogleAnnotation */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
 
 
 /**
@@ -79,22 +72,24 @@ class PolygonGoogle extends MeasureModeGoogle {
     /**
      * Creates an instance of PolygonGoogle.
      * @param {GoogleMapsInputHandler} inputHandler
-     * @param {DragHandler} dragHandler
-     * @param {HighlightHandler} highlightHandler
-     * @param {MeasureComponentBase} drawingHelper
+     * @param {GoogleDragHandler} dragHandler
+     * @param {GoogleHighlightHandler} highlightHandler
+     * @param {GoogleAnnotation} annotationComponent
      * @param {StateManager} stateManager
-     * @param {EventEmitter} emitter
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PolygonGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PolygonGoogle requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app)
+        super("area", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -147,7 +142,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_area_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
@@ -176,7 +171,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure }); // Update the measure in the data pool
+        this.dataPool.updateOrAddMeasure({ ...this.measure }); // Update the measure in the data pool
     }
 
     /**
@@ -231,7 +226,7 @@ class PolygonGoogle extends MeasureModeGoogle {
 
 
         // -- Create final point --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: "#FF0000",
             id: `annotate_area_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
@@ -258,7 +253,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         this.measure.status = "completed"; // Update the measure status
 
         // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Set flags
         this.flags.isMeasurementComplete = true; // Set the measurement as complete
@@ -396,7 +391,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         // --- Create Polygon ---
         // This block is executed if the polygon instance is not found in the array
         if (!polygonInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
-            polygonInstance = this.drawingHelper._addPolygon(positions, {
+            polygonInstance = this.annotationComponent._addPolygon(positions, {
                 color,
                 id,
                 clickable,
@@ -471,7 +466,7 @@ class PolygonGoogle extends MeasureModeGoogle {
 
         // -- Create new label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, area, "squareMeter", {
+            labelInstance = this.annotationComponent._addLabel(positions, area, "squareMeter", {
                 id: `annotate_area_label_${this.measure.id}`,
                 status: status,
                 clickable,

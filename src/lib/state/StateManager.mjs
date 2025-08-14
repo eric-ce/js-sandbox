@@ -1,4 +1,3 @@
-import { Color } from "cesium";
 /**
  * Manages the global state for measurement tools.
  */
@@ -23,12 +22,16 @@ export class StateManager {
                 isDragMode: false,
                 isAddMode: false,
                 isToolsExpanded: false,
+                featureTasks: null,
             },
             element: {
                 contextMenu: null,
                 // helpTable: null,
                 // logTable: null,
                 // toolbar: null,
+            },
+            behavior: {
+                featureTasks: null, // Holds the current feature task state
             },
             // position: {
             //     logBox: { top: "280px", right: "0px" },
@@ -55,7 +58,22 @@ export class StateManager {
             },
         };
     }
-    // Active Mode Methods
+
+
+    /*************************************
+     * GET AND SET METHOD FOR PROPERTIES *
+     *************************************/
+
+    /***************
+     * ACTIVE MODE *
+     ***************/
+    /**
+     * Gets the ID of the currently active measurement mode.
+     * @returns {string | null} The active mode ID or null if inactive.
+     */
+    getActiveMode() {
+        return this._state.activeModeId;
+    }
     /**
      * Sets the currently active measurement mode ID.
      * Emits an 'activeModeChanged' event via the internal emitter.
@@ -66,23 +84,19 @@ export class StateManager {
         if (this._state.activeModeId !== newModeId) {
             const oldModeId = this._state.activeModeId;
             this._state.activeModeId = newModeId;
-            console.log(`StateManager: Active mode changed from '${oldModeId}' to '${newModeId}'`);
-            // Emit specific event that MeasureComponentBase will listen for
+            // console.log(`StateManager: Active mode changed from '${oldModeId}' to '${newModeId}'`);
+            // Emit specific event that AnnotationComponentBase will listen for
             this.emitter.emit('activeModeChanged', newModeId, oldModeId);
             // Emit generic state change as well
             this.emitter.emit('stateChange', { section: 'state', key: 'activeModeId', value: newModeId, oldValue: oldModeId });
         }
     }
 
-    /**
-     * Gets the ID of the currently active measurement mode.
-     * @returns {string | null} The active mode ID or null if inactive.
-     */
-    getActiveMode() {
-        return this._state.activeModeId;
-    }
 
-    // FLAG STATE METHODS
+
+    /********
+     * FLAG *
+     ********/
     getFlagState(key) {
         if (key) {
             if (key in this._state.flags) {
@@ -105,7 +119,10 @@ export class StateManager {
         }
     }
 
-    // BUTTON STATE METHODS
+
+    /**********
+     * BUTTON *
+     **********/
     getButtonState(key) {
         if (key) {
             if (key in this._state.button) {
@@ -127,6 +144,10 @@ export class StateManager {
         }
     }
 
+
+    /***********
+     * ELEMENT *
+     ***********/
     // ELEMENT STATE METHODS
     getElementState(key) {
         if (key) {
@@ -149,7 +170,35 @@ export class StateManager {
         }
     }
 
-    // // POSITION STATE METHODS
+
+    /************
+     * BEHAVIOR *
+     ************/
+    getBehaviorState(key) {
+        if (key) {
+            if (key in this._state.behavior) {
+                return this._state.behavior[key];
+            } else {
+                console.warn(`Property '${key}' does not exist in behavior state.`);
+                return undefined;
+            }
+        }
+        return { ...this._state.behavior };
+    }
+
+    setBehaviorState(key, value) {
+        if (key in this._state.behavior) {
+            this._state.behavior[key] = value;
+            this.emitter.emit("stateChange", { section: "behavior", key, value });
+        } else {
+            console.warn(`Property '${key}' does not exist in behavior state.`);
+        }
+    }
+
+
+    /************
+     * POSITION *
+     ************/
     // getPositionState(key) {
     //     if (key) {
     //         if (key in this._state.position) {
@@ -177,7 +226,10 @@ export class StateManager {
     //     }
     // }
 
-    // OVERLAY STATE METHODS
+
+    /***********
+     * OVERLAY *
+     ***********/
     getOverlayState(key) {
         if (key) {
             if (key in this._state.overlay) {
@@ -199,7 +251,9 @@ export class StateManager {
         }
     }
 
-    // COLOR STATE METHODS
+    /*********
+     * COLOR *
+     *********/
     getColorState(key) {
         if (key) {
             if (key in this._state.color) {
@@ -218,42 +272,6 @@ export class StateManager {
             this.emitter.emit("stateChange", { section: "color", key, value });
         } else {
             console.warn(`Property '${key}' does not exist in color state.`);
-        }
-    }
-
-    // --- NEW: Event Listener Proxy Methods ---
-    /**
-     * Registers an event listener directly on the StateManager's emitter
-     * for specific state manager events (like 'activeModeChanged').
-     * @param {string} eventName - The name of the event (e.g., 'activeModeChanged').
-     * @param {Function} listener - The callback function.
-     */
-    on(eventName, listener) {
-        this.emitter.on(eventName, listener);
-    }
-
-    /**
-     * Removes an event listener directly from the StateManager's emitter.
-     * @param {string} eventName - The name of the event.
-     * @param {Function} listener - The callback function to remove.
-     */
-    off(eventName, listener) {
-        this.emitter.off(eventName, listener);
-    }
-    // --- End Event Listener Proxy Methods ---
-
-    /**
-     * Helper to update help text content if the helpTable element exists.
-     * @param {string} text - The text to display.
-     */
-    updateHelpContent(text) {
-        const helpTable = this.getElementState('helpTable');
-        // Check if helpTable has an updateContent method (duck typing)
-        if (helpTable && typeof helpTable.updateContent === 'function') {
-            helpTable.updateContent(text);
-        } else if (helpTable) {
-            // Fallback if no method exists, just set textContent
-            helpTable.textContent = text;
         }
     }
 }

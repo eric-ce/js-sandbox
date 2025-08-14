@@ -12,34 +12,35 @@ import { MeasureModeLeaflet } from "./MeasureModeLeaflet.mjs";
  */
 
 // -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/LeafletInputHandler.mjs').LeafletInputHandler} LeafletInputHandler */
-/** @typedef {import('../../lib/interaction/LeafletDragHandler.mjs').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/LeafletMeasure.mjs').LeafletMeasure} LeafletMeasure */
-
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
 
 class PickerLeaflet extends MeasureModeLeaflet {
     /** @type {HTMLDivElement} - Overlay to display picked object information */
     #modeInfoOverlay = null;
 
     /**
-     * @param {LeafletInputHandler} inputHandler 
-     * @param {LeafletDragHandler} dragHandler 
-     * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {LeafletMeasure} drawingHelper 
-     * @param {StateManager} stateManager 
-     * @param {EventEmitter} emitter 
+     * @param {LeafletInputHandler} inputHandler
+     * @param {LeafletDragHandler} dragHandler
+     * @param {LeafletHighlightHandler} highlightHandler
+     * @param {LeafletAnnotation} annotationComponent
+     * @param {StateManager} stateManager
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PickerLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PickerLeaflet requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+        super("picker", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
     }
 
     /**
@@ -53,8 +54,8 @@ class PickerLeaflet extends MeasureModeLeaflet {
         this.inputHandler.off("mousemove", this.handleMouseMove);
 
         if (this.emitter) {
-            this.emitter.on("annotation-clicked-leaflet", this.handleLeftClick);
-            this.emitter.on("annotation-hovered-leaflet", this.handleMouseMove);
+            this.emitter.onLeafletHovered(this.handleMouseMove);
+            this.emitter.onLeafletClicked(this.handleLeftClick);
         }
     }
 
@@ -91,10 +92,10 @@ class PickerLeaflet extends MeasureModeLeaflet {
         if (!annotationType || annotationType !== 'annotate' || !pickedObjectMode || !pickedObjectType) return;
 
         // validate mode name with available modes
-        const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
+        const isMatchedMode = this.annotationComponent.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
         if (!isMatchedMode) return;
-        // Activate the relevant mode using the drawing helper
-        this.drawingHelper._activateMode(pickedObjectMode);
+        // Activate the relevant mode using the annotation component
+        this.annotationComponent._activateMode(pickedObjectMode);
 
         // Notify user about the activation
         showCustomNotification(`Activated ${capitalizeString(pickedObjectMode)} mode`, this._container);

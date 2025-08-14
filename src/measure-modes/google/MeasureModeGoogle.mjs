@@ -1,28 +1,19 @@
 import { MeasureModeBase } from "../MeasureModeBase.mjs";
 import { areCoordinatesEqual, calculateDistance, calculateMiddlePos, checkOverlayType, convertToLatLng } from "../../lib/helper/googleHelper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { createContextMenu, deconstructIdForMetadata, formatMeasurementValue, getNeighboringValues, showCustomNotification, updateContextMenu, hideContextMenu } from "../../lib/helper/helper.mjs";
 
 
-/** @typedef {import('../../lib/input/GoogleMapsInputHandler.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} GoogleDragHandler */
-/** @typedef {import('../../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/GoogleMeasure.mjs').GoogleMeasure} GoogleMeasure */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').GoogleAnnotation} GoogleAnnotation */
 
 /** @typedef {lat:number, lng:number | latitude: number, longitude: number, height: number} Coordinate */
 
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
- */
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
 /**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
@@ -45,16 +36,16 @@ class MeasureModeGoogle extends MeasureModeBase {
      * @param {GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
      * @param {GoogleDragHandler} dragHandler - The drag handler abstraction (can be null if not used).
      * @param {GoogleHighlightHandler} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {GoogleMeasure} drawingHelper - The map-specific drawing helper/manager.
+     * @param {GoogleAnnotation} annotationComponent - The map-specific annotation component
      * @param {StateManager} stateManager - The application state manager.
-     * @param {EventEmitter} emitter - The event emitter instance.
+     * @param {ShareEmitter} emitter - The event emitter instance.
+     * @param {object} app - The application instance.
+     * @param {DataPool} dataPool - The data pool instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
-        // Initialize context menu - default to hidden
-        this.contextMenu = createContextMenu(this._container, { show: false });
-        this.stateManager.setElementState("contextMenu", this.contextMenu);
+        this.contextMenu = this.stateManager.getElementState("contextMenu") || null; // Get the context menu from state manager
     }
 
 
@@ -66,7 +57,7 @@ class MeasureModeGoogle extends MeasureModeBase {
      * @override
      */
     _attachMapSpecificListeners() {
-        this.emitter.on('annotation-contextmenu-google', this._handleContextMenu);
+        this.emitter.onGoogleContextMenu(this._handleContextMenu);
     }
 
     /**
@@ -85,7 +76,7 @@ class MeasureModeGoogle extends MeasureModeBase {
      */
     handleRightClick() {
         // Hide the context menu
-        this.contextMenu && this._setContextMenuVisibility(false);
+        // this.contextMenu && this._setContextMenuVisibility(false);
     }
 
 
@@ -103,7 +94,7 @@ class MeasureModeGoogle extends MeasureModeBase {
             return null; // Return null if measureId is not a number
         }
 
-        const measure = dataPool.getMeasureById(measureId); // Get the measure data by ID
+        const measure = this.dataPool.getMeasureById(measureId); // Get the measure data by ID
         if (!measure) return; // If no measure found, exit the function
 
         // Convert cartographic degrees to Google coordinates
@@ -123,11 +114,11 @@ class MeasureModeGoogle extends MeasureModeBase {
         const latLng = { ...convertToLatLng(coordinate) };
         if (!latLng) return null;
 
-        const data = dataPool.getAllMeasures("cartographicDegrees");
+        const data = this.dataPool.getAllMeasures("cartographicDegrees");
         if (Array.isArray(data) && data.length === 0) return null;
 
         const measure = data.find(measure => {
-            if (measure.mapName !== this.mapName) return false; // Check if the measure belongs to the current map
+            if (!measure.renderedOn.includes(this.mapName)) return false; // Check if the measure belongs to the current map
             return measure.coordinates.some(coord => areCoordinatesEqual(coord, latLng));
         })
         if (!measure) return null;
@@ -193,7 +184,7 @@ class MeasureModeGoogle extends MeasureModeBase {
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
                 if (shouldRemove(item)) {
-                    this.drawingHelper[removeMethod](item);
+                    this.annotationComponent[removeMethod](item);
                 }
             }
         });
@@ -341,7 +332,7 @@ class MeasureModeGoogle extends MeasureModeBase {
 
         // AdvancedAnnotationModes handle its own context menu items
         if (advancedAnnotationModes.includes(overlayMode)) {
-            const modeInstance = this.drawingHelper.getModeInstanceByName(overlayMode);
+            const modeInstance = this.annotationComponent.getModeInstanceByName(overlayMode);
             if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
             // Let the mode instance handle its own context menu items
             const itemList = modeInstance._getContextMenuAdditionalItems(overlay);
@@ -365,22 +356,22 @@ class MeasureModeGoogle extends MeasureModeBase {
 
         const measureId = Number(overlay.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
 
-        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
+        const { points, polylines, labels, polygons } = this.annotationComponent._getRelatedOverlaysByMeasureId(measureId);
         points.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point marker
+            this.annotationComponent._removePointMarker(point); // Remove the point marker
         });
         labels.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label
+            this.annotationComponent._removeLabel(label); // Remove the label
         });
         polylines.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline
+            this.annotationComponent._removePolyline(polyline); // Remove the polyline
         });
         polygons.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon
+            this.annotationComponent._removePolygon(polygon); // Remove the polygon
         });
 
         // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
+        this.dataPool.removeMeasureById(measureId);
 
         // show notification
         showCustomNotification(`removed overlay set, id: ${measureId}`, this._container)
@@ -426,7 +417,7 @@ class MeasureModeGoogle extends MeasureModeBase {
         if (typeof modeName !== "string") return null;
 
         // Check if the mode is already active
-        const currentActiveModeInstance = this.drawingHelper.getActiveModeInstance();
+        const currentActiveModeInstance = this.annotationComponent.getActiveModeInstance();
         if (!currentActiveModeInstance) return null;
 
         const currentActiveModeName = currentActiveModeInstance.mode;
@@ -437,7 +428,7 @@ class MeasureModeGoogle extends MeasureModeBase {
         if (isAlreadyInMode) {
             return currentActiveModeInstance; // Return the current active mode instance
         } else {  // Otherwise, activate the mode
-            return this.drawingHelper._activateMode(modeName) || null;
+            return this.annotationComponent._activateMode(modeName) || null;
         }
     }
 
@@ -457,10 +448,13 @@ class MeasureModeGoogle extends MeasureModeBase {
     _updateContextMenu(container, position, itemOptions = [], options = {}) {
         let contextMenu = this.stateManager.getElementState("contextMenu");
 
-        if (!contextMenu) {
-            contextMenu = createContextMenu(container, options);
-            this.stateManager.setElementState("contextMenu", contextMenu);
+        if (contextMenu) {
+            contextMenu.remove();
+            this.stateManager.setElementState("contextMenu", null); // Clear the previous context menu state
         }
+
+        contextMenu = createContextMenu(container, options);
+        this.stateManager.setElementState("contextMenu", contextMenu);
 
         updateContextMenu(contextMenu, position, itemOptions);
         return contextMenu;

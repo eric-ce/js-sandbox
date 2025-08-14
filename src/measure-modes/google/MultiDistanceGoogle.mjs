@@ -1,38 +1,31 @@
-import dataPool from "../../lib/data/DataPool.mjs";
 import { calculateDistance, areCoordinatesEqual, checkOverlayType, convertToLatLng, } from "../../lib/helper/googleHelper.mjs";
 import { getNeighboringValues, showCustomNotification, formatMeasurementValue } from "../../lib/helper/helper.mjs";
 import { MeasureModeGoogle } from "./MeasureModeGoogle.mjs";
-
-/** @typedef {{lat: number, lng: number}} LatLng */
 
 /**
  * @typedef InteractiveAnnotationsState
  * @property {google.maps.Polyline[]} polylines
  * @property {google.maps.OverlayView[]} labels
- */
+*/
 /**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
  * @property {{lat:number, lng:number}} mapPoint - The point on the map where the event occurred
  * @property {{x:number, y:number}} screenPoint - The screen coordinates of the event
- */
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("google")
- */
+*/
 
-/** @typedef {import('../../lib/input/GoogleMapsInputHandler').GoogleMapsInputHandler} GoogleMapsInputHandler */
-/** @typedef {import('../../components/MeasureComponentBase').MeasureComponentBase} MeasureComponentBase */
-/** @typedef {import('../../lib/state/StateManager').StateManager} StateManager */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/interaction/GoogleDragHandler.mjs').GoogleDragHandler} DragHandler */
-/** @typedef {import('../../lib/interaction/GoogleHighlightHandler.mjs').GoogleHighlightHandler} HighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LatLng} LatLng */
+
+/** @typedef {import('../../lib/docs/types.mjs').GoogleMapsInputHandler} GoogleMapsInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleDragHandler} GoogleDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').GoogleHighlightHandler} GoogleHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').GoogleAnnotation} GoogleAnnotation */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
 
 /**
  * Handles multiple distance measurement specifically for Google Map.
@@ -101,22 +94,24 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
     /**
      * Creates an instance of MultiDistanceGoogle.
      * @param {GoogleMapsInputHandler} inputHandler
-     * @param {DragHandler} dragHandler
-     * @param {HighlightHandler} highlightHandler
-     * @param {MeasureComponentBase} drawingHelper
+     * @param {GoogleDragHandler} dragHandler
+     * @param {GoogleHighlightHandler} highlightHandler
+     * @param {GoogleAnnotation} annotationComponent
      * @param {StateManager} stateManager
-     * @param {EventEmitter} emitter
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("MultiDistanceGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("MultiDistanceGoogle requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app)
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -189,7 +184,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
@@ -206,7 +201,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         }
 
         // -- Update dataPool --
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         if (this.coordsCache.length > 1) {
             // Determine the indices of the previous and current points based on the measurement direction
@@ -251,7 +246,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             }
 
             // Update dataPool with the measure data
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
         }
     }
 
@@ -332,7 +327,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             }
 
             // Create last point
-            const lastPoint = this.drawingHelper._addPointMarker(this.#coordinate, {
+            const lastPoint = this.annotationComponent._addPointMarker(this.#coordinate, {
                 color: this.stateManager.getColorState("pointColor"),
                 id: `annotate_${this.mode}_point_${this.measure.id}`,
                 clickable: true,
@@ -398,7 +393,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         this.measure.status = "completed";
 
         // Update to data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Reset to clean up after finish
         this.resetValuesModeSpecific();
@@ -451,7 +446,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         // -- Handle Measure Data --
         // Get the measure data from the data pool
-        const measureData = dataPool.getMeasureById(measureId);
+        const measureData = this.dataPool.getMeasureById(measureId);
         // Only completed measures can be resumed
         if (!measureData || measureData.status !== "completed") {
             return null;
@@ -514,7 +509,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         // if (!userConfirmation) return;
 
         // -- Remove point --
-        this.drawingHelper._removePointMarker(point); // Remove the point marker
+        this.annotationComponent._removePointMarker(point); // Remove the point marker
 
         // -- Set Measure and Distances --
         // Find the measure data by ID
@@ -538,10 +533,10 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         // -- Find and Remove related annotations --
         // remove related lines
-        const polylines = this.drawingHelper._getLineByPositions([pointPositions[0]]);
+        const polylines = this.annotationComponent._getLineByPositions([pointPositions[0]]);
         if (!Array.isArray(polylines) || polylines.length === 0) return; // If no lines are found, exit
         polylines.forEach(line => {
-            this.drawingHelper._removePolyline(line); // Remove the line
+            this.annotationComponent._removePolyline(line); // Remove the line
 
             const linePositions = line?.feature?.properties?.positions;
             if (!Array.isArray(linePositions) || linePositions.length === 0) return; // If no line positions are found, exit
@@ -558,7 +553,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         });
 
         // remove related labels
-        const labelMarkers = this.drawingHelper._getLabelByPosition([pointPositions[0]]);
+        const labelMarkers = this.annotationComponent._getLabelByPosition([pointPositions[0]]);
         if (!Array.isArray(labelMarkers) || labelMarkers.length === 0) return; // If no labels are found, exit
         labelMarkers.forEach(label => {
             // Safety check: assume moving or total labels should not be removed here
@@ -567,7 +562,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             this.#interactiveAnnotations.totalLabels = isTotalLabel ? [label] : [];
             if (isMovingLabel || isTotalLabel) return;
 
-            this.drawingHelper._removeLabel(label); // Remove the label
+            this.annotationComponent._removeLabel(label); // Remove the label
 
             // Case: during measuring, remove the label from this.#interactiveAnnotations
             if (this.#interactiveAnnotations.labels.length === 0) return; // If there are no labels, exit
@@ -690,7 +685,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         }
         this.measure.coordinates = positions.map(pos => ({ ...pos })); // Update the measure with the new coordinates
         // Update dataPool with the measure data
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // -- Update current measure variables --
         if (isMeasuring) {
@@ -710,15 +705,15 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         const lastPosition = positions[0];
 
         // Remove the remaining point and labels
-        const lastPoint = this.drawingHelper._getPointByPosition(lastPosition);
-        const lastLabels = this.drawingHelper._getLabelByPosition([lastPosition]);
+        const lastPoint = this.annotationComponent._getPointByPosition(lastPosition);
+        const lastLabels = this.annotationComponent._getLabelByPosition([lastPosition]);
 
         if (lastPoint) {
-            this.drawingHelper._removePointMarker(lastPoint); // Remove the last point marker
+            this.annotationComponent._removePointMarker(lastPoint); // Remove the last point marker
         }
         if (Array.isArray(lastLabels) && lastLabels.length > 0) {
             lastLabels.forEach(label => {
-                this.drawingHelper._removeLabel(label); // Remove the label marker
+                this.annotationComponent._removeLabel(label); // Remove the label marker
             });
         }
         // -- Handle Measure Data --
@@ -726,7 +721,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         if (isNaN(measureId)) return; // If the measure ID is not a number, exit
         this.coordsCache = []; // Clear the coordsCache
         this.#distances = []; // Clear the distances cache
-        dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
+        this.dataPool.removeMeasureById(measureId); // Remove the measure from the data pool
 
         // Show notification
         showCustomNotification(`Last point removed from measure ${measureId}`, this._container);
@@ -967,7 +962,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             if (isNested) {
                 // remove all lines in the lines array
                 polylinesArray.forEach(lineToRemove => {
-                    this.drawingHelper._removePolyline(lineToRemove);
+                    this.annotationComponent._removePolyline(lineToRemove);
                 });
                 polylinesArray.length = 0; // Clear the array
             }
@@ -977,7 +972,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
                     const line = polylinesArray[i];
                     // Ensure line exists and has a status property before checking
                     if (line && line?.feature?.properties?.status === "moving") {
-                        this.drawingHelper._removePolyline(line);
+                        this.annotationComponent._removePolyline(line);
                         polylinesArray.splice(i, 1);
                     }
                 }
@@ -987,7 +982,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         if (isNested) {
             // -- Create multiple polylines for nested positions --
             positions.forEach(posSet => {
-                const newLineInstance = this.drawingHelper._addPolyline(posSet, {
+                const newLineInstance = this.annotationComponent._addPolyline(posSet, {
                     color,
                     id,
                     status,
@@ -1001,7 +996,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
             })
         } else {
             // -- Create a new single polyline --
-            const newLineInstance = this.drawingHelper._addPolyline(positions, {
+            const newLineInstance = this.annotationComponent._addPolyline(positions, {
                 color,
                 id,
                 status,
@@ -1086,7 +1081,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
         if (labelInstances.length === 0) {
             const segmentDistance = calculateDistance(positions[0], positions[1]);
 
-            const labelInstance = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
+            const labelInstance = this.annotationComponent._addLabel(positions, segmentDistance, "meter", {
                 id: `annotate_${this.mode}_label_${this.measure.id}`,
                 clickable,
                 status,
@@ -1159,7 +1154,7 @@ class MultiDistanceGoogle extends MeasureModeGoogle {
 
         // -- Create new label if not exists --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
+            labelInstance = this.annotationComponent._addLabel([labelPosition], formattedText, null, {
                 clickable,
                 id,
                 status,

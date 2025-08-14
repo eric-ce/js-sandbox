@@ -1,26 +1,17 @@
 import { MeasureModeBase } from "../MeasureModeBase.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { areCoordinatesEqual, calculateDistance, calculateMiddlePos, convertToLatLng } from "../../lib/helper/leafletHelper.mjs";
-import { deconstructIdForMetadata, formatMeasurementValue, showCustomNotification } from "../../lib/helper/helper.mjs";
+import { createContextMenu, deconstructIdForMetadata, formatMeasurementValue, hideContextMenu, showCustomNotification, updateContextMenu } from "../../lib/helper/helper.mjs";
 
-/**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("leaflet")
- */
 
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/LeafletInputHandler.mjs').LeafletInputHandler} LeafletInputHandler */
-/** @typedef {import('../../lib/interaction/LeafletDragHandler.mjs').LeafletDragHandler} LeafletDragHandler */
-/** @typedef {import('../../lib/interaction/LeafletHighlightHandler.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/LeafletMeasure.mjs').LeafletMeasure} LeafletMeasure */
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
+
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletInputHandler} LeafletInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletDragHandler} LeafletDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').LeafletHighlightHandler} LeafletHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').LeafletAnnotation} LeafletAnnotation */
 
 /** @typedef {lat:number, lng:number | latitude: number, longitude: number, height: number} Coordinate */
 
@@ -33,18 +24,20 @@ class MeasureModeLeaflet extends MeasureModeBase {
     contextMenu;
 
     /**
-     * @param {string} modeName - The name of the mode 
-     * @param {LeafletInputHandler} inputHandler 
-     * @param {LeafletDragHandler} dragHandler 
-     * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {LeafletMeasure} drawingHelper 
-     * @param {StateManager} stateManager 
-     * @param {EventEmitter} emitter 
+     * @param {string} modeName - The name of the mode
+     * @param {LeafletInputHandler} inputHandler
+     * @param {LeafletDragHandler} dragHandler
+     * @param {LeafletHighlightHandler} highlightHandler
+     * @param {LeafletAnnotation} annotationComponent
+     * @param {StateManager} stateManager
+     * @param {ShareEmitter} emitter
+     * @param {object} app
+     * @param {DataPool} dataPool
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
-        this.contextMenu = this._setupContextMenu(this._container, { show: false });
+        this.contextMenu = this.stateManager.getElementState("contextMenu") || null; // Get the context menu from state manager
     }
 
 
@@ -56,7 +49,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
      * @override
      */
     _attachMapSpecificListeners() {
-        this.emitter.on('annotation-contextmenu-leaflet', this._handleContextMenu);
+        this.emitter.onLeafletContextMenu(this._handleContextMenu);
     }
 
     /**
@@ -65,6 +58,16 @@ class MeasureModeLeaflet extends MeasureModeBase {
      */
     _removeMapSpecificListeners() {
         this.emitter.off('annotation-contextmenu-leaflet', this._handleContextMenu);
+    }
+
+    /**
+     * Handle right click on the map.
+     * @override
+     */
+    async handleRightClick() {
+        // Hide the context menu
+        // this.contextMenu && this._setContextMenuVisibility(false);
+        console.log("overrided in leaflet")
     }
 
 
@@ -82,7 +85,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
             return null; // Return null if measureId is not a number
         }
 
-        const measure = dataPool.getMeasureById(measureId); // Get the measure data by ID
+        const measure = this.dataPool.getMeasureById(measureId); // Get the measure data by ID
         if (!measure) return null; // If no measure found, exit the function
 
         // Convert cartographic degrees to Google coordinates
@@ -102,11 +105,11 @@ class MeasureModeLeaflet extends MeasureModeBase {
         const latLng = { ...convertToLatLng(coordinate) };
         if (!latLng) return null;
 
-        const data = dataPool.getAllMeasures("cartographicDegrees");
+        const data = this.dataPool.getAllMeasures("cartographicDegrees");
         if (Array.isArray(data) && data.length === 0) return null;
 
         const measure = data.find(measure => {
-            if (measure.mapName !== this.mapName) return false; // Check if the measure belongs to the current map
+            if (!measure.renderedOn.includes(this.mapName)) return false; // Check if the measure belongs to the current map
             return measure.coordinates.some(coord => areCoordinatesEqual(coord, latLng));
         })
         if (!measure) return null;
@@ -123,7 +126,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
     removePendingAnnotations() {
         const targetId = `annotate_${this.mode}`;
 
-        // Get all layer groups from the drawing helper
+        // Get all layer groups from the annotation component
         const collections = [
             this.pointCollection,
             this.labelCollection,
@@ -186,7 +189,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
             // For non-nested in MultiDistance (move), remove only the 'moving' line.
             if (isNested || this.mode === 'distance') {
                 // remove all lines in the lines array
-                polylinesArray.forEach(lineToRemove => this.drawingHelper._removePolyline(lineToRemove));
+                polylinesArray.forEach(lineToRemove => this.annotationComponent._removePolyline(lineToRemove));
                 polylinesArray.length = 0; // Clear the array
             }
             // Case: remove lines that has status "moving"
@@ -195,7 +198,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
                     const line = polylinesArray[i];
                     // Ensure line exists and has a status property before checking
                     if (line && line?.feature?.properties?.status === "moving") {
-                        this.drawingHelper._removePolyline(line);
+                        this.annotationComponent._removePolyline(line);
                         polylinesArray.splice(i, 1);
                     }
                 }
@@ -206,7 +209,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         if (isNested) {
             // -- Create multiple polylines for nested positions --
             positions.forEach(posSet => {
-                const newLineInstance = this.drawingHelper._addPolyline(posSet, {
+                const newLineInstance = this.annotationComponent._addPolyline(posSet, {
                     color,
                     id, // Consider making ID more specific if needed (e.g., adding status)
                     interactive,
@@ -220,7 +223,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
             })
         } else {
             // -- Create a new single polyline --
-            const newLineInstance = this.drawingHelper._addPolyline(positions, {
+            const newLineInstance = this.annotationComponent._addPolyline(positions, {
                 color,
                 id, // Consider making ID more specific if needed (e.g., adding status)
                 interactive,
@@ -271,8 +274,8 @@ class MeasureModeLeaflet extends MeasureModeBase {
         const oldInteractiveState = label.options.interactive;
         if (oldInteractiveState !== interactive) {
             label.options.interactive = interactive;
-            if (typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                this.drawingHelper._refreshLayerInteractivity(label);
+            if (typeof this.annotationComponent._refreshLayerInteractivity === 'function') {
+                this.annotationComponent._refreshLayerInteractivity(label);
             }
         }
 
@@ -311,9 +314,9 @@ class MeasureModeLeaflet extends MeasureModeBase {
             }
 
             // Make the item interactive
-            if (item.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
+            if (item.options.interactive === false && typeof this.annotationComponent._refreshLayerInteractivity === 'function') {
                 item.options.interactive = true;
-                this.drawingHelper._refreshLayerInteractivity(item);
+                this.annotationComponent._refreshLayerInteractivity(item);
             }
         });
     }
@@ -374,7 +377,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
 
         // AdvancedAnnotationModes handle its own context menu items
         if (advancedAnnotationModes.includes(layerMode)) {
-            const modeInstance = this.drawingHelper.getModeInstanceByName(layerMode);
+            const modeInstance = this.annotationComponent.getModeInstanceByName(layerMode);
             if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
             // Let the mode instance handle its own context menu items
             const itemList = modeInstance._getContextMenuAdditionalItems(layer);
@@ -400,22 +403,22 @@ class MeasureModeLeaflet extends MeasureModeBase {
         // }
 
         const measureId = Number(layer.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
-        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
+        const { points, polylines, labels, polygons } = this.annotationComponent._getRelatedOverlaysByMeasureId(measureId);
         points.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point marker
+            this.annotationComponent._removePointMarker(point); // Remove the point marker
         });
         labels.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label
+            this.annotationComponent._removeLabel(label); // Remove the label
         });
         polylines.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline
+            this.annotationComponent._removePolyline(polyline); // Remove the polyline
         });
         polygons.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon
+            this.annotationComponent._removePolygon(polygon); // Remove the polygon
         });
 
         // remove the measure data from dataPool
-        dataPool.removeMeasureById(measureId);
+        this.dataPool.removeMeasureById(measureId);
 
         // Refresh the map dragging, to solve issue the middle click keep dragging
         this._refreshMapDrag();
@@ -459,7 +462,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         if (typeof modeName !== "string") return null;
 
         // Check if the mode is already active
-        const currentActiveModeInstance = this.drawingHelper.getActiveModeInstance();
+        const currentActiveModeInstance = this.annotationComponent.getActiveModeInstance();
         if (!currentActiveModeInstance) return null;
 
         const currentActiveModeName = currentActiveModeInstance.mode;
@@ -470,7 +473,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         if (isAlreadyInMode) {
             return currentActiveModeInstance; // Return the current active mode instance
         } else {  // Otherwise, activate the mode
-            return this.drawingHelper._activateMode(modeName) || null;
+            return this.annotationComponent._activateMode(modeName) || null;
         }
     }
 
@@ -478,42 +481,6 @@ class MeasureModeLeaflet extends MeasureModeBase {
     /*************************
      * CONTEXT MENU SPECIFIC *
      *************************/
-    _setupContextMenu(container, options = {}) {
-        const {
-            show = true,
-        } = options;
-
-        if (!container) {
-            console.warn("Container is not provided for context menu setup.");
-            return;
-        }
-
-        // Create the context menu element
-        this.contextMenu = document.createElement("div");
-        this.contextMenu.classList.add("an-context-menu");
-
-        // Apply styles directly to the element
-        Object.assign(this.contextMenu.style, {
-            background: "#fefefe",
-            border: "1px solid #ddd",
-            borderRadius: "4px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            padding: "4px 0",
-            minWidth: "120px",
-            position: "absolute",
-            zIndex: "1000"
-        });
-
-        // Append the context menu to the specified container
-        container.appendChild(this.contextMenu);
-
-        // Store to the state manager for later use
-        this.stateManager.setElementState("contextMenu", this.contextMenu);
-        this._setContextMenuVisibility(show); // Set initial visibility
-
-        return this.contextMenu;
-    }
-
     /**
      * Update the context menu with new items and position. Fallbacks to setup context menu if not exists.
      * @param {HTMLElement} container - the map container where the context menu should be displayed
@@ -526,88 +493,24 @@ class MeasureModeLeaflet extends MeasureModeBase {
     _updateContextMenu(container, position, itemOptions = [], options = {}) {
         let contextMenu = this.stateManager.getElementState("contextMenu");
 
-        if (!contextMenu) {
-            contextMenu = this._setupContextMenu(container, options);
+        if (contextMenu) {
+            contextMenu.remove();
+            this.stateManager.setElementState("contextMenu", null); // Clear the previous context menu state
         }
 
-        if (!contextMenu || !position.x || !position.y) return;
+        contextMenu = createContextMenu(container, options);
+        this.stateManager.setElementState("contextMenu", contextMenu);
 
-        this._setContextMenuVisibility(true); // Ensure the context menu is visible
-
-        // Update the position of the context menu
-        contextMenu.style.left = `${position.x}px`;
-        contextMenu.style.top = `${position.y}px`;
-
-        // Clear ul element if it exists
-        const existingList = contextMenu.querySelector("ul");
-        if (existingList) {
-            existingList.remove();
-        }
-
-        // list of menu items using ul li 
-        const menuList = document.createElement("ul");
-        menuList.className = "an-context-menu-list";
-        Object.assign(menuList.style, {
-            listStyle: "none",
-            margin: "0",
-            padding: "0"
-        });
-
-        menuList.innerHTML = ""; // Clear existing items
-        // Add new items
-        itemOptions.forEach(item => {
-            const menuItem = document.createElement("li");
-            menuItem.classList.add("an-context-menu-list-item");
-            menuItem.textContent = item.text;
-
-            Object.assign(menuItem.style, {
-                padding: "8px 12px",
-                cursor: "pointer",
-                borderBottom: "1px solid #eee",
-                transition: "background-color 0.3s ease"
-            });
-
-            // Add hover effects
-            menuItem.addEventListener("mouseenter", () => {
-                menuItem.style.backgroundColor = "#ece5e5";
-            });
-            menuItem.addEventListener("mouseleave", () => {
-                menuItem.style.backgroundColor = "transparent";
-            });
-
-            // Click event handler
-            menuItem.addEventListener("click", event => {
-                // Prevent default behavior
-                event.stopPropagation();
-                event.preventDefault();
-                // Call the item's event function
-                item.event(event);
-                this._setContextMenuVisibility(false);
-            });
-
-            menuList.appendChild(menuItem);
-        });
-
-        // Remove border from last item
-        if (menuList.lastElementChild) {
-            menuList.lastElementChild.style.borderBottom = "none";
-        }
-
-        // Append the menu list to the context menu
-        contextMenu.appendChild(menuList);
-
-        // Add a one-time listener to close the menu on the next click anywhere
-        setTimeout(() => document.addEventListener('click', () => this._setContextMenuVisibility(false), { once: true }), 0);
-
-        return contextMenu || null;
+        updateContextMenu(contextMenu, position, itemOptions);
+        return contextMenu;
     }
 
     _setContextMenuVisibility(visible) {
         const contextMenu = this.stateManager.getElementState("contextMenu");
-        if (contextMenu) {
-            contextMenu.style.display = visible ? 'block' : 'none';
+        if (visible) {
+            if (contextMenu) contextMenu.style.display = 'block';
         } else {
-            console.warn("Context menu is not initialized.");
+            hideContextMenu(contextMenu);
         }
     }
 

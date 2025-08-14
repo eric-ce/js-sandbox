@@ -3,7 +3,7 @@ import { Color } from "cesium";
 
 
 /** @typedef {import('cesium').Primitive} Primitive */
-
+/** @typedef {import('cesium').Viewer} Viewer */
 /**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
@@ -35,10 +35,13 @@ class CesiumHighlightHandler {
     currentlyHoveredPrimitive = null;
     currentHoverType = null; // Stores the type of the currently hovered primitive
 
-    // TODO: Features:
-    // [] 1. left click to select primitive, and set relevant data;
-    // [x] 2. mouse move over to highlight primitive, mouse out to unhighlight primitive
-
+    /**
+     * 
+     * @param {Viewer} map 
+     * @param {CesiumInputHandler} inputHandler 
+     * @param {ShareEmitter} emitter 
+     * @param {StateManager} stateManager 
+     */
     constructor(map, inputHandler, emitter, stateManager) {
         this.map = map;
         this.inputHandler = inputHandler;
@@ -131,24 +134,24 @@ class CesiumHighlightHandler {
         }
     }
 
-    /**
-     * Handle left click to select to highlight the primitive
-     * @param {NormalizedEventData} eventData - The event data from the input handler.
-     * @returns {Promise<void>}
-     */
-    handleClickToSelect = (eventData) => {
-        // -- Conditions to PREVENT highlight --
-        if (this.activeModeInstance.flags?.isDragMode ||
-            this.activeModeInstance.flags?.isAddMode ||
-            (!this.activeModeInstance.flags?.isMeasurementComplete && this.activeModeInstance?.coordsCache?.length > 0)
-        ) return;
+    // /**
+    //  * Handle left click to select to highlight the primitive
+    //  * @param {NormalizedEventData} eventData - The event data from the input handler.
+    //  * @returns {Promise<void>}
+    //  */
+    // handleClickToSelect = (eventData) => {
+    //     // -- Conditions to PREVENT highlight --
+    //     if (this.activeModeInstance.flags?.isDragMode ||
+    //         this.activeModeInstance.flags?.isAddMode ||
+    //         (!this.activeModeInstance.flags?.isMeasurementComplete && this.activeModeInstance?.coordsCache?.length > 0)
+    //     ) return;
 
-        // TODO: Implement selection logic using this.currentlySelectedPrimitive,
-        // this.currentSelectType, this.currentSelectData, and _updatePrimitiveAppearance.
-        // Remember to handle unselecting the old primitive and selecting the new one.
-        // If a hovered item is clicked, it should become selected, and hover style might be overridden by select style.
-        console.log("handleClickToSelect - To be implemented");
-    }
+    //     // TODO: Implement selection logic using this.currentlySelectedPrimitive,
+    //     // this.currentSelectType, this.currentSelectData, and _updatePrimitiveAppearance.
+    //     // Remember to handle unselecting the old primitive and selecting the new one.
+    //     // If a hovered item is clicked, it should become selected, and hover style might be overridden by select style.
+    //     console.log("handleClickToSelect - To be implemented");
+    // }
 
     /**
      * Ensure the original style of the primitive is stored in the map.

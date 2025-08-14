@@ -3,7 +3,6 @@ import {
     defined,
     SceneTransforms,
 } from "cesium";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 import { capitalizeString, showCustomNotification } from "../../lib/helper/helper.mjs";
 import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.mjs";
@@ -23,13 +22,13 @@ import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.mjs";
  */
 
 // -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/CesiumMeasure.mjs').CesiumMeasure} CesiumMeasure */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').CesiumAnnotation} CesiumAnnotation */
 
 
 /**
@@ -38,10 +37,6 @@ import { getRankedPickedObjectType } from "../../lib/helper/cesiumHelper.mjs";
  */
 class PickerCesium extends MeasureModeCesium {
     modeName = "picker";
-
-    // -- Public fields: dependencies --
-    /** @type {any} The Cesium package instance. */
-    cesiumPkg;
 
     /** @type {HTMLDivElement} - The overlay element for mode selection. */
     #modeInfoOverlay;
@@ -52,20 +47,20 @@ class PickerCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumMeasure} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
+     * @param {object} app - The application instance
+     * @param {DataPool} dataPool - The data pool instance
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("PickerCesium requires inputHandler, drawingHelper (with map), stateManager, emitter,and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PickerCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
-
-        this.cesiumPkg = cesiumPkg;
+        super("picker", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
     }
 
 
@@ -95,11 +90,11 @@ class PickerCesium extends MeasureModeCesium {
         const pickedObjectMode = pickedObject.id.split('_')[1];
 
         // validate mode name with available modes
-        const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
+        const isMatchedMode = this.annotationComponent.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
         if (!isMatchedMode) return;
 
-        // Activate the relevant mode using the drawing helper
-        this.drawingHelper._activateMode(pickedObjectMode);
+        // Activate the relevant mode using the annotation component
+        this.annotationComponent._activateMode(pickedObjectMode);
 
         // Notify user about the activation
         showCustomNotification(`Activated ${capitalizeString(pickedObjectMode)} mode`, this._container)
@@ -134,7 +129,7 @@ class PickerCesium extends MeasureModeCesium {
 
         const pickedObjectId = pickedObject.id;
         const [annotation, pickedObjectMode] = pickedObjectId.split('_');
-        const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
+        const isMatchedMode = this.annotationComponent.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
         if (annotation !== 'annotate' || !isMatchedMode) {
             this._hideModeOverlay();
             return;

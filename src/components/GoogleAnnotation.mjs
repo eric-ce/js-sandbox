@@ -8,7 +8,7 @@ import {
     areCoordinatesEqual
 } from "../lib/helper/googleHelper.mjs";
 import { deconstructIdForMetadata } from "../lib/helper/helper.mjs";
-import { MeasureComponentBase } from "./MeasureComponentBase.mjs";
+import { AnnotationComponentBase } from "./AnnotationComponentBase.mjs";
 
 
 /** @typedef {google.maps.Marker} Marker */
@@ -17,10 +17,11 @@ import { MeasureComponentBase } from "./MeasureComponentBase.mjs";
 /** @typedef {google.maps.marker.AdvancedMarkerElement} AdvancedMarkerElement */
 
 /**
- * GoogleMeasure class for managing Google Maps measure components.
- * This class extends the MeasureComponentBase and provides methods to add, remove, and manage map graphics such as points, polylines, polygons, and labels.
+ * GoogleAnnotation class for managing Google Maps annotation components.
+ * This class extends the AnnotationComponentBase and provides methods to add, remove, and manage map graphics such as points, polylines, polygons, and labels.
+ * @extends {AnnotationComponentBase}
  */
-export default class GoogleMeasure extends MeasureComponentBase {
+export default class GoogleAnnotation extends AnnotationComponentBase {
     /**@type {Marker[]} */
     #pointCollection = []; // Array to store points
     /**@type {google.maps.Polyline[]} */
@@ -271,7 +272,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             return point;
         } catch (error) {
-            console.error("GoogleMeasure: Error in _addPointMarker:", error);
+            console.error("GoogleAnnotation: Error in _addPointMarker:", error);
             return null;
         }
     }
@@ -345,7 +346,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             return polyline;
         } catch (error) {
-            console.error("GoogleMeasure: Error in _addPolyline:", error);
+            console.error("GoogleAnnotation: Error in _addPolyline:", error);
             return null;
         }
     }
@@ -427,7 +428,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             return label;
         } catch (error) {
-            console.error("GoogleMeasure: Error in _addLabel:", error);
+            console.error("GoogleAnnotation: Error in _addLabel:", error);
             return null;
         }
     }
@@ -514,7 +515,7 @@ export default class GoogleMeasure extends MeasureComponentBase {
 
             return polygon;
         } catch (error) {
-            console.error("GoogleMeasure: Error in _addPolygon:", error);
+            console.error("GoogleAnnotation: Error in _addPolygon:", error);
             return null;
         }
     }
@@ -786,4 +787,4 @@ export default class GoogleMeasure extends MeasureComponentBase {
     }
 }
 
-customElements.define("google-measure", GoogleMeasure);
+customElements.define("google-annotation", GoogleAnnotation);

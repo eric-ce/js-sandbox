@@ -13,11 +13,11 @@ import {
     updatePointerOverlay,
 } from "../../lib/helper/cesiumHelper.mjs";
 import { deconstructIdForMetadata, formatMeasurementValue } from "../../lib/helper/helper.mjs";
-import dataPool from "../../lib/data/DataPool.mjs";
 import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 
 // -- Cesium types --
 /** @typedef {import('cesium').Primitive} Primitive */
+/** @typedef {import('cesium').PointPrimitive} PointPrimitive */
 /** @typedef {import('cesium').Label} Label*/
 /** @typedef {import('cesium').Cartesian3} Cartesian3 */
 /** @typedef {import('cesium').Cartesian2} Cartesian2 */
@@ -25,31 +25,22 @@ import { MeasureModeCesium } from "./MeasureModeCesium.mjs";
 // -- Data types -- 
 /** @typedef {{points: PointPrimitive[], polylines: Primitive[], labels: Label[]}} InteractiveAnnotationsState */
 /**
- * @typedef MeasurementGroup
- * @property {string} id - Unique identifier for the measurement
- * @property {string} mode - Measurement mode (e.g., "distance")
- * @property {{latitude: number, longitude: number, height?: number}[]} coordinates - Points that define the measurement
- * @property {'pending'|'completed'} status - Current state of the measurement
- * @property {Array<{latitude: number, longitude: number, height?: number}|number|string>} _records - Historical coordinate records
- * @property {{latitude: number, longitude: number, height?: number}[]} interpolatedPoints - Calculated points along measurement path
- * @property {'cesium'|'google'|'leaflet'} mapName - Map provider name ("cesium")
- */
-/**
  * @typedef NormalizedEventData
  * @property {object} domEvent - The original DOM event
  * @property {Cartesian3} mapPoint - The point on the map where the event occurred
  * @property {any[]} pickedFeature - The feature that was picked at the event location
  * @property {Cartesian2} screenPoint - The screen coordinates of the event
  */
+/** @typedef {import('../../lib/docs/types.mjs').MeasurementGroup} MeasurementGroup */
 
 // -- Dependencies types --
-/** @typedef {import('../../lib/data/DataPool.mjs').DataPool} DataPool */
-/** @typedef {import('../../lib/input/CesiumInputHandler.mjs').CesiumInputHandler} CesiumInputHandler */
-/** @typedef {import('../../lib/interaction/CesiumDragHandler.mjs').CesiumDragHandler} CesiumDragHandler */
-/** @typedef {import('../../lib/interaction/CesiumHighlightHandler.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
-/** @typedef {import('eventemitter3').EventEmitter} EventEmitter */
-/** @typedef {import('../../lib/state/StateManager.mjs').StateManager} StateManager*/
-/** @typedef {import('../../components/CesiumMeasure.mjs').CesiumMeasure} CesiumMeasure */
+/** @typedef {import('../../lib/docs/types.mjs').DataPool} DataPool */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumInputHandler} CesiumInputHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumDragHandler} CesiumDragHandler */
+/** @typedef {import('../../lib/docs/types.mjs').CesiumHighlightHandler} CesiumHighlightHandler */
+/** @typedef {import('../../lib/docs/types.mjs').ShareEmitter} ShareEmitter */
+/** @typedef {import('../../lib/docs/types.mjs').StateManager} StateManager*/
+/** @typedef {import('../../lib/docs/types.mjs').CesiumAnnotation} CesiumAnnotation */
 
 
 /**
@@ -82,18 +73,20 @@ class HeightCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumMeasure} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
-     * @param {EventEmitter} emitter 
+     * @param {ShareEmitter} emitter 
+     * @param {object} app
+     * @param {DataPool} dataPool
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app) {
-            throw new Error("HeightCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("HeightCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("height", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, cesiumPkg);
+        super("height", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -101,8 +94,6 @@ class HeightCesium extends MeasureModeCesium {
 
         this.coordsCache = [];
         this.measure = super._createDefaultMeasure();
-
-        this.app = app;
     }
 
 
@@ -206,7 +197,7 @@ class HeightCesium extends MeasureModeCesium {
             this.measure.status = "completed";
 
             // -- Update Data Pool --
-            dataPool.updateOrAddMeasure({ ...this.measure });
+            this.dataPool.updateOrAddMeasure({ ...this.measure });
 
             // -- Update State --
             this.flags.isMeasurementComplete = true;
@@ -428,7 +419,7 @@ class HeightCesium extends MeasureModeCesium {
         if (pointsArray.length === 0) {
             positions.forEach((position) => {
                 // create a new point primitive
-                const pointPrimitive = this.drawingHelper._addPointMarker(position, {
+                const pointPrimitive = this.annotationComponent._addPointMarker(position, {
                     color,
                     id,
                     status,
@@ -460,14 +451,14 @@ class HeightCesium extends MeasureModeCesium {
         if (Array.isArray(polylinesArray) && polylinesArray.length > 0) {
             const existingLinePrimitive = polylinesArray[0]; // Get reference to the existing primitive
             if (existingLinePrimitive) {
-                this.drawingHelper._removePolyline(existingLinePrimitive);
+                this.annotationComponent._removePolyline(existingLinePrimitive);
             }
             // Clear the array
             polylinesArray.length = 0;
         }
 
         // -- Create new polyline --
-        const newLinePrimitive = this.drawingHelper._addPolyline(positions, {
+        const newLinePrimitive = this.annotationComponent._addPolyline(positions, {
             color: color,
             id: id,
             status: status
@@ -535,7 +526,7 @@ class HeightCesium extends MeasureModeCesium {
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
-            labelPrimitive = this.drawingHelper._addLabel(positions, height, "meter", {
+            labelPrimitive = this.annotationComponent._addLabel(positions, height, "meter", {
                 id,
                 showBackground,
                 status,
@@ -563,18 +554,18 @@ class HeightCesium extends MeasureModeCesium {
         // remove points
         if (this.#interactiveAnnotations.points) {
             this.#interactiveAnnotations.points.forEach(point => {
-                point && this.drawingHelper._removePointMarker(point);
+                point && this.annotationComponent._removePointMarker(point);
             });
         }
         // remove polylines
         if (this.#interactiveAnnotations.polylines) {
             this.#interactiveAnnotations.polylines.forEach(polyline => {
-                polyline && this.drawingHelper._removePolyline(polyline);
+                polyline && this.annotationComponent._removePolyline(polyline);
             });
         }
         // remove labels
         this.#interactiveAnnotations.labels.forEach(label => {
-            label && this.drawingHelper._removeLabel(label);
+            label && this.annotationComponent._removeLabel(label);
         });
     }
 
