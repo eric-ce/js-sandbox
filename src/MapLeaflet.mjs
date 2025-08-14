@@ -28,6 +28,7 @@ export default class MapLeaflet extends MapBase {
         try {
             await this._initialiseMap().then(() => {
                 this._attachAnnotationToolbox();
+                this._setupResizeHandler();
             })
         } catch (error) {
             console.error("Error initializing Leaflet Maps:", error);
@@ -36,9 +37,34 @@ export default class MapLeaflet extends MapBase {
 
     disconnectedCallback() {
         this._removeMapListener();
+        this._cleanupResizeHandler();
         if (this._map) {
             this._map.remove();
             this._map = null;
+        }
+    }
+
+    _setupResizeHandler() {
+        // Use ResizeObserver to detect when the container size changes
+        if (this.div && this._map) {
+            // Debounce the invalidateSize calls to prevent ResizeObserver loops
+            let resizeTimeout;
+            this._resizeObserver = new ResizeObserver(() => {
+                if (this._map) {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => {
+                        this._map.invalidateSize();
+                    }, 16); // ~1 frame delay
+                }
+            });
+            this._resizeObserver.observe(this.div);
+        }
+    }
+
+    _cleanupResizeHandler() {
+        if (this._resizeObserver) {
+            this._resizeObserver.disconnect();
+            this._resizeObserver = null;
         }
     }
 
@@ -47,16 +73,16 @@ export default class MapLeaflet extends MapBase {
         L.Icon.Default.imagePath = '/leaflet/images/';
 
         // Initialize the map centered at a given coordinate with a zoom level.
-        const map = L.map(this.div).setView([51.505, -0.09], 18);
+        const map = L.map(this.div).setView([51.505, -0.09], 19);
 
         // Add a tile layer from OpenStreetMap.
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors',
-            maxZoom: 19
+            maxZoom: 20
         }).addTo(map);
 
         // Redraw the map to solve the issue of not showing partial map
-        map.invalidateSize();
+        // map.invalidateSize({ animate: true, debounceMoveend: true });
 
         return map;
     }

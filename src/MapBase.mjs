@@ -39,8 +39,9 @@ export class MapBase extends HTMLElement {
     }
 
     // Abstract methods to be implemented by subclasses
-    _createMap() {
-        throw new Error("Subclasses must implement _createMap()");
+    async _createMap() {
+        console.warn("Need to override by specific createMap() method");
+        return;
     }
 
     _addMapListener() {
@@ -74,4 +75,6 @@ export class MapBase extends HTMLElement {
 
         // this._loadAnnotationInstance();
     }
+
+
 }
