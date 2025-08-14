@@ -74,22 +74,22 @@ class PolygonGoogle extends MeasureModeGoogle {
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {GoogleDragHandler} dragHandler
      * @param {GoogleHighlightHandler} highlightHandler
-     * @param {GoogleAnnotation} drawingHelper
+     * @param {GoogleAnnotation} annotationComponent
      * @param {StateManager} stateManager
      * @param {ShareEmitter} emitter
      * @param {object} app
      * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("PolygonGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PolygonGoogle requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool)
+        super("area", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -142,7 +142,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_area_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
@@ -226,7 +226,7 @@ class PolygonGoogle extends MeasureModeGoogle {
 
 
         // -- Create final point --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: "#FF0000",
             id: `annotate_area_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
@@ -391,7 +391,7 @@ class PolygonGoogle extends MeasureModeGoogle {
         // --- Create Polygon ---
         // This block is executed if the polygon instance is not found in the array
         if (!polygonInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
-            polygonInstance = this.drawingHelper._addPolygon(positions, {
+            polygonInstance = this.annotationComponent._addPolygon(positions, {
                 color,
                 id,
                 clickable,
@@ -466,7 +466,7 @@ class PolygonGoogle extends MeasureModeGoogle {
 
         // -- Create new label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, area, "squareMeter", {
+            labelInstance = this.annotationComponent._addLabel(positions, area, "squareMeter", {
                 id: `annotate_area_label_${this.measure.id}`,
                 status: status,
                 clickable,

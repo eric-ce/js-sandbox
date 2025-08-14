@@ -73,22 +73,22 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {GoogleDragHandler} dragHandler
      * @param {GoogleHighlightHandler} highlightHandler
-     * @param {GoogleAnnotation} drawingHelper
+     * @param {GoogleAnnotation} annotationComponent
      * @param {StateManager} stateManager
      * @param {ShareEmitter} emitter
      * @param {object} app
      * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("TwoPointsDistanceGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("TwoPointsDistanceGoogle requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool)
+        super("distance", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -142,7 +142,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             clickable: true, // Make the point clickable
@@ -355,7 +355,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
         // --- Creation Block (if needed) ---
         // This block runs if polylinesArray was empty OR if the existing entry was invalid (!lineInstance was true above)
         if (!lineInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
-            lineInstance = this.drawingHelper._addPolyline(positions, {
+            lineInstance = this.annotationComponent._addPolyline(positions, {
                 color,
                 id,
                 clickable,
@@ -433,7 +433,7 @@ class TwoPointsDistanceGoogle extends MeasureModeGoogle {
 
         // -- Create new label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
+            labelInstance = this.annotationComponent._addLabel(positions, distance, "meter", {
                 clickable,
                 id,
                 status,

@@ -28,19 +28,19 @@ class PickerLeaflet extends MeasureModeLeaflet {
      * @param {LeafletInputHandler} inputHandler
      * @param {LeafletDragHandler} dragHandler
      * @param {LeafletHighlightHandler} highlightHandler
-     * @param {LeafletAnnotation} drawingHelper
+     * @param {LeafletAnnotation} annotationComponent
      * @param {StateManager} stateManager
      * @param {ShareEmitter} emitter
      * @param {object} app
      * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("PickerLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PickerLeaflet requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
+        super("picker", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
     }
 
     /**
@@ -92,10 +92,10 @@ class PickerLeaflet extends MeasureModeLeaflet {
         if (!annotationType || annotationType !== 'annotate' || !pickedObjectMode || !pickedObjectType) return;
 
         // validate mode name with available modes
-        const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
+        const isMatchedMode = this.annotationComponent.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
         if (!isMatchedMode) return;
-        // Activate the relevant mode using the drawing helper
-        this.drawingHelper._activateMode(pickedObjectMode);
+        // Activate the relevant mode using the annotation component
+        this.annotationComponent._activateMode(pickedObjectMode);
 
         // Notify user about the activation
         showCustomNotification(`Activated ${capitalizeString(pickedObjectMode)} mode`, this._container);

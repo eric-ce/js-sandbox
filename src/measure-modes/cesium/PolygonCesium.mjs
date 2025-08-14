@@ -66,18 +66,18 @@ class PolygonCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumAnnotation} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("PolygonCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PolygonCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
+        super("area", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -160,7 +160,7 @@ class PolygonCesium extends MeasureModeCesium {
         if (nearPoint) return; // Do not create a new point if near an existing one
 
         // create a new point primitive
-        const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const pointPrimitive = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             status: "pending",
@@ -292,7 +292,7 @@ class PolygonCesium extends MeasureModeCesium {
             if (nearPoint) return;
 
             // create point
-            const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
+            const pointPrimitive = this.annotationComponent._addPointMarker(this.#coordinate, {
                 color: this.stateManager.getColorState("pointColor"),
                 id: `annotate_${this.mode}_point_${this.measure.id}`,
                 status: "completed",
@@ -437,19 +437,19 @@ class PolygonCesium extends MeasureModeCesium {
         if (Array.isArray(polygonsArray) && polygonsArray.length > 0) {
             // remove polygon graphics: polygon and polygon outline primitives
             polygonsArray.forEach(polygonGraphic => {
-                this.drawingHelper._removePolygon(polygonGraphic);
+                this.annotationComponent._removePolygon(polygonGraphic);
             });
             polygonsArray.length = 0; // Clear the reference to the polygon primitive
         }
 
         // -- Create new polygon --
-        const polygonPrimitive = this.drawingHelper._addPolygon(positions, {
+        const polygonPrimitive = this.annotationComponent._addPolygon(positions, {
             id: polygonId,
             status: status, // Set status for polygon primitive
             ...polygonOptions
         });
         // Create polygon outline primitive
-        const polygonOutlinePrimitive = this.drawingHelper._addPolygonOutline(positions, {
+        const polygonOutlinePrimitive = this.annotationComponent._addPolygonOutline(positions, {
             id: polygonOutlineId,
             status: status, // Set status for polygon outline primitive
             ...polygonOutlineOptions
@@ -518,7 +518,7 @@ class PolygonCesium extends MeasureModeCesium {
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
-            labelPrimitive = this.drawingHelper._addLabel(positions, area, "squareMeter", {
+            labelPrimitive = this.annotationComponent._addLabel(positions, area, "squareMeter", {
                 id,
                 showBackground,
                 status,

@@ -69,20 +69,20 @@ class ProfileCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumAnnotation} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      * @param {App} app 
      * @param {DataPool} dataPool
      * @param {*} cesiumPkg  
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("ProfileCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("ProfileCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("profile", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
+        super("profile", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -173,7 +173,7 @@ class ProfileCesium extends MeasureModeCesium {
         if (nearPoint) return; // Do not create a new point if near an existing one
 
         // create a new point primitive
-        const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const pointPrimitive = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             status: "pending"
@@ -448,14 +448,14 @@ class ProfileCesium extends MeasureModeCesium {
         if (Array.isArray(polylinesArray) && polylinesArray.length > 0) {
             const existingLinePrimitive = polylinesArray[0]; // Get reference to the existing primitive
             if (existingLinePrimitive) {
-                this.drawingHelper._removePolyline(existingLinePrimitive);
+                this.annotationComponent._removePolyline(existingLinePrimitive);
             }
             // Clear the array passed by reference. This modifies the original array (e.g., this.#interactiveAnnotations.polylines)
             polylinesArray.length = 0;
         }
 
         // -- Create new polyline --
-        const newLinePrimitive = this.drawingHelper._addGroundPolyline(positions, {
+        const newLinePrimitive = this.annotationComponent._addGroundPolyline(positions, {
             color: color,
             id: id,
             status: status
@@ -524,7 +524,7 @@ class ProfileCesium extends MeasureModeCesium {
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
-            labelPrimitive = this.drawingHelper._addLabel(positions, distance, "meter", {
+            labelPrimitive = this.annotationComponent._addLabel(positions, distance, "meter", {
                 id: id,
                 showBackground: showBackground,
                 status: status,
@@ -559,14 +559,14 @@ class ProfileCesium extends MeasureModeCesium {
         if (this.#interactiveAnnotations.chartHoveredPoints.length > 0) {
             const hoveredPoints = this.#interactiveAnnotations.chartHoveredPoints;
             hoveredPoints.forEach(point => {
-                this.drawingHelper._removePointMarker(point);
+                this.annotationComponent._removePointMarker(point);
             });
             // Clear the reference
             this.#interactiveAnnotations.chartHoveredPoints.length = 0;
         }
 
         // Create a new point marker at the closest position
-        const hoveredPoint = this.drawingHelper._addPointMarker(position, {
+        const hoveredPoint = this.annotationComponent._addPointMarker(position, {
             color,
             id,
             status,
@@ -686,7 +686,7 @@ class ProfileCesium extends MeasureModeCesium {
         if (!hoveredPoints || hoveredPoints.length === 0) return; // If no hovered points, exit
 
         hoveredPoints.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point primitive
+            this.annotationComponent._removePointMarker(point); // Remove the point primitive
         });
         this.#interactiveAnnotations.chartHoveredPoints = []; // Clear the reference
     }

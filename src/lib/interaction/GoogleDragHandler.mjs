@@ -40,7 +40,7 @@ class GoogleDragHandler {
     polylineCollection;
     polygonCollection;
 
-    _dataPool = null;
+    dataPool;
 
     // -- Private Fields: variables --
     #coordinate = null;
@@ -56,7 +56,7 @@ class GoogleDragHandler {
         this.map = map;
         this.inputHandler = inputHandler;
         this.emitter = emitter;
-        this._dataPool = dataPool;
+        this.dataPool = dataPool;
 
         this.draggedObjectInfo = this._createDefaultDraggedObjectInfo(); // Initialize the dragged object info
     }
@@ -64,10 +64,6 @@ class GoogleDragHandler {
 
     get coordinate() {
         return this.#coordinate; // Getter for coordinate
-    }
-
-    get dataPool() {
-        return this._dataPool;
     }
 
 
@@ -142,7 +138,7 @@ class GoogleDragHandler {
         if (totalLabel) this.draggedObjectInfo.totalLabels = [totalLabel] // Store total label if exists
 
         // Update data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Attach mousemove and mouseup listeners via the InputHandler
         this.mouseMoveListener = this.inputHandler.on('mousemove', this._handleDrag);
@@ -226,7 +222,7 @@ class GoogleDragHandler {
         this.draggedObjectInfo.endPosition = this.#coordinate; // Update the end position
 
         // Update data pool
-        dataPool.updateOrAddMeasure({ ...this.measure });
+        this.dataPool.updateOrAddMeasure({ ...this.measure });
 
         // Emit consistent event (optional)
         // this.emitter.emit("drag-end", {

@@ -50,12 +50,12 @@ class MeasureModeCesium extends MeasureModeBase {
      * @param {CesiumInputHandler} inputHandler - The map input event handler abstraction.
      * @param {CesiumDragHandler} dragHandler - The drag handler abstraction (can be null if not used).
      * @param {CesiumHighlightHandler} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {CesiumAnnotation} drawingHelper - The map-specific drawing helper/manager.
+     * @param {CesiumAnnotation} annotationComponent - The map-specific annotation component
      * @param {StateManager} stateManager - The application state manager.
      * @param {EventEmitter} emitter - The event emitter instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         this.cesiumPkg = cesiumPkg; // Store the Cesium package instance
 
@@ -103,7 +103,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // Find the measure that contains the coordinate
         const measure = data.find(measure => {
-            if (measure.mapName !== this.mapName) return false; // Check if the measure belongs to the current map
+            if (!measure.renderedOn.includes(this.mapName)) return false; // Check if the measure belongs to the current map
             return measure.coordinates.some(coord => areCoordinatesEqual(coord, cartesian));
         })
 
@@ -125,7 +125,7 @@ class MeasureModeCesium extends MeasureModeBase {
     * @returns {void}
     */
     removeAnnotationsAndListeners() {
-        this.drawingHelper.clearCollections();
+        this.annotationComponent.clearCollections();
     }
 
     /**
@@ -174,7 +174,7 @@ class MeasureModeCesium extends MeasureModeBase {
             for (let i = length - 1; i >= 0; i--) {
                 const item = accessMethod === 'get' ? collection.get(i) : collection[i];
                 if (shouldRemove(item)) {
-                    this.drawingHelper[removeMethod](item);
+                    this.annotationComponent[removeMethod](item);
                 }
             }
         });
@@ -253,15 +253,15 @@ class MeasureModeCesium extends MeasureModeBase {
         const lastPosition = positions[0];
 
         // Remove the remaining point and labels 
-        const lastPoint = this.drawingHelper._getPointByPosition(lastPosition);
-        const lastLabels = this.drawingHelper._getLabelByPosition([lastPosition]);
+        const lastPoint = this.annotationComponent._getPointByPosition(lastPosition);
+        const lastLabels = this.annotationComponent._getLabelByPosition([lastPosition]);
 
         if (lastPoint) {
-            this.drawingHelper._removePointMarker(lastPoint); // Remove the last point primitive
+            this.annotationComponent._removePointMarker(lastPoint); // Remove the last point primitive
         }
         if (Array.isArray(lastLabels) && lastLabels.length > 0) {
             lastLabels.forEach(label => {
-                this.drawingHelper._removeLabel(label); // Remove the label primitive
+                this.annotationComponent._removeLabel(label); // Remove the label primitive
             });
         }
         // -- Handle Measure Data --
@@ -362,7 +362,7 @@ class MeasureModeCesium extends MeasureModeBase {
             items.push(...annotationItems);
 
             // -- Add feature tasks items if the user role includes "tester" --
-            if (this.drawingHelper.getUserRole().includes("tester")) {
+            if (this.annotationComponent.getUserRole().includes("tester")) {
                 const featureTasksItems = this._getContextMenuItemsForFeatureTasks(pickedObject, pickedObjectType);
                 items.push(...featureTasksItems);
             }
@@ -414,7 +414,7 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // AdvancedAnnotationModes handle its own context menu items
         if (advancedAnnotationModes.includes(pickedObjectMode)) {
-            const modeInstance = this.drawingHelper.getModeInstanceByName(pickedObjectMode)
+            const modeInstance = this.annotationComponent.getModeInstanceByName(pickedObjectMode)
             if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
             // Let the mode instance handle its own context menu items
             const itemList = modeInstance._getContextMenuAdditionalItems(pickedObject, pickedObjectType);
@@ -457,7 +457,7 @@ class MeasureModeCesium extends MeasureModeBase {
         this._getOrSetModeInstance(pickedObjectMode);
 
         // Add a stop button to stop the feature task
-        if (this.drawingHelper._buttonContainer.querySelector(".stop-feature-task")) {
+        if (this.annotationComponent._buttonContainer.querySelector(".stop-feature-task")) {
             return; // If the stop button already exists, do not add again
         }
         const stopButton = document.createElement("button");
@@ -475,7 +475,7 @@ class MeasureModeCesium extends MeasureModeBase {
             showCustomNotification("Feature tasks stopped.", this._container);
             stopButton.remove();
         });
-        this.drawingHelper._buttonContainer && this.drawingHelper._buttonContainer.appendChild(stopButton);
+        this.annotationComponent._buttonContainer && this.annotationComponent._buttonContainer.appendChild(stopButton);
     }
 
     _addMissingPole() {
@@ -496,7 +496,7 @@ class MeasureModeCesium extends MeasureModeBase {
         if (typeof modeName !== "string") return null;
 
         // Check if the mode is already active
-        const currentActiveModeInstance = this.drawingHelper.getActiveModeInstance();
+        const currentActiveModeInstance = this.annotationComponent.getActiveModeInstance();
         if (!currentActiveModeInstance) return null;
 
         const currentActiveModeName = currentActiveModeInstance.mode;
@@ -507,7 +507,7 @@ class MeasureModeCesium extends MeasureModeBase {
         if (isAlreadyInMode) {
             return currentActiveModeInstance; // Return the current active mode instance
         } else {  // Otherwise, activate the mode
-            return this.drawingHelper._activateMode(modeName) || null;
+            return this.annotationComponent._activateMode(modeName) || null;
         }
     }
 
@@ -533,18 +533,18 @@ class MeasureModeCesium extends MeasureModeBase {
             labelPrimitives,
             polylinePrimitives,
             polygonPrimitives
-        } = this.drawingHelper._getRelatedPrimitivesByMeasureId(measureId);
+        } = this.annotationComponent._getRelatedPrimitivesByMeasureId(measureId);
         pointPrimitives.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point primitive
+            this.annotationComponent._removePointMarker(point); // Remove the point primitive
         });
         labelPrimitives.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label primitive
+            this.annotationComponent._removeLabel(label); // Remove the label primitive
         });
         polylinePrimitives.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline primitive
+            this.annotationComponent._removePolyline(polyline); // Remove the polyline primitive
         });
         polygonPrimitives.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon primitive
+            this.annotationComponent._removePolygon(polygon); // Remove the polygon primitive
         });
 
         // remove the measure data from dataPool
@@ -642,12 +642,12 @@ class MeasureModeCesium extends MeasureModeBase {
 
         // Due to update method logic only update on existing label, so it need to clone it again to update two labels 
         const linePrimitivePositions = linePrimitive.feature?.properties?.positions;
-        const existingLabel = this.drawingHelper._getLabelByPosition(linePrimitivePositions)[0];
+        const existingLabel = this.annotationComponent._getLabelByPosition(linePrimitivePositions)[0];
         if (!existingLabel) return; // If no label is found, exit
         const clonedLabel = this.labelCollection.add(existingLabel);
         this.interactiveAnnotations.labels = [existingLabel, clonedLabel];
 
-        this.interactiveAnnotations.totalLabels = [...this.drawingHelper._getLabelByPosition(this.coordsCache[this.coordsCache.length - 1])]; // Get the total label by the last position of the coordsCache
+        this.interactiveAnnotations.totalLabels = [...this.annotationComponent._getLabelByPosition(this.coordsCache[this.coordsCache.length - 1])]; // Get the total label by the last position of the coordsCache
 
         // Show notification
         showCustomNotification(`Add mode is enabled. Click on the map to add a new point for segment, measure id: ${measureId}`, this._container);
@@ -669,7 +669,7 @@ class MeasureModeCesium extends MeasureModeBase {
         this.coordsCache.splice(minIndex + 1, 0, this.coordinate); // Insert the new coordinate after the first position of the line
 
         // -- Create new point --
-        this.drawingHelper._addPointMarker(this.coordinate, {
+        this.annotationComponent._addPointMarker(this.coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             status: "completed"
@@ -752,7 +752,7 @@ class MeasureModeCesium extends MeasureModeBase {
      */
     _createChart(specificChartConfig = {}, specificChartData = {}, onHoverCallback = null) {
         // -- Validate dependencies --
-        if (!this.drawingHelper || !this.drawingHelper.map || !this.drawingHelper.map.container) {
+        if (!this.annotationComponent || !this.annotationComponent.map || !this.annotationComponent.map.container) {
             console.error("Cesium viewer or container not available to create chart.");
             return null;
         }
@@ -764,8 +764,8 @@ class MeasureModeCesium extends MeasureModeBase {
         // -- Handle chart container --
         this.chartDiv = document.createElement("div");
         this.chartDiv.className = "cesium-chart"; // Use a more specific class name
-        // It's better to use this.drawingHelper.map.container
-        this.drawingHelper.map.container.appendChild(this.chartDiv);
+        // It's better to use this.annotationComponent.map.container
+        this.annotationComponent.map.container.appendChild(this.chartDiv);
 
 
         // -- Create and add the close button --
@@ -869,7 +869,7 @@ class MeasureModeCesium extends MeasureModeBase {
         // this.chartInstance.customData = { /* ... */ };
 
         // -- Make the chart draggable --
-        makeDraggable(this.chartDiv, this.drawingHelper.map.container);
+        makeDraggable(this.chartDiv, this.annotationComponent.map.container);
 
         return this.chartInstance;
     }

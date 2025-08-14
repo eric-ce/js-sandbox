@@ -63,20 +63,20 @@ class PointInfoCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumAnnotation} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      * @param {object} app - The application instance
      * @param {DataPool} dataPool - The data pool instance
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("TwoPointsDistanceCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("TwoPointsDistanceCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -177,7 +177,7 @@ class PointInfoCesium extends MeasureModeCesium {
 
         // -- Handle Point --
         // create a new point primitive
-        const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const pointPrimitive = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             status: "completed"
@@ -371,7 +371,7 @@ class PointInfoCesium extends MeasureModeCesium {
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
-            labelPrimitive = this.drawingHelper._addLabel(positions, formattedText, null, {
+            labelPrimitive = this.annotationComponent._addLabel(positions, formattedText, null, {
                 id: id,
                 showBackground: showBackground,
                 status: status,

@@ -64,19 +64,19 @@ class PolygonLeaflet extends MeasureModeLeaflet {
      * @param {LeafletInputHandler} inputHandler
      * @param {LeafletDragHandler} dragHandler
      * @param {LeafletHighlightHandler} highlightHandler
-     * @param {LeafletAnnotation} drawingHelper
+     * @param {LeafletAnnotation} annotationComponent
      * @param {StateManager} stateManager 
      * @param {ShareEmitter} emitter 
      * @param {object} app
      * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("PolygonLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PolygonLeaflet requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("area", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
+        super("area", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -130,7 +130,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_area_point_${this.measure.id}`,
             interactive: true,
@@ -218,7 +218,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
 
 
         // -- Create final point --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: "#FF0000",
             id: `annotate_area_point_${this.measure.id}`,
             interactive: true, // Make the point interactive
@@ -378,8 +378,8 @@ class PolygonLeaflet extends MeasureModeLeaflet {
                     // Update the interactive
                     polygonInstance.options.interactive = interactive;
                     // Refresh the layer to apply the new interactive state. 
-                    if (this.drawingHelper && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                        this.drawingHelper._refreshLayerInteractivity(polygonInstance);
+                    if (this.annotationComponent && typeof this.annotationComponent._refreshLayerInteractivity === 'function') {
+                        this.annotationComponent._refreshLayerInteractivity(polygonInstance);
                     }
                 }
 
@@ -397,7 +397,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
         // --- Create Polygon ---
         // This block is executed if the polygon instance is not found in the array
         if (!polygonInstance) { // Check if we need to create (either initially empty or cleared due to invalid entry)
-            polygonInstance = this.drawingHelper._addPolygon(positions, {
+            polygonInstance = this.annotationComponent._addPolygon(positions, {
                 color,
                 id,
                 status,
@@ -480,7 +480,7 @@ class PolygonLeaflet extends MeasureModeLeaflet {
 
         // -- Create Label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, area, "squareMeter", {
+            labelInstance = this.annotationComponent._addLabel(positions, area, "squareMeter", {
                 id,
                 interactive,
                 status,

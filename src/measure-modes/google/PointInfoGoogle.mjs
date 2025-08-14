@@ -65,22 +65,22 @@ class PointInfoGoogle extends MeasureModeGoogle {
      * @param {GoogleMapsInputHandler} inputHandler
      * @param {GoogleDragHandler} dragHandler
      * @param {GoogleHighlightHandler} highlightHandler
-     * @param {GoogleAnnotation} drawingHelper
+     * @param {GoogleAnnotation} annotationComponent
      * @param {StateManager} stateManager
      * @param {ShareEmitter} emitter
      * @param {object} app
      * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("PointInfoGoogle requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PointInfoGoogle requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
         if (!google?.maps?.geometry?.spherical) {
             throw new Error("Google Maps geometry library not loaded.");
         }
 
-        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool)
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool)
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -136,7 +136,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
 
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             status: "completed", // Set status to pending
@@ -303,7 +303,7 @@ class PointInfoGoogle extends MeasureModeGoogle {
 
         // -- Create new label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, formattedText, null, {
+            labelInstance = this.annotationComponent._addLabel(positions, formattedText, null, {
                 clickable,
                 id,
                 status,

@@ -47,20 +47,20 @@ class PickerCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumAnnotation} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      * @param {object} app - The application instance
      * @param {DataPool} dataPool - The data pool instance
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("PickerCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PickerCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("picker", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
+        super("picker", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
     }
 
 
@@ -90,11 +90,11 @@ class PickerCesium extends MeasureModeCesium {
         const pickedObjectMode = pickedObject.id.split('_')[1];
 
         // validate mode name with available modes
-        const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
+        const isMatchedMode = this.annotationComponent.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
         if (!isMatchedMode) return;
 
-        // Activate the relevant mode using the drawing helper
-        this.drawingHelper._activateMode(pickedObjectMode);
+        // Activate the relevant mode using the annotation component
+        this.annotationComponent._activateMode(pickedObjectMode);
 
         // Notify user about the activation
         showCustomNotification(`Activated ${capitalizeString(pickedObjectMode)} mode`, this._container)
@@ -129,7 +129,7 @@ class PickerCesium extends MeasureModeCesium {
 
         const pickedObjectId = pickedObject.id;
         const [annotation, pickedObjectMode] = pickedObjectId.split('_');
-        const isMatchedMode = this.drawingHelper.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
+        const isMatchedMode = this.annotationComponent.availableModeConfigs.some(mode => mode.id === pickedObjectMode);
         if (annotation !== 'annotate' || !isMatchedMode) {
             this._hideModeOverlay();
             return;

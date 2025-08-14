@@ -73,20 +73,20 @@ class HeightCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumAnnotation} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {ShareEmitter} emitter 
      * @param {object} app
      * @param {DataPool} dataPool
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("HeightCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("HeightCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("height", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
+        super("height", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -419,7 +419,7 @@ class HeightCesium extends MeasureModeCesium {
         if (pointsArray.length === 0) {
             positions.forEach((position) => {
                 // create a new point primitive
-                const pointPrimitive = this.drawingHelper._addPointMarker(position, {
+                const pointPrimitive = this.annotationComponent._addPointMarker(position, {
                     color,
                     id,
                     status,
@@ -451,14 +451,14 @@ class HeightCesium extends MeasureModeCesium {
         if (Array.isArray(polylinesArray) && polylinesArray.length > 0) {
             const existingLinePrimitive = polylinesArray[0]; // Get reference to the existing primitive
             if (existingLinePrimitive) {
-                this.drawingHelper._removePolyline(existingLinePrimitive);
+                this.annotationComponent._removePolyline(existingLinePrimitive);
             }
             // Clear the array
             polylinesArray.length = 0;
         }
 
         // -- Create new polyline --
-        const newLinePrimitive = this.drawingHelper._addPolyline(positions, {
+        const newLinePrimitive = this.annotationComponent._addPolyline(positions, {
             color: color,
             id: id,
             status: status
@@ -526,7 +526,7 @@ class HeightCesium extends MeasureModeCesium {
 
         // -- Create new label (if no label existed in labelsArray or contained invalid object) --
         if (!labelPrimitive) {
-            labelPrimitive = this.drawingHelper._addLabel(positions, height, "meter", {
+            labelPrimitive = this.annotationComponent._addLabel(positions, height, "meter", {
                 id,
                 showBackground,
                 status,
@@ -554,18 +554,18 @@ class HeightCesium extends MeasureModeCesium {
         // remove points
         if (this.#interactiveAnnotations.points) {
             this.#interactiveAnnotations.points.forEach(point => {
-                point && this.drawingHelper._removePointMarker(point);
+                point && this.annotationComponent._removePointMarker(point);
             });
         }
         // remove polylines
         if (this.#interactiveAnnotations.polylines) {
             this.#interactiveAnnotations.polylines.forEach(polyline => {
-                polyline && this.drawingHelper._removePolyline(polyline);
+                polyline && this.annotationComponent._removePolyline(polyline);
             });
         }
         // remove labels
         this.#interactiveAnnotations.labels.forEach(label => {
-            label && this.drawingHelper._removeLabel(label);
+            label && this.annotationComponent._removeLabel(label);
         });
     }
 

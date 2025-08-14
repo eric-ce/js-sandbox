@@ -65,19 +65,19 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
      * @param {LeafletInputHandler} inputHandler 
      * @param {LeafletDragHandler} dragHandler 
      * @param {LeafletHighlightHandler} highlightHandler 
-     * @param {leafletAnnotation} drawingHelper 
+     * @param {leafletAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      * @param {object} app
      * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("PointInfoLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("PointInfoLeaflet requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("pointInfo", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
+        super("pointInfo", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -131,7 +131,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             interactive: true, // Make the point marker interactive
@@ -304,7 +304,7 @@ class PointInfoLeaflet extends MeasureModeLeaflet {
 
         // -- Create new label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, formattedText, null, {
+            labelInstance = this.annotationComponent._addLabel(positions, formattedText, null, {
                 id,
                 color,
                 status,

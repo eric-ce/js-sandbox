@@ -36,14 +36,14 @@ class MeasureModeGoogle extends MeasureModeBase {
      * @param {GoogleMapsInputHandler} inputHandler - The map input event handler abstraction.
      * @param {GoogleDragHandler} dragHandler - The drag handler abstraction (can be null if not used).
      * @param {GoogleHighlightHandler} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {GoogleAnnotation} drawingHelper - The map-specific drawing helper/manager.
+     * @param {GoogleAnnotation} annotationComponent - The map-specific annotation component
      * @param {StateManager} stateManager - The application state manager.
      * @param {ShareEmitter} emitter - The event emitter instance.
      * @param {object} app - The application instance.
      * @param {DataPool} dataPool - The data pool instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         this.contextMenu = this.stateManager.getElementState("contextMenu") || null; // Get the context menu from state manager
     }
@@ -118,7 +118,7 @@ class MeasureModeGoogle extends MeasureModeBase {
         if (Array.isArray(data) && data.length === 0) return null;
 
         const measure = data.find(measure => {
-            if (measure.mapName !== this.mapName) return false; // Check if the measure belongs to the current map
+            if (!measure.renderedOn.includes(this.mapName)) return false; // Check if the measure belongs to the current map
             return measure.coordinates.some(coord => areCoordinatesEqual(coord, latLng));
         })
         if (!measure) return null;
@@ -184,7 +184,7 @@ class MeasureModeGoogle extends MeasureModeBase {
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
                 if (shouldRemove(item)) {
-                    this.drawingHelper[removeMethod](item);
+                    this.annotationComponent[removeMethod](item);
                 }
             }
         });
@@ -332,7 +332,7 @@ class MeasureModeGoogle extends MeasureModeBase {
 
         // AdvancedAnnotationModes handle its own context menu items
         if (advancedAnnotationModes.includes(overlayMode)) {
-            const modeInstance = this.drawingHelper.getModeInstanceByName(overlayMode);
+            const modeInstance = this.annotationComponent.getModeInstanceByName(overlayMode);
             if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
             // Let the mode instance handle its own context menu items
             const itemList = modeInstance._getContextMenuAdditionalItems(overlay);
@@ -356,18 +356,18 @@ class MeasureModeGoogle extends MeasureModeBase {
 
         const measureId = Number(overlay.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
 
-        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
+        const { points, polylines, labels, polygons } = this.annotationComponent._getRelatedOverlaysByMeasureId(measureId);
         points.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point marker
+            this.annotationComponent._removePointMarker(point); // Remove the point marker
         });
         labels.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label
+            this.annotationComponent._removeLabel(label); // Remove the label
         });
         polylines.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline
+            this.annotationComponent._removePolyline(polyline); // Remove the polyline
         });
         polygons.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon
+            this.annotationComponent._removePolygon(polygon); // Remove the polygon
         });
 
         // remove the measure data from dataPool
@@ -417,7 +417,7 @@ class MeasureModeGoogle extends MeasureModeBase {
         if (typeof modeName !== "string") return null;
 
         // Check if the mode is already active
-        const currentActiveModeInstance = this.drawingHelper.getActiveModeInstance();
+        const currentActiveModeInstance = this.annotationComponent.getActiveModeInstance();
         if (!currentActiveModeInstance) return null;
 
         const currentActiveModeName = currentActiveModeInstance.mode;
@@ -428,7 +428,7 @@ class MeasureModeGoogle extends MeasureModeBase {
         if (isAlreadyInMode) {
             return currentActiveModeInstance; // Return the current active mode instance
         } else {  // Otherwise, activate the mode
-            return this.drawingHelper._activateMode(modeName) || null;
+            return this.annotationComponent._activateMode(modeName) || null;
         }
     }
 

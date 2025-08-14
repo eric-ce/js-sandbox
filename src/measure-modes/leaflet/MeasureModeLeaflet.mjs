@@ -28,14 +28,14 @@ class MeasureModeLeaflet extends MeasureModeBase {
      * @param {LeafletInputHandler} inputHandler
      * @param {LeafletDragHandler} dragHandler
      * @param {LeafletHighlightHandler} highlightHandler
-     * @param {LeafletAnnotation} drawingHelper
+     * @param {LeafletAnnotation} annotationComponent
      * @param {StateManager} stateManager
      * @param {ShareEmitter} emitter
      * @param {object} app
      * @param {DataPool} dataPool
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
-        super(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
+        super(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         this.contextMenu = this.stateManager.getElementState("contextMenu") || null; // Get the context menu from state manager
     }
@@ -109,7 +109,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         if (Array.isArray(data) && data.length === 0) return null;
 
         const measure = data.find(measure => {
-            if (measure.mapName !== this.mapName) return false; // Check if the measure belongs to the current map
+            if (!measure.renderedOn.includes(this.mapName)) return false; // Check if the measure belongs to the current map
             return measure.coordinates.some(coord => areCoordinatesEqual(coord, latLng));
         })
         if (!measure) return null;
@@ -126,7 +126,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
     removePendingAnnotations() {
         const targetId = `annotate_${this.mode}`;
 
-        // Get all layer groups from the drawing helper
+        // Get all layer groups from the annotation component
         const collections = [
             this.pointCollection,
             this.labelCollection,
@@ -189,7 +189,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
             // For non-nested in MultiDistance (move), remove only the 'moving' line.
             if (isNested || this.mode === 'distance') {
                 // remove all lines in the lines array
-                polylinesArray.forEach(lineToRemove => this.drawingHelper._removePolyline(lineToRemove));
+                polylinesArray.forEach(lineToRemove => this.annotationComponent._removePolyline(lineToRemove));
                 polylinesArray.length = 0; // Clear the array
             }
             // Case: remove lines that has status "moving"
@@ -198,7 +198,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
                     const line = polylinesArray[i];
                     // Ensure line exists and has a status property before checking
                     if (line && line?.feature?.properties?.status === "moving") {
-                        this.drawingHelper._removePolyline(line);
+                        this.annotationComponent._removePolyline(line);
                         polylinesArray.splice(i, 1);
                     }
                 }
@@ -209,7 +209,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         if (isNested) {
             // -- Create multiple polylines for nested positions --
             positions.forEach(posSet => {
-                const newLineInstance = this.drawingHelper._addPolyline(posSet, {
+                const newLineInstance = this.annotationComponent._addPolyline(posSet, {
                     color,
                     id, // Consider making ID more specific if needed (e.g., adding status)
                     interactive,
@@ -223,7 +223,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
             })
         } else {
             // -- Create a new single polyline --
-            const newLineInstance = this.drawingHelper._addPolyline(positions, {
+            const newLineInstance = this.annotationComponent._addPolyline(positions, {
                 color,
                 id, // Consider making ID more specific if needed (e.g., adding status)
                 interactive,
@@ -274,8 +274,8 @@ class MeasureModeLeaflet extends MeasureModeBase {
         const oldInteractiveState = label.options.interactive;
         if (oldInteractiveState !== interactive) {
             label.options.interactive = interactive;
-            if (typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
-                this.drawingHelper._refreshLayerInteractivity(label);
+            if (typeof this.annotationComponent._refreshLayerInteractivity === 'function') {
+                this.annotationComponent._refreshLayerInteractivity(label);
             }
         }
 
@@ -314,9 +314,9 @@ class MeasureModeLeaflet extends MeasureModeBase {
             }
 
             // Make the item interactive
-            if (item.options.interactive === false && typeof this.drawingHelper._refreshLayerInteractivity === 'function') {
+            if (item.options.interactive === false && typeof this.annotationComponent._refreshLayerInteractivity === 'function') {
                 item.options.interactive = true;
-                this.drawingHelper._refreshLayerInteractivity(item);
+                this.annotationComponent._refreshLayerInteractivity(item);
             }
         });
     }
@@ -377,7 +377,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
 
         // AdvancedAnnotationModes handle its own context menu items
         if (advancedAnnotationModes.includes(layerMode)) {
-            const modeInstance = this.drawingHelper.getModeInstanceByName(layerMode);
+            const modeInstance = this.annotationComponent.getModeInstanceByName(layerMode);
             if (!modeInstance || typeof modeInstance._getContextMenuAdditionalItems !== "function") return;
             // Let the mode instance handle its own context menu items
             const itemList = modeInstance._getContextMenuAdditionalItems(layer);
@@ -403,18 +403,18 @@ class MeasureModeLeaflet extends MeasureModeBase {
         // }
 
         const measureId = Number(layer.id.split("_").slice(-1)[0]); // Assume the last part of the ID is the measure ID
-        const { points, polylines, labels, polygons } = this.drawingHelper._getRelatedOverlaysByMeasureId(measureId);
+        const { points, polylines, labels, polygons } = this.annotationComponent._getRelatedOverlaysByMeasureId(measureId);
         points.forEach(point => {
-            this.drawingHelper._removePointMarker(point); // Remove the point marker
+            this.annotationComponent._removePointMarker(point); // Remove the point marker
         });
         labels.forEach(label => {
-            this.drawingHelper._removeLabel(label); // Remove the label
+            this.annotationComponent._removeLabel(label); // Remove the label
         });
         polylines.forEach(polyline => {
-            this.drawingHelper._removePolyline(polyline); // Remove the polyline
+            this.annotationComponent._removePolyline(polyline); // Remove the polyline
         });
         polygons.forEach(polygon => {
-            this.drawingHelper._removePolygon(polygon); // Remove the polygon
+            this.annotationComponent._removePolygon(polygon); // Remove the polygon
         });
 
         // remove the measure data from dataPool
@@ -462,7 +462,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         if (typeof modeName !== "string") return null;
 
         // Check if the mode is already active
-        const currentActiveModeInstance = this.drawingHelper.getActiveModeInstance();
+        const currentActiveModeInstance = this.annotationComponent.getActiveModeInstance();
         if (!currentActiveModeInstance) return null;
 
         const currentActiveModeName = currentActiveModeInstance.mode;
@@ -473,7 +473,7 @@ class MeasureModeLeaflet extends MeasureModeBase {
         if (isAlreadyInMode) {
             return currentActiveModeInstance; // Return the current active mode instance
         } else {  // Otherwise, activate the mode
-            return this.drawingHelper._activateMode(modeName) || null;
+            return this.annotationComponent._activateMode(modeName) || null;
         }
     }
 

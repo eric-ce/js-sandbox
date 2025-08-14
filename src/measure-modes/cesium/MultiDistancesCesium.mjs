@@ -72,20 +72,20 @@ class MultiDistancesCesium extends MeasureModeCesium {
      * @param {CesiumInputHandler} inputHandler 
      * @param {CesiumDragHandler} dragHandler 
      * @param {CesiumHighlightHandler} highlightHandler 
-     * @param {CesiumAnnotation} drawingHelper 
+     * @param {CesiumAnnotation} annotationComponent 
      * @param {StateManager} stateManager 
      * @param {EventEmitter} emitter 
      * @param {object} app
      * @param {DataPool} dataPool
      * @param {*} cesiumPkg 
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("MultiDistancesCesium requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("MultiDistancesCesium requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("multi-distances", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool, cesiumPkg);
+        super("multi-distances", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool, cesiumPkg);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -229,7 +229,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         if (nearPoint) return; // Do not create a new point if near an existing one
 
         // create a new point primitive
-        const pointPrimitive = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const pointPrimitive = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             status: "pending"
@@ -428,7 +428,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             }
 
             // Create last point
-            const lastPoint = this.drawingHelper._addPointMarker(this.#coordinate, {
+            const lastPoint = this.annotationComponent._addPointMarker(this.#coordinate, {
                 color: this.stateManager.getColorState("pointColor"),
                 id: `annotate_${this.mode}_point_${this.measure.id}`,
                 status: "completed"
@@ -526,7 +526,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         // if (!userConfirmation) return;
 
         // -- Remove point --
-        this.drawingHelper._removePointMarker(point); // Remove the point primitive
+        this.annotationComponent._removePointMarker(point); // Remove the point primitive
 
         // -- Set Measure and Distances --
         // Find the measure data by ID
@@ -550,10 +550,10 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // -- Find and Remove related annotations --
         // remove related lines
-        const linePrimitives = this.drawingHelper._getLineByPositions([pointPositions[0]]);
+        const linePrimitives = this.annotationComponent._getLineByPositions([pointPositions[0]]);
         if (!Array.isArray(linePrimitives) || linePrimitives.length === 0) return; // If no lines are found, exit
         linePrimitives.forEach(line => {
-            this.drawingHelper._removePolyline(line); // Remove the line primitive
+            this.annotationComponent._removePolyline(line); // Remove the line primitive
 
             const linePositions = line?.feature?.properties?.positions;
             if (!Array.isArray(linePositions) || linePositions.length === 0) return; // If no line positions are found, exit
@@ -570,7 +570,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         });
 
         // remove related labels
-        const labelPrimitives = this.drawingHelper._getLabelByPosition([pointPositions[0]]);
+        const labelPrimitives = this.annotationComponent._getLabelByPosition([pointPositions[0]]);
         if (!Array.isArray(labelPrimitives) || labelPrimitives.length === 0) return; // If no labels are found, exit
         labelPrimitives.forEach(label => {
             // Safety check: assume moving or total labels should not be removed here
@@ -579,7 +579,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             this.#interactiveAnnotations.totalLabels = isTotalLabel ? [label] : [];
             if (isMovingLabel || isTotalLabel) return;
 
-            this.drawingHelper._removeLabel(label); // Remove the label primitive            
+            this.annotationComponent._removeLabel(label); // Remove the label primitive            
 
             // Case: during measuring, remove the label from this.#interactiveAnnotations
             if (this.#interactiveAnnotations.labels.length === 0) return; // If there are no labels, exit
@@ -940,7 +940,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             if (isNested) {
                 // remove all lines in the lines array
                 polylinesArray.forEach(lineToRemove => {
-                    this.drawingHelper._removePolyline(lineToRemove);
+                    this.annotationComponent._removePolyline(lineToRemove);
                 });
                 polylinesArray.length = 0; // Clear the array
             }
@@ -950,7 +950,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
                     const line = polylinesArray[i];
                     // Ensure line exists and has a status property before checking
                     if (line && line?.feature?.properties?.status === "moving") {
-                        this.drawingHelper._removePolyline(line);
+                        this.annotationComponent._removePolyline(line);
                         polylinesArray.splice(i, 1);
                     }
                 }
@@ -960,7 +960,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
         if (isNested) {
             // -- Create multiple polylines for nested positions --
             positions.forEach(posSet => {
-                const newLinePrimitive = this.drawingHelper._addPolyline(posSet, {
+                const newLinePrimitive = this.annotationComponent._addPolyline(posSet, {
                     color,
                     id,
                     status,
@@ -973,7 +973,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             })
         } else {
             // -- Create a new single polyline --
-            const newLinePrimitive = this.drawingHelper._addPolyline(positions, {
+            const newLinePrimitive = this.annotationComponent._addPolyline(positions, {
                 color,
                 id,
                 status,
@@ -1067,7 +1067,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
             const segmentDistance = calculateDistance(positions[0], positions[1]);
             if (!segmentDistance) console.warn("Failed to calculate segment distance.");
 
-            const labelPrimitive = this.drawingHelper._addLabel(positions, segmentDistance, "meter", {
+            const labelPrimitive = this.annotationComponent._addLabel(positions, segmentDistance, "meter", {
                 id,
                 showBackground,
                 status,
@@ -1142,7 +1142,7 @@ class MultiDistancesCesium extends MeasureModeCesium {
 
         // Create a new total label if it does not exist
         if (!totalLabel) {
-            totalLabel = this.drawingHelper._addLabel([labelPosition], formattedText, null, {
+            totalLabel = this.annotationComponent._addLabel([labelPosition], formattedText, null, {
                 id,
                 showBackground,
                 status,

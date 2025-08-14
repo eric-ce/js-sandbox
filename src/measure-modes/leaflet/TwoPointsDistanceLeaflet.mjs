@@ -65,19 +65,19 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
      * @param {LeafletInputHandler} inputHandler
      * @param {LeafletDragHandler} dragHandler
      * @param {LeafletHighlightHandler} highlightHandler
-     * @param {LeafletAnnotation} drawingHelper
+     * @param {LeafletAnnotation} annotationComponent
      * @param {StateManager} stateManager
      * @param {ShareEmitter} emitter
      * @param {object} app
      * @param {DataPool} dataPool
      */
-    constructor(inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+    constructor(inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // Validate input parameters
-        if (!inputHandler || !drawingHelper || !drawingHelper.map || !stateManager || !emitter || !app || !dataPool) {
-            throw new Error("TwoPointsDistanceLeaflet requires inputHandler, drawingHelper (with map), stateManager, emitter, app, and dataPool.");
+        if (!inputHandler || !annotationComponent || !annotationComponent.map || !stateManager || !emitter || !app || !dataPool) {
+            throw new Error("TwoPointsDistanceLeaflet requires inputHandler, annotationComponent (with map), stateManager, emitter, app, and dataPool.");
         }
 
-        super("distance", inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool);
+        super("distance", inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool);
 
         // flags specific to this mode
         this.flags.isMeasurementComplete = false;
@@ -131,7 +131,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
         }
 
         // -- Create point marker --
-        const point = this.drawingHelper._addPointMarker(this.#coordinate, {
+        const point = this.annotationComponent._addPointMarker(this.#coordinate, {
             color: this.stateManager.getColorState("pointColor"),
             id: `annotate_${this.mode}_point_${this.measure.id}`,
             interactive: true, // Make the point interactive
@@ -375,7 +375,7 @@ class TwoPointsDistanceLeaflet extends MeasureModeLeaflet {
 
         // -- Create new label --
         if (!labelInstance) {
-            labelInstance = this.drawingHelper._addLabel(positions, distance, "meter", {
+            labelInstance = this.annotationComponent._addLabel(positions, distance, "meter", {
                 id,
                 color,
                 status,

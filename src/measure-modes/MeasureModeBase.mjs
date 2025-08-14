@@ -40,8 +40,8 @@ class MeasureModeBase {
     dragHandler;
     /** @type {CesiumHighlightHandler | GoogleHighlightHandler | LeafletHighlightHandler | null} The highlight handler abstraction (can be null). */
     highlightHandler;
-    /** @type {CesiumAnnotation | GoogleAnnotation | LeafletAnnotation} The map-specific drawing helper/manager component. */
-    drawingHelper;
+    /** @type {CesiumAnnotation | GoogleAnnotation | LeafletAnnotation} The map-specific annotation component. */
+    annotationComponent;
     /** @type {Viewer | google.maps.Map | L.Map} The map instance (e.g., Cesium.Viewer, google.maps.Map). */
     map;
     /** @type {StateManager} The application state manager. */
@@ -76,25 +76,25 @@ class MeasureModeBase {
      * @param {CesiumInputHandler | GoogleMapsInputHandler | LeafletInputHandler} inputHandler - The map input event handler abstraction.
      * @param {CesiumDragHandler | GoogleDragHandler | LeafletDragHandler | null} dragHandler - The drag handler abstraction (can be null if not used).
      * @param {CesiumHighlightHandler | GoogleHighlightHandler | LeafletHighlightHandler | null} highlightHandler - The highlight handler abstraction (can be null if not used).
-     * @param {CesiumAnnotation | GoogleAnnotation | LeafletAnnotation} drawingHelper - The map-specific drawing helper/manager.
+     * @param {CesiumAnnotation | GoogleAnnotation | LeafletAnnotation} annotationComponent - The map-specific annotation component
      * @param {StateManager} stateManager - The application state manager.
      * @param {ShareEmitter} emitter - The event emitter instance.
      * @param {object} app - The application context.
      * @param {DataPool} dataPool - The data pool instance.
      */
-    constructor(modeName, inputHandler, dragHandler, highlightHandler, drawingHelper, stateManager, emitter, app, dataPool) {
+    constructor(modeName, inputHandler, dragHandler, highlightHandler, annotationComponent, stateManager, emitter, app, dataPool) {
         // -- Validate Dependencies --
         if (!modeName || typeof modeName !== 'string') {
             throw new Error("MeasureModeBase requires a valid modeName string.");
         }
-        if (!inputHandler || !drawingHelper || !stateManager || !emitter || !app) {
-            throw new Error("MeasureModeBase requires inputHandler, drawingHelper, stateManager, emitter, and app.");
+        if (!inputHandler || !annotationComponent || !stateManager || !emitter || !app) {
+            throw new Error("MeasureModeBase requires inputHandler, annotationComponent, stateManager, emitter, and app.");
         }
-        if (!drawingHelper.map) {
-            throw new Error("MeasureModeBase requires drawingHelper to have a valid 'map' instance.");
+        if (!annotationComponent.map) {
+            throw new Error("MeasureModeBase requires annotationComponent to have a valid 'map' instance.");
         }
-        if (typeof drawingHelper.mapName !== 'string') {
-            throw new Error("MeasureModeBase requires drawingHelper to have a valid 'mapName' string.");
+        if (typeof annotationComponent.mapName !== 'string') {
+            throw new Error("MeasureModeBase requires annotationComponent to have a valid 'mapName' string.");
         }
 
         // -- Assign Dependencies --
@@ -102,21 +102,21 @@ class MeasureModeBase {
         this.inputHandler = inputHandler;
         this.dragHandler = dragHandler; // Can be null
         this.highlightHandler = highlightHandler; // Can be null
-        this.drawingHelper = drawingHelper;
-        this.map = drawingHelper.map;
+        this.annotationComponent = annotationComponent;
+        this.map = annotationComponent.map;
         this.stateManager = stateManager;
         this.emitter = emitter;
         this.app = app;
         this.dataPool = dataPool;
 
-        this.mapName = drawingHelper.mapName; // Map name (e.g., "cesium", "google", "leaflet")
+        this.mapName = annotationComponent.mapName; // Map name (e.g., "cesium", "google", "leaflet")
 
-        this._container = this.drawingHelper.container; // The specific map container element by mapName
+        this._container = this.annotationComponent.container; // The specific map container element by mapName
 
-        this.pointCollection = this.drawingHelper.pointCollection; // Array to store points
-        this.polylineCollection = this.drawingHelper.polylineCollection; // Array to store lines
-        this.polygonCollection = this.drawingHelper.polygonCollection; // Array to store polygons
-        this.labelCollection = this.drawingHelper.labelCollection; // Array to store polygons
+        this.pointCollection = this.annotationComponent.pointCollection; // Array to store points
+        this.polylineCollection = this.annotationComponent.polylineCollection; // Array to store lines
+        this.polygonCollection = this.annotationComponent.polygonCollection; // Array to store polygons
+        this.labelCollection = this.annotationComponent.labelCollection; // Array to store polygons
     }
 
 
@@ -303,7 +303,7 @@ class MeasureModeBase {
      * @returns {MeasurementGroup}
      */
     _createDefaultMeasure() {
-        // Ensure drawingHelper and mapName are available
+        // Ensure annotationComponent and mapName are available
         return {
             id: generateIdByTimestamp(),
             mode: this.mode,
